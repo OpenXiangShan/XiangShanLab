@@ -14,7 +14,7 @@
 
 ### 步骤一：完成学习任务
 1. 访问香山课程仓库：[https://github.com/OpenXiangShan/XiangShanLab](https://github.com/OpenXiangShan/XiangShanLab)
-2. 学习课程: [香山开发环境总述.md](docs/课程体系1：操作篇-香山开发环境操作/1.CHN/第一章香山开发环境总述.md)
+2. 学习课程: [香山开发环境总述.md](../docs/课程体系1：操作篇-香山开发环境操作/1.CHN/第一章香山开发环境总述.md)
 3. 完成"hello xiangshan"任务
 4. 准备任务完成截图（需包含完整的运行结果、打印结果需要有您的个人信息）
 
