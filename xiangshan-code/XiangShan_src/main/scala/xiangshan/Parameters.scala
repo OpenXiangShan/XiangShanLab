@@ -53,7 +53,7 @@ case class XSCoreParameters
   VLEN: Int = 128,
   ELEN: Int = 64,
   HSXLEN: Int = 64,
-  HasBitmapCheck: Boolean = true,
+  HasBitmapCheck: Boolean = false,
   HasBitmapCheckDefault: Boolean = false,
   HasMExtension: Boolean = true,
   HasCExtension: Boolean = true,
@@ -305,7 +305,7 @@ case class XSCoreParameters
 
   def vlWidth = log2Up(VLEN) + 1
 
-  /* 
+  /*
     Top-Down, ExecutionStall used
   */
   def fewUops = 4
@@ -526,7 +526,7 @@ case class DebugOptions
 
   DebugAll: Boolean = false,
   DebugPC: BigInt = BigInt("8000024c", 16),
-  
+
   EnablePerfDebug: Boolean = false,
   PerfLevel: String = "VERBOSE",
   EnableXMR: Boolean = true,
@@ -573,7 +573,7 @@ trait HasXSParameter {
 
   def HasBitmapCheck = coreParams.HasBitmapCheck
   def HasBitmapCheckDefault = coreParams.HasBitmapCheckDefault
-  
+
   /** prefetch config */
   def prefetcherSeq = coreParams.prefetcher
   def prefetcherNum = max(prefetcherSeq.size, 1) //TODO lyq: 1 for simpler code generation, but it's also ugly
