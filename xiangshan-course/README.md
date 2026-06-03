@@ -57,19 +57,9 @@
 ### 第三步：完成作业与分享的初体验（针对于测试阶段）
 
 目前任务开通的任务：完成"hello xiangshan"任务；
+请访问：[如何提交hello-xiangshan](user-guide/如何提交hello-xiangshan.md)查看提交教程
 
-1. **阅读课程资料并实操**：课程页面为[香山开发环境总述.md](docs/课程体系1：操作篇-香山开发环境操作/1.CHN/第一章香山开发环境总述.md)
-2. **运行并截图**：确保截图包含完整的运行结果
-3. **前往GitHub**：访问[Issues页面](https://github.com/OpenXiangShan/XiangShanLab/issues)
-4. **选择模板**：点击"New Issue"，选择"🎉 提交 hello xiangshan"模板
-5. **填写信息**：
 
-- 展示名称（您希望在社区中显示的名称）
-- 您的身份
-- 上传截图
-- 分享学习心得（可选但欢迎）
-
-5. **提交Issue**：点击"Submit new issue"，您的成果将在社区展示
 
 
 ## 各节点说明
