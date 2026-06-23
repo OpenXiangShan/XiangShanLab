@@ -1,15 +1,12 @@
 # 第十四章 Diplomacy 实战演练一
 
 参考：\
-<https://bosc.yuque.com/staff-xmw8rg/yhvg8o/xulw3ihe1i6dm5ce>
-
-<https://bosc.yuque.com/staff-xmw8rg/yhvg8o/maieerov2t0o6ms1>
-
-<https://bosc.yuque.com/staff-xmw8rg/yhvg8o/rylrwaxx95dl9ei8>
 
 <https://zhuanlan.zhihu.com/p/659308008>
 
 <https://zhuanlan.zhihu.com/p/633327505>
+
+<https://github.com/OpenXiangShan/ChiselIOPMP/>
 
 # 题目
 
