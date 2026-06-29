@@ -16,5 +16,8 @@
 - **xiangshan-code/** - 相关实验代码
 - **xiangshan-code/** - Related lab codes / experimental source codes
 
-- **BOSC-Interview-Questions/** - 开芯院部分面试题
-- **BOSC-Interview-Questions/** - Selected interview questions from the Beijing Institute of Open Source Chip (BOSC)
+- **Question bank/** - 题库
+- **Question bank/** - Question bank
+
+- **2026-CIE-RISC-V-Contest-Application-Track/** - 2026CIE全国RISC-V高水平创新及应用大赛应用方向赛题提交区域
+- **2026-CIE-RISC-V-Contest-Application-Track/** - 2026 CIE National RISC-V High-Level Innovation and Application Competition - Application Direction Submission Area
