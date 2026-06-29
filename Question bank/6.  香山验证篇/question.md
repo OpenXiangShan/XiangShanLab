@@ -24,7 +24,7 @@
     -   一个生成并运行成功的测试用例输出样例（日志、汇编代码、二进制文件等）。
 
     **资源链接：**
-    -   [https://github.com/yu-yake2002/NEMU-Matrix.git](https://github.com/yu-yake2002/NEMU-Matrix.git)
+    -   [https://github.com/OpenXiangShan/NEMU](https://github.com/OpenXiangShan/NEMU)
 5. **触发BUG**
     - 如何写出触发ROB FULL的测试用例
     - 如何写出触发LQ/SQ FULL的测试用例
