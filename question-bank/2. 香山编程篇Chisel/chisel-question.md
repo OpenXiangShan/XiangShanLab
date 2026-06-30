@@ -76,3 +76,8 @@
 
     ![](https://cdn.nlark.com/yuque/0/2026/png/53372797/1776409415548-adc4532a-7153-4692-9372-0bfd79570c89.png)
     *(这是一张图片，内容与地址扩展相关)*
+
+7.  **利用Gray code 判断 queue full/empty/almost full/ almost empty**
+    1. 同步时钟场景
+    2. 异步时钟场景
+    3. 代码提交要求：chisel 源码 + chisel test 代码
