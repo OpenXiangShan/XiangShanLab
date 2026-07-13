@@ -1,0 +1,4 @@
+interface:
+  display_name: "Analyze XiangShan Kunminghu"
+  short_description: "Analyze XiangShan and XSCache paths"
+  default_prompt: "Use $analyze-xiangshan-kunminghu to map a XiangShan Kunminghu memory request through mem/cache/XSCache, including speculative paths."
