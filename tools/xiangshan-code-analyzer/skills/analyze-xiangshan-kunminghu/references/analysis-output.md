@@ -6,7 +6,7 @@ Use this file whenever the skill generates a module code-analysis Markdown docum
 
 Save generated module code-analysis Markdown files under:
 
-`/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/`
+`xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/` relative to `xiangshanlab_home`
 
 This directory is for code-deep-dive analysis output. The older directory `中级-基于代码进行分析/` is not the default destination for newly generated module analysis unless the user explicitly requests it.
 
@@ -21,6 +21,7 @@ This directory is for code-deep-dive analysis output. The older directory `中�
 After producing the Markdown content, write it with:
 
 ```bash
+export xiangshanlab_home=/path/to/XiangShanLab
 skills/analyze-xiangshan-kunminghu/scripts/save_analysis.py --module <ModuleName> --input <markdown-file>
 ```
 

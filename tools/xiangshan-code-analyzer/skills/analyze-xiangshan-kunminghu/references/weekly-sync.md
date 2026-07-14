@@ -6,16 +6,17 @@ Use this file before analyzing XiangShan when the skill has not synchronized loc
 
 Keep the local documentation and course inputs fresh. XiangShan source analysis should use `https://github.com/OpenXiangShan/XiangShan.git` directly.
 
-- XiangShan Design Doc checkout when present, normally `/nfs/home/yuanmiaomiao/XiangShanLab/XiangShan-Design-Doc`
-- XiangShanLab course repository at `/nfs/home/yuanmiaomiao/XiangShanLab`
-- Generated course-analysis content under `/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-基于代码进行分析/`
-- Generated code deep-dive output under `/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/`
+- XiangShan Design Doc checkout when present, normally `XiangShan-Design-Doc` relative to `xiangshanlab_home`
+- XiangShanLab course repository at `xiangshanlab_home`
+- Generated course-analysis content under `xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-基于代码进行分析/` relative to `xiangshanlab_home`
+- Generated code deep-dive output under `xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/` relative to `xiangshanlab_home`
 
 ## Required Sync Check
 
 At the start of a module analysis, run the helper unless the user explicitly asks not to sync:
 
 ```bash
+export xiangshanlab_home=/path/to/XiangShanLab
 skills/analyze-xiangshan-kunminghu/scripts/weekly_sync.py
 ```
 
@@ -34,8 +35,8 @@ The helper exits without network work when the last sync is less than 7 days old
 
 Default repositories checked by the helper:
 
-- `/nfs/home/yuanmiaomiao/XiangShanLab`
-- `/nfs/home/yuanmiaomiao/XiangShanLab/XiangShan-Design-Doc`
+- `xiangshanlab_home`
+- `XiangShan-Design-Doc` relative to `xiangshanlab_home`
 
 Add additional repositories with `XIANGSHAN_SYNC_REPOS`, separated by `:` on Linux, or with `--extra-repos`.
 

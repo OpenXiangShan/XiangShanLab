@@ -21,13 +21,15 @@ from typing import Any
 
 DEFAULT_INTERVAL_DAYS = 7
 DEFAULT_STATE = Path.home() / ".cache" / "codex" / "analyze-xiangshan-kunminghu-weekly-sync.json"
+XIANGSHANLAB_HOME_ENV = "xiangshanlab_home"
+XIANGSHANLAB_HOME_ENV_UPPER = "XIANGSHANLAB_HOME"
 DEFAULT_REPOS = [
-    "/nfs/home/yuanmiaomiao/XiangShanLab",
-    "/nfs/home/yuanmiaomiao/XiangShanLab/XiangShan-Design-Doc",
+    ".",
+    "XiangShan-Design-Doc",
 ]
 COURSE_ANALYSIS_DIRS = [
-    "/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-基于代码进行分析",
-    "/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析",
+    "xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-基于代码进行分析",
+    "xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析",
 ]
 
 
@@ -90,7 +92,23 @@ def write_state(path: Path, state: dict[str, Any]) -> None:
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n")
 
 
-def parse_repos(extra: str | None) -> list[Path]:
+def xiangshanlab_home() -> Path:
+    raw = os.environ.get(XIANGSHANLAB_HOME_ENV) or os.environ.get(XIANGSHANLAB_HOME_ENV_UPPER)
+    if not raw:
+        raise RuntimeError(
+            f"set {XIANGSHANLAB_HOME_ENV} or {XIANGSHANLAB_HOME_ENV_UPPER} to the XiangShanLab checkout"
+        )
+    return Path(raw).expanduser().resolve()
+
+
+def resolve_under_home(path: str, home: Path) -> Path:
+    candidate = Path(path).expanduser()
+    if candidate.is_absolute():
+        return candidate
+    return home / candidate
+
+
+def parse_repos(extra: str | None, home: Path) -> list[Path]:
     repos = list(DEFAULT_REPOS)
     for raw in (os.environ.get("XIANGSHAN_SYNC_REPOS"), extra):
         if raw:
@@ -98,10 +116,11 @@ def parse_repos(extra: str | None) -> list[Path]:
     seen: set[str] = set()
     result: list[Path] = []
     for repo in repos:
-        normalized = str(Path(repo))
+        resolved = resolve_under_home(repo, home)
+        normalized = str(resolved)
         if normalized not in seen:
             seen.add(normalized)
-            result.append(Path(normalized))
+            result.append(resolved)
     return result
 
 
@@ -129,12 +148,17 @@ def main() -> int:
         except Exception:
             pass
 
-    results = [repo_state(repo, allow_pull=not args.no_pull) for repo in parse_repos(args.extra_repos)]
+    try:
+        top = xiangshanlab_home()
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
-    top = Path("/nfs/home/yuanmiaomiao/XiangShanLab")
+    results = [repo_state(repo, allow_pull=not args.no_pull) for repo in parse_repos(args.extra_repos, top)]
+
     course_statuses: list[dict[str, Any]] = []
     for raw_dir in COURSE_ANALYSIS_DIRS:
-        course_dir = Path(raw_dir)
+        course_dir = resolve_under_home(raw_dir, top)
         course_status: dict[str, Any] = {"path": str(course_dir), "exists": course_dir.exists()}
         if course_dir.exists() and top.exists():
             code, out = run(["git", "status", "--short", "--", str(course_dir)], top)

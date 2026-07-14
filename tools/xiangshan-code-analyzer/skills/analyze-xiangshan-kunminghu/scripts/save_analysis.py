@@ -7,11 +7,14 @@ import argparse
 import re
 import shutil
 import sys
+import os
 from datetime import datetime
 from pathlib import Path
 
+XIANGSHANLAB_HOME_ENV = "xiangshanlab_home"
+XIANGSHANLAB_HOME_ENV_UPPER = "XIANGSHANLAB_HOME"
 DEFAULT_OUTPUT_DIR = Path(
-    "/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/"
+    "xiangshan-course/docs/"
     "课程体系4：实现篇-香山高性能处理器微架构优化/"
     "中级-高性能香山处理器代码深入解析"
 )
@@ -30,6 +33,22 @@ def unique_path(path: Path) -> Path:
     return path.with_name(f"{path.stem}-{stamp}{path.suffix}")
 
 
+def xiangshanlab_home() -> Path:
+    raw = os.environ.get(XIANGSHANLAB_HOME_ENV) or os.environ.get(XIANGSHANLAB_HOME_ENV_UPPER)
+    if not raw:
+        raise RuntimeError(
+            f"set {XIANGSHANLAB_HOME_ENV} or {XIANGSHANLAB_HOME_ENV_UPPER} to the XiangShanLab checkout"
+        )
+    return Path(raw).expanduser().resolve()
+
+
+def resolve_output_dir(raw_output_dir: str) -> Path:
+    output_dir = Path(raw_output_dir).expanduser()
+    if output_dir.is_absolute():
+        return output_dir
+    return xiangshanlab_home() / output_dir
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Save XiangShan module analysis Markdown")
     parser.add_argument("--module", required=True, help="module name or desired file stem")
@@ -45,7 +64,11 @@ def main() -> int:
         print(f"input Markdown does not exist: {src}", file=sys.stderr)
         return 2
 
-    out_dir = Path(args.output_dir)
+    try:
+        out_dir = resolve_output_dir(args.output_dir)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     out_dir.mkdir(parents=True, exist_ok=True)
     filename = args.filename or f"{sanitize_stem(args.module)}.md"
     if not filename.lower().endswith(".md"):

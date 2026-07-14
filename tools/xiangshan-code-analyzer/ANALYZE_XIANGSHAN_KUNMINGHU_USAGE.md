@@ -110,6 +110,7 @@ XSCache:
 The skill performs a guarded weekly sync check for local documentation/course inputs before source inspection, unless the user explicitly asks not to sync. XiangShan source code itself is fetched or inspected directly from `https://github.com/OpenXiangShan/XiangShan.git`. It uses:
 
 ```bash
+export xiangshanlab_home=/path/to/XiangShanLab
 skills/analyze-xiangshan-kunminghu/scripts/weekly_sync.py
 ```
 
@@ -118,7 +119,7 @@ Behavior:
 - Runs at most once every 7 days by default; use `--force` only when explicitly requested.
 - Fetches configured git repositories and fast-forwards only clean worktrees with `git pull --ff-only`.
 - Never runs destructive commands such as reset, clean, or checkout.
-- Records status for `/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-基于代码进行分析/` without overwriting generated or edited course-analysis files.
+- Records status for `xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-基于代码进行分析/` relative to `xiangshanlab_home` without overwriting generated or edited course-analysis files.
 - Does not make local XiangShan source authoritative; the source revision comes from `https://github.com/OpenXiangShan/XiangShan.git`.
 - Reports missing or dirty repositories in the analysis scope.
 
@@ -127,11 +128,12 @@ Behavior:
 
 Generated module code-analysis Markdown should be saved to:
 
-`/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/`
+`xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/` relative to `xiangshanlab_home`
 
 Use the helper when saving generated analysis:
 
 ```bash
+export xiangshanlab_home=/path/to/XiangShanLab
 skills/analyze-xiangshan-kunminghu/scripts/save_analysis.py --module <ModuleName> --input <markdown-file>
 ```
 
