@@ -6,6 +6,9 @@ Use this template when producing the final explanation.
 
 - Branch/path analyzed:
 - Source commit analyzed:
+- Comparison mode: yes/no
+- Base branch/commit, if comparison:
+- Target branch/commit, if comparison:
 - Files read:
 - Theory/course docs read:
 - Design docs read:
@@ -25,10 +28,51 @@ For every algorithm, port, inter-module connection, and datapath segment discuss
 | --- | --- | --- | --- | --- |
 
 Rules:
-- `Commit` is the source commit used for the analysis, such as `git rev-parse HEAD` for local source or the remote commit SHA for GitHub source.
+- `Commit` is the source commit used for the analysis, such as `git rev-parse HEAD` for local source or the remote commit SHA for GitHub source. In comparison mode, provide one evidence row for the base side and one evidence row for the target side when both sides are needed to prove a changed behavior.
 - `File:line(s)` must point to the exact source lines for algorithms, IO definitions, `io.* :=` connections, `<>` bulk connections, module instantiations, mux/select logic, pipeline registers, queues, SRAM/table access, and datapath transforms.
 - Keep snippets short: include only the core Chisel lines needed to prove the claim.
 - If line numbers cannot be obtained, state why and do not present the claim as fully verified.
+
+
+## 2A. Branch Comparison Summary
+
+Use this section only for two-branch module comparison.
+
+| Item | Base | Target | Evidence |
+| --- | --- | --- | --- |
+| Branch/commit |  |  |  |
+| Module path(s) |  |  |  |
+| Effective instantiation path |  |  |  |
+| Public interface status |  |  |  |
+| Main behavioral status |  |  |  |
+
+Selected diff command or method:
+
+```bash
+```
+
+## 2B. Branch Difference Matrix
+
+Use this section only for two-branch module comparison. Include both sides of source evidence for every behavior-changing claim.
+
+| Change | Category | Base source lines and core code | Target source lines and core code | Current-skill code analysis | Behavioral impact | Compatibility risk | Verification focus |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+
+Classify changes as interface/IO, parameter, instantiation, control path, data path, FSM/state, storage, index/address, arbitration/priority, exception/interrupt/debug/privilege, AXI/TL/APB protocol, memory/cache pipeline, predictor algorithm, or mechanical/no effective behavior. The `Current-skill code analysis` cell must use the same principles as normal module analysis: who owns/updates the changed logic, why it exists, how it works, from what signal/source it is derived, to what consumer/effect it flows, and what changed in algorithm/control path/data path/storage/FSM/index/handshake behavior.
+
+
+## 2C. Diff Hunk Code-Analysis Checklist
+
+Use this section only for two-branch module comparison. For each semantic diff hunk, answer these items before summarizing impact:
+
+- Enclosing context: module/class/function, pipeline stage, storage structure, FSM, arbiter, IO bundle, or algorithm that contains the diff.
+- Base behavior: who owns or updates the old logic, why it existed, how it worked, from what source it was derived, and to what consumer/effect it flowed.
+- Target behavior: who owns or updates the new logic, why it exists, how it works, from what source it is derived, and to what consumer/effect it flows.
+- Changed scenario: one concrete transaction, request conflict, stall, replay, redirect, miss, exception, interrupt, flush, commit, or first-valid/reset case where base and target behave differently.
+- Analysis axes touched: interface/IO, parameter, control path, data path, FSM/state lifecycle, storage update/release/replace/search, valid set/clear/hold, index/address calculation, arbitration/priority, protocol channel, memory/cache stage, predictor lookup/update/recovery, or exception/debug/privilege path.
+- Verification focus: assertion, unit test, elaboration check, waveform signal group, directed stimulus, or regression class that should prove the changed behavior.
+
+Do not leave a semantic diff at the level of "code was added/removed". Reconstruct the effective microarchitecture behavior on both branches and compare it using the same source-evidence standard as the rest of this template.
 
 ## 3. Theory-to-Code Mapping
 
@@ -244,6 +288,8 @@ Use the philosophy axis explicitly:
 - To what consumer/effect?
 
 ## 22. Summary
+
+For branch comparison, start with a compact verdict: unchanged behavior, interface-compatible behavior change, interface-breaking change, or unclear without elaboration/tests. Then list the semantic diff count, mechanical diff count, main changed analysis axes, migration requirements, and verification priorities.
 
 End with a compact mental model:
 - One sentence for the module responsibility.

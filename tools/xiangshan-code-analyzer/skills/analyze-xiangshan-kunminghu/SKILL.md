@@ -1,13 +1,13 @@
 ---
 name: analyze-xiangshan-kunminghu
-description: Analyze OpenXiangShan XiangShan Kunminghu microarchitecture source code, design documents, and XiangShanLab superscalar/out-of-order microarchitecture course concepts, and XSCache cache-subsystem modules, chiselAIA interrupt-controller modules, chiselIOPMP protection modules, AXI/AXI4 bus master/slave interfaces, especially src/main/scala/xiangshan on kunminghu-v2 or a user-specified branch. Use when the user asks for code walkthroughs, theory-to-code mapping, module explanations, signal tracing with Chisel source line evidence, algorithm analysis with core source snippets, state-machine analysis, control-path/data-path analysis, port/connection analysis with line numbers, Mermaid diagram generation, waveform-draw handshake timing diagram generation, module-interface diagram generation, storage-structure analysis, exception/interrupt/debug/privilege analysis, chiselAIA/APLIC/IMSIC analysis, chiselIOPMP permission analysis, AXI master/slave protocol analysis, AXI channel/control-signal analysis, queue/buffer full-empty analysis, or pipeline/instruction-flow analysis for XiangShan backend, frontend, cache, or mem modules, including decode/rename/dispatch/issue/execute/writeback/commit, icache/itlb/ftq/ibuffer/branch predictors with paper-grounded predictor algorithm principles, and detailed load/store-class memory instruction flows across mem and cache directories, including scalar, floating-point, vector, AMO/LR/SC, prefetch, fence, and CBO flows with explicit per-stage pipeline behavior, FSM behavior, index/allocation algorithms, and why-this-exists plus scenario examples for key control signals and FSM states.
+description: Analyze OpenXiangShan XiangShan Kunminghu microarchitecture source code, design documents, and XiangShanLab superscalar/out-of-order microarchitecture course concepts, and XSCache cache-subsystem modules, chiselAIA interrupt-controller modules, chiselIOPMP protection modules, AXI/AXI4 bus master/slave interfaces, especially src/main/scala/xiangshan on kunminghu-v2, a user-specified branch, or two user-specified branches for module-level code comparison. Use when the user asks for code walkthroughs, theory-to-code mapping, module explanations, branch-to-branch code analysis comparison, module diff analysis, signal tracing with Chisel source line evidence, algorithm analysis with core source snippets, state-machine analysis, control-path/data-path analysis, port/connection analysis with line numbers, Mermaid diagram generation, waveform-draw handshake timing diagram generation, module-interface diagram generation, storage-structure analysis, exception/interrupt/debug/privilege analysis, chiselAIA/APLIC/IMSIC analysis, chiselIOPMP permission analysis, AXI master/slave protocol analysis, AXI channel/control-signal analysis, queue/buffer full-empty analysis, or pipeline/instruction-flow analysis for XiangShan backend, frontend, cache, or mem modules, including decode/rename/dispatch/issue/execute/writeback/commit, icache/itlb/ftq/ibuffer/branch predictors with paper-grounded predictor algorithm principles, and detailed load/store-class memory instruction flows across mem and cache directories, including scalar, floating-point, vector, AMO/LR/SC, prefetch, fence, and CBO flows with explicit per-stage pipeline behavior, FSM behavior, index/allocation algorithms, and why-this-exists plus scenario examples for key control signals and FSM states.
 ---
 
 # Analyze XiangShan Kunminghu
 
 ## Objective
 
-Use this skill to produce code-grounded explanations of XiangShan Kunminghu modules. Always obtain XiangShan source code directly from `https://github.com/OpenXiangShan/XiangShan.git` unless the user explicitly provides a local path. Default to branch `kunminghu-v2` unless the user explicitly asks for another branch or commit. If the prompt contains a conflicting branch/path, state the source URL and branch/commit being analyzed before explaining.
+Use this skill to produce code-grounded explanations of XiangShan Kunminghu modules, including branch-to-branch module comparisons when requested. Always obtain XiangShan source code directly from `https://github.com/OpenXiangShan/XiangShan.git` unless the user explicitly provides a local path. Default single-branch analysis to branch `kunminghu-v2` unless the user explicitly asks for another branch or commit. For comparison analysis, require two branch/commit names and one or more modules/paths from the user; if any of these are missing, ask for the missing branch/module fields before analyzing. If the prompt contains a conflicting branch/path, state the source URL and branch/commit being analyzed before explaining.
 
 Primary source roots:
 - Weekly sync helper: `scripts/weekly_sync.py` and `references/weekly-sync.md`
@@ -60,6 +60,41 @@ Before step 1, read `references/weekly-sync.md` and run `scripts/weekly_sync.py`
 14. Save generated module analysis Markdown to the code-deep-dive course directory. Read `references/analysis-output.md` and use `scripts/save_analysis.py`; default destination is `/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/`.
 15. Explain only claims supported by code or cited design docs. If a signal source or sink is unclear, say what was found and what file should be inspected next.
 
+
+## Branch Comparison Workflow
+
+Use this mode when the user asks to compare two branches, versions, commits, or implementations of a module.
+
+Required user inputs:
+- Base branch/commit: the older, baseline, or left-side version.
+- Target branch/commit: the newer, experiment, or right-side version.
+- Module/path: one or more module names, Scala/Chisel files, or subsystem paths to compare.
+
+If the user gives only one branch, only one side of the comparison, or no module, ask a concise clarification for the missing fields before fetching source. If the user does not define base/target direction but provides two branch names, preserve the user-provided order and label them explicitly.
+
+Comparison procedure:
+1. Resolve both branches/commits from `https://github.com/OpenXiangShan/XiangShan.git` or the user-provided local path. Record both exact commit SHAs.
+2. Locate the requested module in both versions. If a file or module was renamed, moved, added, or deleted, identify the old and new paths and cite the evidence from `git diff --name-status`, `git log --follow`, or direct tree inspection.
+3. Build a file set for comparison: primary module file, instantiated child modules whose interfaces changed, parameter definitions, bundle definitions, decode/CSR/config files when they affect the module, and test or elaboration hooks when relevant.
+4. Generate a source diff for the selected file set only. Prefer `git diff <base>..<target> -- <paths>` for one checkout or `git diff --no-index` for two worktrees. Do not summarize repository-wide churn.
+5. Treat each meaningful diff hunk as a code-analysis target, not a standalone text patch. For every changed hunk, recover the enclosing module/class/function, IO bundle, parameter owner, pipeline stage, storage structure, FSM, arbitration network, or algorithm context before explaining it.
+6. Read line-numbered source from both versions for every behavior-changing difference. Cite both sides as `base file:line` and `target file:line`; include short core snippets from both sides when a behavior claim depends on changed code.
+7. Classify every meaningful difference by impact area: public interface/IO, parameters, instantiation path, control path, data path, FSM/state lifecycle, storage structure, index/address calculation, arbitration/priority, exception/interrupt/debug/privilege, AXI/TL/APB protocol, memory/cache pipeline stage, predictor algorithm, or documentation-only/no effective behavior.
+8. For every semantic change, apply the normal module-analysis principles from this skill: answer who owns/updates it, why it exists, how it works, from what signal/source it is derived, and to what consumer/effect it flows. Also analyze affected valid/ready/fire behavior, state set/clear/hold behavior, index/address calculation, storage update/release/replace/search behavior, and simultaneous-request arbitration when relevant.
+9. Explain behavioral impact, not only text diff: what input scenario changes, which downstream module observes it, whether timing/backpressure/replay/flush/exception behavior changes, and whether compatibility or verification risk increases.
+10. Separate mechanical changes from semantic changes. Treat formatting, rename-only, comment-only, and dead-code changes as low impact unless they change effective instantiation, generated hardware, or public contracts. For mechanical changes, still state why they do or do not affect effective code.
+11. For each changed interface, state compatibility effects for callers and callees: ports added/removed/renamed, bundle field changes, width/parameter changes, ready/valid semantics, AXI channel role or payload changes, and required downstream updates.
+12. For each changed algorithm or state machine, compare initial/reset behavior, first transaction behavior, all changed branches/cases, simultaneous-request behavior, priority/tie behavior, and state update effects.
+13. For memory/cache/XSCache modules, compare stage-by-stage behavior and identify which stage changed, including set/bank/way/entry index calculation, MSHR/replay/refill/writeback behavior, and empty/full/backpressure logic.
+14. End with a migration/risk summary: required code changes, verification focus, likely regressions, and open questions that need waveform, elaboration, or test evidence.
+
+Diff analysis rules:
+- Do not output only a patch summary. Convert changed code into microarchitecture analysis using the same evidence, algorithm, control-path, data-path, storage, FSM, and signal-provenance requirements as single-branch analysis.
+- For every changed signal or expression, trace producer, consumers, parameter dependence, timing stage, reset/first-use behavior when applicable, and a concrete scenario where the base and target branches differ.
+- For every changed table, queue, buffer, array, register group, valid bit, pointer, or replacement state, compare `update`, `release`, `replace`, and `search/read/probe` behavior across both branches, including conflict priority and empty/full/backpressure effects.
+- For every changed selector, arbiter, mux priority, grant vector, or ready fanout, compare request qualification, simultaneous-request behavior, priority/fairness rule, losing request behavior, and state update effects.
+- For every changed pipeline, Decoupled/Valid, AXI/TL/APB, replay, flush, redirect, exception, interrupt, debug, privilege, cache miss/refill/writeback, or predictor update path, show the base behavior, target behavior, and the exact scenario that changes.
+
 ## Answer Contract
 
 For each requested module, produce:
@@ -88,6 +123,7 @@ For each requested module, produce:
 - Dynamic flow: describe normal path, speculative path, and at least one exceptional/replay/redirect/miss path when relevant.
 - chiselAIA / chiselIOPMP / AXI Bus: when relevant, identify APLIC/IMSIC or IOPMP boundary, AXI master/slave roles, AW/W/B/AR/R channels, protocol control signals, permission/interrupt behavior, backpressure, error responses, and exact source evidence.
 - Source evidence: include the analyzed source commit, file paths, class/module names, exact line references for algorithms/ports/connections/datapaths, and concise Chisel core code snippets. Line references are mandatory, not optional, for all behavior-changing claims.
+- Branch comparison evidence: when comparing two branches, include base and target branch names, exact commit SHAs, selected file set, diff command or method, per-change classification, base and target line references, changed code snippets from both sides, and a current-skill-style code analysis of each semantic diff: who/why/how/from what/to what, affected algorithm/control path/data path/storage/FSM/index/handshake behavior, concrete scenario difference, behavioral impact, compatibility risk, and verification focus.
 - Saved Markdown path: when producing a module analysis file, save it under the code-deep-dive course directory and report the absolute path.
 
 Use English for the generated analysis unless the user explicitly asks for another language.

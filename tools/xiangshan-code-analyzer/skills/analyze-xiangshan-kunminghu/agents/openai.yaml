@@ -1,7 +1,7 @@
 interface:
   display_name: "Analyze XiangShan Kunminghu"
-  short_description: "Analyze XiangShan and save deep dives"
-  default_prompt: "Use $analyze-xiangshan-kunminghu to map a XiangShan Kunminghu memory request through mem/cache/XSCache, including speculative paths."
+  short_description: "Analyze or compare XiangShan modules"
+  default_prompt: "Use $analyze-xiangshan-kunminghu to compare two XiangShan branches for a module, or map one module through code-grounded microarchitecture evidence."
 
 dependencies:
   tools:
