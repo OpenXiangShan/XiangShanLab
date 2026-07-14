@@ -14,13 +14,14 @@ To identify it:
 
 ## Algorithm Analysis
 
-For every algorithm, provide:
+For every algorithm, provide exact source evidence from the analyzed commit:
 
-| Algorithm | Code owner | Inputs | State used | Rule/priority | Output/effect |
-| --- | --- | --- | --- | --- | --- |
+| Algorithm | Code owner | Commit | Source lines | Core Chisel code | Inputs | State used | Rule/priority | Output/effect |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 Then explain in prose:
 - What problem the algorithm solves.
+- Which exact source lines prove the algorithm, and why the snippet is the core implementation.
 - The exact priority order or selection rule.
 - Whether it is combinational, registered, pipelined, speculative, replayable, or commit-time.
 - How it handles ties, invalid entries, full/empty conditions, mispredicts, misses, exceptions, and flushes.
@@ -32,9 +33,9 @@ Common XiangShan algorithms to look for:
 - Rename snapshot and redirect recovery.
 - Wakeup/select and bypass/forwarding selection.
 - Branch predictor table lookup/update and history recovery.
-- Cache tag match, replacement, miss merging, refill, writeback, and probe handling.
-- LSQ forwarding, RAW/RAR violation detection, replay selection, and commit release.
-- TLB lookup, permission checking, PTW miss handling, and page-cache replacement.
+- Cache tag match, replacement, miss-entry allocation, miss merging, refill, writeback, and probe handling.
+- LSQ/free-list allocation and release, LSQ forwarding, RAW/RAR violation detection, replay-entry selection, and commit release.
+- TLB lookup, permission checking, PTW entry allocation, PTW miss handling, and page-cache replacement.
 
 ## State Machine Analysis
 
@@ -45,11 +46,13 @@ Detect FSMs by searching for:
 
 For every FSM or state-like structure, provide:
 
-| State | Meaning | Entry condition | Exit condition | Outputs/actions | Backpressure/cancel behavior |
-| --- | --- | --- | --- | --- | --- |
+| State | Meaning | Why it exists | Example scenario | Entry condition | Exit condition | Outputs/actions | Backpressure/cancel behavior |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 
 Also explain:
 - Reset state and initialization.
+- Why each state is needed: the hazard, latency, ordering point, resource conflict, protocol phase, or recovery case it represents.
+- A concrete scenario for each nontrivial state, using real module signal names when possible.
 - State transitions caused by redirect, flush, cancel, replay, miss, grant/refill, commit, or exception.
 - Whether outputs are Mealy-style from current inputs or Moore-style from registered state.
 - Which parameter controls state count, queue depth, outstanding count, or timeout.
@@ -63,10 +66,11 @@ Trace:
 - Arbitration modules and `PriorityMux`, `Mux1H`, one-hot masks, age comparisons, and grant vectors.
 - Parameter-generated port counts and vector widths.
 
-For each important control signal, answer:
+For each important control signal, answer with exact Chisel file:line evidence and a short core code snippet:
 - Who produces it?
 - Which parameter controls its width/count/existence?
-- Why is it needed?
+- Why is it needed? Name the concrete hazard, ordering rule, bandwidth/resource limit, speculation recovery, or protocol phase it handles.
+- What is an example scenario where it changes behavior?
 - How is it computed?
 - From what upstream condition?
 - To what downstream module or state update?
@@ -112,21 +116,22 @@ When explaining control signals, prioritize these categories:
 - FSM controls: state registers, next-state logic, transition conditions, outputs qualified by state.
 - Pipeline controls: stage valid bits, stage registers, stall/flush/cancel/replay, stage-to-stage enable, bubble injection, redirect kill, load cancel.
 
-For each important control signal, name the controlling condition and the controlled effect. Example structure:
+For each important control signal, name the controlling condition, controlled effect, why the signal exists, and an example scenario. Example structure:
 
-| Control signal | Kind | Producer | Selects/enables/stalls what | Key condition | Parameter dependence |
-| --- | --- | --- | --- | --- | --- |
+| Control signal | Kind | Producer | Commit | Source lines | Core Chisel code | Why it exists | Example scenario | Selects/enables/stalls what | Key condition | Parameter dependence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Pipeline Signal Focus
 
-For pipelined modules, produce a stage table:
+For pipelined modules, produce a stage table with exact Chisel line evidence:
 
-| Stage | Valid/control | Payload registers | Work done | Stall/flush/replay behavior | Output to |
-| --- | --- | --- | --- | --- | --- |
+| Stage | Commit | Source lines | Core Chisel code | Valid/control | Payload registers | Work done | Index/allocation computed here | FSM/valid state effect | Stall/flush/replay behavior | Output to |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
-Trace key signals across stages, especially:
+Trace key signals across stages with source line evidence, especially:
 - request valid/ready and stage valid bits
 - address/tag/data/uop/metadata pipeline registers
 - hit/miss/exception/replay/cancel signals
 - write enables and array read enables
 - response valid and writeback valid
+- allocation/free indexes, set/bank/way/beat indexes, replacement/victim indexes, replay/miss/PTW entry indexes, and the algorithm that chooses them

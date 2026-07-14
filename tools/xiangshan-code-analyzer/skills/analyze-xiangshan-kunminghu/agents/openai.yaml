@@ -1,4 +1,10 @@
 interface:
   display_name: "Analyze XiangShan Kunminghu"
-  short_description: "Analyze XiangShan and XSCache paths"
+  short_description: "Analyze XiangShan and save deep dives"
   default_prompt: "Use $analyze-xiangshan-kunminghu to map a XiangShan Kunminghu memory request through mem/cache/XSCache, including speculative paths."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "paper-search-agent-mcp"
+      description: "Search academic papers for predictor algorithm principles"

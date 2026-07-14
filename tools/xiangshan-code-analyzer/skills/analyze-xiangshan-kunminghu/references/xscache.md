@@ -17,11 +17,14 @@ For XSCache modules, include:
 - Cache level role: L2 slice, LLC slice, CHI bridge, directory, data storage, request buffer, MSHR, prefetcher, link/network layer, or MMIO bridge.
 - Protocol role: TileLink side, internal mainpipe side, CHI TX/RX channel, snoop path, grant/response path, data path.
 - Theory-to-code mapping for cache hierarchy, coherence, miss handling, MSHR, directory, refill, writeback, probe/snoop, backpressure, and prefetch.
-- Control path: valid/ready/fire, channel arbitration, MSHR allocation, mainpipe arbitration, refill/grant response, probe/snoop conflict, retry/replay, sink/source selection.
+- Pipeline stages: each request/mainpipe/MSHR/refill/probe/response stage, what work it performs, which payload/control registers it owns, and what can stall, retry, replay, merge, or cancel it.
+- Control path: valid/ready/fire, channel arbitration, MSHR allocation, mainpipe arbitration, refill/grant response, probe/snoop conflict, retry/replay, sink/source selection. For every key control signal, explain why it exists and give a concrete L2/LLC/CHI scenario where it changes behavior.
 - Data path: address/set/tag/way/dir-state/data-line/beat/source-id/txn-id/opcode/param movement.
+- FSM behavior: MSHR, mainpipe, request/grant/refill/probe/CHI channel state transitions, including reset state, why each state exists, a concrete scenario for each nontrivial state, entry condition, per-state outputs/actions, and exit condition.
+- Index/allocation algorithms: request-buffer slot selection, MSHR entry allocation and secondary-merge lookup, directory set/tag/way lookup, replacement/victim way selection, data-bank/beat selection, source-id/txn-id allocation, grant/response buffer slots, and channel queue slots.
 - Queue/buffer capacity: request buffer, MSHR buffer, grant buffer, channel queues, prefetch queues, data storage queues, link-layer buffers.
 - Exception/privilege note: outer cache generally handles physical/coherent transactions, but still explain error/denied/corrupt/response status signals when present.
-- Mermaid data-path and module-interface diagrams.
+- Mermaid data-path and module-interface diagrams, plus waveform-draw handshake timing diagrams.
 
 ## Package Map
 
@@ -32,10 +35,10 @@ Analyze these modules for L2 behavior:
 - `CoupledL2.scala`: top-level CoupledL2 integration.
 - `Slice.scala`, `BaseSlice.scala`: per-slice organization.
 - `SinkA.scala`, `SinkC.scala`, `SourceB.scala`: TileLink-side request/probe/release channels.
-- `RequestBuffer.scala`: request buffering and scheduling; must analyze full/empty/backpressure.
+- `RequestBuffer.scala`: request buffering and scheduling; must analyze full/empty/backpressure and the slot allocation/free algorithm.
 - `RequestArb.scala`: arbitration into mainpipe or MSHR paths.
-- `MainPipe.scala`: core L2 pipeline; hit/miss/probe/refill/writeback control and data movement.
-- `MSHR.scala`, `MSHRCtl.scala`, `MSHRBuffer.scala`: miss state, secondary miss merge, refill/grant, queue capacity, replay/wakeup.
+- `MainPipe.scala`: core L2 pipeline; hit/miss/probe/refill/writeback control and data movement. Produce a stage table with directory/data access, set/tag/way/beat calculation, replacement/victim choice, MSHR interaction, probe/refill/writeback actions, and output handoff.
+- `MSHR.scala`, `MSHRCtl.scala`, `MSHRBuffer.scala`: miss state, secondary miss merge, refill/grant, queue capacity, replay/wakeup. Derive the MSHR index allocation policy, conflict/merge lookup, entry FSM, why each state/control signal exists, retry/replay behavior, scenario examples, and release/free timing.
 - `Directory.scala`: tag/directory state lookup/update/replacement.
 - `DataStorage.scala`: data SRAM/line/beat access.
 - `GrantBuffer.scala`: grant/data response buffering.
@@ -52,7 +55,7 @@ Analyze these modules for LLC/L3 behavior:
 - `OpenLLC.scala`: top-level LLC integration.
 - `Slice.scala`: slice organization.
 - `RequestBuffer.scala`, `RequestArb.scala`: request buffering/arbitration and capacity logic.
-- `MainPipe.scala`: LLC pipeline and directory/data coordination.
+- `MainPipe.scala`: LLC pipeline and directory/data coordination. Produce a stage table with directory/data access, set/tag/way/beat calculation, replacement/victim choice, miss/refill/writeback/probe actions, and output handoff.
 - `Directory.scala`: LLC directory/tag/coherence state.
 - `DataStorage.scala`: LLC data SRAM.
 - `MemUnit.scala`, `RefillUnit.scala`, `ResponseUnit.scala`, `SnoopUnit.scala`: downstream memory/refill/response/snoop behavior.
@@ -78,8 +81,8 @@ Analyze these modules for CHI protocol plumbing:
 
 For each XSCache request path, classify:
 
-| Request class | Entry channel | Main modules | Directory/data action | Response channel | Speculative/retry behavior |
-| --- | --- | --- | --- | --- | --- |
+| Request class | Entry channel | Main modules | Pipeline stages and work | FSM/retry states | Index/allocation algorithm | Directory/data action | Response channel | Speculative/retry behavior |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 Classes to consider:
 - L1 load miss / acquire / read shared.

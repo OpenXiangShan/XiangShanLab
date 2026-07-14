@@ -216,7 +216,7 @@ Producer path:
 5. RegCache delays the chosen `rcIdx` three cycles and writes data to that slot.
 6. TagTable uses wakeup `pdest/rcDest` to update searchable mapping.
 
-## 15. Mermaid Diagrams
+## 15. Diagrams
 
 ### Module Interface
 
@@ -269,6 +269,100 @@ flowchart LR
   IQMeta --> TagWrite[TagTable pdest->rcDest]
   WritePort --> DataArray[DataModule mem/v]
 ```
+
+
+### Handshake / Valid-like Timing
+
+RegCache has no Decoupled `ready` on the data arrays. The diagrams below therefore draw the valid-like enable timing that replaces a ready/valid handshake: `ren`, `wen`, tag hit `valid`, payload stability, and cancel masking.
+
+#### Dispatch Tag Lookup
+
+```waveform-draw
+{
+  "signal": [
+    { "name": "clk", "wave": "p....." },
+    { "name": "fromRename.valid", "wave": "010..." },
+    { "name": "SrcType.isXp", "wave": "010..." },
+    { "name": "rcTag.read.ren", "wave": "010..." },
+    { "name": "rcTag.read.tag", "wave": "x=x...", "data": ["psrc"] },
+    { "name": "allocPregs.match", "wave": "0.10.." },
+    { "name": "tagHit.raw", "wave": "0.10.." },
+    { "name": "read.valid", "wave": "0.0..." },
+    { "name": "useRegCache", "wave": "0.0..." },
+    { "name": "regCacheIdx", "wave": "x=x...", "data": ["ignored"] }
+  ],
+  "config": { "hscale": 1 }
+}
+```
+
+This is the `RegCacheTagTable` lookup path in `Dispatch.scala`: `read.ren` comes from `fromRename.valid && SrcType.isXp`, and `matchAlloc` suppresses a raw tag hit when rename allocates the same physical register in the same cycle.
+
+#### RegCache Data Read
+
+```waveform-draw
+{
+  "signal": [
+    { "name": "clk", "wave": "p......" },
+    { "name": "issue.valid", "wave": "010...." },
+    { "name": "readRegCache", "wave": "010...." },
+    { "name": "r_in.ren", "wave": "010...." },
+    { "name": "r_in.addr", "wave": "x=x....", "data": ["rcIdx"] },
+    { "name": "in_addr", "wave": "x.=x...", "data": ["rcIdx"] },
+    { "name": "bank.ren", "wave": "0.10..." },
+    { "name": "bank.addr", "wave": "x.=x...", "data": ["local"] },
+    { "name": "r_in.data", "wave": "x..=x..", "data": ["data"] },
+    { "name": "BN.readRegCache", "wave": "0..10.." }
+  ],
+  "config": { "hscale": 1 }
+}
+```
+
+DataPath asserts `r_in.ren` only for issued sources whose `DataSource` is `regcache`. `RegCache.scala` captures `addr` with `RegEnable`, gates the bank `ren` with `GatedValidRegNext`, and BypassNetwork consumes the returned data in the next operand-select stage.
+
+#### Producer Slot Allocation And Data Write
+
+```waveform-draw
+{
+  "signal": [
+    { "name": "clk", "wave": "p........." },
+    { "name": "age.out", "wave": "=.........", "data": ["rcN"] },
+    { "name": "toWakeupQueueRCIdx", "wave": "=.........", "data": ["rcN"] },
+    { "name": "wakeup.valid", "wave": "010......." },
+    { "name": "wakeup.bits.rcDest", "wave": "x=x......", "data": ["rcN"] },
+    { "name": "exu.valid", "wave": "0..10....." },
+    { "name": "BN.forwardIntWen", "wave": "0..10....." },
+    { "name": "RC.write.wen", "wave": "0...10...." },
+    { "name": "delayToRCIdx", "wave": "x...=x....", "data": ["rcN"] },
+    { "name": "RC.write.addr", "wave": "x...=x....", "data": ["rcN"] },
+    { "name": "RC.write.data", "wave": "x...=x....", "data": ["result"] }
+  ],
+  "config": { "hscale": 1 }
+}
+```
+
+The replacement index is exposed to IssueQueue before the data write. The same index is delayed by `RegNextN(..., 3)` and overwrites the actual data-array write address when BypassNetwork supplies the registered write port.
+
+#### Tag Write Mask And Cancel
+
+```waveform-draw
+{
+  "signal": [
+    { "name": "clk", "wave": "p......." },
+    { "name": "wakeup.valid", "wave": "01010..." },
+    { "name": "rfWen", "wave": "01010..." },
+    { "name": "ldCancel", "wave": "0.10...." },
+    { "name": "og0Cancel", "wave": "0...10.." },
+    { "name": "tag.wen", "wave": "01000..." },
+    { "name": "cancelVec", "wave": "0.1.0..." },
+    { "name": "tag.v", "wave": "0.10...." },
+    { "name": "read.hit", "wave": "0..0...." }
+  ],
+  "config": { "hscale": 1 }
+}
+```
+
+TagTable writes only when `wakeup.valid && rfWen && !LoadShouldCancel && !og0Cancel`. Existing mappings are released by allocation, same-tag replacement, or load cancel; data array contents may remain, but a cleared tag valid bit prevents future lookup from using stale data.
+
 
 ## 16. Storage Structures
 
@@ -330,6 +424,23 @@ A load-produced value can be advertised before all later cancellation conditions
 ### Port conflict path
 
 RegCache does not arbitrate same-entry multi-write conflicts. Tag/Data modules assert that two write ports cannot write the same local entry in the same cycle. Replacement selection is intended to produce distinct ranks for simultaneous write ports; if rank uniqueness breaks, AgeDetector or write modules assert. Multiple reads are provisioned by generated read ports; limited-port contention is handled before RegCache by DataPath/issue parameterization, not by RegCache ready/backpressure.
+
+
+## Code Anchors
+
+| Behavior | File and line anchors |
+| --- | --- |
+| RegCache bank split, read address capture, bank mux, and 3-cycle write-index delay | `backend/regcache/RegCache.scala:37`, `RegCache.scala:65`, `RegCache.scala:74`, `RegCache.scala:113` |
+| Data array valid bit, read assertion, and same-entry multi-write assertion | `backend/regcache/RegCacheDataModule.scala:45`, `RegCacheDataModule.scala:51`, `RegCacheDataModule.scala:59` |
+| Tag compare, write priority, cancel priority, and load-dependency shift | `backend/regcache/RegCacheTagModule.scala:56`, `RegCacheTagModule.scala:74`, `RegCacheTagModule.scala:82` |
+| Dispatch-side tag lookup and `useRegCache/regCacheIdx` update | `backend/dispatch/Dispatch.scala:400`, `Dispatch.scala:489`, `Dispatch.scala:493` |
+| TagTable write mask and cancel vector | `backend/regcache/RegCacheTagTable.scala:64`, `RegCacheTagTable.scala:80`, `RegCacheTagTable.scala:88`, `RegCacheTagTable.scala:105` |
+| DataPath RegCache instance, read-port construction, read data routing, and write-port connection | `backend/datapath/DataPath.scala:300`, `DataPath.scala:301`, `DataPath.scala:313`, `DataPath.scala:333` |
+| BypassNetwork operand source mux and RC write-port generation | `backend/datapath/BypassNetwork.scala:188`, `BypassNetwork.scala:216`, `BypassNetwork.scala:302`, `BypassNetwork.scala:321` |
+| Issue entry `useRegCache/regCacheIdx` set/clear on wakeup, replacement, and load cancel | `backend/issue/EntryBundles.scala:412`, `backend/issue/EnqEntry.scala:111` |
+| Region routes replacement RC index to issue queues and checks 3-cycle debug alignment | `backend/Region.scala:295`, `Region.scala:304` |
+| Age timer and replacement rank selection | `backend/regcache/RegCacheAgeTimer.scala:47`, `RegCacheAgeTimer.scala:61`, `backend/regcache/AgeDetector.scala:56`, `AgeDetector.scala:63` |
+
 
 ## 19. Summary
 

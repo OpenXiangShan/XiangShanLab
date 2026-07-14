@@ -35,9 +35,9 @@ Search for:
 8. Trace flush/cancel/replay/redirect behavior.
 9. State who consumes full/empty: which upstream ready/stall or downstream valid is affected.
 
-## Mermaid Recommendation
+## Diagram Recommendation
 
-For nontrivial queues/buffers, include a compact interface diagram:
+For nontrivial queues/buffers, include a compact Mermaid interface diagram and a waveform-draw enqueue/dequeue timing diagram:
 
 ```mermaid
 flowchart LR
@@ -48,4 +48,4 @@ flowchart LR
   Flush -- redirect/cancel --> Queue
 ```
 
-Replace generic node names with real module names and include capacity parameter labels.
+Replace generic node names with real module names and include capacity parameter labels. Also include a waveform-draw block showing enq.valid, enq.ready, enq.fire, deq.valid, deq.ready, deq.fire, full/empty or flush/cancel behavior when those signals exist.

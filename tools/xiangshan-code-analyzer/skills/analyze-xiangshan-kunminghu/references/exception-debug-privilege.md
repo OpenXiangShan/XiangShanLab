@@ -1,6 +1,6 @@
 # Exception, Interrupt, Debug, and Privilege Analysis
 
-Use this file whenever a module may generate, transform, prioritize, carry, or consume exception, interrupt, debug, trap, CSR, privilege, PMP/PMA, or page-fault metadata. This is mandatory for backend control/ROB/CSR, frontend redirect/fetch exception, mem/cache/MMU/TLB, and any FU with exception outputs.
+Use this file whenever a module may generate, transform, prioritize, carry, or consume exception, interrupt, debug, trap, CSR, privilege, PMP/PMA, IOPMP, AIA, or page-fault metadata. This is mandatory for backend control/ROB/CSR, frontend redirect/fetch exception, mem/cache/MMU/TLB, and any FU with exception outputs.
 
 ## Required Coverage
 
@@ -11,9 +11,9 @@ For each relevant module, identify:
 
 Classes to check:
 - Synchronous exceptions: illegal instruction, breakpoint, ecall, load/store/inst address misaligned, page fault, access fault, virtual instruction, guest page fault, floating/vector exceptions when represented architecturally.
-- Interrupts: machine/supervisor/virtual/timer/software/external/local interrupt signals as implemented in CSR/trap logic.
+- Interrupts: machine/supervisor/virtual/timer/software/external/local interrupt signals as implemented in CSR/trap logic, including chiselAIA APLIC/IMSIC/MSI paths when present.
 - Debug: debug mode entry, trigger match, breakpoint, single-step, debug CSR paths, DRET/MRET/SRET interactions where relevant.
-- Privilege: current privilege mode, virtualization mode, satp/hgatp/vsatp effects, mstatus/sstatus/hstatus fields, PMP/PMA permission checks, TLB permission checks, CSR privilege checks.
+- Privilege: current privilege mode, virtualization mode, satp/hgatp/vsatp effects, mstatus/sstatus/hstatus fields, PMP/PMA/IOPMP permission checks, TLB permission checks, CSR/AIA register privilege checks.
 - Redirect/trap: trap target generation, frontend redirect, backend flush, ROB walk/recovery, CSR state update.
 
 ## Search Terms
@@ -24,7 +24,8 @@ Use these terms in code search:
 - Interrupt: `interrupt`, `intr`, `mip`, `mie`, `sip`, `sie`, `localInterrupt`, `timer`, `external`, `software`
 - Debug: `debug`, `Debug`, `dmode`, `Trigger`, `tdata`, `Dret`, `dret`, `singleStep`, `breakpoint`
 - Privilege: `priv`, `Privilege`, `mode`, `mstatus`, `sstatus`, `hstatus`, `satp`, `vsatp`, `hgatp`, `PMP`, `PMA`, `permission`, `pf`, `af`, `pageFault`, `accessFault`
-- CSR: `CSR`, `NewCSR`, `CSRBundles`, `CSRModule`, `TrapHandleModule`, `InterruptFilter`, `MachineLevel`, `SupervisorLevel`, `HypervisorLevel`, `DebugLevel`
+- CSR/AIA: `CSR`, `NewCSR`, `CSRBundles`, `CSRModule`, `TrapHandleModule`, `InterruptFilter`, `MachineLevel`, `SupervisorLevel`, `HypervisorLevel`, `DebugLevel`, `APLIC`, `IMSIC`, `mstateen`, `sstateen`, `hstateen`, `sireg`, `siselect`, `vsireg`, `vsiselect`
+- IOPMP: `IOPMP`, `iopmp`, `permission`, `deny`, `accessFault`, `APB`, `bypass`, `entry`, `lock`
 
 ## Analysis Procedure
 

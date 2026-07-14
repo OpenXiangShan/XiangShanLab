@@ -1,6 +1,6 @@
 # Frontend Reference
 
-Read this file for frontend fetch, prediction, and instruction delivery modules under `src/main/scala/xiangshan/frontend`.
+Read this file for frontend fetch, prediction, and instruction delivery modules under `src/main/scala/xiangshan/frontend`. For predictor modules, also read `predictor-papers.md` and use `paper-search-agent-mcp` to search the relevant paper before explaining algorithm principles.
 
 ## Main Files
 
@@ -78,14 +78,16 @@ Analyze each predictor separately, then describe the ensemble:
 - `BPU`: integration, arbitration, update, redirect, and response composition
 
 For each predictor:
-- Storage structures: tables, tags, counters, history registers, stack entries
-- Read path: index generation, tag match, prediction output
-- Update path: who trains, when, with what resolved metadata
+- Paper-grounded principle: use `paper-search-agent-mcp` and summarize the relevant paper's algorithm before code mapping
+- Storage structures: tables, tags, counters, history registers, folded histories, useful bits, target entries, stack entries
+- Read path: index generation, tag match, provider/alternate selection, confidence/counter interpretation, prediction output
+- Update path: who trains, when, with what resolved metadata, allocation/replacement, useful-bit or confidence update when present
 - Recovery path: history repair, redirect flush, snapshot restore
+- Scenario example: cold start, aliasing, long-history branch, indirect target change, return prediction, misprediction redirect, or correction override
 - Consumer: next PC generation, FTQ metadata, backend redirect comparison
 
 Always distinguish prediction-time signals from training/update signals.
 
 ## Extra Frontend Analysis Requirements
 
-For frontend modules, explain predictor algorithms with lookup/update/recovery separation. For FSMs, inspect fetch pipeline control, ICache miss/refill control, FTQ enqueue/dequeue/commit state, RAS/history recovery, and redirect handling. Keep prediction data path separate from training/update control path.
+For frontend modules, explain predictor algorithms with paper-backed principle plus lookup/update/recovery separation. For FSMs, inspect fetch pipeline control, ICache miss/refill control, FTQ enqueue/dequeue/commit state, RAS/history recovery, and redirect handling. Keep prediction data path separate from training/update control path.

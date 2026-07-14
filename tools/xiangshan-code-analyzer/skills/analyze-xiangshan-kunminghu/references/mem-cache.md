@@ -9,10 +9,13 @@ For any module under `mem` or `cache`, explain:
 - Module boundary and parent instantiation path.
 - Instruction categories that can reach it: scalar load, scalar store, FP load/store, vector load/store, AMO/LR/SC, prefetch, fence, CBO, uncache/MMIO, misaligned access, TLB/PTW request, cache probe/refill/writeback.
 - Theory-to-code mapping for memory ordering, structural hazards, data hazards, load-store forwarding, replay, precise exceptions, and commit visibility.
-- Control path: valid/ready/fire, arbiters, mux selects, stalls, flushes, redirects, load cancel, replay, exception, commit release, refill/grant/probe control.
+- Pipeline stages: list every visible stage and describe exactly what it does, including request accept, address generation, TLB lookup, tag/meta lookup, data access, miss/replay allocation, refill/writeback/probe handling, response/writeback, and commit-visible effects when present.
+- Control path: valid/ready/fire, arbiters, mux selects, stalls, flushes, redirects, load cancel, replay, exception, commit release, refill/grant/probe control. For every key control signal, explain why it exists and give a concrete load/store/cache scenario where it changes behavior.
 - Data path: uop/address/data/mask/tag/way/set/line/beat/exception metadata movement.
+- FSM behavior: explicit `Enum` states and implicit valid/status lifecycles, with reset state, why each state exists, a concrete scenario for each nontrivial state, transition conditions, per-state outputs/actions, and backpressure/cancel/replay behavior.
+- Index/allocation algorithms: queue/free-list entry allocation, LSQ/LQ/SQ pointers, replay-entry choice, MSHR/miss entry allocation and merge, TLB/PTW entry selection, cache set/tag/way/bank/beat selection, victim/replacement way selection, and release/free policy.
 - Storage structures: queue entries, valid/status bits, pointers, data arrays, tag/meta arrays, miss entries, replay entries, uncache entries, TLB entries, PTW queues.
-- Mermaid data-path and module-interface diagrams.
+- Mermaid data-path and module-interface diagrams, plus waveform-draw handshake timing diagrams.
 
 ## mem Directory Module Expansion
 
@@ -23,10 +26,10 @@ Top and common:
 - `mem/MaskedDataModule.scala`: data/mask helper storage; explain when used by store/vector paths.
 
 Pipeline units:
-- `mem/pipeline/LoadUnit.scala`: scalar/load address generation, TLB/cache request, exception/replay/writeback path.
-- `mem/pipeline/StoreUnit.scala`: store address/data path, SQ enqueue/update, address check, commit-visible store handoff.
-- `mem/pipeline/AtomicsUnit.scala`: AMO/LR/SC request generation and ordering; connect to DCache mainpipe AMO path.
-- `mem/pipeline/HybridUnit.scala`: shared or mixed memory execution path; identify which instruction classes use it in the selected branch.
+- `mem/pipeline/LoadUnit.scala`: scalar/load address generation, TLB/cache request, exception/replay/writeback path; describe every code-defined stage and what address, mask, uop, TLB, cache, exception, and replay work is performed in that stage.
+- `mem/pipeline/StoreUnit.scala`: store address/data path, SQ enqueue/update, address check, commit-visible store handoff; describe store address/data split stages, SQ index allocation/update, mask/data generation, and commit release timing.
+- `mem/pipeline/AtomicsUnit.scala`: AMO/LR/SC request generation and ordering; connect to DCache mainpipe AMO path and explain serialization/replay FSM states and index/allocation decisions.
+- `mem/pipeline/HybridUnit.scala`: shared or mixed memory execution path; identify which instruction classes use it in the selected branch and split shared stages by work performed.
 
 LSQ:
 - `mem/lsqueue/LSQWrapper.scala`: LSQ integration and interfaces to MemBlock, load/store units, ROB/commit, DCache.
@@ -39,7 +42,7 @@ LSQ:
 - `LoadMisalignBuffer.scala`: split/recombine misaligned scalar/vector loads.
 - `StoreQueue.scala`, `StoreQueueData.scala`: store address/data/status, forwarding, commit release, CBO/CMO timing if present.
 - `StoreMisalignBuffer.scala`: split/recombine misaligned stores.
-- `FreeList.scala`: LSQ entry allocation/free policy.
+- `FreeList.scala`: LSQ entry allocation/free policy; derive the exact free-mask, priority/round-robin/first-free choice, allocated index, release index, wrap behavior, and simultaneous allocate/free handling.
 
 Store buffer:
 - `mem/sbuffer/Sbuffer.scala`: committed store buffering, DCache store request issue, forwarding/merge behavior, drain and fence interaction.
@@ -74,9 +77,9 @@ DCache:
 - `cache/dcache/FakeDCache.scala`: nonfunctional substitute only when selected.
 - `cache/dcache/CtrlUnit.scala`: flush/control/error/cache-control handling.
 - `cache/dcache/Uncache.scala`: uncached/MMIO request FSM and TileLink/outer-bus behavior.
-- `cache/dcache/loadpipe/LoadPipe.scala`: load request stages, TLB result, tag/data access, forwarding response, hit/miss/replay/exception.
-- `cache/dcache/storepipe/StorePipe.scala`: store request stages, data mask, tag/meta/data writes, miss/replay/forwarding implications.
-- `cache/dcache/mainpipe/MainPipe.scala`: serialized main pipeline for miss/refill/store/AMO/probe/writeback operations; identify arbitration priority.
+- `cache/dcache/loadpipe/LoadPipe.scala`: load request stages, TLB result, tag/data access, forwarding response, hit/miss/replay/exception; produce a stage table for s0/s1/s2 or the branch's actual stage names with stage work, payload registers, set/bank/way/tag/index calculation, hit/miss decision, replay/cancel handling, and response timing.
+- `cache/dcache/storepipe/StorePipe.scala`: store request stages, data mask, tag/meta/data writes, miss/replay/forwarding implications; produce a stage table with address/mask generation, set/bank/way/tag calculation, write-enable generation, and miss/replay behavior.
+- `cache/dcache/mainpipe/MainPipe.scala`: serialized main pipeline for miss/refill/store/AMO/probe/writeback operations; identify arbitration priority, pipeline stage ownership, per-state/FSM actions, and entry/way/set allocation or replacement decisions.
 - `cache/dcache/mainpipe/MissQueue.scala`: miss allocation, merge, MSHR-like behavior, refill response.
 - `cache/dcache/mainpipe/Probe.scala`: coherence probe request handling and conflict with normal accesses.
 - `cache/dcache/mainpipe/WritebackQueue.scala`: dirty eviction/writeback queue lifecycle.
@@ -101,8 +104,8 @@ When the user asks about load/store/AMO/prefetch/fence/CBO, trace the operation 
 
 For each instruction category, provide:
 
-| Instruction category | Decode/FU marker | mem modules | cache/MMU modules | Commit/exception behavior | Special cases |
-| --- | --- | --- | --- | --- | --- |
+| Instruction category | Decode/FU marker | mem modules | cache/MMU modules | Pipeline stages and work | FSM/replay states | Index/allocation algorithm | Commit/exception behavior | Special cases |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Scalar Load Path
 
@@ -206,7 +209,7 @@ Always separate speculative memory dependence tracking from architecturally comm
 
 ## Extra Memory/Cache Analysis Requirements
 
-For mem/cache modules, algorithm analysis must cover load-store ordering, forwarding, replay selection, miss merging, replacement, refill, writeback, probes, TLB/PTW walks, permission checks, vector split/merge, misaligned split/recombine, uncache/MMIO, AMO serialization, and CBO/fence ordering when relevant. FSM analysis is mandatory for uncache, atomics, misalign buffers, miss queues, writeback queues, PTW, vector segment/FOF buffers, cache-control units, and cache mainpipe/probe handling when state exists.
+For mem/cache modules, algorithm analysis must cover load-store ordering, forwarding, replay selection, miss merging, replacement, refill, writeback, probes, TLB/PTW walks, permission checks, vector split/merge, misaligned split/recombine, uncache/MMIO, AMO serialization, and CBO/fence ordering when relevant. For every behavior-changing control signal or FSM state, include why it exists and an example scenario such as a TLB miss, DCache miss, full replay queue, store-load forwarding hit, load cancel, probe conflict, refill response, commit release, or exception. Pipeline stage analysis is mandatory for every mem/cache/XSCache path: identify each stage, the work performed in that stage, the payload/control registers, the valid/ready or enable condition, stall/flush/replay behavior, and output handoff. FSM analysis is mandatory for uncache, atomics, misalign buffers, miss queues, writeback queues, PTW, vector segment/FOF buffers, cache-control units, and cache mainpipe/probe handling when state exists. Index/allocation analysis is mandatory for LSQ/LQ/SQ/free-list entries, replay entries, MSHR/miss entries, PTW entries, TLB entries, cache set/bank/way/beat selectors, victim/replacement ways, store-buffer slots, vector split/merge slots, and CBO/fence queue slots when present.
 
 
 ## Exception/Interrupt/Debug/Privilege Checks
