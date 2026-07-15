@@ -92,7 +92,7 @@ Hash drivers are required for any predictor, cache, TLB, prefetcher, memory-depe
 | --- | --- | --- | --- | --- |
 | `H_SAME_INDEX_DIFF_TAG` | Same hash/index, different tag | Generate two or more addresses/PCs with same index but different tag | Conflict causes replacement, way select, alias handling, or miss as code defines | Hash conflict checker |
 | `H_SAME_INDEX_SAME_TAG_DIFF_CONTEXT` | Same index/tag, different context | Same hash key under different ASID/VMID/domain/privilege | Context tag or flush prevents stale hit | Context isolation checker |
-| `H_HISTORY_ALIAS` | Folded history alias | Generate branch histories with same folded hash but different real history | Predictor update/lookup conflict follows code | Predictor checker |
+| `H_HISTORY_ALIAS` | Folded history alias | Generate branch histories with same folded hash but different real history, including reset, all-zero, all-one, oldest-bit-only, newest-bit-only, alternating, saturated-length, and fold-boundary patterns | Predictor update/lookup conflict follows code and every history consumer sees the exact expected folded and unfolded value | Predictor history checker |
 | `H_BANK_ALIAS` | Hash-to-bank alias | Generate addresses mapping to same bank and different banks | Bank conflict and arbitration match code | Bank checker |
 | `H_MSHR_MERGE_ALIAS` | Miss merge hash alias | Generate misses with same merge key and same index/different tag | Merge or allocate decision follows code | MSHR checker |
 | `H_PREFETCH_ALIAS` | Prefetch table alias | Generate streams that collide in prefetch tables | Training/replacement/throttle follows code | Prefetch checker |
@@ -116,6 +116,7 @@ The script must:
   - same set, different way candidate
   - same hash, different context
   - boundary addresses around page/cacheline/fetch-block if applicable
+  - predictor history patterns when the hash uses history: reset, all-zero, all-one, oldest-bit-only, newest-bit-only, alternating 0101 and 1010, saturated-length, fold-boundary, same-folded-hash/different-real-history, speculative-update, commit-update, redirect-recovery, nested-redirect-recovery, and context-switch/fence
 - Avoid illegal architectural addresses unless the test explicitly targets fault behavior.
 - Emit JSON and assembly-friendly hex lists:
 

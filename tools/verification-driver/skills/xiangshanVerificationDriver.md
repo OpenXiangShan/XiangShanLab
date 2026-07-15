@@ -8,6 +8,7 @@ This driver pack combines two sources:
 - Specification source: `https://github.com/docularxu/openclaw-skills.git`, skill `riscv-spec`.
 - Debug/privilege implementation source: effective XiangShan Chisel lines reported by the code-analysis source for debug event producers, privilege guards, CSR fields, trap/redirect priority, and commit state updates.
 - Forward-progress implementation source: effective XiangShan Chisel lines reported by the code-analysis source for every mux, arbiter, FSM, queue, replay path, ready/valid path, credit path, and completion condition.
+- Performance counter implementation source: effective XiangShan Chisel lines reported by the code-analysis source for every performance counter CSR, event selector, inhibit/control bit, overflow bit, event producer, privilege/virtualization filter, and counter update path.
 
 Each generated driver is split into three required parts:
 
@@ -72,9 +73,12 @@ Architecture exception drivers must use `skills/architectureExceptionDrivers.md`
 
 Debug event drivers must use `skills/debugEventDrivers.md` when a module can produce, carry, arbitrate, consume, mask, or observe debug events, debug CSRs, trigger matches, single-step, halt/resume, `dret`, trap/debug redirects, or debug-mode privilege restrictions.
 
+Performance monitor counter drivers must use `skills/performanceMonitorCounterDrivers.md` when a module implements, updates, filters, exposes, virtualizes, snapshots, or consumes `cycle`, `instret`, `mcycle`, `minstret`, `hpmcounter*`, `mhpmcounter*`, `mhpmevent*`, inhibit/control CSRs, overflow/pending state, event buses, event aggregation, or performance-monitor interrupt logic.
+
 
 - Instruction legality and encoding for module-visible instruction classes.
 - CSR read/write legality, field mask behavior, WARL/WLRL behavior, privilege access, and side effects.
+- Performance monitor counter CSR legality, event selector legality, inhibit/control behavior, overflow/pending behavior, and privilege/virtualization visibility when implemented.
 - Exception priority and trap metadata: cause, tval, epc, interrupt bit, debug entry, and redirect target.
 - Per-instruction exception closure: every implemented instruction or instruction class must enumerate and test all architecturally reachable exceptions.
 - Memory-instruction exception priority: one memory instruction must be tested with multiple candidate exceptions in the same execution path, including misalign, page fault, guest page fault, access fault, PMP/PMA/IOPMP deny, replay, LR/SC reservation, vector element fault, CBO fault, and MMIO error when applicable.
@@ -99,6 +103,22 @@ Minimum microarchitecture scenarios:
 - Microarchitecture events: redirect, replay, port contention, resource contention, structural conflict, bank conflict, same-entry conflict, MSHR/replay-entry conflict, CSR/ROB/LSQ ordering conflict, and exception versus redirect priority.
 - Debug microarchitecture events: debug valid/cause/PC metadata generation, queueing, kill, replay preservation, redirect selection, commit/trap arbitration, CSR update timing, and resume state restoration.
 - Storage: update, release, replace, search/read/probe, read/write same index, multiple writes same index, RAW/WAR/WAW, bypass/forwarding, and assert/error behavior.
+- Performance counters: maximum concurrent event pulses, CSR read/write versus increment races, inhibit/event-select changes during active events, overflow boundaries, queue full/empty update pressure, flush/replay kill behavior, trap/debug/context-switch filtering, and no lost or double-counted events.
+
+## Flush Extreme-State Rules
+
+Every code-reachable flush, redirect, cancel, kill, invalidate, drain, recovery, fence, context-switch flush, exception flush, interrupt/debug flush, replay flush, or cache/TLB invalidation path must be tested in microarchitecture extreme states, not only in a nominal partially-filled pipeline.
+
+Minimum flush extreme-state coverage:
+
+- Queue and buffer occupancy: assert each flush source while every affected queue, skid buffer, replay queue, update queue, FTQ/IBuffer-like structure, MSHR/PTW entry pool, store/load queue, issue queue, ROB, writeback buffer, refill buffer, and protocol tracker is empty, almost empty, exactly one entry live, full, almost full, wrapped, and simultaneously enqueueing/dequeueing when reachable.
+- Pipeline and handshake pressure: assert flush while valid is stalled by ready low, while response valid is pending, while producer and consumer fire in the same cycle, while payload is held stable, and while backpressure propagates across adjacent stages.
+- Resource extremes: assert flush while all relevant ports, banks, ways, entries, credits, IDs, source/sink IDs, replacement candidates, replay slots, and update ports are exhausted or contended.
+- State-machine extremes: assert flush from idle, first-request, every busy/wait/retry state, terminal response state, error state when reachable, and same-cycle competing transition states.
+- Boundary timing: assert flush before accept, on accept/fire, after accept before write, on response, after response before commit, during commit, during retry/replay, during replacement/refill, and during pointer wrap.
+- Required checks: killed entries cannot later fire, commit, wake up consumers, update predictors/CSRs/memory/cache metadata, leak context, consume grants, free resources twice, lose surviving older state, corrupt occupancy flags, or block new legal work after the code-defined drain/recovery point.
+- Coverage accounting: if any extreme state is unreachable, the generated driver must cite exact code evidence or constraints. Otherwise it must include a row and checker for that state.
+
 
 ## Debug Event and Privilege Rules
 
@@ -147,9 +167,9 @@ Every module driver that consumes instruction operands, functional-unit operands
 Minimum operand boundary coverage:
 
 - Integer operands: zero, one, negative one, signed min/max, unsigned max, carry/borrow pairs, shift amount edges, mul/div edges, branch compare edges, and bit-pattern edges.
-- Floating operands: signed zero, infinities, quiet/signaling NaNs, NaN payloads, subnormal/normal boundaries, largest finite, rounding halfway cases, conversion boundaries, FMA cancellation, fflags, frm, FS legality, and NaN boxing when applicable.
+- Floating operands: signed zero, infinities, quiet/signaling NaNs, NaN payloads, subnormal/normal boundaries, smallest subnormal, largest subnormal, smallest normal, largest finite, underflow boundaries, overflow boundaries, rounding halfway cases, conversion boundaries, FMA cancellation, fflags, frm, FS legality, and NaN boxing when applicable.
 - Address operands: alignment, page, superpage, guest-page, canonicality, PMP/PMA/IOPMP boundary, cacheline, bank/set, MMIO/uncache, and fetch target boundaries.
-- Vector operands: `vl`, `vstart`, masks, SEW/LMUL, stride/index addresses, reductions, and faulting element boundaries when vector is implemented.
+- Vector operands: `vl`, `vstart`, masks, SEW/LMUL, stride/index addresses, reductions, faulting element boundaries, and per-lane FP special operand coverage for every implemented vector lane when vector FP is implemented.
 - CSR/control operands: reset values, writable masks, reserved bits, WARL edge values, privilege modes, status stack fields, interrupt masks, and protection config boundaries.
 - Bus protocol fields: AXI/TL/APB/CHI IDs, source/sink, burst length, size, masks/strobes, response, and boundary beat fields.
 
@@ -194,6 +214,21 @@ Minimum required coverage:
 - Hash conflict generation: for every code-derived hash, index fold, XOR, modulo, mask, bank hash, folded history, predictor table index, prefetch hash, cache/directory hash, or MSHR merge key, generate conflict inputs and, when possible, a script that constructs same-index/different-tag and same-hash/different-context address groups.
 
 The generated hash script must encode the exact code-derived expression. It must not use a guessed hash function.
+
+## Predictor Coverage Rules
+
+Every module driver for a predictor, predictor table, predictor meta path, or predictor-like trainer must cover both correct prediction and incorrect prediction scenarios. This includes branch direction predictors, target predictors, indirect-target predictors, statistical correctors, base predictors, return-address stacks, loop or stride predictors, prefetch predictors, memory-dependence predictors, and any local predictor instantiated under a larger BPU or frontend module.
+
+Minimum predictor coverage:
+
+- Predictor inventory: enumerate every code-instantiated predictor component, table, history register, folded-history object, meta field, trainer, update queue, recovery snapshot, and consumer. Do not collapse multiple predictors into one generic row when their indexes, histories, replacement rules, or update rules differ.
+- Correct prediction: for each predictor, construct taken/not-taken, target-hit, return-hit, indirect-target-hit, no-violation, or no-prefetch-miss cases as applicable, then check selected prediction, metadata, confidence/counter update, and no spurious redirect/replay.
+- Incorrect prediction: for each predictor, construct wrong direction, wrong target, wrong return address, wrong indirect target, false positive, false negative, alias-hit, and stale-entry cases when reachable, then check redirect/replay, architectural recovery, wrong-path state removal, and correct retraining.
+- History completeness: for every history used by a predictor, cover reset value, all-zero history, all-one history, single-bit oldest/newest positions, alternating patterns, saturated length, fold-boundary patterns, shift-in on prediction, commit update, speculative update, redirect recovery, nested redirect recovery, and context switch/fence handling when reachable.
+- History consumers: every table index, tag, confidence path, chooser path, replacement path, RAS operation, update decision, and recovery snapshot that consumes history must be checked against the exact code-derived history value before and after update/recovery.
+- Lookup/update timing: include lookup-only, update-only, same-entry lookup+update, lookup+redirect, update+redirect, multi-update same cycle, queue full/almost-full, and reset/flush while update is pending.
+- Context isolation: train the predictor under one privilege/process/VM/domain context and probe it under another. The driver must prove entries are tagged, flushed, rechecked, or harmlessly speculative according to code.
+- Scoreboard rule: a correct prediction must not hide an illegal state update, and an incorrect prediction must not cause architectural corruption after recovery.
 
 ## Cache Structure Rules
 

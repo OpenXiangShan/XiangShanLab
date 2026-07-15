@@ -21,6 +21,7 @@ Microarchitecture Scenario Verification:
 | Global redirect | Branch mispredict, exception, interrupt, debug entry | Frontend/backend younger state flushed; older state preserved | Flush/replay checker |
 | Cross-subsystem contention | Fetch, LSU, cache, CSR, interrupt all active | Shared ports arbitrate by code priority and hold loser requests | Arbiter checker |
 | Resource exhaustion | Fill ROB, FTQ, LSQ, MSHR, issue queues | Backpressure propagates to legal upstream boundary | Occupancy checker |
+| Performance counter stress | Max concurrent frontend/backend/LSU/cache/trap/debug events with CSR reads/writes, inhibit toggles, overflow, flush, replay, and context switch | Counter deltas, overflow state, and visible CSR values match code/spec with no lost or double-counted event | Performance counter checker |
 
 Shared-resource context switches are mandatory for all top-level drivers.
 
@@ -199,6 +200,7 @@ Microarchitecture Scenario Verification:
 | Commit port contention | Many ready commit entries, limited commit width | Oldest legal entries commit; others remain | Arbiter checker |
 | Redirect recovery | Mispredict or exception with younger entries | Younger entries cleared; head/commit state preserved | Flush checker |
 | Resource conflict | ROB allocate but LSQ/issue allocation fails | Atomicity and rollback match code | Resource checker |
+| Retire counter pressure | Retire 0, 1, max commit width, trapped, replayed, flushed, debug-entering, and context-switching instruction windows | `instret`/`minstret` and commit-event counters count only code-defined retired instructions and do not count killed/replayed work twice | Performance counter checker |
 
 ### backend/ctrlblock
 
@@ -271,26 +273,32 @@ Microarchitecture Scenario Verification:
 
 ### frontend/BPU.scala and Predictors
 
-Applies to BPU, FTB, Tage, ITTAGE, SC, Bim, and RAS.
+Applies to BPU, FTB, Tage, ITTAGE, SC, Bim, RAS, and every code-instantiated local predictor, predictor table, folded-history object, trainer, update queue, meta path, and recovery snapshot under the frontend predictor hierarchy. Generated drivers must list each concrete predictor separately and must not rely on this family heading as proof that all predictors were covered.
 
 Architecture Verification:
 
 | Scenario | Stimulus | Expected architectural observation | Checkers |
 | --- | --- | --- | --- |
 | Prediction transparency | Any prediction stream | Wrong predictions recover with correct architectural commit | Architecture scoreboard |
+| Correct prediction architectural transparency | For every predictor, drive a code-reachable correct direction/target/return/indirect/chooser/confidence prediction | No architectural redirect is required and commit matches the non-speculative instruction stream | Architecture scoreboard |
+| Incorrect prediction architectural recovery | For every predictor, drive a code-reachable wrong direction, wrong target, wrong return, wrong indirect target, false positive, false negative, alias hit, or stale-entry prediction | Redirect/replay repairs the stream and final commit remains architecturally correct | Architecture scoreboard, redirect checker |
 | Fence/context switch | Fence.i, process/VM/domain switch | No stale predictor state causes architectural corruption | Context checker |
 
 Microarchitecture Scenario Verification:
 
 | Scenario | Stimulus | Expected microarchitectural observation | Checkers |
 | --- | --- | --- | --- |
+| Predictor inventory closure | Enumerate BPU, FTB, Tage, ITTAGE, SC, Bim, RAS, and every discovered local predictor/table/history/trainer/meta path | Each component has its own lookup, update, replacement, recovery, and checker rows | Coverage closure checker |
+| Predictor correct cases | For each predictor, train and lookup correct taken, correct not-taken, correct target, correct return, correct indirect target, correct chooser/SC override, and correct no-override cases when reachable | Prediction bits, target, meta, confidence, counter, provider/alternate provider, and no-redirect behavior match code | Predictor functional checker |
+| Predictor wrong cases | For each predictor, train or alias wrong direction, wrong target, wrong return, wrong indirect target, stale entry, false positive, false negative, and wrong chooser/SC override cases when reachable | Redirect/replay cause, recovery target, retraining update, and wrong-path state removal match code | Predictor recovery checker |
+| History complete coverage | Drive every history source used by indexes, tags, chooser, SC, RAS, provider selection, update, and replacement through reset, all-zero, all-one, oldest-bit-only, newest-bit-only, alternating, saturated-length, and fold-boundary patterns | Folded and unfolded history observed by every consumer equals the exact code-derived value before lookup, after speculative update, after commit update, after redirect recovery, and after nested redirect recovery | History checker |
 | Predictor table conflict | Aliasing PCs, same index, simultaneous update/lookup | Read/write/replace priority matches code | Storage checker |
 | Update queue full/almost | Train faster than predictor can update | Backpressure/drop/retry follows code | Occupancy checker |
-| Redirect/recovery | Mispredict updates history and target | History/RAS/FTB/TAGE/SC state recovers correctly | Flush/replay checker |
+| Redirect/recovery | Mispredict updates history and target | History/RAS/FTB/TAGE/ITTAGE/SC/Bim state recovers correctly | Flush/replay checker |
 | Arbiter conflict | Multiple update sources or prediction consumers | Winner/loser behavior follows code | Arbiter checker |
 | Context switch | Priv/process/VM/domain switch with trained predictor | Tagging, flush, or harmless stale prediction policy verified | Context isolation checker |
 
-Predictor drivers must use paper-backed algorithm context when generated by the code analyzer.
+Predictor drivers must use paper-backed algorithm context when generated by the code analyzer. Correct and incorrect prediction scenarios are mandatory for every predictor in the inventory. Any predictor history that is not covered by reset, boundary, alias, speculative update, commit update, redirect recovery, nested redirect recovery, and context-switch/fence cases must be reported as an explicit coverage gap, not silently omitted.
 
 ### frontend/icache
 
@@ -586,6 +594,7 @@ Before a generated driver is considered complete:
 - It has an `Operand Boundary Verification` section using `skills/operandBoundaryDrivers.md` when instructions, operands, addresses, CSR fields, masks, or protocol fields are in scope.
 - It has a `Virtualization Protection Verification` section using `skills/virtualizationProtectionDrivers.md` when virtualization, PMP, page translation, PMA, IOPMP, privilege permissions, or MMIO/uncache protection are in scope.
 - It has a `Debug Event Verification` section using `skills/debugEventDrivers.md` when debug mode, debug CSRs, trigger match, `ebreak`, single-step, halt/resume, `dret`, trap/debug redirect, or debug privilege restrictions are in scope.
+- It has `Performance Monitor Counter Stress Verification` using `skills/performanceMonitorCounterDrivers.md` when performance counters, event selectors, inhibit/control CSRs, overflow/pending state, event buses, commit counters, privilege/virtualization filters, or performance-monitor interrupts are in scope.
 - It has a `System Verification` section using `skills/systemVirtualizationPermissionDrivers.md` when privilege, virtualization, system calls, page-table permissions, multi-core synchronization, asynchronous events, guest/host trap interaction, or trap-handler save/handle/restore phases are in scope.
 - It has a `Conflict Scenario Verification` section using applicable rows from `skills/conflictScenarioDrivers.md`.
 - It has an `FSM Scenario Verification` section using applicable rows from `skills/fsmScenarioDrivers.md` when the module contains explicit or implicit state machines.
@@ -617,6 +626,7 @@ Before a generated driver is considered complete:
 - System verification drivers cover system calls/trap ABI paths, read/write/execute permission traversal, leaf/non-leaf PTEs, virtualization, guest/host cross faults/traps/interrupts, multi-core synchronization, asynchronous events, and save/handle/restore trap phases.
 - Exception tests include nested interrupt/trap scenarios across trap entry, handler execution, trap return, delegation, debug, and virtualization when implemented.
 - Debug event tests enumerate code-derived producers/consumers, priority arbitration, CSR updates, privilege/debug-mode legality, and precise side-effect checks from XiangShan analyzer evidence.
+- Performance monitor counter tests enumerate every implemented counter, event producer, selector, inhibit/control bit, overflow bit, privilege/virtualization filter, and update path, then stress CSR races, max concurrent events, flush/replay/trap/debug/context-switch windows, queue full/empty states, and overflow boundaries.
 - Forward-progress tests cover deadlock, livelock, starvation, old-low-priority versus new-high-priority mux/arbiter cases, persistent high-priority traffic, pointer/age wrap, and FSM starvation/livelock scenarios for every reachable structure.
 - Microarchitecture claims cite effective Chisel source lines from the analyzer output before implementation.
 

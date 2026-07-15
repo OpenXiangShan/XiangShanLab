@@ -32,7 +32,8 @@ For every selected conflict, include:
 | `C_MULTI_READ_LIMITED_PORT` | Read-port contention | More readers than physical ports for regfile, FTQ, table, cache, TLB, predictor, or queue | Arbiter or banking rule selects serviced readers | Losing readers hold request or replay | Port checker, handshake checker |
 | `C_BANK_CONFLICT` | Bank conflict | Multiple accesses map to same bank/set/way/port | Bank conflict policy selects winner or merges compatible ops | Loser stalls, retries, or replays | Conflict checker, replay checker |
 | `C_QUEUE_ENQ_DEQ_BOUNDARY` | Queue boundary conflict | Enqueue and dequeue when queue is empty, almost empty, full, or almost full | Pointer/count update follows code rule | Backpressure/valid reflects next-state occupancy | Occupancy checker |
-| `C_QUEUE_FLUSH_ENQ_DEQ` | Queue operation versus flush | Enqueue, dequeue, and redirect/flush/cancel in one cycle | Flush/cancel priority defined by code | Killed entry cannot become visible; legal survivor preserved | Flush checker, occupancy checker |
+| `C_QUEUE_FLUSH_ENQ_DEQ` | Queue operation versus flush | Enqueue, dequeue, and redirect/flush/cancel in one cycle at empty, almost-empty, one-live-entry, full, almost-full, and wrap boundaries | Flush/cancel priority and pointer/count update are defined by code for each occupancy extreme | Killed entry cannot become visible; legal survivor preserved; empty/full/almost flags remain correct | Flush checker, occupancy checker |
+| `C_FLUSH_EXTREME_OCCUPANCY` | Flush at microarchitecture extremes | Assert every code-reachable flush/redirect/cancel/kill while affected queues, buffers, replay slots, MSHRs/PTWs, ROB/LSQ/issue entries, update queues, or protocol trackers are empty, almost empty, one-entry live, full, almost full, wrapped, and simultaneously enq/deq when reachable | Flush priority, drain policy, and survivor policy follow code for each extreme state | Killed state cannot later fire/commit/update; no double-free, lost survivor, stale flag, or permanent backpressure | Flush extreme-state checker, occupancy checker |
 | `C_ALLOC_FREE_SAME_RESOURCE` | Allocate/free conflict | Allocation and release target same free-list, ROB, LSQ, MSHR, PTW, issue slot, or predictor entry | Allocation/free order follows code | No double allocation, lost free, or negative occupancy | Resource checker |
 | `C_REPLACE_LOOKUP_UPDATE` | Replacement conflict | Lookup, update/train, and replacement choose same predictor/cache/TLB/directory entry | Lookup/update/replace priority follows code | Loser is retried, masked, merged, or sees defined old/new state | Replacement checker |
 | `C_ARB_ALL_REQUESTERS` | Arbiter all-requesters conflict | All clients assert valid/request in same cycle | Fixed/age/RR priority grants exactly allowed winners | Losers see ready low or hold request | Arbiter checker |
@@ -51,7 +52,7 @@ For every selected conflict, include:
 | `C_REDIRECT_WRITEBACK` | Redirect versus writeback | Killed uop reaches writeback or wakeup path | Age/redirect mask controls whether writeback is allowed | Wrong-path writeback masked; legal older writeback preserved | Writeback checker |
 | `C_REPLAY_EXCEPTION` | Replay versus exception | Operation becomes replayable and faulting in overlapping cycles | Spec/code priority selects replay, exception, or delayed exception | Non-winning action cannot double-update state | Replay/exception checker |
 | `C_REPLAY_REPLAY` | Replay queue contention | Multiple replay sources target limited replay port or queue | Replay selection follows code priority/fairness | Losing replay holds valid or is requeued | Replay queue checker |
-| `C_STALL_FLUSH` | Stall versus flush | Pipeline stage stalled while flush arrives | Flush priority clears or marks killed state per code | Stalled killed payload cannot later fire | Pipeline checker |
+| `C_STALL_FLUSH` | Stall versus flush | Pipeline stage stalled while flush arrives, including ready-low, response-pending, full downstream, empty upstream, and same-cycle fire boundaries | Flush priority clears or marks killed state per code at each stall extreme | Stalled killed payload cannot later fire, update state, or hold backpressure forever | Pipeline/flush checker |
 | `C_FIRST_REQUEST_RESET_EXIT` | First request after reset | First valid request arrives as reset/initialization deasserts | FSM/valid state accepts only after legal initialization | Early request stalls or is ignored per code | FSM checker |
 | `C_EXCEPTION_INTERRUPT_DEBUG` | Trap source priority | Exception, interrupt, debug trigger, halt request, and trap return condition overlap | RISC-V/spec and code priority select architecturally legal action with correct `dcsr`/`dpc` or EPC/cause update | Lower-priority action remains pending, is masked, or is killed per code | Trap/debug priority checker |
 
@@ -95,6 +96,7 @@ For every selected conflict, include:
 | `C_WRITEBACK_MULTI_PORT` | Writeback conflict | More FU results than writeback/regfile ports | Writeback arbiter grants legal winners | Losers stall/replay; no lost result | Writeback checker |
 | `C_ROB_COMMIT_REDIRECT_EXCEPTION` | ROB conflict | Commit, branch redirect, exception, interrupt/debug overlap | Oldest precise architectural event wins; debug entry updates only legal debug state | Younger events killed or deferred | ROB/trap/debug checker |
 | `C_CSR_WRITE_TRAP_INTERRUPT` | CSR conflict | CSR write, trap entry, interrupt update, and xRET overlap | CSR update priority follows spec and code | Non-winning CSR update masked/deferred | CSR checker |
+| `C_PMC_CSR_EVENT_OVERFLOW` | Performance counter conflict | Counter CSR read/write/RMW, event increment, inhibit/event-select write, overflow update, trap/debug entry, and interrupt pending update overlap | Counter write/increment/overflow/trap priority follows spec and code | Non-winning update is held, merged, masked, or explicitly overwritten by code; no lost event, double count, impossible CSR read, or duplicate overflow interrupt | Performance counter checker |
 
 ## Bus, AIA, and IOPMP Conflict Drivers
 
@@ -122,8 +124,10 @@ For every selected conflict, include:
 Before a module conflict driver is complete:
 
 - All storage structures have same-entry read/write and multi-write conflict coverage.
+- All performance monitor counters have CSR read/write versus event update, inhibit/event-select versus event, overflow versus trap/debug/interrupt, and multi-counter simultaneous overflow conflict coverage when reachable.
 - All arrays/tables/caches/TLBs/predictors have lookup/update/replace conflict coverage.
-- All queues have enqueue/dequeue boundary and flush/enqueue/dequeue conflict coverage.
+- All queues have enqueue/dequeue boundary and flush/enqueue/dequeue conflict coverage at empty, almost-empty, one-live-entry, full, almost-full, and wrap states.
+- Every flush/redirect/cancel/kill path has microarchitecture extreme-state coverage across affected queues, buffers, FSM states, handshakes, full resources, empty resources, and same-cycle accept/response/commit boundaries.
 - All arbiters and muxes have all-requesters-valid, each-requester-alone, older-low-priority versus newer-high-priority, persistent high-priority starvation, and pointer/age wrap coverage where applicable.
 - All ready/valid interfaces have stalled-valid plus flush/replay conflict coverage.
 - All pipelines have stall-versus-flush and redirect-versus-writeback/commit coverage where reachable.
