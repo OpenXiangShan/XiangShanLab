@@ -16,6 +16,7 @@ Use this template when producing the final explanation.
 - Effective instantiation path:
 - Subsystem context:
 - Load/store instruction categories covered:
+- Instruction latency/throughput covered:
 - Exception/interrupt/debug/privilege paths covered:
 - chiselAIA/chiselIOPMP/AXI paths covered:
 - Difftest signal/architectural-state paths covered:
@@ -152,6 +153,38 @@ Use this section for every nontrivial module and every behavior-changing diff. I
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 Required scenario classes: replay, redirect, structural conflict, data/ordering conflict, port/bank/MSHR/queue contention, resource empty, resource full/almost-full, and simultaneous valid requests. Explain concrete transaction examples using real signal names; avoid generic statements such as "backpressure happens" without naming the resource and consumer.
+
+## 10B. Instruction Latency and Throughput
+
+Use this section when the request involves instruction timing, backend/FU behavior, memory/cache instruction flow, or any module that changes instruction accept/complete rate. Read `instruction-latency-throughput.md` first.
+
+State the timing convention:
+- Latency start event:
+- Latency end event:
+- Throughput metric:
+- Best-case assumptions:
+- Variable-latency assumptions:
+
+Per-instruction or per-class timing:
+
+| Instruction/class | Decode/FU marker | Effective path | Latency start | Latency end | Best-case latency | Variable contributors | Throughput / initiation interval | Bottleneck resource | Source evidence | Confidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+Resource throughput:
+
+| Resource | Applies to | Count/width | Accept condition | Completion condition | Arbitration/priority | Peak throughput | Degradation scenarios | Source evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+Path timing:
+
+| Cycle/stage | Event | Valid/ready condition | Payload/state | Can stall/replay/flush? | Source evidence |
+| --- | --- | --- | --- | --- | --- |
+
+Reporting rules:
+- Separate issue-to-response, issue-to-writeback, dispatch-to-writeback, and dispatch-to-commit numbers when they differ.
+- Separate fixed FU latency from variable queue wait, writeback contention, ROB commit wait, replay, redirect, exception, TLB/cache miss, MSHR/refill, fence/order serialization, and uncache/MMIO latency.
+- Report throughput as steady-state initiation interval or operations per cycle under stated assumptions, not as the inverse of latency unless code proves a fully pipelined resource and no downstream bottleneck.
+- Mark values as code-proven fixed, parameter-derived, best-case bound, variable/miss-dependent, or unclear without elaboration/waveforms.
 
 ## 11. Exception / Interrupt / Debug / Privilege
 

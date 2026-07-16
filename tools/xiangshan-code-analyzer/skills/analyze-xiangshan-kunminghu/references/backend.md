@@ -89,6 +89,7 @@ Start with `exu/ExeUnit.scala`, `exu/ExuBlock.scala`, `fu/FunctionUnit.scala`, `
 
 Focus on:
 - FU type matching and latency
+- Per-instruction and per-instruction-class latency/throughput. Read `instruction-latency-throughput.md` before reporting timing numbers.
 - Operand source selection and bypass
 - Branch/jump redirect generation
 - CSR/exception/interrupt interactions
@@ -96,6 +97,8 @@ Focus on:
 
 Ask:
 - Who owns execution latency and valid timing?
+- What are the timing reference points for each reported instruction latency: issue-to-response, issue-to-writeback, dispatch-to-writeback, or dispatch-to-commit?
+- Which resource limits throughput for this instruction class: issue port, FU count, FU pipeline initiation interval, writeback port, ROB/commit width, LSQ/cache resource, or a busy/serialization state?
 - Why is this FU wrapper needed instead of exposing the raw FU?
 - How are exceptions, redirects, and writeback results produced?
 - From what issue/datapath operands?
@@ -139,3 +142,5 @@ Ask:
 ## Extra Backend Analysis Requirements
 
 For backend modules, always split control path and data path. For decode/rename/dispatch/issue/execute/writeback/commit, identify the effective instantiated path and the parameter-generated widths. For algorithms, prioritize rename allocation/recovery, issue select, wakeup, bypass, reg-cache replacement, writeback arbitration, ROB commit, redirect priority, and exception selection. For FSMs, include queue entry status machines even when there is no explicit `Enum`.
+
+For timing analysis, build a table per instruction class. Use decode markers and `FuType` to identify the class, `FuConfig`/`FunctionUnit`/wrapper code to prove execute latency, issue queue and FU busy logic to prove initiation interval, writeback arbitration to prove completion throughput, and ROB/commit logic to prove ordered retirement effects. Treat dispatch/issue wait as variable unless operands-ready and issue-resource-available assumptions are explicitly stated.

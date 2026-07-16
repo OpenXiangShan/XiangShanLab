@@ -1,7 +1,7 @@
 interface:
   display_name: "Analyze XiangShan Kunminghu"
-  short_description: "Analyze XiangShan modules and difftest signals"
-  default_prompt: "Use $analyze-xiangshan-kunminghu to compare XiangShan branches, map a module through code-grounded microarchitecture evidence, or trace difftest architectural/cache/queue state signals with replay/redirect/conflict/contention/empty/full scenarios."
+  short_description: "Analyze XiangShan modules, difftest, and instruction timing"
+  default_prompt: "Use $analyze-xiangshan-kunminghu to compare XiangShan branches, map a module through code-grounded microarchitecture evidence, trace difftest architectural/cache/queue state signals, or derive instruction latency/throughput with replay/redirect/conflict/contention/empty/full scenarios."
 
 dependencies:
   tools:
