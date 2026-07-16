@@ -1,0 +1,7 @@
+[info] compiling 32 Scala sources to /nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/out/difftest/compile.dest/classes ...
+[warn] 1 deprecation (since 2.13.0)
+[warn] 1 deprecation (since 2.13.13)
+[warn] 2 deprecations (since Chisel 6.0)
+[warn] 4 deprecations in total; re-run with -deprecation for details
+[warn] four warnings found
+[info] done compiling

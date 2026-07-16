@@ -1,0 +1,43 @@
+/***************************************************************************************
+* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
+*
+* XiangShan is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*          http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
+***************************************************************************************/
+
+package xiangshan.backend.decode.isa.predecode
+
+import chisel3.util._
+import xiangshan.frontend.bpu.BranchAttribute
+
+object PreDecodeInst {
+  // def C_JAL     = BitPat("b????????????????_?01_?_??_???_??_???_01") // RV32C
+  def C_J       = BitPat("b????????????????_101_?_??_???_??_???_01")
+  def C_EBREAK  = BitPat("b????????????????_100_?_00_000_00_000_10")
+  def C_JALR    = BitPat("b????????????????_100_?_??_???_00_000_10")  // c.jalr & c.jr
+  def C_BRANCH  = BitPat("b????????????????_11?_?_??_???_??_???_01")
+  def JAL       = BitPat("b????????????????_???_?????_1101111")
+  def JALR      = BitPat("b????????????????_000_?????_1100111")
+  def BRANCH    = BitPat("b????????????????_???_?????_1100011")
+  def NOP       = BitPat("b???????????????0_100_01010_0000001")   //li	a0,0
+
+  val brTable = Array(
+    // c.ebreak should not be decoded as jalr, higher priority than c.jalr
+    C_EBREAK -> List(BranchAttribute.BranchType.None),
+    C_J      -> List(BranchAttribute.BranchType.Direct),
+    C_JALR   -> List(BranchAttribute.BranchType.Indirect),
+    C_BRANCH -> List(BranchAttribute.BranchType.Conditional),
+    JAL      -> List(BranchAttribute.BranchType.Direct),
+    JALR     -> List(BranchAttribute.BranchType.Indirect),
+    BRANCH   -> List(BranchAttribute.BranchType.Conditional)
+  )
+}

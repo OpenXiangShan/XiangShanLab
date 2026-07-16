@@ -1,0 +1,28 @@
+{
+  "external mill.api.PathRef": {
+    "call mill.api.PathRef#path()os.Path": {}
+  },
+  "call mill.api.PathRef.<clinit>()void": {
+    "def build_.package_$smmpt$.$anonfun$rtl$3(mill.api.PathRef)java.lang.String": {
+      "call build_.package_$smmpt$.$anonfun$rtl$3(mill.api.PathRef)java.lang.String": {}
+    }
+  },
+  "call build_.package_#smmptModule()build_.package_$smmptModule$": {
+    "def build_.package_$smmpt$#rtl()mill.define.Command": {
+      "call build_.package_$smmpt$#rtl()mill.define.Command": {}
+    }
+  },
+  "call scala.collection.IterableOnceOps#mkString(java.lang.String)java.lang.String": {
+    "def build_.package_$smmpt$.$anonfun$rtl$2(build_.package_$smmpt$,scala.collection.immutable.Seq)void": {
+      "call build_.package_$smmpt$.$anonfun$rtl$2(build_.package_$smmpt$,scala.collection.immutable.Seq)void": {
+        "def build_.package_$smmpt$.$deserializeLambda$(java.lang.invoke.SerializedLambda)java.lang.Object": {},
+        "def build_.package_$smmpt$.$anonfun$rtl$1(build_.package_$smmpt$,scala.collection.immutable.Seq,mill.api.Ctx)mill.api.Result": {
+          "call build_.package_$smmpt$.$anonfun$rtl$1(build_.package_$smmpt$,scala.collection.immutable.Seq,mill.api.Ctx)mill.api.Result": {}
+        }
+      }
+    }
+  },
+  "call build_.package_$smmptModule$#runClasspath()mill.define.Target": {},
+  "call scala.collection.immutable.Seq#map(scala.Function1)java.lang.Object": {},
+  "call scala.collection.IterableOnceOps.<clinit>()void": {}
+}

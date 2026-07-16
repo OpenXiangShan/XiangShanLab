@@ -1,0 +1,71 @@
+{
+  "smmpt.rtl": {
+    "smmptModule.runClasspath": {
+      "smmptModule.resolvedRunIvyDeps": {
+        "smmptModule.compileIvyDeps": {},
+        "smmptModule.mandatoryIvyDeps": {
+          "smmptModule.scalaLibraryIvyDeps": {},
+          "smmptModule.mandatoryIvyDeps.super.JavaModule": {}
+        },
+        "smmptModule.artifactTypes": {},
+        "smmptModule.transitiveCoursierProjects": {},
+        "smmptModule.scalaVersion": {},
+        "smmptModule.runIvyDeps": {},
+        "smmptModule.ivyDeps": {},
+        "smmptModule.scalaOrganization": {},
+        "smmptModule.platformSuffix": {},
+        "smmptModule.bomIvyDeps": {},
+        "smmptModule.depManagement": {}
+      },
+      "smmptModule.transitiveLocalClasspath": {},
+      "smmptModule.localClasspath": {
+        "smmptModule.localRunClasspath": {
+          "smmptModule.resources": {},
+          "smmptModule.localRunClasspath.super.RunModule": {},
+          "smmptModule.compile": {
+            "smmptModule.zincReportCachedProblems": {},
+            "mill.scalalib.ZincWorkerModule.worker": {
+              "mill.scalalib.ZincWorkerModule.classpath": {},
+              "mill.scalalib.ZincWorkerModule.javaHome": {
+                "mill.scalalib.ZincWorkerModule.jvmId": {},
+                "mill.scalalib.ZincWorkerModule.jvmIndexVersion": {}
+              },
+              "mill.scalalib.ZincWorkerModule.zincLogDebug": {}
+            },
+            "smmptModule.zincAuxiliaryClassFileExtensions": {
+              "smmptModule.zincAuxiliaryClassFileExtensions.super.JavaModule": {}
+            },
+            "smmptModule.allSourceFiles": {
+              "smmptModule.allSources": {
+                "smmptModule.generatedSources": {},
+                "smmptModule.sources": {}
+              }
+            },
+            "smmptModule.zincIncrementalCompilation": {},
+            "smmptModule.mandatoryJavacOptions": {},
+            "smmptModule.compileClasspath": {
+              "smmptModule.resolvedIvyDeps": {},
+              "smmptModule.transitiveCompileClasspath": {}
+            },
+            "smmptModule.upstreamCompileOutput": {},
+            "smmptModule.scalaCompilerClasspath": {},
+            "smmptModule.allScalacOptions": {
+              "smmptModule.scalacOptions": {},
+              "smmptModule.enablePluginScalacOptions.super.ScalaModule": {},
+              "smmptModule.mandatoryScalacOptions": {}
+            },
+            "smmptModule.scalacPluginClasspath": {
+              "smmptModule.scalacPluginIvyDeps": {}
+            },
+            "smmptModule.javacOptions": {}
+          }
+        },
+        "smmptModule.localCompileClasspath": {
+          "smmptModule.unmanagedClasspath": {},
+          "smmptModule.compileResources": {}
+        }
+      },
+      "smmptModule.runClasspath.super.RunModule": {}
+    }
+  }
+}

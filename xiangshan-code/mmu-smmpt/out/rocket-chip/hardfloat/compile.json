@@ -1,0 +1,8 @@
+{
+    "value": {
+        "analysisFile": "/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/out/rocket-chip/hardfloat/compile.dest/zinc",
+        "classes": "ref:v0:614d93ce:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/out/rocket-chip/hardfloat/compile.dest/classes"
+    },
+    "valueHash": -1532419787,
+    "inputsHash": 682470929
+}

@@ -1,0 +1,8 @@
+{
+    "value": [
+        "ref:v0:c984eca8:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/smmpt-module/src/main/resources",
+        "ref:v0:b1f3ccdf:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/out/smmptModule/compile.dest/classes"
+    ],
+    "valueHash": 1179063876,
+    "inputsHash": 1932393779
+}

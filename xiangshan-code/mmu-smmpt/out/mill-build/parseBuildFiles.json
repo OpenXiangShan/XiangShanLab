@@ -1,0 +1,21 @@
+{
+    "value": {
+        "seenScripts": [
+            [
+                "/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/build.mill",
+                "\n\nimport _root_._\nimport _root_._\nimport _root_._\nimport mill._\nimport mill.scalalib._\nimport mill.scalalib.scalafmt.ScalafmtModule\nimport os.Path\n\nval defaultScalaVersion = \"2.13.17\"\nval pwd = os.Path(sys.env(\"MILL_WORKSPACE_ROOT\"))\n\ntrait ChiselModule extends SbtModule with ScalafmtModule {\n  def scalaVersion: T[String] = defaultScalaVersion\n  def scalacOptions = Seq(\"-language:reflectiveCalls\", \"-Ymacro-annotations\", \"-Ytasty-reader\")\n  def ivyDeps: T[Agg[Dep]] = Agg(ivy\"org.chipsalliance::chisel:7.3.0\")\n  def scalacPluginIvyDeps: T[Agg[Dep]] = Agg(ivy\"org.chipsalliance:::chisel-plugin:7.3.0\")\n\n  def resolveFirtoolDeps = T {\n    firtoolresolver.Resolve(chisel3.BuildInfo.firtoolVersion.get, true) match {\n      case Right(bin) => bin.path.getAbsolutePath\n      case Left(err)  => err\n    }\n  }\n}\n\nobject `rocket-chip` extends ChiselModule {\n  object macros extends ScalaModule {\n    def scalaVersion: T[String] = defaultScalaVersion\n    def ivyDeps: T[Agg[Dep]] = Agg(ivy\"org.scala-lang:scala-reflect:$defaultScalaVersion\")\n  }\n\n  object hardfloat extends ChiselModule {\n    def millSourcePath: Path = pwd / \"rocket-chip\" / \"hardfloat\" / \"hardfloat\"\n  }\n\n  object cde extends ScalaModule {\n    def scalaVersion: T[String] = defaultScalaVersion\n    def millSourcePath: Path = pwd / \"rocket-chip\" / \"cde\" / \"cde\"\n  }\n\n  def mainClass = Some(\"freechips.rocketchip.diplomacy.Main\")\n  def moduleDeps = Seq(macros, hardfloat, cde)\n  def ivyDeps: T[Agg[Dep]] =\n    super.ivyDeps() ++ Agg(ivy\"com.lihaoyi::mainargs:0.7.7\", ivy\"org.json4s::json4s-jackson:4.0.7\")\n}\n\nobject utility extends ChiselModule {\n  def moduleDeps = Seq(`rocket-chip`)\n  def ivyDeps: T[Agg[Dep]] = super.ivyDeps() ++ Agg(ivy\"com.lihaoyi::sourcecode:0.4.4\")\n}\n\nobject yunsuan extends ChiselModule\n\nobject openNCB extends ChiselModule {\n  def millSourcePath = pwd / \"XSCache\" / \"OpenNCB\"\n  def moduleDeps = Seq(`rocket-chip`)\n}\n\nobject XSCache extends ChiselModule {\n  def millSourcePath = pwd / \"XSCache\"\n  def moduleDeps = Seq(`rocket-chip`, utility, openNCB)\n}\n\nobject difftest extends ChiselModule\n\nobject macros extends ScalaModule {\n  def scalaVersion: T[String] = defaultScalaVersion\n  def ivyDeps: T[Agg[Dep]] = Agg(ivy\"org.scala-lang:scala-reflect:$defaultScalaVersion\")\n}\n\nobject xiangshan extends ChiselModule {\n  def millSourcePath = pwd / \"mmu-smmpt-module\"\n  def moduleDeps = Seq(\n    `rocket-chip`,\n    difftest,\n    XSCache,\n    yunsuan,\n    utility,\n    macros\n  )\n\n  private val resourcesPath = (millSourcePath / \"src\" / \"main\" / \"resources\").toString()\n  def forkEnv = Map(\"PATH\" -> (sys.env(\"PATH\") + \":\" + resourcesPath))\n  def forkArgs = Seq(\n    s\"-Xmx${sys.props.getOrElse(\"jvm-xmx\", \"40G\")}\",\n    s\"-Xss${sys.props.getOrElse(\"jvm-xss\", \"256m\")}\" \n  )\n\n  def ivyDeps: T[Agg[Dep]] = super.ivyDeps() ++ Agg(\n    ivy\"org.scalatest::scalatest:3.2.19\",\n    ivy\"io.circe::circe-yaml:0.16.1\",\n    ivy\"io.circe::circe-generic-extras:0.14.4\"\n  )\n\n  def scalacOptions: T[Seq[String]] = super.scalacOptions() ++ Agg(\"-deprecation\", \"-feature\")\n}\n\nobject smmptModule extends ChiselModule {\n  def millSourcePath = pwd / \"smmpt-module\"\n}\n\nobject smmpt extends Module {\n  def rtl() = T.command {\n    os.proc(\"java\", \"-cp\", smmptModule.runClasspath().map(_.path.toString).mkString(java.io.File.pathSeparator), \"smmpt.SmmptModuleMain\").call(cwd = pwd)\n    os.makeDir.all(pwd / \"mmu-smmpt-rtl\")\n    os.copy.over(pwd / \"build\" / \"smmpt-module\" / \"SmmptHasMptCheckShell.sv\", pwd / \"mmu-smmpt-rtl\" / \"smmpt-module.sv\")\n  }\n}\n"
+            ]
+        ],
+        "repos": [],
+        "ivyDeps": [
+            "org.chipsalliance::chisel:7.3.0",
+            "de.tototec::de.tobiasroeser.mill.vcs.version::0.4.0",
+            "org.chipsalliance::firtool-resolver:2.0.1"
+        ],
+        "errors": [],
+        "metaBuild": false,
+        "buildFile": "build.mill"
+    },
+    "valueHash": -779842269,
+    "inputsHash": -1236479124
+}

@@ -1,0 +1,33 @@
+{
+    "value": [
+        "qref:v1:66635991:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/scala-library/2.13.15/scala-library-2.13.15.jar",
+        "qref:v1:8dee720a:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/chipsalliance/chisel_2.13/7.3.0/chisel_2.13-7.3.0.jar",
+        "qref:v1:69f20c1b:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/de/tototec/de.tobiasroeser.mill.vcs.version_mill0.11_2.13/0.4.0/de.tobiasroeser.mill.vcs.version_mill0.11_2.13-0.4.0.jar",
+        "qref:v1:ecedbb51:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/chipsalliance/firtool-resolver_2.13/2.0.1/firtool-resolver_2.13-2.0.1.jar",
+        "qref:v1:4b580bec:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/com/lihaoyi/mill-moduledefs_2.13/0.11.2/mill-moduledefs_2.13-0.11.2.jar",
+        "qref:v1:38b129fd:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/com/github/scopt/scopt_2.13/4.1.0/scopt_2.13-4.1.0.jar",
+        "qref:v1:243aee62:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/apache/commons/commons-text/1.13.1/commons-text-1.13.1.jar",
+        "qref:v1:963333da:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/json4s/json4s-native_2.13/4.0.7/json4s-native_2.13-4.0.7.jar",
+        "qref:v1:ea54b789:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/io/github/alexarchambault/data-class_2.13/0.2.7/data-class_2.13-0.2.7.jar",
+        "qref:v1:ffd1d6c5:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/json4s/json4s-core_2.13/4.0.7/json4s-core_2.13-4.0.7.jar",
+        "qref:v1:836234d7:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/json4s/json4s-native-core_2.13/4.0.7/json4s-native-core_2.13-4.0.7.jar",
+        "qref:v1:c7d4dedc:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/json4s/json4s-ast_2.13/4.0.7/json4s-ast_2.13-4.0.7.jar",
+        "qref:v1:19e72d64:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/json4s/json4s-scalap_2.13/4.0.7/json4s-scalap_2.13-4.0.7.jar",
+        "qref:v1:9edb433f:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/com/thoughtworks/paranamer/paranamer/2.8/paranamer-2.8.jar",
+        "ref:v0:c984eca8:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/mill-build/compile-resources",
+        "qref:v0:8eea6e32:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/out/mill-launcher/0.12.15.jar",
+        "qref:v1:c8282372:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/com/lihaoyi/mill-runner-linenumbers_2.13/0.12.15/mill-runner-linenumbers_2.13-0.12.15.jar",
+        "qref:v1:930501cd:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/scala-compiler/2.13.15/scala-compiler-2.13.15.jar",
+        "qref:v1:66635991:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/scala-library/2.13.15/scala-library-2.13.15.jar",
+        "qref:v1:4b580bec:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/com/lihaoyi/mill-moduledefs_2.13/0.11.2/mill-moduledefs_2.13-0.11.2.jar",
+        "qref:v1:7b284f5f:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/com/lihaoyi/mill-main-client/0.12.15/mill-main-client-0.12.15.jar",
+        "qref:v1:0d6dad67:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/scala-reflect/2.13.15/scala-reflect-2.13.15.jar",
+        "qref:v1:c3fede0e:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/io/github/java-diff-utils/java-diff-utils/4.12/java-diff-utils-4.12.jar",
+        "qref:v1:756f448c:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/jline/jline/3.26.3/jline-3.26.3.jar",
+        "qref:v1:93dd03ee:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar",
+        "qref:v1:589290b0:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/com/lihaoyi/sourcecode_2.13/0.3.0/sourcecode_2.13-0.3.0.jar",
+        "ref:v0:26c0f837:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/out/mill-build/compile.dest/classes"
+    ],
+    "valueHash": 451876824,
+    "inputsHash": -1227717672
+}

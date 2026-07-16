@@ -1,0 +1,10 @@
+{
+    "value": [
+        "org.chipsalliance::chisel:7.3.0",
+        "org.scalatest::scalatest:3.2.19",
+        "io.circe::circe-yaml:0.16.1",
+        "io.circe::circe-generic-extras:0.14.4"
+    ],
+    "valueHash": -1940095361,
+    "inputsHash": -1342839304
+}

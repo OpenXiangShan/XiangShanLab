@@ -1,0 +1,11 @@
+{
+    "value": [
+        "-language:reflectiveCalls",
+        "-Ymacro-annotations",
+        "-Ytasty-reader",
+        "-deprecation",
+        "-feature"
+    ],
+    "valueHash": -1634745645,
+    "inputsHash": 1092744779
+}
