@@ -9,6 +9,7 @@ This driver pack combines two sources:
 - Debug/privilege implementation source: effective XiangShan Chisel lines reported by the code-analysis source for debug event producers, privilege guards, CSR fields, trap/redirect priority, and commit state updates.
 - Forward-progress implementation source: effective XiangShan Chisel lines reported by the code-analysis source for every mux, arbiter, FSM, queue, replay path, ready/valid path, credit path, and completion condition.
 - Performance counter implementation source: effective XiangShan Chisel lines reported by the code-analysis source for every performance counter CSR, event selector, inhibit/control bit, overflow bit, event producer, privilege/virtualization filter, and counter update path.
+- Performance bottleneck implementation source: effective XiangShan Chisel lines reported by the code-analysis source for every throughput, latency, occupancy, port, bank, queue, replay, credit, arbitration, backpressure, recovery, and completion path that can limit sustained service rate.
 
 Each generated driver is split into three required parts:
 
@@ -58,6 +59,10 @@ Every module driver must use this shape.
 | Event | Stimulus | Expected response | Recovery/check |
 | --- | --- | --- | --- |
 
+## Performance Bottleneck Stress Verification
+| Bottleneck ID | Scope | Code evidence needed | Stress stimulus | Expected performance property | Failure signature | Checkers / metrics |
+| --- | --- | --- | --- | --- | --- | --- |
+
 ## Shared Resource Context-Switch Coverage
 | Switch class | Stimulus | Required checks |
 | --- | --- | --- |
@@ -104,6 +109,7 @@ Minimum microarchitecture scenarios:
 - Debug microarchitecture events: debug valid/cause/PC metadata generation, queueing, kill, replay preservation, redirect selection, commit/trap arbitration, CSR update timing, and resume state restoration.
 - Storage: update, release, replace, search/read/probe, read/write same index, multiple writes same index, RAW/WAR/WAW, bypass/forwarding, and assert/error behavior.
 - Performance counters: maximum concurrent event pulses, CSR read/write versus increment races, inhibit/event-select changes during active events, overflow boundaries, queue full/empty update pressure, flush/replay kill behavior, trap/debug/context-switch filtering, and no lost or double-counted events.
+- Performance bottlenecks: baseline versus saturated throughput, queue/port/bank/resource saturation, burst absorb/drain, backpressure amplification, head-of-line blocking, long-tail latency, recovery throughput, mixed-latency traffic, and counter-correlated bottleneck observations.
 
 ## Flush Extreme-State Rules
 
@@ -187,6 +193,21 @@ Minimum forward-progress coverage:
 - For every mux/arbiter/select path, create a scenario where an older request arrives on a lower-priority input and stays valid while newer requests arrive on higher-priority inputs; check whether code eventually serves, promotes, replays, kills, or intentionally starves the older request.
 - For every FSM, create potential starvation and livelock scenarios by holding lower-priority transitions true while pulsing higher-priority transitions, and by cycling retry/replay/nonterminal states before providing fair completion.
 - Every progress claim must state fairness assumptions, code-derived bound when present, failure signature, and exact XiangShan code evidence for request hold, grant, state exit, and completion.
+
+## Performance Bottleneck Stress Rules
+
+Every generated driver for a nontrivial module must include `Performance Bottleneck Stress Verification` using `skills/performanceBottleneckDrivers.md` when the module can limit throughput, latency, resource occupancy, fairness, recovery bandwidth, or sustained service rate. This includes queues, ports, banks, arbiters, schedulers, issue/writeback paths, LSQ/store buffers, caches, TLB/PTW, MSHRs, replay paths, bus bridges, crossbars, predictors, fetch/decode/rename/dispatch/commit paths, CSR/event paths, and shared resources.
+
+Minimum performance bottleneck coverage:
+
+- Baseline versus saturation: include at least one low-pressure baseline and one maximum legal sustained-pressure case for every bottlenecked path.
+- Queue and resource saturation: fill queues, buffers, MSHRs, PTW entries, replay entries, credits, source/sink IDs, ports, banks, and outstanding trackers to empty, almost-empty, one-live-entry, full, almost-full, and wrap states when reachable.
+- Throughput and latency metrics: define accepted work, completed work, stall cycles, occupancy, drain time, replay count, latency distribution, fairness/service interval, and performance-counter deltas when counters are implemented.
+- Burst and mix pressure: test short bursts, depth-sized bursts, depth+1 bursts, long bursts, sparse traffic, all-producer saturation, same-bank/same-set conflict traffic, distributed traffic, short/long-latency mixes, wrong-path/recovery mixes, and context-switch pressure.
+- Recovery bandwidth: after flush, redirect, replay, invalidate, trap, debug entry, or context switch under saturation, verify killed work is removed and legal throughput returns to the code-derived baseline after the documented drain/refill point.
+- Counter observability: when using performance counters to diagnose a bottleneck, cross-reference `skills/performanceMonitorCounterDrivers.md` and verify event select, inhibit, overflow, privilege/virtualization filters, and precision before trusting counter deltas.
+
+Every bottleneck claim must cite exact code evidence for width, queue depth, port count, bank/hash/index expression, arbitration, credit update, retry/replay rule, backpressure propagation, and completion. If code intentionally serializes or starves a path, the driver must check that documented policy instead of assuming ideal throughput.
 
 ## FSM Scenario Rules
 
@@ -295,6 +316,12 @@ Use these event names consistently in all module drivers:
 - `P_DEADLOCK_ALL_STALL`: all visible clients stall until one legal sink is released.
 - `P_LIVELOCK_REPLAY_LOOP`: replay or retry repeats without useful completion.
 - `P_STARVE_OLD_LOW_NEW_HIGH`: older low-priority request risks starvation behind newer high-priority traffic.
+- `PB_BASELINE_SINGLE_STREAM`: one legal stream establishes the low-pressure latency and throughput baseline.
+- `PB_MAX_SUSTAINED_THROUGHPUT`: all legal producers run every cycle under fair sinks to measure service-rate limits.
+- `PB_BURST_ABSORB_DRAIN`: burst length sweeps fill resources and then stop producers to measure legal drain time.
+- `PB_BACKPRESSURE_AMPLIFICATION`: one blocked sink tests where stall propagation stops or recovers.
+- `PB_HEAD_OF_LINE_BLOCKING`: a blocked oldest entry competes with younger serviceable work.
+- `PB_RECOVERY_THROUGHPUT`: saturated traffic resumes after flush, replay, redirect, invalidate, trap, debug, or context recovery.
 - `REDIRECT`: younger speculative state is killed and recovery pointer/target is used.
 - `REPLAY`: replayable operation is reissued without architectural double commit.
 - `PORT_CONTENTION`: more clients than physical ports; losing clients stall, retry, or replay as code defines.
