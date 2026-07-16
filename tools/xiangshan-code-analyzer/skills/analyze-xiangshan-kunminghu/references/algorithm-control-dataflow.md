@@ -24,8 +24,9 @@ Then explain in prose:
 - Which exact source lines prove the algorithm, and why the snippet is the core implementation.
 - The exact priority order or selection rule.
 - Whether it is combinational, registered, pipelined, speculative, replayable, or commit-time.
-- How it handles ties, invalid entries, full/empty conditions, mispredicts, misses, exceptions, and flushes.
+- How it handles ties, invalid entries, full/empty conditions, mispredicts, misses, exceptions, redirects, replays, conflicts, contention, and flushes.
 - Which microarchitecture parameters change the algorithm width or behavior.
+- A scenario mapping for replay, redirect, conflict, contention, and resource empty/full/almost-full cases: trigger, involved requesters/resource, winner, loser or blocked path, state update, retry/recovery path, and downstream effect.
 
 Common XiangShan algorithms to look for:
 - Age selection and oldest-first issue/replacement.
@@ -51,9 +52,9 @@ For every FSM or state-like structure, provide:
 
 Also explain:
 - Reset state and initialization.
-- Why each state is needed: the hazard, latency, ordering point, resource conflict, protocol phase, or recovery case it represents.
+- Why each state is needed: the hazard, latency, ordering point, resource conflict, contention point, empty/full resource condition, protocol phase, or recovery case it represents.
 - A concrete scenario for each nontrivial state, using real module signal names when possible.
-- State transitions caused by redirect, flush, cancel, replay, miss, grant/refill, commit, or exception.
+- State transitions caused by redirect, flush, cancel, replay, conflict, contention, empty/full resource changes, miss, grant/refill, commit, or exception.
 - Whether outputs are Mealy-style from current inputs or Moore-style from registered state.
 - Which parameter controls state count, queue depth, outstanding count, or timeout.
 
@@ -70,7 +71,7 @@ For each important control signal, answer with exact Chisel file:line evidence a
 - Who produces it?
 - Which parameter controls its width/count/existence?
 - Why is it needed? Name the concrete hazard, ordering rule, bandwidth/resource limit, speculation recovery, or protocol phase it handles.
-- What is an example scenario where it changes behavior?
+- What is an example scenario where it changes behavior, especially replay, redirect, conflict, contention, or resource empty/full?
 - How is it computed?
 - From what upstream condition?
 - To what downstream module or state update?
@@ -116,9 +117,9 @@ When explaining control signals, prioritize these categories:
 - FSM controls: state registers, next-state logic, transition conditions, outputs qualified by state.
 - Pipeline controls: stage valid bits, stage registers, stall/flush/cancel/replay, stage-to-stage enable, bubble injection, redirect kill, load cancel.
 
-For each important control signal, name the controlling condition, controlled effect, why the signal exists, and an example scenario. Example structure:
+For each important control signal, name the controlling condition, controlled effect, why the signal exists, and an example scenario. For replay/redirect/conflict/contention/empty/full cases, map trigger -> resource/requesters -> priority -> winner/loser -> state update -> downstream effect. Example structure:
 
-| Control signal | Kind | Producer | Commit | Source lines | Core Chisel code | Why it exists | Example scenario | Selects/enables/stalls what | Key condition | Parameter dependence |
+| Control signal | Kind | Producer | Commit | Source lines | Core Chisel code | Why it exists | Scenario mapping | Selects/enables/stalls what | Key condition | Parameter dependence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Pipeline Signal Focus

@@ -18,6 +18,7 @@ Use this template when producing the final explanation.
 - Load/store instruction categories covered:
 - Exception/interrupt/debug/privilege paths covered:
 - chiselAIA/chiselIOPMP/AXI paths covered:
+- Difftest signal/architectural-state paths covered:
 - Queues/buffers capacity logic covered:
 
 ## 2. Mandatory Source Evidence
@@ -143,6 +144,15 @@ For each nontrivial algorithm:
 
 Explain the operating principle, initialization/reset behavior, first valid/request behavior, every major case or branch, tie handling, simultaneous requester behavior, empty/full/invalid behavior, flush/redirect/replay/miss/exception behavior, commit interaction, and how state evolves after each case. For every arbiter, selector, mux-priority network, grant vector, ready fanout, or request scheduler, enumerate all requesters and state request qualification, priority/fairness rule, grant encoding, selected data, ready/backpressure returned to each requester, losing request behavior, and state updates caused by the grant.
 
+## 10A. Replay Redirect Conflict Contention Resource Scenarios
+
+Use this section for every nontrivial module and every behavior-changing diff. If a category is not present, state `searched, not present` with the files/signals checked.
+
+| Scenario class | Trigger condition | Involved resource/requesters | Source lines | Core code | Priority/arbitration rule | Winner behavior | Loser/blocked behavior | State update | Retry/redirect/replay path | Downstream effect |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+Required scenario classes: replay, redirect, structural conflict, data/ordering conflict, port/bank/MSHR/queue contention, resource empty, resource full/almost-full, and simultaneous valid requests. Explain concrete transaction examples using real signal names; avoid generic statements such as "backpressure happens" without naming the resource and consumer.
+
 ## 11. Exception / Interrupt / Debug / Privilege
 
 When relevant, include:
@@ -170,7 +180,16 @@ When relevant, include:
 
 For chiselAIA, cover APLIC/IMSIC boundary, interrupt source, MSI/register access, CSR privilege/virtualization interaction, priority, pending/enable/claim/complete or delivery behavior. For chiselIOPMP, cover protected path, config port, permission inputs, match algorithm, allow/deny response, bypass, and access-fault/error behavior. For AXI, cover master and slave roles plus AW/W/B/AR/R channel signals: `valid`, `ready`, `addr`, `id`, `len`, `size`, `burst`, `data`, `strb`, `last`, `resp`, and backpressure.
 
-## 14. State Machines
+## 14. Difftest Signal Coverage
+
+Use this section when difftest signals, architectural-state dumps, cache state, memory address events, exception/interrupt events, or per-queue state are relevant. Read `references/difftest.md` first.
+
+| Difftest signal/event | State class | Producer lines | Enable/timing | Payload fields | From what | To what/reference meaning | Speculative or committed | Corner case |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+State class must be one of: RISC-V architectural state, reference-model-visible difftest event, or microarchitectural debug state. Cover int/fp/vector registers, CSR, exception/trap, interrupt, memory virtual/physical address, cache state, and requested queue/buffer state. Explain uncovered or ambiguous signals explicitly.
+
+## 15. State Machines
 
 For explicit or implicit FSMs/state-like entries:
 
@@ -179,7 +198,7 @@ For explicit or implicit FSMs/state-like entries:
 
 If no FSM exists, state that and identify the closest state-like valid/status structure. For every state or state-like value, explain why it exists and give a concrete transaction scenario that sets, holds, or clears it.
 
-## 15. Control Path
+## 16. Control Path
 
 Trace mux selects, valid/ready/fire, arbitration, FSM transitions, pipeline stage controls, stalls, cancels, redirects, replay, exceptions, commit, and update conditions.
 
@@ -192,7 +211,7 @@ For key control signals:
 - From what source?
 - To what consumer/effect?
 
-## 16. Pipeline Signals
+## 17. Pipeline Signals
 
 For pipelined modules, include:
 
@@ -201,7 +220,7 @@ For pipelined modules, include:
 
 If no pipeline exists, state that and explain the closest combinational/registered boundary. For `mem`, `cache`, and XSCache content, this section is mandatory: describe what each stage specifically does, including TLB/tag/meta/data access, set/bank/way/beat selection, miss/replay/refill/writeback handling, response/writeback timing, and commit-visible effects when present.
 
-## 17. Data Path
+## 18. Data Path
 
 Trace payload movement. Every datapath edge/transform must include Chisel source line numbers and core code from the analyzed commit:
 - Input fields:
@@ -210,7 +229,7 @@ Trace payload movement. Every datapath edge/transform must include Chisel source
 - Output fields:
 - Flush/cancel/replay/miss behavior:
 
-## 18. Diagrams
+## 19. Diagrams
 
 Include a key data-path diagram, module-interface diagram, and handshake timing diagram when the module is nontrivial. Use `references/diagrams.md`.
 
@@ -251,7 +270,7 @@ Handshake timing diagram:
 For each important handshake or valid-like timing path, explain what `fire` means in code, when payload must remain stable, what signal creates backpressure, and what flush/cancel/replay does to an already accepted transfer. If the module has no `ready`, draw the closest valid/enable timing and state that there is no Decoupled backpressure.
 
 
-## 19. Storage Structures
+## 20. Storage Structures
 
 For each table, queue, buffer, array, register group, and pointer:
 
@@ -260,7 +279,7 @@ For each table, queue, buffer, array, register group, and pointer:
 
 Call out valid bits, allocation/free logic, pointers, index calculations, capacity parameters, empty/full/almost-full logic, ready/backpressure targets, snapshots, data/tag arrays, replay/miss/exception metadata, and replacement state. For every storage structure, describe behavior through `update`, `release`, `replace`, and `search/read/probe` even when the code calls them enqueue/dequeue/read/write/allocate/free/lookup/match. For each operation, state the exact timing, enable/fire condition, index/address/pointer calculation, payload fields updated/released/replaced/searched, valid-bit set/clear/hold behavior, same-cycle update/release/replace/search collision priority, and downstream consumers. For every read/write port conflict, explicitly analyze same-cycle read/write same index, multiple writes same index, multiple reads with limited ports, RAW/WAR/WAW behavior, bypass/forwarding/assert behavior, and whether the losing request wins, stalls, retries, replays, is masked, is dropped, or is illegal. For every valid/status bit, explicitly state when it is set, when it is cleared, when it holds its value, what flush/cancel/replay affects it, and what downstream logic observes it.
 
-## 20. Critical Signal Deep Dives
+## 21. Critical Signal Deep Dives
 
 Pick the signals that determine behavior, not every wire. For each:
 
@@ -273,12 +292,14 @@ Pick the signals that determine behavior, not every wire. For each:
 - Why the design needs this signal:
 - Example scenario where this signal matters:
 
-## 21. Dynamic Operation
+## 22. Dynamic Operation
 
 Describe:
 - Normal path: request enters, state is allocated/read, result leaves.
 - Speculative path: what state/request is created before commit/final permission/final coherence response, how it is validated, canceled, replayed, merged, or dropped.
 - Recovery path: redirect, exception, replay, miss, flush, cancel, coherence retry, or invalidation.
+- Conflict/contention path: simultaneous requesters, limited port/bank/entry/MSHR/queue resources, priority or fairness decision, loser behavior, and retry or backpressure path.
+- Empty/full path: exact empty/full/almost-full signal, who observes it, what state holds or clears, and what transaction resumes progress.
 
 Use the philosophy axis explicitly:
 - Who updates this?
@@ -287,7 +308,7 @@ Use the philosophy axis explicitly:
 - From what signal/source?
 - To what consumer/effect?
 
-## 22. Summary
+## 23. Summary
 
 For branch comparison, start with a compact verdict: unchanged behavior, interface-compatible behavior change, interface-breaking change, or unclear without elaboration/tests. Then list the semantic diff count, mechanical diff count, main changed analysis axes, migration requirements, and verification priorities.
 

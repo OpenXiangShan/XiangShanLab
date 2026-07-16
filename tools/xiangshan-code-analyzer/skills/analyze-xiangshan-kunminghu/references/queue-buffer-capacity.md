@@ -11,9 +11,9 @@ For every queue/buffer-like structure, provide:
 
 Also explain:
 - Pointer scheme: head/tail/enqPtr/deqPtr, circular flags, free list allocation, valid vector, count register, one-hot mask, or age matrix.
-- Multi-port behavior: allocation width, deallocation width, read/write conflict, bank conflict, same-entry write conflicts.
-- Flush/cancel behavior: redirect, exception, replay, commit, load cancel, probe, refill, reset.
-- Empty/full edge cases: simultaneous enq/deq, wrap-around, almost-full threshold, reserved slots, `canAccept`, `allowEnqueue`, `ready`, `valid`.
+- Multi-port behavior: allocation width, deallocation width, read/write conflict, bank conflict, port contention, same-entry write conflicts, and loser/retry behavior.
+- Flush/cancel behavior: redirect, exception, replay, commit, load cancel, probe, refill, reset, and whether entries are held, cleared, retried, or redirected.
+- Empty/full edge cases: simultaneous enq/deq, wrap-around, almost-full threshold, reserved slots, empty dequeue attempt, full enqueue attempt, `canAccept`, `allowEnqueue`, `ready`, `valid`.
 - Who observes capacity: dispatch, rename, issue, LSQ, MemBlock, DCache, frontend, ROB, CSR/cache-control path.
 
 ## Search Terms
@@ -31,9 +31,9 @@ Search for:
 4. Derive full/almost-full/backpressure conditions from code.
 5. Trace enqueue path: producer, valid condition, ready condition, allocation index, data written.
 6. Trace dequeue/free path: consumer, valid condition, ready/fire, free index, state cleared.
-7. Check simultaneous enq/deq behavior and multi-port conflicts.
-8. Trace flush/cancel/replay/redirect behavior.
-9. State who consumes full/empty: which upstream ready/stall or downstream valid is affected.
+7. Check simultaneous enq/deq behavior, multi-port conflicts, port/bank/entry contention, and which requester wins, stalls, retries, replays, or is dropped.
+8. Trace flush/cancel/replay/redirect behavior with a concrete scenario: trigger signal, affected entries, held/cleared state, retry or redirect target, and downstream observer.
+9. State who consumes full/empty: which upstream ready/stall or downstream valid is affected, what transaction is blocked, and what event makes progress resume.
 
 ## Diagram Recommendation
 
