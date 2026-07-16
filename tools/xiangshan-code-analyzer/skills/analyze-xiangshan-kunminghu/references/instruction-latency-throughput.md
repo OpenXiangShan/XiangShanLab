@@ -4,7 +4,7 @@ Read this file whenever the user asks about instruction latency, instruction thr
 
 ## Definitions
 
-- **Latency**: cycles from an explicitly named start event to an explicitly named end event. Common start events are decode input, rename output, dispatch fire, issue fire, FU input fire, memory request fire, or cache request fire. Common end events are FU response valid, writeback fire, ROB writeback observed, commit fire, or memory response accepted.
+- **Latency**: cycles from an explicitly named start event to an explicitly named end event. Common start events are decode input, rename output, dispatch fire, issue fire, FU input fire, memory request fire, or cache request fire. Common end events are FU response valid, bypass/forward data visible, regCache write/update, physical register-file write, writeback fire, ROB writeback observed, commit fire, or memory response accepted.
 - **Throughput**: steady-state rate for independent operations under stated assumptions. Express as instructions per cycle, operations per cycle, or initiation interval. Do not use latency as throughput.
 - **Best-case latency**: no stalls, no redirects, operands ready, resource available, cache hit or fixed FU path when applicable.
 - **Variable latency**: load miss, TLB miss, cache miss/refill, replay, division iteration, vector element count, CSR/exception serialization, writeback contention, queue full, bank conflict, MSHR contention, or downstream backpressure.
@@ -17,6 +17,7 @@ For every reported latency or throughput number, include source evidence for:
 - Instruction classification: decode table, `FuType`, operation type, or memory/cache opcode marker.
 - Routing path: decode/rename/dispatch/issue/exu/mem/cache/writeback/commit modules that the instruction class traverses.
 - FU or pipeline timing: `FuConfig`, `FunctionUnit`, wrapper, pipeline registers, valid delay, busy/ready, or response valid logic.
+- Bypass/regCache timing: bypass source valid/data timing, `readForward`/`readBypass`/`readBypass2` selection, regCache write-enable/data timing, and whether regCache is updated from bypass data or PRF data.
 - Resource count: issue ports, execution units, FU instances, writeback ports, memory pipelines, cache banks, MSHRs, queue entries, arbiters, or commit width.
 - Bottleneck arbitration: issue select, FU busy table, writeback arbiter, load/store queue, memory/cache request arbiter, bank/MSHR arbiter, or commit rule.
 - Variable contributors: replay, redirect, exception, miss, refill, TLB/PTW, vector iteration, divider state, fence/order serialization, or MMIO/uncache path.
@@ -30,7 +31,7 @@ For every reported latency or throughput number, include source evidence for:
    - Dispatch/issue wait is variable unless the analysis assumes operands ready and issue slot available.
    - Execute/FU latency is fixed only if `FuConfig`, wrapper, or FU code proves a fixed pipeline delay.
    - Memory/cache latency must split hit, miss, replay, TLB/PTW, MMIO/uncache, refill/writeback, and commit-visible completion.
-   - Writeback/ROB/commit latency must include arbitration and ordered retirement effects when the chosen end event is writeback or commit.
+   - Bypass/regCache/writeback/ROB/commit latency must be split when these events differ. If the analyzed path can update regCache, report the write-to-regCache timing separately from bypass visibility and physical register-file write timing.
 4. Derive throughput from the limiting initiation interval:
    - Count independent instruction accept/issue slots and FU instances for the class.
    - Check whether the FU is fully pipelined, has a busy state, or accepts a new request only after response.
@@ -43,8 +44,8 @@ For every reported latency or throughput number, include source evidence for:
 
 Use a per-instruction or per-class timing table:
 
-| Instruction/class | Decode/FU marker | Path | Latency start | Latency end | Best-case latency | Variable contributors | Throughput / initiation interval | Bottleneck resource | Source evidence | Confidence |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Instruction/class | Decode/FU marker | Path | Latency start | Latency end | Best-case latency | issue -> bypass | issue -> regCache write | issue -> PRF write | Variable contributors | Throughput / initiation interval | Bottleneck resource | Source evidence | Confidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 Use a resource-throughput table:
 
@@ -58,7 +59,8 @@ Use a path timing table when one instruction needs a cycle-by-cycle explanation:
 
 ## Reporting Rules
 
-- Always state the timing reference point. `ALU latency is 1 cycle` is insufficient; say whether this means issue-to-FU-response, FU-input-to-writeback, or dispatch-to-commit.
+- Always state the timing reference point. `ALU latency is 1 cycle` is insufficient; say whether this means FU-input-to-response, issue-to-bypass, issue-to-regCache-write, issue-to-PRF-write, FU-input-to-writeback, or dispatch-to-commit.
+- When analyzing XiangShan backend latency, include regCache write/update timing when the producer has a regCache path. Treat regCache as a distinct endpoint: it is a bypass-backed cache for later source reads, not the PRF itself.
 - Do not average unrelated paths into one number. Report separate best-case, hit, miss, replay, and serialized cases.
 - Do not claim one-instruction-per-cycle throughput unless the FU can accept a new request every cycle and downstream writeback/commit resources can sustain it.
 - For vector instructions, state whether latency/throughput is per instruction, per micro-op, per element group, or per lane operation.

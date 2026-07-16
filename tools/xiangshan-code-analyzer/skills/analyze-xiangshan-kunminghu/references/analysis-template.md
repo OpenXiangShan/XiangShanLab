@@ -167,8 +167,8 @@ State the timing convention:
 
 Per-instruction or per-class timing:
 
-| Instruction/class | Decode/FU marker | Effective path | Latency start | Latency end | Best-case latency | Variable contributors | Throughput / initiation interval | Bottleneck resource | Source evidence | Confidence |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Instruction/class | Decode/FU marker | Effective path | Latency start | Latency end | Best-case latency | issue -> bypass | issue -> regCache write | issue -> PRF write | Variable contributors | Throughput / initiation interval | Bottleneck resource | Source evidence | Confidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 Resource throughput:
 
@@ -181,7 +181,7 @@ Path timing:
 | --- | --- | --- | --- | --- | --- |
 
 Reporting rules:
-- Separate issue-to-response, issue-to-writeback, dispatch-to-writeback, and dispatch-to-commit numbers when they differ.
+- Separate issue-to-response, issue-to-bypass, issue-to-regCache-write, issue-to-PRF-write, issue-to-writeback, dispatch-to-writeback, and dispatch-to-commit numbers when they differ.
 - Separate fixed FU latency from variable queue wait, writeback contention, ROB commit wait, replay, redirect, exception, TLB/cache miss, MSHR/refill, fence/order serialization, and uncache/MMIO latency.
 - Report throughput as steady-state initiation interval or operations per cycle under stated assumptions, not as the inverse of latency unless code proves a fully pipelined resource and no downstream bottleneck.
 - Mark values as code-proven fixed, parameter-derived, best-case bound, variable/miss-dependent, or unclear without elaboration/waveforms.
