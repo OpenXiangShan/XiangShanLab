@@ -48,3 +48,18 @@ Use this file to locate intent-level documentation in `OpenXiangShan/XiangShan-D
 ## XSCache
 
 For XSCache-specific source analysis, use `references/xscache.md` and the `OpenXiangShan/XSCache.git` repository. Design Doc cache/l2cache pages may describe CoupledL2 concepts, but effective XSCache behavior must be verified in XSCache source.
+
+## Mandatory Source Traceability
+
+Use `references/design-doc-code-trace.md` whenever Design Doc content is consulted. Design Doc text and figures are intent-level inputs, not proof of effective behavior.
+
+For every load-bearing claim, figure edge, table row, stage label, parameter, timing number, or interface assumption:
+
+1. Record the exact Design Doc file and heading/figure location.
+2. Split the claim into atomic statements.
+3. Locate the instantiated/configured source module and exact `XiangShan` source lines.
+4. Trace producer → transform/register/state/handshake → consumer line by line.
+5. Mark `Verified`, `Partially verified`, `Not found`, `Version mismatch`, or `Design-only/pseudocode`.
+6. Explain stale names, branch/configuration guards, commented code, omitted details, and behavior differences.
+
+Every output using Design Doc material must record independent Design Doc and XiangShan commits and include a design-to-source traceability matrix. Do not convert an unmapped diagram into an implementation claim.

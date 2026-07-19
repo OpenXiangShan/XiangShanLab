@@ -91,3 +91,7 @@ Always distinguish prediction-time signals from training/update signals.
 ## Extra Frontend Analysis Requirements
 
 For frontend modules, explain predictor algorithms with paper-backed principle plus lookup/update/recovery separation. For FSMs, inspect fetch pipeline control, ICache miss/refill control, FTQ enqueue/dequeue/commit state, RAS/history recovery, and redirect handling. Keep prediction data path separate from training/update control path.
+
+## Frontend Pipeline Diagram
+
+For frontend top-level or full-chain analysis, include a dedicated Mermaid stage graph in addition to the module connectivity graph. Use the effective source stage names; when present, show `F0 -> F1 -> F2 -> F3` and label each edge with the PC, prediction metadata, translation result, line data, predecode result, or valid/ready condition that crosses the stage. Show redirects, flushes, and predictor updates as bundled feedback edges, not as separate edges for every signal. If the complete frontend has more than three meaningful connections between the same module pair, split the diagram into BPU/FTQ, ICache/ITLB/IFU, and IFU/IBuffer subgraphs.

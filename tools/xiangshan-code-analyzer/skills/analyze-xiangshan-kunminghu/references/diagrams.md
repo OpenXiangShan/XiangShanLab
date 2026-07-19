@@ -39,6 +39,45 @@ Show:
 - Interface names and direction: `Decoupled req`, `Valid resp`, `Vec readPorts`, `writePorts`, `wakeup`, `redirect`, `flush`.
 - Parameterized multiplicity: label edges with values or expressions such as `RenameWidth`, `LoadPipelineWidth`, `getIntExuRCReadSize`, `nWays`, `nSets` when known.
 
+## Top-Level and End-to-End Mermaid Rules
+
+Use these rules when the request asks for a top-level module map, complete signal chain, frontend/backend overview, or full pipeline:
+
+1. Draw two separate diagrams, not one overloaded figure:
+   - `Top-Level Module Connectivity`: module/subsystem boundaries and only the most important bundled interfaces.
+   - `Frontend/Backend Pipeline Stages`: stage-to-stage timing and payload progression.
+2. Keep module connectivity sparse. Between any pair of modules, draw no more than three edges. Combine related signals into one labeled edge such as `req/resp`, `valid/ready/fire`, or `redirect/flush/update`; do not create one edge for every signal.
+3. If the graph would exceed three useful edges or become difficult to read, split it into multiple Mermaid subgraphs/figures: `Frontend`, `Fetch/ICache`, `Backend`, `Memory/Cache`, and `Commit/Redirect` are recommended boundaries. Each subgraph must remain independently understandable and cross-subgraph links must stay bundled.
+4. The stage graph must use names proven by source code. Show Frontend stages such as `F0`, `F1`, `F2`, and `F3` when those stages exist, followed by the actual Backend stages such as Decode, Rename, Dispatch, Issue, Execute, Writeback, and Commit. If the implementation uses `s0/s1/s2/s3`, `B0/B1`, or another naming scheme, preserve the source names and map them in prose.
+5. Label each stage edge with the payload/control group crossing it, for example `fetch PC + prediction`, `inst + predecode`, `uop + rename map`, `ready uop`, `result + wakeup`, or `commit/redirect`. Keep stage graph edges chronological and do not turn feedback paths into fake forward pipeline stages.
+
+Example module graph:
+
+```mermaid
+flowchart LR
+  subgraph FE[Frontend]
+    BPU -->|PC + prediction metadata| FTQ
+    FTQ -->|fetch request| IFU
+    IFU -->|inst + exception metadata| IBuffer
+  end
+  subgraph BE[Backend]
+    IBuffer -->|inst packet| Decode
+    Decode -->|uop bundle| Rename
+    Rename -->|renamed uop| Dispatch
+  end
+  FTQ -->|redirect/update| Commit
+  Commit -->|flush/redirect| BPU
+```
+
+Example stage graph:
+
+```mermaid
+flowchart LR
+  F0 -->|fetch PC| F1 -->|prediction/translation| F2 -->|line data/predecode| F3
+  F3 -->|instruction packet| Decode -->|uop| Rename -->|renamed uop| Dispatch
+  Dispatch -->|ready uop| Issue -->|operands| Execute -->|result| Writeback -->|retire| Commit
+```
+
 ## FSM Diagram Rules
 
 Use `stateDiagram-v2` for explicit state machines.
@@ -57,7 +96,7 @@ If the module has no explicit FSM but uses valid bits/status fields as an implic
 
 ## waveform-draw Handshake Timing Rules
 
-Use fenced code blocks with `waveform-draw` as the info string. Use WaveDrom-compatible signal JSON so the diagram can be rendered by waveform-draw-style tools.
+Use fenced code blocks with `waveform-draw` as the info string. Configure VS Code's Markdown Preview WaveDrom extension to recognize this identifier; see `references/vscode-waveform.md`. Use strict WaveDrom-compatible signal JSON so the diagram renders in the Markdown Preview.
 
 Each timing diagram should include:
 - `clk` as the first signal.
@@ -112,3 +151,5 @@ waveform-draw diagram labels must use real signal names from the inspected code 
 - Prefer `0`, `1`, `.`, `x`, and `=` wave characters for readable valid/ready timing.
 - Use `data` labels for payload names, not long prose.
 - Do not put code line references inside waveform-draw signal names or data labels.
+- Do not use comments, trailing commas, JavaScript expressions, or Markdown prose inside the JSON block; the VS Code preview extension parses it as JSON.
+- Preview with `Markdown: Open Preview to the Side` or `Markdown: Open Preview`; the source editor itself remains plain text.

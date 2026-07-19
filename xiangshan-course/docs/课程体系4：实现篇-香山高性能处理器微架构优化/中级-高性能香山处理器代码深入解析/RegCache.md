@@ -445,3 +445,26 @@ RegCache does not arbitrate same-entry multi-write conflicts. Tag/Data modules a
 ## 19. Summary
 
 RegCache is a small, banked, non-architectural cache for recent integer writeback data. Its main state is data valid/data arrays, tag valid/tag/load-dependency arrays, age timers, and issue-entry RegCache metadata. Its key control path is dispatch tag search plus wakeup/replacement update of `useRegCache/regCacheIdx`. Its key data path is BypassNetwork result -> RegCache write and RegCache read -> BypassNetwork operand mux. The most important corner case is stale slot reuse: replacement and cancellation must clear tag/issue metadata so old consumers do not read newly overwritten data.
+
+## 验证特别注意
+
+> 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。每个期望必须以当前 `kunminghu-v2` 有效 Chisel 为准。
+
+| Verification ID | 风险 / 不变量 | 定向激励 | 期望观察 | Checker / Coverage |
+| --- | --- | --- | --- | --- |
+| `C_MULTI_WRITE_SAME_ENTRY` | 多个写端口同拍覆盖同一 RegCache entry | 强制两个 write port 选择相同 slot | 触发源码断言或唯一合法优先级，tag/data 不分裂；证据 [backend/regcache/RegCacheDataModule.scala:45-75](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/regcache/RegCacheDataModule.scala#L45-L75) | Multi-write assertion；tag/data scoreboard |
+| `REGCACHE_INVALID_READ` | 读取 invalid/stale slot 造成错误操作数 | tag miss、替换取消和 load cancel 后立即读取旧 slot | invalid 读取被断言/屏蔽，不能伪造 hit；证据 [backend/regcache/RegCacheDataModule.scala:45-65](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/regcache/RegCacheDataModule.scala#L45-L65) | Valid-bit checker；stale-slot reuse cover |
+| `REGCACHE_TAG_DATA_ALIGN` | 流水化写索引导致 tag 与 data 落入不同 entry | 连续三拍写不同 pdest/slot，并插入 cancel/replace | 写 tag、写 data 与延迟后的 index 对齐；证据 [backend/regcache/RegCache.scala:65-120](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/regcache/RegCache.scala#L65-L120) | Pipeline metadata scoreboard |
+| `C_SAME_ENTRY_RW` | 同拍读写/替换同一 slot 的旁路与命中错误 | read、write、replace 同时指向同 entry | tag 命中、取消和替换优先级符合源码；证据 [backend/regcache/RegCacheTagModule.scala:50-95](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/regcache/RegCacheTagModule.scala#L50-L95) | Storage conflict checker；RAW/replace cross |
+| `H_SAME_INDEX_DIFF_TAG` | 不同 pdest 竞争或重复占用 slot | 制造相同低位索引不同 tag，并允许多个 slot 出现同 tag | TagTable 的 hit vector、写入和无效化保持 one-hot/可解释；证据 [backend/regcache/RegCacheTagTable.scala:55-105](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/regcache/RegCacheTagTable.scala#L55-L105) | Tag uniqueness checker；multi-hit cover |
+| `REGCACHE_AGE_ORDER` | 年龄矩阵不传递或替换项不唯一 | 读写多个 entry、让计时器饱和并跨组比较 | 年龄更新优先级和 replacement one-hot 断言成立；证据 [backend/regcache/RegCacheAgeTimer.scala:51-98](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/regcache/RegCacheAgeTimer.scala#L51-L98)、[backend/regcache/AgeDetector.scala:63-70](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/regcache/AgeDetector.scala#L63-L70) | Age-order checker；rank uniqueness cover |
+| `RESOURCE_CONTENTION` | 所有 slot/读写端口繁忙时覆盖活跃值 | 填满有效 entry 并持续产生多读多写 | 替换只选代码给出的最老/无效项，阻塞不造成架构错误 | Occupancy/arbiter checker；port-pressure cross |
+| `PB_RECOVERY_THROUGHPUT` | 低命中率或端口冲突导致旁路网络长期拥塞 | 冷热 pdest 阶段切换并注入持续写回 | miss/stale hit 不破坏正确性，命中率和端口压力恢复 | Performance checker；hit-rate/stall coverage |
+
+### 通用判定原则
+
+- `valid && !ready` 期间 payload 必须稳定；只有 `fire` 才能推进指针、状态或训练一次。
+- flush/redirect/replay 的胜负关系必须按代码优先级检查；错误路径不得提交、写表、训练预测器或暴露异常/数据。
+- 资源填满后必须验证可排空；重复冲突、retry 或 redirect 不得形成 deadlock/livelock，并检查低优先级旧请求是否饥饿。
+- 环形指针必须覆盖最大值到零的 wrap；表索引必须构造 same-index/different-tag 和同拍 read/write 冲突组。
+- 性能覆盖至少记录占用率、反压周期、redirect 恢复延迟、重试次数和恢复后的持续吞吐。
