@@ -1,5 +1,0 @@
-Manifest-Version: 1.0
-Specification-Vendor: org.scala-sbt
-Specification-Title: Compiler Bridge
-Specification-Version: 1.10.7
-

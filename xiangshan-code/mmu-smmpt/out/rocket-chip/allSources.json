@@ -1,8 +1,0 @@
-{
-    "value": [
-        "ref:v0:ec57cf7a:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/rocket-chip/src/main/scala",
-        "ref:v0:c984eca8:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/rocket-chip/src/main/java"
-    ],
-    "valueHash": -1308073928,
-    "inputsHash": -242203896
-}

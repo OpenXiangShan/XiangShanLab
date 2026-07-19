@@ -1,8 +1,0 @@
-{
-    "value": [
-        "qref:v1:50528653:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/scala-library/2.13.17/scala-library-2.13.17.jar",
-        "ref:v0:c984eca8:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/rocket-chip/cde/cde/compile-resources"
-    ],
-    "valueHash": -1932900270,
-    "inputsHash": 331717552
-}

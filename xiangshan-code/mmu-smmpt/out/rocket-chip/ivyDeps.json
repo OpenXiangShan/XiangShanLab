@@ -1,9 +1,0 @@
-{
-    "value": [
-        "org.chipsalliance::chisel:7.3.0",
-        "com.lihaoyi::mainargs:0.7.7",
-        "org.json4s::json4s-jackson:4.0.7"
-    ],
-    "valueHash": -849575313,
-    "inputsHash": 758815606
-}

@@ -1,1 +1,0 @@
-Exception in thread "main" chisel3.internal.Errors: Fatal errors during hardware elaboration. Look above for error list. Rerun with --throw-on-first-error if you wish to see a stack trace.
