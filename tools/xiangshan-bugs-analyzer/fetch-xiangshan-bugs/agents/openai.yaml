@@ -1,0 +1,4 @@
+interface:
+  display_name: "Get XiangShan Bug"
+  short_description: "Collect XiangShan issues and PR bug context"
+  default_prompt: "Use $get-xiangshan-bug to collect XiangShan issues and PRs, summarize bug causes, and write xiangshan-bug-lib."

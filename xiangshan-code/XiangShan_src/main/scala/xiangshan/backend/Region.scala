@@ -1,0 +1,948 @@
+/***************************************************************************************
+ * Copyright (c) 2025 Beijing Institute of Open Source Chip (BOSC)
+ *
+ * XiangShan is licensed under Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *          http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ *
+ * See the Mulan PSL v2 for more details.
+ ***************************************************************************************/
+
+package xiangshan.backend
+
+import org.chipsalliance.cde.config.Parameters
+import chisel3._
+import chisel3.util._
+import xiangshan._
+import xiangshan.backend.Bundles._
+import xiangshan.backend.datapath.DataConfig._
+import xiangshan.backend.datapath._
+import xiangshan.backend.datapath.WbConfig._
+import xiangshan.backend.fu.{CSRFileIO, FenceIO, FuType}
+import xiangshan.backend.regfile.RfWritePortBundle
+import xiangshan.backend.exu.ExuBlock
+import xiangshan.mem._
+import utility._
+import xiangshan.backend.fu.vector.Bundles.{VType, Vstart}
+import xiangshan.backend.fu.wrapper.{CSRInput, CSRToDecode}
+import xiangshan.backend.rob.RobPtr
+import xiangshan.backend.issue.EntryBundles.RespType
+import xiangshan.backend.issue._
+
+
+class Region(val params: SchdBlockParams)(implicit p: Parameters) extends XSModule with HasCriticalErrors {
+  val io = IO(new RegionIO(params))
+  val issueQueues = params.issueBlockParams.map { case iqParam =>
+     Module(new IssueQueueImp()(p,iqParam)).suggestName("issueQueue" + iqParam.allExuParams.map(_.name).reduce(_ + _) + "_" + iqParam.getIQFuName)
+  }
+  issueQueues.map(x =>{
+    println(s"[Region] iqParam.getIQName = ${x.param.getIQName}")
+    println(s"[Region] Class name: ${x.getClass.getSimpleName}")
+    println(s"[Region] iqParam.inIntSchd: ${x.param.inIntSchd}")
+    println(s"[Region] iqParam.isMemAddrIQ: ${x.param.isMemAddrIQ}")
+  }
+  )
+  println(s"[Region] ${params.schdType}")
+  val prefix = if (params.isIntSchd) "int" else if (params.isFpSchd) "fp" else "vec"
+  val dataPath = Module(new DataPath()(p, backendParams, params)).suggestName(prefix + "DataPath")
+  val bypassNetwork = Module(new BypassNetwork()(p, backendParams)).suggestName(prefix + "BypassNetwork")
+  val exuBlock = Module(new ExuBlock()(p, params)).suggestName(prefix + "ExuBlock")
+  val wbDataPath = Module(new WbDataPath(backendParams, params)).suggestName(prefix + "WBDataPath")
+  val og2ForVector = Option.when(params.isVecSchd)(Module(new Og2ForVector(backendParams)).suggestName(prefix + "OG2ForVector"))
+  val wbFuBusyTable = Module(new WbFuBusyTable()(p, backendParams)).suggestName(prefix + "WBFuBusyTable")
+
+  wbFuBusyTable.io.in.intSchdBusyTable := io.intSchdBusyTable
+  wbFuBusyTable.io.in.fpSchdBusyTable := io.fpSchdBusyTable
+  wbFuBusyTable.io.in.vfSchdBusyTable := io.vfSchdBusyTable
+  val og0Cancel = dataPath.io.og0Cancel
+  val og1Cancel = dataPath.io.og1Cancel
+  val allWakeup = if (params.isIntSchd) issueQueues.flatMap(_.io.wakeupToIQ) ++ io.wakeUpFromFp.get
+                  else if (params.isFpSchd) issueQueues.flatMap(_.io.wakeupToIQ) ++ io.wakeUpFromInt.get.filter(_.bits.params.hasLoadExu)
+                  else issueQueues.flatMap(_.io.wakeupToIQ)
+  val iqWakeUpBundle: Map[Int, ValidIO[IssueQueueIQWakeUpBundle]] = allWakeup.map(x => (x.bits.exuIdx, x)).toMap
+  val iqWakeUpBundleDelayed: Map[Int, ValidIO[IssueQueueIQWakeUpBundle]] =
+    allWakeup
+    .map{ case x =>
+      val delayed = Wire(chiselTypeOf(x))
+      // TODO: add clock gate use Wen, remove issuequeue wakeupToIQ logic Wen = Wen && valid
+      delayed := RegNext(x)
+      (x.bits.exuIdx, delayed)
+    }.toMap
+  // Connect bundles having the same wakeup source
+  issueQueues.zipWithIndex.foreach { case (iq, i) =>
+    println(s"[Region_${params.schdType}] iq.param.getIQName = ${iq.param.getIQName}")
+    println(s"[Region_${params.schdType}] iq.io.wakeupFromIQ.size = ${iq.io.wakeupFromIQ.size}")
+    if (params.isIntSchd) println(s"[Region_${params.schdType}] io.wakeUpFromFp.size = ${io.wakeUpFromFp.get.size}")
+    if (params.isFpSchd) println(s"[Region_${params.schdType}] io.wakeUpFromInt.filter(_.bits.params.hasLoadExu).size = ${io.wakeUpFromInt.get.filter(_.bits.params.hasLoadExu).size}")
+    println(s"[Region_${params.schdType}] iqWakeUpBundle = ${iqWakeUpBundle.keys.toList.sorted}")
+    iq.io.wakeupFromIQ.foreach { wakeUp =>
+      val exuIdx = wakeUp.bits.exuIdx
+      println(s"[Region_${params.schdType}] Connect wakeup exuName = ${backendParams.allExuParams(exuIdx).name}, exuIdx = ${exuIdx}")
+      val wakeUpIn = iqWakeUpBundle(wakeUp.bits.exuIdx)
+      wakeUp.valid := wakeUpIn.valid
+      connectSamePort(wakeUp.bits, wakeUpIn.bits)
+      backendParams.connectWakeup(exuIdx)
+      if (backendParams.isCopyPdest(exuIdx)) {
+        println(s"[Region_${params.schdType}] exuIdx ${exuIdx} use pdestCopy ${backendParams.getCopyPdestIndex(exuIdx)}")
+        wakeUp.bits.pdest := wakeUpIn.bits.pdestCopy.get(backendParams.getCopyPdestIndex(exuIdx))
+        if (wakeUpIn.bits.rfWenCopy.nonEmpty) wakeUp.bits.rfWen := wakeUpIn.bits.rfWenCopy.get(backendParams.getCopyPdestIndex(exuIdx))
+        if (wakeUpIn.bits.fpWenCopy.nonEmpty) wakeUp.bits.fpWen := wakeUpIn.bits.fpWenCopy.get(backendParams.getCopyPdestIndex(exuIdx))
+        if (wakeUpIn.bits.vecWenCopy.nonEmpty) wakeUp.bits.vecWen := wakeUpIn.bits.vecWenCopy.get(backendParams.getCopyPdestIndex(exuIdx))
+        if (wakeUpIn.bits.v0WenCopy.nonEmpty) wakeUp.bits.v0Wen := wakeUpIn.bits.v0WenCopy.get(backendParams.getCopyPdestIndex(exuIdx))
+        if (wakeUpIn.bits.vlWenCopy.nonEmpty) wakeUp.bits.vlWen := wakeUpIn.bits.vlWenCopy.get(backendParams.getCopyPdestIndex(exuIdx))
+        if (wakeUpIn.bits.loadDependencyCopy.nonEmpty) wakeUp.bits.loadDependency := wakeUpIn.bits.loadDependencyCopy.get(backendParams.getCopyPdestIndex(exuIdx))
+      }
+      if (iq.param.numIntSrc == 0) wakeUp.bits.rfWen := false.B
+      if (iq.param.numFpSrc == 0) wakeUp.bits.fpWen := false.B
+      if (iq.param.numVfSrc == 0) wakeUp.bits.vecWen := false.B
+      if (iq.param.numV0Src == 0) wakeUp.bits.v0Wen := false.B
+      if (iq.param.numVlSrc == 0) wakeUp.bits.vlWen := false.B
+    }
+    iq.io.wakeupFromIQDelayed.foreach { wakeUp =>
+      val wakeUpIn = iqWakeUpBundleDelayed(wakeUp.bits.exuIdx)
+      wakeUp.valid := wakeUpIn.valid
+      connectSamePort(wakeUp.bits, wakeUpIn.bits)
+      if (iq.param.numIntSrc == 0) wakeUp.bits.rfWen := false.B
+      if (iq.param.numFpSrc == 0) wakeUp.bits.fpWen := false.B
+      if (iq.param.numVfSrc == 0) wakeUp.bits.vecWen := false.B
+      if (iq.param.numV0Src == 0) wakeUp.bits.v0Wen := false.B
+      if (iq.param.numVlSrc == 0) wakeUp.bits.vlWen := false.B
+    }
+    if (iq.param.needLoadDependency)
+      iq.io.ldCancel := io.ldCancel
+    else
+      iq.io.ldCancel := 0.U.asTypeOf(io.ldCancel)
+  }
+  issueQueues.filter(_.param.StdCnt == 0).zip(io.fromDispatch).map{ case (sinks, sources) => {
+    sinks.io.enq.zip(sources).map{ case (sink, source) => {
+      sink.valid := source.valid
+      // TODO add option connect method
+      connectSamePort(sink.bits, source.bits)
+      sinks.io.vlFromIntIsZero := false.B
+      sinks.io.vlFromIntIsVlmax := false.B
+      sinks.io.vlFromVfIsZero := false.B
+      sinks.io.vlFromVfIsVlmax := false.B
+      source.ready := sink.ready
+    }}
+  }}
+  issueQueues.filterNot(_.param.StdCnt == 0).map { case stdiq => {
+    stdiq.io.vlFromIntIsZero := false.B
+    stdiq.io.vlFromIntIsVlmax := false.B
+    stdiq.io.vlFromVfIsZero := false.B
+    stdiq.io.vlFromVfIsVlmax := false.B
+    }
+  }
+  issueQueues.filter(_.param.needUncertainWakeupFromExu).map(_.io.wakeupFromExu.get).flatten.zip(exuBlock.io.uncertainWakeupOut.get).map { case (iq, exuWakeUpIn) =>
+    iq <> exuWakeUpIn
+  }
+  val iqWakeUpOutMap: Map[Int, ValidIO[IssueQueueIQWakeUpBundle]] =
+    issueQueues.flatMap(_.io.wakeupToIQ)
+      .map(x => (x.bits.exuIdx, x))
+      .toMap
+  io.wakeUpToDispatch.foreach { wakeUp =>
+    wakeUp := iqWakeUpOutMap(wakeUp.bits.exuIdx)
+  }
+
+
+  // Response
+  val fromDataPathResp = if (params.isIntSchd) dataPath.io.toIntIQ
+                         else if (params.isFpSchd) dataPath.io.toFpIQ
+                         else dataPath.io.toVfIQ
+  // for fix timing, 1 iq use 1 flushCopyReg, oldestRedirect use 1 flushCopyReg, the other modules use 1 flushCopyReg
+  val flushCopyRegVec = VecInit(Seq.tabulate(issueQueues.size + 2)(x => RegNextWithEnable(io.flush)))
+  issueQueues.zipWithIndex.foreach { case (iq, i) =>
+    iq.io.flush := flushCopyRegVec(i)
+    iq.io.og0Cancel := og0Cancel
+    iq.io.og1Cancel := og1Cancel
+    iq.io.og0Resp.zipWithIndex.foreach { case (og0Resp, j) =>
+      og0Resp := fromDataPathResp(i)(j).og0resp
+    }
+    iq.io.og1Resp.zipWithIndex.foreach { case (og1Resp, j) =>
+      og1Resp := fromDataPathResp(i)(j).og1resp
+    }
+    iq.io.replaceRCIdx.foreach(x => x := 0.U.asTypeOf(x))
+    iq.io.wakeupFromWB.foreach(x => x := 0.U.asTypeOf(x))
+    iq.io.wakeupFromWBDelayed.foreach(x => x := 0.U.asTypeOf(x))
+  }
+  // 1 iq has 1 ldu, 1sta, 1vstu
+  val ldAddrIQs = issueQueues.filter(iq => iq.param.LduCnt > 0)
+  ldAddrIQs.zipWithIndex.foreach { case(imp, i) =>
+    imp.io.memIO.get.loadWakeUp.head := io.wakeupFromLDU.get(i)
+  }
+  val stAddrIQs = issueQueues.filter(iq => iq.param.StaCnt > 0)
+  stAddrIQs.zipWithIndex.foreach { case(imp, i) =>
+    val feedBack = io.staFeedback.get(i).feedbackSlow
+    imp.io.s2Resp.get.head.failed := feedBack.valid && !feedBack.bits.hit
+    imp.io.s2Resp.get.head.finalSuccess := feedBack.valid && feedBack.bits.hit
+    imp.io.s2Resp.get.head.fuType := 0.U
+    imp.io.s2Resp.get.head.lqIdx.foreach(_ := feedBack.bits.lqIdx)
+    imp.io.s2Resp.get.head.sqIdx.foreach(_ := feedBack.bits.sqIdx)
+  }
+  val vecStuIQs = issueQueues.filter(iq => iq.param.VstuCnt > 0)
+  vecStuIQs.zipWithIndex.foreach { case(imp, i) =>
+    imp.io.memIO.get.lqDeqPtr.get := io.lqDeqPtr.get
+    imp.io.memIO.get.sqDeqPtr.get := io.sqDeqPtr.get
+    val feedBack = io.vstuFeedback.get(i).feedbackSlow
+    imp.io.snResp.get.head.failed := feedBack.valid && !feedBack.bits.hit
+    imp.io.snResp.get.head.finalSuccess := feedBack.valid && feedBack.bits.hit
+    imp.io.snResp.get.head.fuType := 0.U
+    imp.io.snResp.get.head.lqIdx.foreach(_ := feedBack.bits.lqIdx)
+    imp.io.snResp.get.head.sqIdx.foreach(_ := feedBack.bits.sqIdx)
+  }
+  // other wakeup, int vec need WB wakeup
+  def connectWakeupWB(sink: ValidIO[IssueQueueWBWakeUpBundle], source: RfWritePortBundle): Unit = {
+    sink.valid := source.wen
+    sink.bits.rfWen := source.rfWen
+    sink.bits.fpWen := source.fpWen
+    sink.bits.vecWen := source.vecWen
+    sink.bits.v0Wen := source.v0Wen
+    sink.bits.vlWen := source.vlWen
+    sink.bits.pdest := source.pdest
+    sink.bits.pdestVl := source.pdest
+  }
+
+  if (params.isIntSchd) {
+    // exu can write to only one register file port
+    val idxes = backendParams.vecSchdParams.get.exuBlockParams.filter(_.writeIntRf).map(_.wbPortConfigs.filter(_.isInstanceOf[IntWB]).head.port)
+    println(s"[Region] vec write int port = ${idxes}")
+    val wakeupFromWB = MixedVecInit(idxes.map(x => io.fromIntWb(x)))
+    val wakeupFromWBDelayed = RegNext(wakeupFromWB)
+    issueQueues.map { case iq =>
+      val vecExuIndices = params.backendParam.allExuParams.filter(x => x.isVfExeUnit || x.isMemExeUnit && x.needVecWen).map(_.exuIdx)
+      println(s"[Region_int] vecExuIndices = ${vecExuIndices}")
+      val vecWBIndices = iq.io.wakeupFromWB.zipWithIndex.filter(x => x._1.bits.exuIndices.intersect(vecExuIndices).nonEmpty).map(_._2)
+      println(s"[Region_int] vecWBIndices = ${vecWBIndices}")
+      vecWBIndices.zip(wakeupFromWB).zip(wakeupFromWBDelayed).map { case ((i, source1), source2) =>
+        connectWakeupWB(iq.io.wakeupFromWB(i), source1)
+        connectWakeupWB(iq.io.wakeupFromWBDelayed(i), source2)
+      }
+      iq.io.wakeupFromF2I.foreach(_ := io.wakeupFromF2I.get)
+      println(s"[Region_int] wakeupFromWB.size = ${wakeupFromWB.size}")
+      println(s"[Region_int] iq.io.wakeupFromWB.size = ${iq.io.wakeupFromWB.size}")
+      println(s"[Region_int] ${iq.param.getIQName}: iq.param.needWakeupFromIntWBPort = ${iq.param.needWakeupFromIntWBPort.map(x => (x._1, x._2.map(_.name)))}")
+    }
+  }
+  else if (params.isFpSchd) {
+    val idxes = backendParams.vecSchdParams.get.exuBlockParams.filter(_.writeFpRf).map(_.wbPortConfigs.filter(_.isInstanceOf[FpWB]).head.port)
+    println(s"[Region] vec write fp port = ${idxes}")
+    val wakeupFromWB = MixedVecInit(idxes.map(x => io.fromFpWb(x)))
+    val wakeupFromWBDelayed = RegNext(wakeupFromWB)
+    issueQueues.map { case iq =>
+      val vecExuIndices = params.backendParam.allExuParams.filter(x => x.isVfExeUnit || x.isMemExeUnit && x.needVecWen).map(_.exuIdx)
+      println(s"[Region_fp] vecExuIndices = ${vecExuIndices}")
+      val vecWBIndices = iq.io.wakeupFromWB.zipWithIndex.filter(x => x._1.bits.exuIndices.intersect(vecExuIndices).nonEmpty).map(_._2)
+      println(s"[Region_fp] vecWBIndices = ${vecWBIndices}")
+      vecWBIndices.zip(wakeupFromWB).zip(wakeupFromWBDelayed).map { case ((i, source1), source2) =>
+        connectWakeupWB(iq.io.wakeupFromWB(i), source1)
+        connectWakeupWB(iq.io.wakeupFromWBDelayed(i), source2)
+      }
+      iq.io.wakeupFromI2F.foreach(_ := io.wakeupFromI2F.get)
+    }
+  }
+  else if (params.isVecSchd) {
+    val wakeupFromWB = io.fromVfWb ++ io.fromV0Wb ++ io.fromVlWb
+    val wakeupFromWBDelayedVf = RegNext(io.fromVfWb)
+    val wakeupFromWBDelayedV0 = RegNext(io.fromV0Wb)
+    val wakeupFromWBDelayedVl = RegNext(io.fromVlWb)
+    issueQueues.map { case iq =>
+      println(s"[Region_vec] wakeupFromWB.size = ${wakeupFromWB.size}")
+      println(s"[Region_vec] iq.io.wakeupFromWB.size = ${iq.io.wakeupFromWB.size}")
+      println(s"[Region_vec] ${iq.param.getIQName}: iq.param.needWakeupFromVfWBPort = ${iq.param.needWakeupFromVfWBPort.map(x => (x._1, x._2.map(_.name)))}")
+      iq.io.wakeupFromWB.zip(wakeupFromWB).map(x => connectWakeupWB(x._1, x._2))
+      iq.io.wakeupFromWBDelayed.zip(wakeupFromWBDelayedVf ++ wakeupFromWBDelayedV0 ++ wakeupFromWBDelayedVl).map(x => connectWakeupWB(x._1, x._2))
+    }
+  }
+  // std dispatch
+  val stDataIQs = issueQueues.filter(iq => iq.param.StdCnt > 0)
+  val staEnqs = stAddrIQs.map(_.io.enq).flatten
+  val stdEnqs = stDataIQs.map(_.io.enq).flatten.take(staEnqs.size)
+  val noStdExuParams = params.issueBlockParams.map(x => Seq.fill(x.numEnq)(x.exuBlockParams)).flatten.filter { x => x.map(!_.hasStdFu).reduce(_ && _) }
+  val staIdx = io.fromDispatch.zipWithIndex.filter(x => x._1.head.bits.params.isStAddrIQ).map(_._2)
+  val staReady = stAddrIQs.map(_.io.enq.head.ready)
+  val stdReady = stDataIQs.map(_.io.enq.head.ready)
+  staIdx.zipWithIndex.map { case (sta, i) => {
+    io.fromDispatch(sta).map(_.ready := staReady(i) && stdReady(i))
+  }
+  }
+  val staFromDispatch = staIdx.map(x => io.fromDispatch(x)).flatten
+  staEnqs.zip(staFromDispatch).map { case (sink, source) =>
+    sink.valid := source.valid && !source.bits.isDropAmocasSta
+  }
+  (stdEnqs).zip(staFromDispatch).zipWithIndex.foreach { case ((stdIQEnq, staIQEnq), i) =>
+    stdIQEnq.valid := staIQEnq.valid
+    connectSamePort(stdIQEnq.bits, staIQEnq.bits)
+    // Store data reuses store addr src(1) in dispatch2iq
+    // [dispatch2iq] --src*------src*(0)--> [staIQ|hyaIQ]
+    //                       \
+    //                        ---src*(1)--> [stdIQ]
+    // Since the src(1) of sta is easier to get, stdIQEnq.bits.src*(0) is assigned to staIQEnq.bits.src*(1)
+    // instead of dispatch2Iq.io.out(x).bits.src*(1)
+    val stdIdx = 1
+    stdIQEnq.bits.srcState(0) := staIQEnq.bits.srcState(stdIdx)
+    stdIQEnq.bits.srcLoadDependency(0) := staIQEnq.bits.srcLoadDependency(stdIdx)
+    stdIQEnq.bits.srcType(0) := staIQEnq.bits.srcType(stdIdx)
+    stdIQEnq.bits.psrc(0) := staIQEnq.bits.psrc(stdIdx)
+    stdIQEnq.bits.sqIdx.get := staIQEnq.bits.sqIdx.get
+    stdIQEnq.bits.useRegCache(0) := staIQEnq.bits.useRegCache(stdIdx)
+    stdIQEnq.bits.regCacheIdx(0) := staIQEnq.bits.regCacheIdx(stdIdx)
+  }
+  // Connect each replace RCIdx to IQ
+  if (params.needWriteRegCache) {
+    val iqReplaceRCIdxVec = issueQueues.filter(_.param.needWriteRegCache).flatMap { iq =>
+      iq.param.allExuParams.zip(iq.io.replaceRCIdx.get).filter(_._1.needWriteRegCache).map(_._2)
+    }
+    iqReplaceRCIdxVec.zip(dataPath.io.toWakeupQueueRCIdx).foreach { case (iq, in) =>
+      iq := in
+    }
+
+    if (backendParams.basicDebugEn && params.isIntSchd) {
+      val delayedWakeupQueueRcIdx = issueQueues.flatMap(_.io.wakeupToIQ).map { case x =>
+        val delayed = Wire(new DiffRCIdx)
+        delayed.wen   := RegNextN(x.bits.rfWen, 3)
+        delayed.rcIdx := RegNextN(x.bits.rcDest.get, 3)
+        delayed
+      }.toSeq
+      dataPath.io.diffRcIdx.get.zipWithIndex.foreach { case (x, i) =>
+        x.wen   := delayedWakeupQueueRcIdx(i).wen
+        x.rcIdx := delayedWakeupQueueRcIdx(i).rcIdx
+      }
+    }
+    println(s"[Region] numWriteRegCache: ${params.numWriteRegCache}")
+    println(s"[Region] iqReplaceRCIdxVec: ${iqReplaceRCIdxVec.size}")
+  }
+  dataPath.io.hartId := io.hartId
+  dataPath.io.flush := flushCopyRegVec.last
+  dataPath.io.fromIntIQ.flatten.map(x => {
+    x.valid := false.B
+    x.bits := 0.U.asTypeOf(x.bits)
+  })
+  dataPath.io.fromFpIQ.flatten.map(x => {
+    x.valid := false.B
+    x.bits := 0.U.asTypeOf(x.bits)
+  })
+  dataPath.io.fromVfIQ.flatten.map(x => {
+    x.valid := false.B
+    x.bits := 0.U.asTypeOf(x.bits)
+  })
+
+  io.fromIntIQDeqOg1Payload.foreach(pl => dataPath.io.fromIntIQDeqOg1Payload := pl)
+  io.fromFpIQDeqOg1Payload.foreach(pl => dataPath.io.fromFpIQDeqOg1Payload := pl)
+  io.fromVecIQDeqOg1Payload.foreach(pl => dataPath.io.fromVecIQDeqOg1Payload := pl)
+
+  val dataPathToExus = (dataPath.io.toIntExu ++ dataPath.io.toFpExu ++ dataPath.io.toVecExu).flatten
+  dataPathToExus.map(x => {
+    x.ready := false.B
+  })
+  dataPath.io.ldCancel := 0.U.asTypeOf(dataPath.io.ldCancel)
+  dataPath.io.wbConfictRead := 0.U.asTypeOf(dataPath.io.wbConfictRead)
+  dataPath.io.fromBypassNetwork := 0.U.asTypeOf(dataPath.io.fromBypassNetwork)
+  dataPath.io.fromPcTargetMem.toDataPathTargetPC := 0.U.asTypeOf(dataPath.io.fromPcTargetMem.toDataPathTargetPC)
+  dataPath.io.fromPcTargetMem.toDataPathPC := 0.U.asTypeOf(dataPath.io.fromPcTargetMem.toDataPathPC)
+
+  bypassNetwork.io.fromDataPath.int.foreach(x => x.foreach{ xx =>
+      xx.valid := false.B
+      xx.bits := 0.U.asTypeOf(xx.bits)
+  })
+  bypassNetwork.io.fromDataPath.fp.foreach(x => x.foreach { xx =>
+    xx.valid := false.B
+    xx.bits := 0.U.asTypeOf(xx.bits)
+  })
+  bypassNetwork.io.fromDataPath.vf.foreach(x => x.foreach { xx =>
+    xx.valid := false.B
+    xx.bits := 0.U.asTypeOf(xx.bits)
+  })
+  bypassNetwork.io.fromDataPath.rcData := 0.U.asTypeOf(bypassNetwork.io.fromDataPath.rcData)
+  bypassNetwork.io.fromExus := 0.U.asTypeOf(bypassNetwork.io.fromExus)
+  val bypassNetworkToExus = (bypassNetwork.io.toExus.int ++ bypassNetwork.io.toExus.fp ++ bypassNetwork.io.toExus.vf).flatten
+  bypassNetworkToExus.map(_.ready := false.B)
+
+  wbDataPath.io.flush := flushCopyRegVec.last
+  wbDataPath.io.fromTop.hartId := io.hartId
+  wbDataPath.io.fromIntExu.flatten.map { case x =>
+    x.valid := false.B
+    x.bits := 0.U.asTypeOf(x.bits)
+  }
+  if (!params.isFpSchd){
+    wbDataPath.io.fromFpExu.flatten.map { case x =>
+      x.valid := false.B
+      x.bits := 0.U.asTypeOf(x.bits)
+    }
+  }
+  wbDataPath.io.fromVfExu.flatten.map { case x =>
+    x.valid := false.B
+    x.bits := 0.U.asTypeOf(x.bits)
+  }
+  wbDataPath.io.fromCSR.vstart := 0.U
+  io.toIntPreg := 0.U.asTypeOf(io.toIntPreg)
+  io.toFpPreg  := 0.U.asTypeOf(io.toFpPreg )
+  io.toVfPreg  := 0.U.asTypeOf(io.toVfPreg )
+  io.toV0Preg  := 0.U.asTypeOf(io.toV0Preg )
+  io.toVlPreg  := 0.U.asTypeOf(io.toVlPreg )
+  io.vlWriteBackInfoOut := 0.U.asTypeOf(io.vlWriteBackInfoOut)
+
+  exuBlock.io.frm.foreach(_ := io.frm)
+  exuBlock.io.vxrm.foreach(_ := io.vxrm)
+  exuBlock.io.flush := flushCopyRegVec.last
+
+  val wbFuBusyTableWrite = Wire(MixedVec(params.issueBlockParams.map(x => x.genWbFuBusyTableWriteBundle)))
+  issueQueues.zipWithIndex.foreach { case (iq, i) =>
+    wbFuBusyTableWrite(i) := iq.io.wbBusyTableWrite
+  }
+  io.wbFuBusyTableWriteOut := wbFuBusyTableWrite
+  val criticalErrors = exuBlock.getCriticalErrors
+  generateCriticalErrors()
+  if (params.isIntSchd) {
+    io.toFrontendBJUResolve.get := exuBlock.io.toFrontendBJUResolve.get
+    issueQueues.zipWithIndex.foreach { case (iq, i) =>
+      iq.io.wbBusyTableRead := wbFuBusyTable.io.out.intRespRead(i)
+    }
+    io.vlWriteBackInfoOut.vlFromIntIsZero := exuBlock.io.vlIsZero.get
+    io.vlWriteBackInfoOut.vlFromIntIsVlmax := exuBlock.io.vlIsVlmax.get
+    io.cross.I2FWakeupOut.get := exuBlock.io.cross.I2FWakeupOut.get
+    io.cross.I2FDataOut.get   := exuBlock.io.cross.I2FDataOut.get
+    exuBlock.io.cross.F2IDataIn.get := io.cross.F2IDataIn.get
+    exuBlock.io.csrio.get <> io.csrio.get
+    exuBlock.io.csrin.get := io.csrin.get
+    println(s"[Region_int] wbDataPath.io.fromIntExu.size = ${wbDataPath.io.fromIntExu.size}")
+    println(s"[Region_int] exuBlock.io.out.size = ${exuBlock.io.out.size}")
+    println(s"[Region_int] io.memWriteback.size = ${io.memWriteback.flatten.size}")
+    wbDataPath.io.fromIntExu.flatten.zip((exuBlock.io.out ++ io.memWriteback).flatten).map{ case (sink, source) =>
+      sink <> source
+    }
+    wbDataPath.io.fromFpExu.flatten.zip((io.fromFpExu.get).flatten).map { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+    wbDataPath.io.fromVfExu.flatten.zip((io.fromVecExu.get).flatten).map { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+    io.vtype.get := exuBlock.io.vtype.get
+    io.toIntPreg := wbDataPath.io.toIntPreg
+    io.fenceio.get <> exuBlock.io.fenceio.get
+    io.csrToDecode.get <> exuBlock.io.csrToDecode.get
+
+    dataPath.io.ldCancel := io.ldCancel
+    dataPath.io.fromIntIQ.zip(issueQueues).zip(io.intIQOut.get).map{ case ((sink, source), iqOut) =>
+      sink.zipWithIndex.map{ case (s, i) =>
+        s.valid := source.io.deqDelay(i).valid
+        iqOut(i).valid := source.io.deqDelay(i).valid
+        s.bits := source.io.deqDelay(i).bits
+        iqOut(i).bits := source.io.deqDelay(i).bits
+        source.io.deqDelay(i).ready := s.ready && iqOut(i).ready
+      }
+    }
+    dataPath.io.fromIntIQDeqOg1Payload.zip(issueQueues).zip(io.intIQDeqOg1PayloadOut.get).map { case ((sink, source), plOut) =>
+      sink.zipWithIndex.map { case (s, i) =>
+        s := source.io.deqOg1Payload(i)
+        plOut(i) := source.io.deqOg1Payload(i)
+      }
+    }
+    // for write int regfile and resp
+    dataPath.io.fromFpIQ.zip(io.fromFpIQ.get).map { case (sink, source) =>
+      sink <> source
+    }
+
+    dataPath.io.fromIntWb.get := wbDataPath.io.toIntPreg
+    dataPath.io.fromPcTargetMem <> io.fromPcTargetMem.get
+    dataPath.io.fromBypassNetwork := bypassNetwork.io.toDataPath
+
+    bypassNetwork.io.fromDataPath.int <> dataPath.io.toIntExu
+    bypassNetwork.io.fromDataPath.rcData := dataPath.io.toBypassNetworkRCData
+    bypassNetwork.io.fromExus.connectExuOutput(_.int)(MixedVecInit(exuBlock.io.out ++ io.memWriteback))
+    bypassNetwork.io.fromExus.connectExuOutput(_.fp)(io.fromFpExuBlockOut.get)
+    // no use
+    io.fromFpExuBlockOut.get.flatten.map(_.ready := true.B)
+    for (i <- 0 until exuBlock.io.in.length) {
+      for (j <- 0 until exuBlock.io.in(i).length) {
+        val shouldLdCancel = LoadShouldCancel(bypassNetwork.io.toExus.int(i)(j).bits.ctrl.loadDependency, io.ldCancel)
+        val rightOut = Wire(chiselTypeOf(exuBlock.io.in(i)(j)))
+        // no block for uops to exu, when idiv busy, use og1 resp
+        rightOut.ready := true.B
+        NewPipelineConnect(
+          bypassNetwork.io.toExus.int(i)(j), rightOut, rightOut.fire,
+          Mux(
+            bypassNetwork.io.toExus.int(i)(j).valid,
+            bypassNetwork.io.toExus.int(i)(j).bits.robIdx.needFlush(flushCopyRegVec.last) || shouldLdCancel,
+            false.B
+          ),
+          Option(s"pipeTo${rightOut.bits.params.name}")
+        )
+        exuBlock.io.in(i)(j).valid := rightOut.valid
+        exuBlock.io.in(i)(j).bits := rightOut.bits
+        val ldCancelResp = !exuBlock.io.in(i)(j).bits.params.needUncertainWakeup.B || !shouldLdCancel
+        bypassNetwork.io.toExus.int(i)(j).ready := exuBlock.io.in(i)(j).ready && ldCancelResp
+      }
+    }
+    val toMem = Wire(io.toMemExu.get.cloneType)
+    io.toMemExu.get <> toMem
+    val firstMemExu = bypassNetwork.io.toExus.int.indexWhere(x => x.map(xx => xx.bits.params.isMemExeUnit).reduce(_ || _))
+    println(s"[Regin_int] firstMemExu = $firstMemExu")
+    for (i <- toMem.indices) {
+      for (j <- toMem(i).indices) {
+        val toMemExuInput = bypassNetwork.io.toExus.int(firstMemExu + i)(j)
+        val shouldLdCancel = LoadShouldCancel(toMemExuInput.bits.ctrl.loadDependency, io.ldCancel)
+        toMemExuInput.ready := true.B
+        val toMemValidAfterCancel = toMemExuInput.valid && !(toMemExuInput.bits.robIdx.needFlush(flushCopyRegVec.last) || shouldLdCancel)
+        toMem(i)(j).valid := RegNext(toMemValidAfterCancel)
+        toMem(i)(j).bits := RegNext(toMemExuInput.bits)
+        if (toMem(i)(j).bits.params.hasLoadFu){
+          toMemExuInput.ready := toMem(i)(j).ready
+          val toMemValidReg = RegInit(Bool(), false.B)
+          toMemValidReg := toMemValidAfterCancel && (!toMemValidReg || toMem(i)(j).fire) ||
+                           toMemValidReg && !toMem(i)(j).fire && !toMem(i)(j).bits.robIdx.needFlush(flushCopyRegVec.last)
+          toMem(i)(j).valid := toMemValidReg
+          toMem(i)(j).bits := RegEnable(toMemExuInput.bits, toMemValidAfterCancel && (!toMem(i)(j).valid || toMem(i)(j).fire))
+        }
+        val thisIQ = issueQueues.filter(x => x.param.allExuParams.contains(toMem(i)(j).bits.params)).head
+        if (thisIQ.io.s0Resp.nonEmpty) {
+          thisIQ.io.s0Resp.get(j).failed := toMem(i)(j).valid && !toMem(i)(j).ready
+          thisIQ.io.s0Resp.get(j).finalSuccess := toMem(i)(j).fire && !(thisIQ.param.isStAddrIQ).B
+          thisIQ.io.s0Resp.get(j).fuType := toMem(i)(j).bits.ctrl.fuType
+          thisIQ.io.s0Resp.get(j).sqIdx.foreach(_ := 0.U.asTypeOf(new SqPtr))
+          thisIQ.io.s0Resp.get(j).lqIdx.foreach(_ := 0.U.asTypeOf(new LqPtr))
+        }
+        // for intRegion's loadUnit
+        if (thisIQ.io.snResp.nonEmpty) {
+          thisIQ.io.snResp.get(j).failed := false.B
+          thisIQ.io.snResp.get(j).finalSuccess := toMem(i)(j).fire && !(thisIQ.param.isStAddrIQ).B
+          thisIQ.io.snResp.get(j).fuType := toMem(i)(j).bits.ctrl.fuType
+          thisIQ.io.snResp.get(j).sqIdx.foreach(_ := 0.U.asTypeOf(new SqPtr))
+          thisIQ.io.snResp.get(j).lqIdx.foreach(_ := toMem(i)(j).bits.lqIdx.get)
+        }
+      }
+    }
+    io.exuOut.flatten.zip((exuBlock.io.out ++ io.memWriteback).flatten).map { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+  }
+  else if (params.isFpSchd) {
+    issueQueues.zipWithIndex.foreach { case (iq, i) =>
+      iq.io.wbBusyTableRead := wbFuBusyTable.io.out.fpRespRead(i)
+    }
+    io.cross.F2IWakeupOut.get := exuBlock.io.cross.F2IWakeupOut.get
+    io.cross.F2IDataOut.get   := exuBlock.io.cross.F2IDataOut.get
+    exuBlock.io.cross.I2FDataIn.get := io.cross.I2FDataIn.get
+    wbDataPath.io.fromFpExu.flatten.zip(exuBlock.io.out.flatten).map{ case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+      source.ready := sink.ready
+    }
+    wbDataPath.io.fromIntExu.flatten.zip((io.fromIntExu.get).flatten).map { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+    wbDataPath.io.fromVfExu.flatten.zip((io.fromVecExu.get).flatten).map { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+    dataPath.io.ldCancel := io.ldCancel
+    // for read fp regfile
+    dataPath.io.fromIntIQ.zip(io.fromIntIQ.get).map { case (sink, source) =>
+      sink <> source
+    }
+    dataPath.io.fromFpIQ.zip(issueQueues).zip(io.fpIQOut.get).map { case ((sink, source), iqOut) =>
+      sink.zipWithIndex.map { case (s, i) =>
+        s.valid := source.io.deqDelay(i).valid
+        iqOut(i).valid := source.io.deqDelay(i).valid
+        s.bits := source.io.deqDelay(i).bits
+        iqOut(i).bits := source.io.deqDelay(i).bits
+        source.io.deqDelay(i).ready := s.ready && iqOut(i).ready
+      }
+    }
+    dataPath.io.fromFpIQDeqOg1Payload.zip(issueQueues).zip(io.fpIQDeqOg1PayloadOut.get).map { case ((sink, source), plOut) =>
+      sink.zipWithIndex.map { case (s, i) =>
+        s := source.io.deqOg1Payload(i)
+        plOut(i) := source.io.deqOg1Payload(i)
+      }
+    }
+
+    dataPath.io.fromFpWb.get := wbDataPath.io.toFpPreg
+    dataPath.io.fromBypassNetwork <> bypassNetwork.io.toDataPath
+    io.toFpPreg := wbDataPath.io.toFpPreg
+    bypassNetwork.io.fromDataPath.fp <> dataPath.io.toFpExu
+
+    val intLoadWB = bypassNetwork.io.fromExus.int.flatten.filter(_.bits.params.hasLoadExu)
+    intLoadWB.zip(io.lduWriteback.get.flatten).foreach { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits.intWen := false.B
+      sink.bits.pdest := source.bits.pdest
+      sink.bits.data := source.bits.toFpRf.get.bits
+    }
+    bypassNetwork.io.fromExus.connectExuOutput(_.fp)(exuBlock.io.out)
+    for (i <- 0 until exuBlock.io.in.length) {
+      for (j <- 0 until exuBlock.io.in(i).length) {
+        val shouldLdCancel = LoadShouldCancel(bypassNetwork.io.toExus.fp(i)(j).bits.ctrl.loadDependency, io.ldCancel)
+        val rightOut = Wire(chiselTypeOf(exuBlock.io.in(i)(j)))
+        rightOut.ready := true.B
+        NewPipelineConnect(
+          bypassNetwork.io.toExus.fp(i)(j), rightOut, rightOut.fire,
+          Mux(
+            bypassNetwork.io.toExus.fp(i)(j).valid,
+            bypassNetwork.io.toExus.fp(i)(j).bits.robIdx.needFlush(flushCopyRegVec.last) || shouldLdCancel,
+            false.B
+          ),
+          Option(s"pipeTo${rightOut.bits.params.name}")
+        )
+        exuBlock.io.in(i)(j).valid := rightOut.valid
+        exuBlock.io.in(i)(j).bits := rightOut.bits
+        val ldCancelResp = !exuBlock.io.in(i)(j).bits.params.needUncertainWakeup.B || !shouldLdCancel
+        bypassNetwork.io.toExus.fp(i)(j).ready := exuBlock.io.in(i)(j).ready && ldCancelResp
+      }
+    }
+    io.exuOut.flatten.zip((exuBlock.io.out).flatten).map { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+    io.fpExuBlockOut.get.flatten.zip(exuBlock.io.out.flatten).map{ case(sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+  }
+  else if (params.isVecSchd) {
+    issueQueues.zipWithIndex.foreach { case (iq, i) =>
+      iq.io.wbBusyTableRead := wbFuBusyTable.io.out.vfRespRead(i)
+      iq.io.vlFromIntIsZero := io.vlWriteBackInfoIn.vlFromIntIsZero
+      iq.io.vlFromIntIsVlmax := io.vlWriteBackInfoIn.vlFromIntIsVlmax
+      iq.io.vlFromVfIsZero := io.vlWriteBackInfoIn.vlFromVfIsZero
+      iq.io.vlFromVfIsVlmax := io.vlWriteBackInfoIn.vlFromVfIsVlmax
+    }
+    val og2Resp = issueQueues.map(_.io.og2Resp.get).flatten
+    og2Resp.zip(og2ForVector.get.io.toVfIQOg2Resp.flatten).map{ case (sink, source) =>
+      sink := source
+    }
+    io.vlWriteBackInfoOut.vlFromVfIsZero := exuBlock.io.vlIsZero.get
+    io.vlWriteBackInfoOut.vlFromVfIsVlmax := exuBlock.io.vlIsVlmax.get
+    io.vtype.get := exuBlock.io.vtype.get
+    wbDataPath.io.fromVfExu.flatten.zip((exuBlock.io.out ++ io.memWriteback).flatten).map { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+      source.ready := sink.ready
+    }
+    wbDataPath.io.fromIntExu.flatten.zip((io.fromIntExu.get).flatten).map { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+    wbDataPath.io.fromFpExu.flatten.zip((io.fromFpExu.get).flatten).map { case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+    wbDataPath.io.fromCSR.vstart := io.vstart.get
+    io.toVfPreg := wbDataPath.io.toVfPreg
+    io.toV0Preg := wbDataPath.io.toV0Preg
+    io.toVlPreg := wbDataPath.io.toVlPreg
+    io.toVecExcpMod.foreach(_ := dataPath.io.toVecExcpMod.get)
+    // for read int/fp regfile
+    dataPath.io.fromIntIQ.zip(io.fromIntIQ.get).map { case (sink, source) =>
+      sink <> source
+    }
+    dataPath.io.fromFpIQ.zip(io.fromFpIQ.get).map { case (sink, source) =>
+      sink <> source
+    }
+    dataPath.io.fromVfIQ.zip(issueQueues).map { case (sink, source) =>
+      sink <> source.io.deqDelay
+    }
+    dataPath.io.fromVecIQDeqOg1Payload.zip(issueQueues).zip(io.vecIQDeqOg1PayloadOut.get).map { case ((sink, source), plOut) =>
+      sink.zipWithIndex.map { case (s, i) =>
+        s := source.io.deqOg1Payload(i)
+        plOut(i) := source.io.deqOg1Payload(i)
+      }
+    }
+    dataPath.io.fromVfWb.get := wbDataPath.io.toVfPreg
+    dataPath.io.fromV0Wb.get := wbDataPath.io.toV0Preg
+    dataPath.io.fromVlWb.get := wbDataPath.io.toVlPreg
+    dataPath.io.fromBypassNetwork <> bypassNetwork.io.toDataPath
+    dataPath.io.diffVlRat.foreach(_ := io.diffVlRat.get)
+
+    dataPath.io.fromVecExcpMod.foreach(_ := io.fromVecExcpMod.get)
+    og2ForVector.get.io.flush := flushCopyRegVec.last
+    og2ForVector.get.io.ldCancel := io.ldCancel
+    og2ForVector.get.io.fromOg1VfArith <> dataPath.io.toVecExu
+
+    bypassNetwork.io.fromDataPath.vf <> og2ForVector.get.io.toVfArithExu
+    bypassNetwork.io.fromExus.connectExuOutput(_.vf)(exuBlock.io.out)
+    for (i <- 0 until exuBlock.io.in.size) {
+      for (j <- 0 until exuBlock.io.in(i).size) {
+        val leftIn = Wire(chiselTypeOf(bypassNetwork.io.toExus.vf(i)(j)))
+        leftIn.valid := bypassNetwork.io.toExus.vf(i)(j).valid
+        leftIn.bits := bypassNetwork.io.toExus.vf(i)(j).bits
+        leftIn.ready := true.B
+        bypassNetwork.io.toExus.vf(i)(j).ready := exuBlock.io.in(i)(j).ready && !(exuBlock.io.in(i)(j).fire && FuType.isUncertain(exuBlock.io.in(i)(j).bits.ctrl.fuType))
+        NewPipelineConnect(
+          leftIn, exuBlock.io.in(i)(j), exuBlock.io.in(i)(j).fire,
+          Mux(
+            bypassNetwork.io.toExus.vf(i)(j).fire,
+            bypassNetwork.io.toExus.vf(i)(j).bits.robIdx.needFlush(flushCopyRegVec.last),
+            exuBlock.io.in(i)(j).bits.robIdx.needFlush(flushCopyRegVec.last)
+          ) || !bypassNetwork.io.toExus.vf(i)(j).ready,
+          Option(s"pipeTo${leftIn.bits.params.name}")
+        )
+      }
+    }
+    val toMem = Wire(io.toMemExu.get.cloneType)
+    io.toMemExu.get <> toMem
+    val firstMemExu = bypassNetwork.io.toExus.vf.indexWhere(x => x.map(xx => xx.bits.params.isMemExeUnit).reduce(_ || _))
+    println(s"[Regin_vec] firstMemExu = $firstMemExu")
+    for (i <- toMem.indices) {
+      for (j <- toMem(i).indices) {
+        val toMemExuInput = bypassNetwork.io.toExus.vf(firstMemExu + i)(j)
+        toMemExuInput.ready := true.B
+        toMem(i)(j).valid := RegNext(toMemExuInput.valid && !toMemExuInput.bits.robIdx.needFlush(flushCopyRegVec.last))
+        toMem(i)(j).bits := RegNext(toMemExuInput.bits)
+        val thisIQ = issueQueues.filter(x => x.param.allExuParams.contains(toMem(i)(j).bits.params)).head
+        if (thisIQ.io.s0Resp.nonEmpty) {
+          thisIQ.io.s0Resp.get(j) match {
+            case resp =>
+              resp.failed := toMem(i)(j).valid && !toMem(i)(j).ready
+              resp.finalSuccess := toMem(i)(j).fire && FuType.isVLoad(toMem(i)(j).bits.ctrl.fuType)
+              resp.fuType := toMem(i)(j).bits.ctrl.fuType
+              resp.sqIdx.foreach(_ := 0.U.asTypeOf(new SqPtr))
+              resp.lqIdx.foreach(_ := 0.U.asTypeOf(new LqPtr))
+          }
+        }
+      }
+    }
+    io.exuOut.flatten.zip((exuBlock.io.out ++ io.memWriteback).flatten).map{ case (sink, source) =>
+      sink.valid := source.valid
+      sink.bits := source.bits
+    }
+  }
+  io.wbDataPathToCtrlBlock.writeback := wbDataPath.io.toCtrlBlock.writeback
+  // oldestRedirect
+  if (params.isIntSchd) {
+    val exuRedirects: Seq[ValidIO[Redirect]] = wbDataPath.io.toCtrlBlock.writeback.filter(_.bits.redirect.nonEmpty).map(x => {
+      val out = Wire(Valid(new Redirect()))
+      out.valid := x.valid && x.bits.redirect.get.valid && !x.bits.robIdx.needFlush(Seq(io.flush, flushCopyRegVec(flushCopyRegVec.length - 2)))
+      out.bits := x.bits.redirect.get.bits
+      out.bits.debugIsCtrl := true.B
+      out.bits.debugIsMemVio := false.B
+      out
+    }).toSeq
+    val oldestOneHot = Redirect.selectOldestRedirect(exuRedirects)
+    val oldestExuRedirect = Mux1H(oldestOneHot, exuRedirects)
+    io.wbDataPathToCtrlBlock.delayedOldestExuRedirect.get.valid := RegNext(oldestExuRedirect.valid)
+    io.wbDataPathToCtrlBlock.delayedOldestExuRedirect.get.bits  := RegEnable(oldestExuRedirect.bits, oldestExuRedirect.valid)
+  }
+  io.IQValidNumVec := issueQueues.filter(_.param.StdCnt == 0).map(_.io.validCntDeqVec).flatten
+  io.og0Cancel := dataPath.io.og0Cancel
+  io.diffVl.foreach(_ := dataPath.io.diffVl.get)
+  io.lduWriteback.foreach(_.flatten.foreach(_.ready := true.B))
+  io.fpRfRdataOut.foreach(_ := dataPath.io.fpRfRdataOut.get)
+  dataPath.io.fpRfRdataIn.foreach(_ := io.fpRfRdataIn.get)
+
+  io.uopTopDown.uopsIssued := dataPath.io.uopTopDown.uopsIssued
+  io.uopTopDown.uopsIssuedCnt := dataPath.io.uopTopDown.uopsIssuedCnt
+  io.uopTopDown.noStoreIssued := dataPath.io.uopTopDown.noStoreIssued
+
+  // perf counter
+  val staValidNum = stAddrIQs.map{ case staIQ =>
+    PopCount(staIQ.io.validVec)
+  }
+  val stdValidNum = stDataIQs.map{ case stdIQ =>
+    PopCount(stdIQ.io.validVec)
+  }
+  def andVec(a: Vec[Bool], b: Vec[Bool]): Vec[Bool] =
+    VecInit(a.zip(b).map { case (x, y) => x && y })
+
+  val staNumEnq = params.issueBlockParams.filter(iq => iq.StaCnt > 0).map(_.numEnq)
+  val stdNumEnq = params.issueBlockParams.filter(iq => iq.StdCnt > 0).map(_.numEnq)
+  val staEnqHasIssuedVec = stAddrIQs.zip(staNumEnq).map{ case (staIQ, numEnq) =>
+    andVec(staIQ.io.issuedVec, staIQ.io.validVec).take(numEnq).reduce(_ & _)
+  }
+  val stdEnqHasIssuedVec = stDataIQs.zip(stdNumEnq).map{ case (stdIQ, numEnq) =>
+    andVec(stdIQ.io.issuedVec, stdIQ.io.validVec).take(numEnq).reduce(_ & _)
+  }
+
+
+  val issueQueueValidNumVec: Vec[UInt] = io.debugIQValidNumVec.getOrElse(VecInit(Seq.fill(io.IQNum)(0.U)))
+  issueQueues.filter(_.param.StdCnt == 0).zip(issueQueueValidNumVec).foreach{ case (issueQueue, validNum) =>
+    validNum := PopCount(issueQueue.io.validVec)
+  }
+  staIdx.zipWithIndex.foreach { case (sta, i) =>
+    issueQueueValidNumVec(sta) := Mux(staValidNum(i) > stdValidNum(i), staValidNum(i), stdValidNum(i))
+  }
+
+  val issueQueueEnqHasIssuedVec : Vec[Bool] = io.debugIQEnqHasIssuedVec.getOrElse(VecInit(Seq.fill(io.IQNum)(false.B)))
+  issueQueues.filter(_.param.StdCnt == 0).zip(issueQueueEnqHasIssuedVec).foreach{ case (issueQueue, enqIssued) =>
+    enqIssued := andVec(issueQueue.io.issuedVec, issueQueue.io.validVec).take(issueQueue.param.numEnq).reduce(_ & _)
+  }
+  staIdx.zipWithIndex.foreach { case (sta, i) =>
+    issueQueueEnqHasIssuedVec(sta) := Mux(staValidNum(i) > stdValidNum(i), staEnqHasIssuedVec(i), stdEnqHasIssuedVec(i))
+  }
+
+  val issueQueueDeqVec = issueQueues.flatMap(_.io.deqDelay)
+  io.debugIQDeqRobIdxVec.foreach(_.zip(issueQueueDeqVec).foreach{ case(sink, source) =>
+    sink.valid := source.valid
+    sink.bits := source.bits.robIdx
+  })
+
+
+
+  if (params.isIntSchd) {
+    val iqNum = issueQueues.size
+    case class FUConfig(filter: UInt => Bool, name: String, paramCheck: IssueBlockParams => Boolean)
+    val fuConfigs = Seq(
+      FUConfig(FuType.isAlu, "ALU", _.AluCnt > 0),
+      FUConfig(FuType.isBJU, "BJU", _.BrhCnt > 0),
+      FUConfig(FuType.isLoad, "LDU", _.LduCnt > 0)
+    )
+    def generatePerfCounters(fuConfig: FUConfig, checkSrcReady: Boolean): Unit = {
+      for (i <- 0 until iqNum) {
+        for (j <- 0 until iqNum) {
+          if ((i != j) && fuConfig.paramCheck(issueQueues(i).param) && fuConfig.paramCheck(issueQueues(j).param)) {
+
+            def getIssueSignals(iq: IssueQueueIO): Seq[Bool] = {
+              val baseSignals = iq.validVec.zip(iq.issuedVec).zip(iq.canIssueVec).zip(iq.fuTypeVec).map {
+                case (((v, issued), canIssue), fuType) =>
+                  (v, !issued, canIssue, fuConfig.filter(fuType))
+              }
+              if (checkSrcReady) {
+                baseSignals.zip(iq.srcReadyVec).map {
+                  case ((v, notIssued, canIssue, fuMatch), srcReady) =>
+                    v && notIssued && canIssue && fuMatch && srcReady
+                }
+              } else {
+                baseSignals.map { case (v, notIssued, canIssue, fuMatch) =>
+                  v && notIssued && canIssue && fuMatch
+                }
+              }
+            }
+            val iqiSignals = getIssueSignals(issueQueues(i).io)
+            val iqjSignals = getIssueSignals(issueQueues(j).io)
+            val cond = (PopCount(iqiSignals) > 1.U) && (PopCount(iqjSignals) === 0.U)
+            val suffix = if (checkSrcReady) "SrcReady" else "CanIssue"
+            XSPerfAccumulate(s"${fuConfig.name}_${suffix}_IQ${i}_more1_IQ${j}_none", PopCount(cond))
+          }
+        }
+      }
+    }
+    fuConfigs.foreach { config =>
+      generatePerfCounters(config, checkSrcReady = false)
+      generatePerfCounters(config, checkSrcReady = true)
+    }
+  }
+}
+
+class RegionIO(val params: SchdBlockParams)(implicit p: Parameters) extends XSBundle {
+  val intSchdParam = backendParams.intSchdParams.get
+  val fpSchdParam = backendParams.fpSchdParams.get
+  val vecSchdParam = backendParams.vecSchdParams.get
+  // uops from dispatch, two level vec, not flatten
+  val fromDispatch = MixedVec(params.issueBlockParams.filter(_.StdCnt == 0).map(x => Flipped(Vec(x.numEnq, DecoupledIO(new RegionInUop(x))))))
+  val hartId = Input(UInt(8.W))
+  val flush = Flipped(ValidIO(new Redirect))
+  val ldCancel = Vec(backendParams.LduCnt, Flipped(new LoadCancelIO))
+  val fromPcTargetMem = Option.when(params.isIntSchd)(Flipped(new PcToDataPathIO(backendParams)))
+  val diffVlRat = Option.when(backendParams.basicDebugEn && params.isVecSchd)(Input(Vec(1, UInt(log2Up(VlPhyRegs).W))))
+  val diffVl = Option.when(backendParams.basicDebugEn && params.isVecSchd)(Output(UInt(VlData().dataWidth.W)))
+  val vlWriteBackInfoIn = new Bundle {
+    val vlFromIntIsZero = Input(Bool())
+    val vlFromIntIsVlmax = Input(Bool())
+    val vlFromVfIsZero = Input(Bool())
+    val vlFromVfIsVlmax = Input(Bool())
+  }
+  val vlWriteBackInfoOut = Flipped(new Bundle {
+    val vlFromIntIsZero = Input(Bool())
+    val vlFromIntIsVlmax = Input(Bool())
+    val vlFromVfIsZero = Input(Bool())
+    val vlFromVfIsVlmax = Input(Bool())
+  })
+  val wakeUpToDispatch = params.genIQWakeUpOutValidBundle
+  val wakeUpFromFp = Option.when(params.isIntSchd)(Flipped(fpSchdParam.genIQWakeUpOutValidBundle))
+  val wakeUpFromInt = Option.when(params.isFpSchd)(Flipped(intSchdParam.genIQWakeUpOutValidBundle))
+  val wakeupFromI2F = Option.when(params.isFpSchd)(Flipped(ValidIO(new IssueQueueIQWakeUpBundle(params.backendParam.getExuIdxI2F, params.backendParam))))
+  val wakeupFromF2I = Option.when(params.isIntSchd)(Flipped(ValidIO(new IssueQueueIQWakeUpBundle(params.backendParam.getExuIdxF2I, params.backendParam))))
+  val cross = new ExuCrossRegion(params)
+  val toMemExu = Option.when(!params.isFpSchd)(params.genNewExuInputCopySrcBundleMemBlock)
+  // fromMem
+  val wakeupFromLDU = Option.when(params.isIntSchd)(Vec(params.LdExuCnt, Flipped(Valid(new MemWakeUpBundle))))
+  val staFeedback = Option.when(params.isIntSchd)(Flipped(Vec(params.StaCnt, new MemRSFeedbackIO)))
+  val vstuFeedback = Option.when(params.isVecSchd)(Flipped(Vec(params.VstuCnt, new MemRSFeedbackIO(isVector = true))))
+  val fromVecExcpMod = Option.when(params.isVecSchd)(Input(new ExcpModToVprf(maxMergeNumPerCycle * 2, maxMergeNumPerCycle)))
+  val csrio = Option.when(params.hasCSR)(new CSRFileIO)
+  val csrin = Option.when(params.hasCSR)(new CSRInput)
+  val csrToDecode = Option.when(params.hasCSR)(Output(new CSRToDecode))
+  val vtype = Option.when(params.writeVConfig)((Valid(new VType)))
+  val wbDataPathToCtrlBlock = new Bundle {
+    val writeback: MixedVec[ValidIO[WriteBackRobBundle]] = MixedVec(params.genWriteBackRobValidBundle.flatten)
+    val delayedOldestExuRedirect = Option.when(params.isIntSchd)(ValidIO(new Redirect))
+  }
+  val memWriteback: MixedVec[MixedVec[DecoupledIO[NewExuOutput]]] = Flipped(params.genNewExuOutputDecoupledBundleMemBlock)
+  val lduWriteback: Option[MixedVec[MixedVec[DecoupledIO[NewExuOutput]]]] = Option.when(params.isFpSchd)(
+    Flipped(MixedVec(intSchdParam.issueBlockParams.filter(_.isLdAddrIQ).map(_.genNewExuOutputDecoupledBundle)))
+  )
+  val lqDeqPtr = Option.when(params.isVecSchd)(Input(new LqPtr))
+  val sqDeqPtr = Option.when(params.isVecSchd)(Input(new SqPtr))
+  val allIssueParams = params.issueBlockParams.filter(_.StdCnt == 0)
+  val IQNum = allIssueParams.size
+  val IssueQueueDeqSum = allIssueParams.map(_.numDeq).sum
+  val maxIQSize = allIssueParams.map(_.numEntries).max
+  val IQValidNumVec = Output(Vec(IssueQueueDeqSum, UInt((maxIQSize).U.getWidth.W)))
+  val toIntPreg = Output(backendParams.genIntWriteBackBundle)
+  val toFpPreg = Output(backendParams.genFpWriteBackBundle)
+  val toVfPreg = Output(backendParams.genVfWriteBackBundle)
+  val toV0Preg = Output(backendParams.genV0WriteBackBundle)
+  val toVlPreg = Output(backendParams.genVlWriteBackBundle)
+  val fromIntWb = Input(backendParams.genIntWriteBackBundle)
+  val fromFpWb = Input(backendParams.genFpWriteBackBundle)
+  val fromVfWb = Input(backendParams.genVfWriteBackBundle)
+  val fromV0Wb = Input(backendParams.genV0WriteBackBundle)
+  val fromVlWb = Input(backendParams.genVlWriteBackBundle)
+  val I2FWakeupIn = Option.when(params.isFpSchd)(Flipped(ValidIO(new IssueQueueIQWakeUpBundle(params.backendParam.getExuIdxI2F, params.backendParam))))
+  val F2IWakeupIn = Option.when(params.isIntSchd)(Flipped(ValidIO(new IssueQueueIQWakeUpBundle(params.backendParam.getExuIdxF2I, params.backendParam))))
+  val og0Cancel = Output(ExuVec())
+  val fenceio = Option.when(params.isIntSchd)(new FenceIO)
+  val frm = Input(UInt(3.W))
+  val vxrm = Input(UInt(2.W))
+  val vstart = Option.when(params.isVecSchd)(Input(Vstart()))
+  val toVecExcpMod = Option.when(params.isVecSchd)(Output(new VprfToExcpMod(maxMergeNumPerCycle * 2)))
+  val exuOut = params.genNewExuOutputValidBundle
+  val fromIntExu = Option.when(!params.isIntSchd)(Flipped(intSchdParam.genNewExuOutputValidBundle))
+  val fromFpExu = Option.when(!params.isFpSchd)(Flipped(fpSchdParam.genNewExuOutputValidBundle))
+  val fromVecExu = Option.when(!params.isVecSchd)(Flipped(vecSchdParam.genNewExuOutputValidBundle))
+  val intSchdBusyTable = MixedVec(intSchdParam.issueBlockParams.map(x => Input(x.genWbFuBusyTableWriteBundle)))
+  val fpSchdBusyTable = MixedVec(fpSchdParam.issueBlockParams.map(x => Input(x.genWbFuBusyTableWriteBundle)))
+  val vfSchdBusyTable = MixedVec(vecSchdParam.issueBlockParams.map(x => Input(x.genWbFuBusyTableWriteBundle)))
+  val wbFuBusyTableWriteOut = MixedVec(params.issueBlockParams.map(x => Output(x.genWbFuBusyTableWriteBundle)))
+  val toFrontendBJUResolve = Option.when(params.isIntSchd)(Vec(backendParams.BrhCnt, Valid(new Resolve)))
+  val fpExuBlockOut = Option.when(params.isFpSchd)(params.genNewExuOutputDecoupledBundle)
+  val fromFpExuBlockOut = Option.when(params.isIntSchd)(Flipped(fpSchdParam.genNewExuOutputDecoupledBundle))
+  // to read fp regfile
+  val intIQOut  = Option.when(params.isIntSchd)(MixedVec(params.issueBlockParams.map(_.genIssueDecoupledBundle)))
+  val fromIntIQ = Option.when(params.isFpSchd || params.isVecSchd)(Flipped(MixedVec(intSchdParam.issueBlockParams.map(_.genIssueDecoupledBundle))))
+  // fp regfile read data
+  val fpRfRdataIn = Option.when(params.isIntSchd)(Input(Vec(backendParams.numPregRd(FpData()), UInt(backendParams.fpSchdParams.get.rfDataWidth.W))))
+  val fpRfRdataOut = Option.when(params.isFpSchd)(Output(Vec(backendParams.numPregRd(FpData()), UInt(backendParams.fpSchdParams.get.rfDataWidth.W))))
+  // to write int regfile
+  val fpIQOut = Option.when(params.isFpSchd)(MixedVec(params.issueBlockParams.map(_.genIssueDecoupledBundle)))
+  val fromFpIQ = Option.when(params.isIntSchd || params.isVecSchd)(Flipped(MixedVec(fpSchdParam.issueBlockParams.map(_.genIssueDecoupledBundle))))
+
+  // DeqOg1Payload
+  val fromIntIQDeqOg1Payload: Option[MixedVec[MixedVec[IssueQueueDeqOg1Payload]]] =
+    Option.when(!params.isIntSchd)(Input(MixedVec(backendParams.schdParams(IntScheduler()).issueBlockParams.map(_.genIssueDeqOg1PayloadBundle))))
+  val fromFpIQDeqOg1Payload: Option[MixedVec[MixedVec[IssueQueueDeqOg1Payload]]] =
+    Option.when(!params.isFpSchd)(Input(MixedVec(backendParams.schdParams(FpScheduler()).issueBlockParams.map(_.genIssueDeqOg1PayloadBundle))))
+  val fromVecIQDeqOg1Payload: Option[MixedVec[MixedVec[IssueQueueDeqOg1Payload]]] =
+    Option.when(!params.isVecSchd)(Input(MixedVec(backendParams.schdParams(VecScheduler()).issueBlockParams.map(_.genIssueDeqOg1PayloadBundle))))
+
+  val intIQDeqOg1PayloadOut: Option[MixedVec[MixedVec[IssueQueueDeqOg1Payload]]] =
+    Option.when(params.isIntSchd)(Output(MixedVec(backendParams.schdParams(IntScheduler()).issueBlockParams.map(_.genIssueDeqOg1PayloadBundle))))
+  val fpIQDeqOg1PayloadOut: Option[MixedVec[MixedVec[IssueQueueDeqOg1Payload]]] =
+    Option.when(params.isFpSchd)(Output(MixedVec(backendParams.schdParams(FpScheduler()).issueBlockParams.map(_.genIssueDeqOg1PayloadBundle))))
+  val vecIQDeqOg1PayloadOut: Option[MixedVec[MixedVec[IssueQueueDeqOg1Payload]]] =
+    Option.when(params.isVecSchd)(Output(MixedVec(backendParams.schdParams(VecScheduler()).issueBlockParams.map(_.genIssueDeqOg1PayloadBundle))))
+
+  // TopDown
+  val uopTopDown = new UopTopDown
+  val iqDeqSum = params.issueBlockParams.map(_.numDeq).sum
+  val debugIQValidNumVec = Option.when(backendParams.debugEn)(Vec(IQNum, Output(UInt(maxIQSize.U.getWidth.W))))
+  val debugIQEnqHasIssuedVec = Option.when(backendParams.debugEn)(Vec(IQNum, Output(Bool())))
+  val debugIQDeqRobIdxVec = Option.when(backendParams.debugEn)(Vec(iqDeqSum, ValidIO(new RobPtr())))
+}
+

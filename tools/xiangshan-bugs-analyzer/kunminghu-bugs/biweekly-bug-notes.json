@@ -1,0 +1,4840 @@
+[
+  {
+    "biweekly": 106,
+    "date": "2026-07-06",
+    "description": "Fix the FTQ trainCache flush condition (#6147)",
+    "modules": [
+      "frontend",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "6147",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6147",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6147"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 106] 20260706",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/07/06/biweekly-106-en/"
+  },
+  {
+    "biweekly": 106,
+    "date": "2026-07-06",
+    "description": "Fix the issue where IFU UncacheUnit handling instruction fetches in PBMT.IO regions did not wait for instruction commit, leading to speculative instruction fetches (#6144)",
+    "modules": [
+      "frontend",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "6144",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6144",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6144"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 106] 20260706",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/07/06/biweekly-106-en/"
+  },
+  {
+    "biweekly": 106,
+    "date": "2026-07-06",
+    "description": "(V2) Fix PMP bug: non-dmode can't access memory of debug (#6095)",
+    "modules": [
+      "backend",
+      "mem"
+    ],
+    "refs": [
+      {
+        "number": "6095",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6095",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6095"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 106] 20260706",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/07/06/biweekly-106-en/"
+  },
+  {
+    "biweekly": 106,
+    "date": "2026-07-06",
+    "description": "Fix the set dueling logic error in the CoupledL2 drrip replacement algorithm (XSCache #20)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "20",
+        "repo": "OpenXiangShan/XSCache",
+        "text": "XSCache #20",
+        "url": "https://github.com/OpenXiangShan/XSCache/pull/20"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 106] 20260706",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/07/06/biweekly-106-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fixed the SEI priority number when an SEI is injected from M-level, setting it to S-level priority 256 according to the AIA spec (#6010)",
+    "modules": [
+      "backend",
+      "chiselAIA"
+    ],
+    "refs": [
+      {
+        "number": "6010",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6010",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6010"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fixed the issue where vsstatus.SDT was not cleared when mret enters VU mode (#6074)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "6074",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6074",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6074"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fixed the vstopi Candidate3 enable condition and the iid selection when Candidate3 and Candidate5 are both enabled (#6030, #6031, #6086)",
+    "modules": [
+      "backend",
+      "chiselAIA"
+    ],
+    "refs": [
+      {
+        "number": "6030",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6030",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6030"
+      },
+      {
+        "number": "6031",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6031",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6031"
+      },
+      {
+        "number": "6086",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6086",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6086"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fixed fence instruction opcode matching (#6096)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "6096",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6096",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6096"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fixed X-state propagation for commit_w in ROB (#6070)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "6070",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6070",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6070"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fixed incorrect mtval2 generation during IGPF (#6058)",
+    "modules": [
+      "backend",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "6058",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6058",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6058"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fixed MNret handling of mnstatus.MNPP/MNPV (#6075)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "6075",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6075",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6075"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Gated VS hvictl interrupt-cause generation by trap type and refined pending-interrupt handling for WFI resume (#6067)",
+    "modules": [
+      "backend",
+      "chiselAIA"
+    ],
+    "refs": [
+      {
+        "number": "6067",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6067",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6067"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fixed temporary trapInstInfo generation to avoid missing an older CSR trap instruction when flush and redirect arrive in the same cycle (#6084)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "6084",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6084",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6084"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Marked HLV/HLVX/HSV memory exceptions as virtual memory traps to correctly update htval/mtval (#6071)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "6071",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6071",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6071"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fixed the read-modify-write base value for PMP/PMA in CSRRS/CSRRC operations (#6051)",
+    "modules": [
+      "backend",
+      "mem"
+    ],
+    "refs": [
+      {
+        "number": "6051",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6051",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6051"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fix the issue where cbo executes before instruction commit (#6081)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "6081",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6081",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6081"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Fix the performance counters of loadUnit (#5939)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5939",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5939",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5939"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 105,
+    "date": "2026-06-23",
+    "description": "Add pointer exceed assert (#5795)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5795",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5795",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5795"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 105] 20260623",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/23/biweekly-105-en/"
+  },
+  {
+    "biweekly": 104,
+    "date": "2026-06-08",
+    "description": "Fix the issue introduced by UBTB timing optimization, which treats overwritten entries as hits and causes incorrect predictions (#6009)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "6009",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6009",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6009"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 104] 20260608",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/08/biweekly-104-en/"
+  },
+  {
+    "biweekly": 104,
+    "date": "2026-06-08",
+    "description": "Optimize the timing of IBuffer enqueue logic (#5946)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5946",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5946",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5946"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 104] 20260608",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/08/biweekly-104-en/"
+  },
+  {
+    "biweekly": 104,
+    "date": "2026-06-08",
+    "description": "Fix bug of fullOverlap when store is cross16B (#6003)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "6003",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#6003",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/6003"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 104] 20260608",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/08/biweekly-104-en/"
+  },
+  {
+    "biweekly": 104,
+    "date": "2026-06-08",
+    "description": "Split L2 prefetch request queue by slices, reducing blocking between different slices (XSCache #13)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "13",
+        "repo": "OpenXiangShan/XSCache",
+        "text": "XSCache #13",
+        "url": "https://github.com/OpenXiangShan/XSCache/pull/13"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 104] 20260608",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/08/biweekly-104-en/"
+  },
+  {
+    "biweekly": 104,
+    "date": "2026-06-08",
+    "description": "Move prefetch from loadUnit to mainPipe (#5997)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5997",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5997",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5997"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 104] 20260608",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/06/08/biweekly-104-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Get empty state directly from backend, fixing the issue of MMIO fetch getting stuck in specific scenarios (#5787)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5787",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5787",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5787"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Fix the issue where IFU failed to send instructions to backend when handling RVC instructions that are close to page boundaries (#5959)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5959",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5959",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5959"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Fix the issue where ICache s1_itlbPbmt register has incorrect bit width (#5962)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5962",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5962",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5962"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Fix the issue where IFU had incorrect instruction concatenation and metadata selection when handling RVI instructions that cross MMIO-cacheable boundaries (#5985)",
+    "modules": [
+      "frontend",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5985",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5985",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5985"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Adjust the tag comparison, register read, and related logic in UBTB, ABTB, and UTAGE prediction pipelines to optimize timing (#5686)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5686",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5686",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5686"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Adjust the replacer-related logic in MBTB training pipeline to optimize timing (#5897, #5944)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5897",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5897",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5897"
+      },
+      {
+        "number": "5944",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5944",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5944"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Adjust the TAGE training pipeline to optimize timing (#5890)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5890",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5890",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5890"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Adjust the SC prediction pipeline's counter and related logic to optimize timing (#5911)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5911",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5911",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5911"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Adjust the SC training pipeline's write-back enable calculation logic to optimize timing (#5923)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5923",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5923",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5923"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Adjust the CommonHR's fold history calculation logic during redirection to optimize timing (#5975)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5975",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5975",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5975"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Adjust the PHR S1 pipeline's fold history calculation logic to optimize timing (#5892)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5892",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5892",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5892"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Replace priority encoder with parallel OR logic in IFU to optimize timing (#5937)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5937",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5937",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5937"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Export empty state to FTQ when backend drains (#5787)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5787",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5787",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5787"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Fix CSR to support debug spec 1.0 (#5952)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5952",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5952",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5952"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "(V2) Stepie should control hvictl interrupt injection (#5926)",
+    "modules": [
+      "backend",
+      "chiselAIA"
+    ],
+    "refs": [
+      {
+        "number": "5926",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5926",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5926"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Fix the issue where unalignQueue failed to clear queue entries after cross-page store operations (#5913)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5913",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5913",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5913"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Add handshake signals for prefetch requests sent to L2 to prevent loss for no reason (#5989)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5989",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5989",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5989"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Only read data during DCache refill when the replacement block is dirty, instead of reading data every time (#5956)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5956",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5956",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5956"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Optimize the timing of CoupledL2, reducing timing violations from -130 ps to -40 ps and maximum logic levels from 44 to 24 at 2MB capacity (XSCache #4)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4",
+        "repo": "OpenXiangShan/XSCache",
+        "text": "XSCache #4",
+        "url": "https://github.com/OpenXiangShan/XSCache/pull/4"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Fix the accuracy of early wakeup signals from CoupledL2 to MemBlock and add performance counters to track the accuracy (XSCache #5, #5993)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5",
+        "repo": "OpenXiangShan/XSCache",
+        "text": "XSCache #5",
+        "url": "https://github.com/OpenXiangShan/XSCache/pull/5"
+      },
+      {
+        "number": "5993",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5993",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5993"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Create a new XSCache repository and migrated code from the original CoupledL2 and OpenLLC repositories to resolve circular dependencies and code duplication (#5938)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5938",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5938",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5938"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 103,
+    "date": "2026-05-25",
+    "description": "Removed support for the Tilelink bus protocol between L2 and L3 in XSCache, retaining only support for the CHI bus protocol (XSCache #6)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "6",
+        "repo": "OpenXiangShan/XSCache",
+        "text": "XSCache #6",
+        "url": "https://github.com/OpenXiangShan/XSCache/pull/6"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 103] 20260525",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/25/biweekly-103-en/"
+  },
+  {
+    "biweekly": 102,
+    "date": "2026-05-11",
+    "description": "(V2) Collaborated with the backend team to fix incorrect updates to the xepc and xtval registers when an exception occurs after satp is updated (#5860)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5860",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5860",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5860"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 102] 20260511",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/11/biweekly-102-en/"
+  },
+  {
+    "biweekly": 102,
+    "date": "2026-05-11",
+    "description": "Fixed incorrect exception tagging when the IFU handles exceptions caused by cross-page instructions (#5874)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5874",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5874",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5874"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 102] 20260511",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/11/biweekly-102-en/"
+  },
+  {
+    "biweekly": 102,
+    "date": "2026-05-11",
+    "description": "Used SRAM to store the TAGE useful counters to save area (#5852)",
+    "modules": [
+      "frontend",
+      "mem"
+    ],
+    "refs": [
+      {
+        "number": "5852",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5852",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5852"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 102] 20260511",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/11/biweekly-102-en/"
+  },
+  {
+    "biweekly": 102,
+    "date": "2026-05-11",
+    "description": "Adjusted the pipeline stage partitioning for MBTB attribute handling at the top level of the BPU to improve timing (#5842)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5842",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5842",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5842"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 102] 20260511",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/11/biweekly-102-en/"
+  },
+  {
+    "biweekly": 102,
+    "date": "2026-05-11",
+    "description": "(V2) Collaborated with the frontend team to fix incorrect updates to the xepc and xtval registers when an exception occurs after satp is updated (#5860)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5860",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5860",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5860"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 102] 20260511",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/11/biweekly-102-en/"
+  },
+  {
+    "biweekly": 102,
+    "date": "2026-05-11",
+    "description": "(V2) Fixed the issue where every jump instruction execution would trigger a redirect (#5867)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5867",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5867",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5867"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 102] 20260511",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/11/biweekly-102-en/"
+  },
+  {
+    "biweekly": 102,
+    "date": "2026-05-11",
+    "description": "(V2) Added an initial value for mtvec (#5862)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5862",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5862",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5862"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 102] 20260511",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/11/biweekly-102-en/"
+  },
+  {
+    "biweekly": 102,
+    "date": "2026-05-11",
+    "description": "Fixed the issue where the PPN truncation bits were incorrectly used to index CFS in L2TLB (#5858)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5858",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5858",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5858"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 102] 20260511",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/11/biweekly-102-en/"
+  },
+  {
+    "biweekly": 102,
+    "date": "2026-05-11",
+    "description": "Fixed StoreQueue behavior when handling memory accesses that cross 16-byte boundaries (#5855)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5855",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5855",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5855"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 102] 20260511",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/05/11/biweekly-102-en/"
+  },
+  {
+    "biweekly": 101,
+    "date": "2026-04-27",
+    "description": "Fix S1 RAS stack top address issue during S3 override (#5680)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5680",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5680",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5680"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 101] 20260427",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/27/biweekly-101-en/"
+  },
+  {
+    "biweekly": 101,
+    "date": "2026-04-27",
+    "description": "Remove SC training metadata stored in FTQ, read on update instead, to save area (#5819)",
+    "modules": [
+      "frontend",
+      "mem"
+    ],
+    "refs": [
+      {
+        "number": "5819",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5819",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5819"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 101] 20260427",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/27/biweekly-101-en/"
+  },
+  {
+    "biweekly": 101,
+    "date": "2026-04-27",
+    "description": "Decouple the write of TAGE taken counter and useful counter to save power (#5782)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5782",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5782",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5782"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 101] 20260427",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/27/biweekly-101-en/"
+  },
+  {
+    "biweekly": 101,
+    "date": "2026-04-27",
+    "description": "Fix BPU S3 timing paths (#5797)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5797",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5797",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5797"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 101] 20260427",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/27/biweekly-101-en/"
+  },
+  {
+    "biweekly": 101,
+    "date": "2026-04-27",
+    "description": "Fix SC prediction timing paths (#5843)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5843",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5843",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5843"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 101] 20260427",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/27/biweekly-101-en/"
+  },
+  {
+    "biweekly": 101,
+    "date": "2026-04-27",
+    "description": "Fix FTQ redirect and branch resolve timing paths (#5835)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5835",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5835",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5835"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 101] 20260427",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/27/biweekly-101-en/"
+  },
+  {
+    "biweekly": 101,
+    "date": "2026-04-27",
+    "description": "fix indirect csr RegOut ((V2) #5823, 5833)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5823",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "(V2) #5823",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5823"
+      },
+      {
+        "number": "5833",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "5833",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5833"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 101] 20260427",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/27/biweekly-101-en/"
+  },
+  {
+    "biweekly": 101,
+    "date": "2026-04-27",
+    "description": "Fix OverlapMask for cross16B forward in StoreUnit (#5814)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5814",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5814",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5814"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 101] 20260427",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/27/biweekly-101-en/"
+  },
+  {
+    "biweekly": 101,
+    "date": "2026-04-27",
+    "description": "Skip global CleanInvalid during local Flush All in CoupledL2 (CoupledL2 #499)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "499",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #499",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/499"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 101] 20260427",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/27/biweekly-101-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Fix the issue where metadata of the history register is updated incorrectly when an override from the advanced predictor occurs (#5756)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5756",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5756",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5756"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Expose SRAMTemplate resetState to the interface, allowing BPU to determine if SRAM is ready to receive requests (#5735，Utility#141)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5735",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5735",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5735"
+      },
+      {
+        "number": "141",
+        "repo": "OpenXiangShan/Utility",
+        "text": "Utility#141",
+        "url": "https://github.com/OpenXiangShan/Utility/pull/141"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Preserved dpc during debug re-entry following a critical error (#5730)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5730",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5730",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5730"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Synchronized fixes for debug-related bugs in V2 (#5754)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5754",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5754",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5754"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Fixed issues related to Mcontrol6/Tdata1 (#5722)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5722",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5722",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5722"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Fixed mis_pred and total_flush metrics within the TopDown analysis (#5762)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5762",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5762",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5762"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Fixed the driver for psrcVl in the Bypass stage, changing it to pdestVl (#5743)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5743",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5743",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5743"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Fix the issue of deqPtr moving too early in the StoreQueue (#5748)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5748",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5748",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5748"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Fix the issue with pbmt and hypervisor accessing device regions (#5751)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5751",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5751",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5751"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 100,
+    "date": "2026-04-13",
+    "description": "Fix the issue of unalignedHead getting stuck during replay (#5783)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5783",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5783",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5783"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 100] 20260413",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/04/13/biweekly-100-en/"
+  },
+  {
+    "biweekly": 99,
+    "date": "2026-03-30",
+    "description": "(V2) Fixed a bug in IFU MMIO fetch, which would send all-zero instruction data to the backend when the fetch address +32B crosses a page boundary and only the latter page has an exception (#5687)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5687",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5687",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5687"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 99] 20260330",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/30/biweekly-99-en/"
+  },
+  {
+    "biweekly": 99,
+    "date": "2026-03-30",
+    "description": "Fix commitInstrBranch and add branch_jump performance counter（#5705）",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5705",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5705",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5705"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 99] 20260330",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/30/biweekly-99-en/"
+  },
+  {
+    "biweekly": 99,
+    "date": "2026-03-30",
+    "description": "Remove dataSource signal from commonOutBundle toRremove redundant dependencies（#5704）",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5704",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5704",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5704"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 99] 20260330",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/30/biweekly-99-en/"
+  },
+  {
+    "biweekly": 99,
+    "date": "2026-03-30",
+    "description": "(V2) Fix the issue where Store MMIO does not mark ROB (#5640)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5640",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5640",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5640"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 99] 20260330",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/30/biweekly-99-en/"
+  },
+  {
+    "biweekly": 99,
+    "date": "2026-03-30",
+    "description": "(V2) Fix the revoke logic of MisalignBuffer (#5674)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5674",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5674",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5674"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 99] 20260330",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/30/biweekly-99-en/"
+  },
+  {
+    "biweekly": 99,
+    "date": "2026-03-30",
+    "description": "(V2) Fix the forward order hazard in Uncache module when mem_acquire is not fired (#5630)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5630",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5630",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5630"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 99] 20260330",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/30/biweekly-99-en/"
+  },
+  {
+    "biweekly": 99,
+    "date": "2026-03-30",
+    "description": "(V2) Use a separate signal in L1Prefetcher to RegEnable PC (#5720)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5720",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5720",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5720"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 99] 20260330",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/30/biweekly-99-en/"
+  },
+  {
+    "biweekly": 99,
+    "date": "2026-03-30",
+    "description": "Fix the exception type raised for misaligned accesses to MMIO regions (#5700)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5700",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5700",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5700"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 99] 20260330",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/30/biweekly-99-en/"
+  },
+  {
+    "biweekly": 99,
+    "date": "2026-03-30",
+    "description": "Fix several MemBlock timing issues (#5697)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5697",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5697",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5697"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 99] 20260330",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/30/biweekly-99-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Fix the issue that saturate counters in MBTB baseTable are not updated when the branch is correctly predicted (#5602)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5602",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5602",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5602"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Fix history restore logic on s3 override (#5625)",
+    "modules": [
+      "frontend",
+      "mem"
+    ],
+    "refs": [
+      {
+        "number": "5625",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5625",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5625"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Fix the bug in TAGE entry allocation logic, which causes the allocation failure rate to soar after running for a while (#5677)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5677",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5677",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5677"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Fix the timing of SC training logic (#5648)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5648",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5648",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5648"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Fix the data output of v0 in vldMergeUnit (#5675)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5675",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5675",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5675"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Reduce bju IssueQueue's size, fix IssueQueue's ready timing, fix timing of interrupt selection (#5636)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5636",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5636",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5636"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Move RatWrapper to Rename to check Rename timing (#5637)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5637",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5637",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5637"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Hold LikelyShared on retried writes in CoupledL2 (CoupledL2 #474)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "474",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #474",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/474"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Generate gpaddr by bitwise-Or instead of adder (#5644)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "5644",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5644",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5644"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 98,
+    "date": "2026-03-16",
+    "description": "Restore performance considering async depth is 4 (CoupledL2 #472)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "472",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #472",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/472"
+      }
+    ],
+    "section": "MemBlock and Cache",
+    "source_title": "[XiangShan Biweekly 98] 20260316",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/03/16/biweekly-98-en/"
+  },
+  {
+    "biweekly": 96,
+    "date": "2026-02-16",
+    "description": "Fix the training condition of SC which does not check whether MBTB is hit, and leads to training with invalid data (#5601)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5601",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5601",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5601"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 96] 20260216",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/02/16/biweekly-96-en/"
+  },
+  {
+    "biweekly": 96,
+    "date": "2026-02-16",
+    "description": "Fix the issue that saturate counters in MBTB baseTable are not updated when the branch is correctly predicted (#5602)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5602",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5602",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5602"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 96] 20260216",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/02/16/biweekly-96-en/"
+  },
+  {
+    "biweekly": 96,
+    "date": "2026-02-16",
+    "description": "Adjusting BPU s2 pipeline stage, with some information from MBTB given to TAGE earlier (#5614)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5614",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5614",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5614"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 96] 20260216",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/02/16/biweekly-96-en/"
+  },
+  {
+    "biweekly": 96,
+    "date": "2026-02-16",
+    "description": "Adjusting the pipeline stage of MBTB position comparison logic (#5603)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5603",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5603",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5603"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 96] 20260216",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/02/16/biweekly-96-en/"
+  },
+  {
+    "biweekly": 96,
+    "date": "2026-02-16",
+    "description": "Adjusting the pipeline stage of UTAGE history information (#5517)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "5517",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5517",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5517"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "[XiangShan Biweekly 96] 20260216",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/02/16/biweekly-96-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "Fix backend TopDown interface connection issues (#5340)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5340",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5340",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5340"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "Modify the value of mvendorid (#5367)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5367",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5367",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5367"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "Fix Dispatch pipeline stall cycle counting issue (#5398)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5398",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5398",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5398"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V3) Fix RAS action issue during commit (#5421)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5421",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5421",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5421"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V2/V3) Fix priority issue causing illegal instruction exception when reading vl/vlenb in CSR read instructions (#5420, #5422)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5420",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5420",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5420"
+      },
+      {
+        "number": "5422",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5422",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5422"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V3) Use basicDebugEn signal in diffVl debug interface (#5465)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5465",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5465",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5465"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V2) Upgrade NEMU config to fix vfredusum issue (#5434)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5434",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5434",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5434"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V3) Reduce one-cycle delay in redirect (#5378)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5378",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5378",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5378"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V3) Move the selection of oldestExuRedirect from ctrlblock to intRegion (#5462)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5462",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5462",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5462"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V3) Separate targetPc into trap and xret paths to optimize timing, handling exceptions and CSR FunctionUnit writebacks respectively (#5475)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5475",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5475",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5475"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V3) Remove some dead code (#5405, #5324)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5405",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5405",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5405"
+      },
+      {
+        "number": "5324",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5324",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5324"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V3) Remove some code connecting with 0.U width (#5413)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5413",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5413",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5413"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V3) Switch to using CSRs.scala file to keep track of CSR addresses (#5440)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5440",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5440",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5440"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 93,
+    "date": "2026-01-05",
+    "description": "(V3) Configure vl src separately in each parameter class in backend for easier maintenance (#5368)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5368",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5368",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5368"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 93] 20260105",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2026/01/05/biweekly-93-en/"
+  },
+  {
+    "biweekly": 92,
+    "date": "2025-12-22",
+    "description": "Fix backend TopDown interface connection issues (#5340)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5340",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5340",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5340"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 92] 20251222",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/12/22/biweekly-92-en/"
+  },
+  {
+    "biweekly": 92,
+    "date": "2025-12-22",
+    "description": "Modify the value of mvendorid (#5367)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5367",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5367",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5367"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 92] 20251222",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/12/22/biweekly-92-en/"
+  },
+  {
+    "biweekly": 92,
+    "date": "2025-12-22",
+    "description": "Fix Dispatch pipeline stall cycle counting issue (#5398)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5398",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5398",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5398"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 92] 20251222",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/12/22/biweekly-92-en/"
+  },
+  {
+    "biweekly": 91,
+    "date": "2025-12-08",
+    "description": "Fix CSR wake-up related issues (#5259)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5259",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5259",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5259"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 91] 20251208",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/12/08/biweekly-91-en/"
+  },
+  {
+    "biweekly": 91,
+    "date": "2025-12-08",
+    "description": "Fix uncertain wake-up issues in floating-point division and square root during pipeline flush (YunSuan #5131)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "192",
+        "repo": "OpenXiangShan/YunSuan",
+        "text": "YunSuan #5131",
+        "url": "https://github.com/OpenXiangShan/YunSuan/pull/192"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 91] 20251208",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/12/08/biweekly-91-en/"
+  },
+  {
+    "biweekly": 91,
+    "date": "2025-12-08",
+    "description": "Remove a clock gate in BypassNetwork (#5291)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5291",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5291",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5291/files"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 91] 20251208",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/12/08/biweekly-91-en/"
+  },
+  {
+    "biweekly": 90,
+    "date": "2025-11-24",
+    "description": "Fixing issues related to nmi register gating (#5067#5215)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5067",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5067",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5067"
+      },
+      {
+        "number": "5215",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5215",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5215"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 90] 20251124",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/11/24/biweekly-90-en/"
+  },
+  {
+    "biweekly": 90,
+    "date": "2025-11-24",
+    "description": "Rejecting out-of-order reads of xip-type CSRs (#5131)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5131",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5131",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5131"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 90] 20251124",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/11/24/biweekly-90-en/"
+  },
+  {
+    "biweekly": 90,
+    "date": "2025-11-24",
+    "description": "Optimizing the code quality of the V3 backend, removing some redundant code, modifying some code styles, and performing some renaming (#5135)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "5135",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#5135",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/5135"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "[XiangShan Biweekly 90] 20251124",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/11/24/biweekly-90-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Fixed the issue where the xcontext CSR was not reset properly (#4915)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4915",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4915",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4915"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Fixed missing exception priority configuration for software check exceptions (#4923)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4923",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4923",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4923"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Increased issue width to 8, update issue queue configurations, and add more ALU units (#4845)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4845",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4845",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4845"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Supported speculative wakeup and cancellation for variable-latency functional units (#4845)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4845",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4845",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4845"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Supported speculative wakeup and cancellation for load instructions (#4845)",
+    "modules": [
+      "backend",
+      "mem"
+    ],
+    "refs": [
+      {
+        "number": "4845",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4845",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4845"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Fixed the condition for identifying Napot pages: only pages with the lower 4 bits of PPN equal to 4'b1000 are allowed to cover a 64KB range (#4828), (#4900)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4828",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4828",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4828"
+      },
+      {
+        "number": "4900",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4900",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4900"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Fixed a bug in the vpn matching logic during gpf handling and gpaddr retrieval, where NAPOT page attributes were not properly considered (#4911)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4911",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4911",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4911"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Fixed a bug where the top two bits of vaddr were incorrectly truncated, which could result in incorrect upper bits in gpaddr when written back to CSR in certain scenarios (#4913)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4913",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4913",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4913"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Fixed the generation logic related to DCache bus errors to prevent propagation of X states (#4899)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4899",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4899",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4899"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Seted the initial value of memBackType in DCache MSHR to correctly indicate whether the request to L2 Cache targets memory or uncache (#4907)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4907",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4907",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4907"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Fixed a bug where the high bits of vaddr were truncated in vector segment instructions, causing false exception reports (#4892)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4892",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4892",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4892"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 82,
+    "date": "2025-08-04",
+    "description": "Fixed some stuck bugs during vector misalignment handling (#4914)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4914",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4914",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4914"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 82】20250804",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/08/04/biweekly-82-en/"
+  },
+  {
+    "biweekly": 81,
+    "date": "2025-07-21",
+    "description": "Fixed the issue where RAB fails to correctly walk and reallocate physical registers when a move instruction triggers an exception (#4874)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4874",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4874",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4874"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 81】20250721",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/07/21/biweekly-81-en/"
+  },
+  {
+    "biweekly": 81,
+    "date": "2025-07-21",
+    "description": "Fixed the missing exception check for the vm bit in certain instructions (vadc/vsbc) in NEMU (NEMU #914)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "914",
+        "repo": "OpenXiangShan/NEMU",
+        "text": "NEMU #914",
+        "url": "https://github.com/OpenXiangShan/NEMU/pull/914"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 81】20250721",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/07/21/biweekly-81-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed an issue where asynchronous updates to the xtopi CSR caused difftest mismatches: temporarily skipped xtopi in difftest comparison (#4742)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4742",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4742",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4742"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a problem where sstateenx was not correctly generated as a Verilog module (#4723)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4723",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4723",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4723"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Moved the core-side trace collection of xret instructions from the commit stage to the rename stage (#4736)",
+    "modules": [
+      "frontend",
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4736",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4736",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4736"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Added support for using a custom HINT instruction as a debug trigger in FPGA simulation (#4776)",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4776",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4776",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4776"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a bug where, upon cache aliasing in DCache, the probe request’s blocking logic considered only the physical address and ignored the alias bit, causing stuck (#4741)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4741",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4741",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4741"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a bug in DCache’s MetaArray where read–write conflicts were not properly marked in the RAR Queue, causing loads to read old values (#4795)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4795",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4795",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4795"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed several bugs related to DCache ECC and custom ECC error injection (#4753), (#4755), (#4782)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4753",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4753",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4753"
+      },
+      {
+        "number": "4755",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4755",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4755"
+      },
+      {
+        "number": "4782",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4782",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4782"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a bug where, on a misaligned and cross-page memory load request that raises an exception, the exception address written into xtval is incorrect (#4751)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4751",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4751",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4751"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a bug where uncache accesses to illegal addresses did not correctly report a hardware error (#4774)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4774",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4774",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4774"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a difftest framework bug where uncache store and memory store comparisons were mistimed, leading to difftest mismatches (#4779)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4779",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4779",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4779"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a bug in IFU address generation where, in certain scenarios, the wrong lower bits of the address were used as the offset (#4748)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4748",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4748",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4748"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a bug during two-stage address translation where, after a guest-page fault (gpf) was triggered, both page fault (pf) and gpf were erroneously reported simultaneously (#4754)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4754",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4754",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4754"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a bug in PMA address checks where the signal was mistimed when selecting the check type based on the request’s cmd, leading to incorrect permission checks (#4769)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4769",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4769",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4769"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a corner-case bug in TLB hit logic where mismatched page sizes between stages were not considered, causing false hits (#4780)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4780",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4780",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4780"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Fixed a bug in the TLB’s handle_block function where, in certain scenarios, the logic for generating gpaddr was incorrect (#4793)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4793",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4793",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4793"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 78,
+    "date": "2025-06-09",
+    "description": "Change the arbitration logic for the TXRSP and TXDAT channels to RoundRobin scheduling to prevent low-priority requests from timing out under congestion (CoupledL2 #415)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "415",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #415",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/415"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 78】20250609",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/06/09/biweekly-78-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Aligned the implementation of xcontext and xstateen CSRs with the latest privileged specification (#4696, #4676).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4696",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4696",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4696"
+      },
+      {
+        "number": "4676",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4676",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4676"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Fixed functional issues caused by out-of-order reads of xtopi/xtopei registers (#4698).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4698",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4698",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4698"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Added missing permission checks in accordance with the latest privileged specification (#4672).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4672",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4672",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4672"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Fixed sign extension errors of the program counter under the sv48x4 mode (#4728).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4728",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4728",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4728"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Added handling logic for bus errors on Uncache Store (#4717)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4717",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4717",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4717"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Fixed bug where a misaligned vector store incorrectly wrote data to sbuffer when exception happened (#4731)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4731",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4731",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4731"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Fixed bug in page-fault determination for the CBO instruction (#4702)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4702",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4702",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4702"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Fixed store–load forwarding data error caused by an incorrect forwarding mask for CMO instructions (#4730)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4730",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4730",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4730"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Fixed CPU stuck caused by incorrect redirect handling of vector instructions in the storequeue (#4711)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4711",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4711",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4711"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Fixed performance bug where huge pages in TLB should have hit but were falsely reported as missing in certain scenarios (#4694)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4694",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4694",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4694"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Fixed bug where SC/AMO instructions failed to report an access fault when the target address lacked atomic permissions (#4724)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4724",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4724",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4724"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Fixed bugs related to ECC error injection handling (#4718)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4718",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4718",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4718"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "L2 Cache supports non-blocking RXDAT and RXRSP (CoupledL2 #397)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "397",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #397",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/397"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 77,
+    "date": "2025-05-26",
+    "description": "Adjusted BOP latency to match the CHI version of the L2 Cache (CoupledL2 #413)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "413",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #413",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/413"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 77】20250526",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/26/biweekly-77-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed the read/write permission issue for the LCOFI (Local Counter Overflow Interrupt) bit (bit 13) in xvip/xvien registers (#4648).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4648",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4648",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4648"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed incorrect access control of sireg and vsireg by xstateen (#4649).",
+    "modules": [
+      "backend",
+      "chiselAIA"
+    ],
+    "refs": [
+      {
+        "number": "4649",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4649",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4649"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed an issue where virtual interrupt injection was not gated by mnstatus.nmie (#4645).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4645",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4645",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4645"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed WFI instructions not being woken up by non-maskable interrupts (#4645).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4645",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4645",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4645"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed incorrect updates to the tval register in scenarios where interrupts, CSR-related exceptions, and redirects occurred simultaneously (#4671).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4671",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4671",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4671"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed incorrect mcause updates during interrupt double-trap scenarios (#4671).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4671",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4671",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4671"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed an issue where tval failed to update correctly if EX_II/EX_VI exceptions occurred both in the original instruction and again in the interrupt handler (#4671).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4671",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4671",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4671"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed the dequeue logic in StoreQueue when a uncache store causes an exception (#4641)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4641",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4641",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4641"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Change UncacheBuffer’s store and load to enqueue based on robIdx arbitration to prevent dependency deadlock (#4628)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4628",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4628",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4628"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed bug where, for unaligned memory accesses crossing a page boundary that trigger an exception on the new page, the written *tval still takes the address of the previous page (#4673)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4673",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4673",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4673"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "For unaligned memory-access instructions, perform a rollback when the RAW queue is full to avoid stalling (#4674)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4674",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4674",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4674"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed a bug in StoreQueue when a CBO instruction raises an exception (#4663)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4663",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4663",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4663"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed bugs in the genVpn function that didn’t account for different virtualization stages and didn’t handle large-page VPN concatenation correctly (#4647)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4647",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4647",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4647"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed a bug where PPNs were generated incorrectly when using virtualization allStage while both VS-Stage and G-Stage are huge pages (#4658)",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4658",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4658",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4658"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed the hit-matching logic in the MMU for some napot scenarios (#4659)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4659",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4659",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4659"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 76,
+    "date": "2025-05-12",
+    "description": "Fixed bug in StoreQueue where vector exception flags could incorrectly trigger a timeout assert (#4660)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4660",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4660",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4660"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 76】20250512",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/05/12/biweekly-76-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed a deadlock bug in the simulation environment when using AXI4Memory with continuous writes of burst=1 (#4611)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4611",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4611",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4611"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed several bugs in StoreQueue related to the dequeue logic for uncache stores (#4641)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4641",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4641",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4641"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed a bug in cbo.zero where RAW violation checks were not performed at cacheline granularity (#4592)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4592",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4592",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4592"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed a bug where misaligned loads erroneously triggered RAR/RAW violation checks during replay (#4580)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4580",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4580",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4580"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed a bug in certain corner cases where ECC errors were not reported correctly (#4572)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4572",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4572",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4572"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed a bug in vector EMUL<1 misaligned unit-stride instructions where element index calculation was wrong, causing incorrect exception information (#4593)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4593",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4593",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4593"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Prevent software prefetch instructions from generating uncache-address accesses, avoiding false-positive exceptions (#4636)",
+    "modules": [
+      "frontend",
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4636",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4636",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4636"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed a deadlock bug in DCache under intensive same-set access scenarios (#4622)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4622",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4622",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4622"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Changed MMIO-path exceptions to be reported as Hardware Errors instead of Access Faults (#4619)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4619",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4619",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4619"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed several bugs in PTW and LLPTW modules related to exception handling during MMU page-table walks (#4586), (#4596), (#4597)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4586",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4586",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4586"
+      },
+      {
+        "number": "4596",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4596",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4596"
+      },
+      {
+        "number": "4597",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4597",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4597"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed two bugs in L1 TLB related to the virtualization extensions (#4587), (#4588)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4587",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4587",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4587"
+      },
+      {
+        "number": "4588",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4588",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4588"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed handling logic for tag verification errors in the L2 Cache (CoupledL2 #399)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "399",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #399",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/399"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Fixed bug where the TX linkactive channel is not deactivated when exiting coherency in the L2 Cache (CoupledL2 #407)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "407",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #407",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/407"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Optimized the redundant enqueue logic of the uncacheBuffer in the LoadQueue to improve timing (#4603)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4603",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4603",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4603"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Adjust tag and data SRAM specifications in the L2 Cache (CoupledL2 #402), (CoupledL2 #405)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "402",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #402",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/402"
+      },
+      {
+        "number": "405",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #405",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/405"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 75,
+    "date": "2025-04-28",
+    "description": "Add support for multiple time input formats in CLog.B (OpenLLC #62)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "62",
+        "repo": "OpenXiangShan/OpenLLC",
+        "text": "OpenLLC #62",
+        "url": "https://github.com/OpenXiangShan/OpenLLC/pull/62"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 75】20250428",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/04/28/biweekly-75-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed instruction prefetch pipeline handling of high address exceptions (#4423)",
+    "modules": [
+      "frontend",
+      "backend",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4423",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4423",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4423"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "A series of SRAM partitioning (#4468), (#4360), (#4485)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "4468",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4468",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4468"
+      },
+      {
+        "number": "4360",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4360",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4360"
+      },
+      {
+        "number": "4485",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4485",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4485"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed an issue where instruction fusion was not blocked when a trigger fired and an exception occurred (#4439).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4439",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4439",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4439"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Further fixed stalls caused by the amocas.q instruction (#4435).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4435",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4435",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4435"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed the FusionDecoder incorrectly outputting valid fusion information when disabled (#4456).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4456",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4456",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4456"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed an issue where non-register interrupt pending status was not properly synchronized in the difftest framework after reset (#4449).",
+    "modules": [
+      "backend"
+    ],
+    "refs": [
+      {
+        "number": "4449",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4449",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4449"
+      }
+    ],
+    "section": "Backend",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed a series of bugs in the MMU related to high-address checking, exception handling, and Svnapot extension (#4422), (#4448), (#4453), (#4454), (#4455), (#4471), (#4472), (#4473)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4422",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4422",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4422"
+      },
+      {
+        "number": "4448",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4448",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4448"
+      },
+      {
+        "number": "4453",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4453",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4453"
+      },
+      {
+        "number": "4454",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4454",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4454"
+      },
+      {
+        "number": "4455",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4455",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4455"
+      },
+      {
+        "number": "4471",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4471",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4471"
+      },
+      {
+        "number": "4472",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4472",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4472"
+      },
+      {
+        "number": "4473",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4473",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4473"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed the bug in NEMU for multi-core ref when virtualization is enabled (NEMU #835)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "835",
+        "repo": "OpenXiangShan/NEMU",
+        "text": "NEMU #835",
+        "url": "https://github.com/OpenXiangShan/NEMU/pull/835"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed several bugs in scenarios combining uncache, misaligned accesses, and exceptions (#4426), (#4441), (#4442)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4426",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4426",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4426"
+      },
+      {
+        "number": "4441",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4441",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4441"
+      },
+      {
+        "number": "4442",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4442",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4442"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed the bug in NEMU where atomic instructions and misaligned memory accesses did not trigger exceptions when PBMT changed memory attributes from cacheable to IO/NC (NEMU #833)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "833",
+        "repo": "OpenXiangShan/NEMU",
+        "text": "NEMU #833",
+        "url": "https://github.com/OpenXiangShan/NEMU/pull/833"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed several consistency issues in CoupledL2 that violated the CHI protocol (CoupledL2 #390), (CoupledL2 #392), (CoupledL2 #395)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "390",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #390",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/390"
+      },
+      {
+        "number": "392",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #392",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/392"
+      },
+      {
+        "number": "395",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #395",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/395"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Add check for the WFI (Wait For Interrupt) state before the L2 Cache exits the coherency (CoupledL2 #385)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "385",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #385",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/385"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Fixed several issues related to the handling of the RespErr field in the CHI protocol (CoupledL2 #384), (CoupledL2 #394)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "384",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #384",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/384"
+      },
+      {
+        "number": "394",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #394",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/394"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 73,
+    "date": "2025-03-31",
+    "description": "Adjust L2 Cache SRAM (tag) specifications (CoupledL2 #388); add SRAM control interface (CoupledL2 #389)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "388",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #388",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/388"
+      },
+      {
+        "number": "389",
+        "repo": "OpenXiangShan/CoupledL2",
+        "text": "CoupledL2 #389",
+        "url": "https://github.com/OpenXiangShan/CoupledL2/pull/389"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 73】20250331",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2025/03/31/biweekly-73-en/"
+  },
+  {
+    "biweekly": 66,
+    "date": "2024-12-23",
+    "description": "Fixed the issue where instruction prefetching did not correctly flush after encountering a Guest Pagefault (#3996)",
+    "modules": [
+      "frontend",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3996",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3996",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3996"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "【XiangShan Biweekly 66】20241223",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/23/biweekly-66-en/"
+  },
+  {
+    "biweekly": 66,
+    "date": "2024-12-23",
+    "description": "Added a workaround for same-address read/write in dual-port SRAM according to SRAM library constraints (#4002)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "4002",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4002",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4002"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "【XiangShan Biweekly 66】20241223",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/23/biweekly-66-en/"
+  },
+  {
+    "biweekly": 66,
+    "date": "2024-12-23",
+    "description": "Fixed an issue with incorrect RAS predictor updates under power down and up reset (#4048)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "4048",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4048",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4048"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "【XiangShan Biweekly 66】20241223",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/23/biweekly-66-en/"
+  },
+  {
+    "biweekly": 66,
+    "date": "2024-12-23",
+    "description": "Allow speculative instruction fetching in Svpbmt NC space (#3944)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "3944",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3944",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3944"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "【XiangShan Biweekly 66】20241223",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/23/biweekly-66-en/"
+  },
+  {
+    "biweekly": 66,
+    "date": "2024-12-23",
+    "description": "Fixed some parameterization issues (#3950)",
+    "modules": [
+      "frontend"
+    ],
+    "refs": [
+      {
+        "number": "3950",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3950",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3950"
+      }
+    ],
+    "section": "Frontend",
+    "source_title": "【XiangShan Biweekly 66】20241223",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/23/biweekly-66-en/"
+  },
+  {
+    "biweekly": 66,
+    "date": "2024-12-23",
+    "description": "Fix several bugs releated to misaligned load / store requests (#4053), (#4057), (#4077)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4053",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4053",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4053"
+      },
+      {
+        "number": "4057",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4057",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4057"
+      },
+      {
+        "number": "4077",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4077",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4077"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 66】20241223",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/23/biweekly-66-en/"
+  },
+  {
+    "biweekly": 66,
+    "date": "2024-12-23",
+    "description": "Timing: Optimize critical path in StoreQueue (#3988)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3988",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3988",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3988"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 66】20241223",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/23/biweekly-66-en/"
+  },
+  {
+    "biweekly": 66,
+    "date": "2024-12-23",
+    "description": "Area: Remove redundant registers in VirtualLoadQueue (#4061); Remove redundant CacheOpDecoder in DCache (#4050)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4061",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4061",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4061"
+      },
+      {
+        "number": "4050",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4050",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4050"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 66】20241223",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/23/biweekly-66-en/"
+  },
+  {
+    "biweekly": 66,
+    "date": "2024-12-23",
+    "description": "Power Consumption: Trim LSQ and optimize MemBlock power consumption (#4059); Single-core shutdown for smoke testing",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4059",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4059",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4059"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 66】20241223",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/23/biweekly-66-en/"
+  },
+  {
+    "biweekly": 65,
+    "date": "2024-12-09",
+    "description": "Fix the bug that a TLB corresponding item is replaced during guest page fault processing (#3964, #3985)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3964",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3964",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3964"
+      },
+      {
+        "number": "3985",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3985",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3985"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 65】20241209",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/09/biweekly-65-en/"
+  },
+  {
+    "biweekly": 65,
+    "date": "2024-12-09",
+    "description": "Fix the bug that a vset instruction cannot handle interrupts during flushPipe, setting vset instructions not to respond to interrupts (#3991)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3991",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3991",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3991"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 65】20241209",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/09/biweekly-65-en/"
+  },
+  {
+    "biweekly": 65,
+    "date": "2024-12-09",
+    "description": "Fix error when NEMU handles cross-page address translation (NEMU #710)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "710",
+        "repo": "OpenXiangShan/NEMU",
+        "text": "NEMU #710",
+        "url": "https://github.com/OpenXiangShan/NEMU/pull/710"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 65】20241209",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/09/biweekly-65-en/"
+  },
+  {
+    "biweekly": 65,
+    "date": "2024-12-09",
+    "description": "Timing: Optimize the hit path selection logic of DCache and improve the timing paths related to CMO operations (#3988)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3988",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3988",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3988"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 65】20241209",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/09/biweekly-65-en/"
+  },
+  {
+    "biweekly": 65,
+    "date": "2024-12-09",
+    "description": "Remove redundant combinational logic from LoadQueueReplay/StoreQueue (#3976)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3976",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3976",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3976"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 65】20241209",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/09/biweekly-65-en/"
+  },
+  {
+    "biweekly": 65,
+    "date": "2024-12-09",
+    "description": "MMU area reduction: Trim the number of entries in the MMU page cache from 2k to 1k, and performance has slightly decreased (#4003)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "4003",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#4003",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/4003"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 65】20241209",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/12/09/biweekly-65-en/"
+  },
+  {
+    "biweekly": 61,
+    "date": "2024-10-14",
+    "description": "Fix handling logic of guest page fault on prefetch requests, and situations when redirect after gpf (#3697).",
+    "modules": [
+      "frontend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3697",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3697",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3697"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 61】20241014",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/10/14/biweekly-61-en/"
+  },
+  {
+    "biweekly": 61,
+    "date": "2024-10-14",
+    "description": "Fix bug where non-aligned requests did not successfully write gpaddr to htval or mtval2 register (#3699)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3699",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3699",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3699"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 61】20241014",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/10/14/biweekly-61-en/"
+  },
+  {
+    "biweekly": 61,
+    "date": "2024-10-14",
+    "description": "Performance Counters: Coupled L2 HPM integrated into XiangShan CSR, with optimized output format (#3708)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3708",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3708",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3708"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 61】20241014",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/10/14/biweekly-61-en/"
+  },
+  {
+    "biweekly": 60,
+    "date": "2024-09-30",
+    "description": "Fixed the issue of meta clients update in CoupledL2 DCT (#3648)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3648",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3648",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3648"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 60】20240930",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/09/30/biweekly-60-en/"
+  },
+  {
+    "biweekly": 60,
+    "date": "2024-09-30",
+    "description": "Fix a serious of bugs related to arbitration and nested request in CoupledL2 (#3621), (#3637)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3621",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3621",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3621"
+      },
+      {
+        "number": "3637",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3637",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3637"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 60】20240930",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/09/30/biweekly-60-en/"
+  },
+  {
+    "biweekly": 60,
+    "date": "2024-09-30",
+    "description": "Fixed exception judgement error caused by high address truncation, and also fixed the bug that exception address was not correctly written to *tval register (#3629), (#3639), (#3674)",
+    "modules": [
+      "backend",
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3629",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3629",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3629"
+      },
+      {
+        "number": "3639",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3639",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3639"
+      },
+      {
+        "number": "3674",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3674",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3674"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 60】20240930",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/09/30/biweekly-60-en/"
+  },
+  {
+    "biweekly": 60,
+    "date": "2024-09-30",
+    "description": "L2 MCP2 Constraints: Checked all relevant signals and fixed several violation cases (#3633)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3633",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3633",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3633"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 60】20240930",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/09/30/biweekly-60-en/"
+  },
+  {
+    "biweekly": 60,
+    "date": "2024-09-30",
+    "description": "Added CHI version HPM performance counters, refactored, and updated the HPM code (#3631)",
+    "modules": [
+      "mem",
+      "cache"
+    ],
+    "refs": [
+      {
+        "number": "3631",
+        "repo": "OpenXiangShan/XiangShan",
+        "text": "#3631",
+        "url": "https://github.com/OpenXiangShan/XiangShan/pull/3631"
+      }
+    ],
+    "section": "MemBlock and cache",
+    "source_title": "【XiangShan Biweekly 60】20240930",
+    "source_url": "https://docs.xiangshan.cc/zh-cn/latest/blog/2024/09/30/biweekly-60-en/"
+  }
+]

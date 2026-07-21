@@ -1,0 +1,337 @@
+/***************************************************************************************
+* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
+*
+* XiangShan is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*          http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
+***************************************************************************************/
+
+package xiangshan.mem
+
+import org.chipsalliance.cde.config.Parameters
+import chisel3._
+import chisel3.util._
+import utils._
+import utility._
+import xiangshan._
+import xiangshan.ExceptionNO._
+import xiangshan.frontend.ftq.FtqPtr
+import xiangshan.backend._
+import xiangshan.backend.fu.fpu._
+import xiangshan.backend.rob.RobLsqIO
+import xiangshan.backend.Bundles.{DynInst, ExuOutput, MemExuOutput}
+import xiangshan.backend.rob.RobPtr
+import xiangshan.mem.mdp._
+import xiangshan.mem.Bundles._
+import xiangshan.cache._
+import xiangshan.cache.mmu._
+
+class LqPtr(implicit p: Parameters) extends CircularQueuePtr[LqPtr](
+  p => p(XSCoreParamsKey).VirtualLoadQueueSize
+){
+}
+
+object LqPtr {
+  def apply(f: Bool, v: UInt)(implicit p: Parameters): LqPtr = {
+    val ptr = Wire(new LqPtr)
+    ptr.flag := f
+    ptr.value := v
+    ptr
+  }
+}
+
+// TODO: remove this
+trait HasLoadHelper { this: XSModule =>
+  def rdataHelper(uop: DynInst, rdata: UInt): UInt = {
+    val fpWen = uop.fpWen
+    LookupTree(uop.fuOpType, List(
+      LSUOpType.lb   -> SignExt(rdata(7, 0) , XLEN),
+      LSUOpType.lh   -> SignExt(rdata(15, 0), XLEN),
+      /*
+          riscv-spec-20191213: 12.2 NaN Boxing of Narrower Values
+          Any operation that writes a narrower result to an f register must write
+          all 1s to the uppermost FLEN−n bits to yield a legal NaN-boxed value.
+      */
+      LSUOpType.lw   -> Mux(fpWen, FPU.box(rdata, FPU.S), SignExt(rdata(31, 0), XLEN)),
+      LSUOpType.ld   -> Mux(fpWen, FPU.box(rdata, FPU.D), SignExt(rdata(63, 0), XLEN)),
+      LSUOpType.lbu  -> ZeroExt(rdata(7, 0) , XLEN),
+      LSUOpType.lhu  -> ZeroExt(rdata(15, 0), XLEN),
+      LSUOpType.lwu  -> ZeroExt(rdata(31, 0), XLEN),
+
+      // hypervisor
+      LSUOpType.hlvb -> SignExt(rdata(7, 0), XLEN),
+      LSUOpType.hlvh -> SignExt(rdata(15, 0), XLEN),
+      LSUOpType.hlvw -> SignExt(rdata(31, 0), XLEN),
+      LSUOpType.hlvd -> SignExt(rdata(63, 0), XLEN),
+      LSUOpType.hlvbu -> ZeroExt(rdata(7, 0), XLEN),
+      LSUOpType.hlvhu -> ZeroExt(rdata(15, 0), XLEN),
+      LSUOpType.hlvwu -> ZeroExt(rdata(31, 0), XLEN),
+      LSUOpType.hlvxhu -> ZeroExt(rdata(15, 0), XLEN),
+      LSUOpType.hlvxwu -> ZeroExt(rdata(31, 0), XLEN),
+    ))
+  }
+
+  // TODO: remove genRdataOH and newRdataHelper when old LoadUnit is removed
+  def genRdataOH(uop: DynInst): UInt = {
+    val fuOpType = uop.fuOpType
+    val fpWen    = uop.fpWen
+    val result = Cat(
+      (fuOpType === LSUOpType.lw && fpWen),
+      (fuOpType === LSUOpType.lh && fpWen),
+      (fuOpType === LSUOpType.lw && !fpWen) || (fuOpType === LSUOpType.hlvw),
+      (fuOpType === LSUOpType.lh && !fpWen) || (fuOpType === LSUOpType.hlvh),
+      (fuOpType === LSUOpType.lb)           || (fuOpType === LSUOpType.hlvb),
+      (fuOpType === LSUOpType.ld)           || (fuOpType === LSUOpType.hlvd),
+      (fuOpType === LSUOpType.lwu)          || (fuOpType === LSUOpType.hlvwu) || (fuOpType === LSUOpType.hlvxwu),
+      (fuOpType === LSUOpType.lhu)          || (fuOpType === LSUOpType.hlvhu) || (fuOpType === LSUOpType.hlvxhu),
+      (fuOpType === LSUOpType.lbu)          || (fuOpType === LSUOpType.hlvbu),
+    )
+    result
+  }
+
+  def newRdataHelper(select: UInt, rdata: UInt): UInt = {
+    XSError(PopCount(select) > 1.U, "data selector must be One-Hot!\n")
+    val selData = Seq(
+      ZeroExt(rdata(7, 0), XLEN),
+      ZeroExt(rdata(15, 0), XLEN),
+      ZeroExt(rdata(31, 0), XLEN),
+      rdata(63, 0),
+      SignExt(rdata(7, 0) , XLEN),
+      SignExt(rdata(15, 0) , XLEN),
+      SignExt(rdata(31, 0) , XLEN),
+      FPU.box(rdata, FPU.H),
+      FPU.box(rdata, FPU.S)
+    )
+    Mux1H(select, selData)
+  }
+
+  def genDataSelectByOffset(addrOffset: UInt): Vec[Bool] = {
+    require(addrOffset.getWidth == 4)
+    VecInit((0 until 16).map{ case i =>
+      addrOffset === i.U
+    })
+  }
+
+  def rdataVecHelper(alignedType: UInt, rdata: UInt): UInt = {
+    LookupTree(alignedType, List(
+      "b00".U -> ZeroExt(rdata(7, 0), VLEN),
+      "b01".U -> ZeroExt(rdata(15, 0), VLEN),
+      "b10".U -> ZeroExt(rdata(31, 0), VLEN),
+      "b11".U -> ZeroExt(rdata(63, 0), VLEN)
+    ))
+  }
+}
+
+class LqEnqIO(implicit p: Parameters) extends MemBlockBundle {
+  val canAccept = Output(Bool())
+  val sqCanAccept = Input(Bool())
+  val needAlloc = Vec(LSQEnqWidth, Input(Bool()))
+  val req = Vec(LSQEnqWidth, Flipped(ValidIO(new DynInst)))
+  val resp = Vec(LSQEnqWidth, Output(new LqPtr))
+}
+
+class LqTriggerIO(implicit p: Parameters) extends XSBundle {
+  val hitLoadAddrTriggerHitVec = Input(Vec(TriggerNum, Bool()))
+  val lqLoadAddrTriggerHitVec = Output(Vec(TriggerNum, Bool()))
+}
+
+class LoadQueueTopDownIO(implicit p: Parameters) extends XSBundle {
+  val robHeadVaddr = Flipped(Valid(UInt(VAddrBits.W)))
+  val robHeadTlbReplay = Output(Bool())
+  val robHeadTlbMiss = Output(Bool())
+  val robHeadLoadVio = Output(Bool())
+  val robHeadLoadMSHR = Output(Bool())
+  val robHeadMissInDTlb = Input(Bool())
+  val robHeadOtherReplay = Output(Bool())
+}
+
+class LoadQueue(implicit p: Parameters) extends XSModule
+  with HasDCacheParameters
+  with HasMemBlockParameters
+  with HasCircularQueuePtrHelper
+  with HasLoadHelper
+  with HasPerfEvents
+{
+  val io = IO(new Bundle() {
+    val redirect = Flipped(Valid(new Redirect))
+    val vecFeedback = Vec(VecLoadPipelineWidth, Flipped(ValidIO(new FeedbackToLsqIO)))
+    val enq = new LqEnqIO
+    val ldu = new Bundle() {
+      val rawNukeQuery = Vec(LoadPipelineWidth, Flipped(new LoadRAWNukeQuery()))
+      val rarNukeQuery = Vec(LoadPipelineWidth, Flipped(new LoadRARNukeQuery()))
+      val ldin         = Vec(LoadPipelineWidth, Flipped(Decoupled(new LqWriteBundle))) // from load_s3
+    }
+    val sta = new Bundle() {
+      val storeAddrIn = Vec(StorePipelineWidth, Flipped(Valid(new StoreAddrIO))) // from store_s1
+    }
+    val std = new Bundle() {
+      val storeDataIn = Vec(StorePipelineWidth, Flipped(Valid(new StoreQueueDataWrite))) // from store_s0, store data, send to sq from rs
+    }
+    val sq = new Bundle() {
+      val stAddrReadySqPtr = Input(new SqPtr)
+      val stAddrReadyVec   = Input(Vec(StoreQueueSize, Bool()))
+      val stDataReadySqPtr = Input(new SqPtr)
+      val stDataReadyVec   = Input(Vec(StoreQueueSize, Bool()))
+      val stIssuePtr       = Input(new SqPtr)
+      val sqEmpty          = Input(Bool())
+      val sqDeqPtr         = Input(new SqPtr)
+    }
+    val bypass = Flipped(Vec(LoadPipelineWidth, new UncacheBypass))
+    val replay = Vec(LoadPipelineWidth, Decoupled(new LoadReplayIO))
+    val loadWakeup  = Flipped(ValidIO(new DCacheLoadWakeup()))
+    val release = Flipped(Valid(new Release))
+    val nuke_rollback = Vec(StorePipelineWidth, Output(Valid(new Redirect)))
+    val nack_rollback = Vec(1, Output(Valid(new Redirect))) // uncachebuffer
+    val rob = Flipped(new RobLsqIO)
+    val uncache = new UncacheWordIO
+    val exceptionInfo = ValidIO(new MemExceptionInfo())
+    val lqFull = Output(Bool())
+    val lqDeq = Output(UInt(log2Up(CommitWidth + 1).W))
+    val lqCancelCnt = Output(UInt(log2Up(VirtualLoadQueueSize+1).W))
+    val lq_rep_full = Output(Bool())
+    val tlbReplayDelayCycleCtrl = Vec(4, Input(UInt(ReSelectLen.W)))
+    val l2_hint = Input(Valid(new L2ToL1Hint()))
+    val tlb_hint = Flipped(new TlbHintIO)
+    val lqEmpty = Output(Bool())
+
+    // mdp train io
+    val mdpTrain        = ValidIO(new Redirect)
+
+    val lqDeqPtr = Output(new LqPtr)
+
+    val rarValidCount = Output(UInt())
+
+    val debugTopDown = new LoadQueueTopDownIO
+    val noUopsIssed = Input(Bool())
+  })
+
+  val loadQueueRAR = Module(new LoadQueueRAR)  //  read-after-read violation
+  val loadQueueRAW = Module(new LoadQueueRAW)  //  read-after-write violation
+  val loadQueueReplay = Module(new LoadQueueReplay)  //  enqueue if need replay
+  val virtualLoadQueue = Module(new VirtualLoadQueue)  //  control state
+  val uncacheBuffer = Module(new LoadQueueUncache) // uncache
+  /**
+   * LoadQueueRAR
+   */
+  loadQueueRAR.io.redirect  <> io.redirect
+  loadQueueRAR.io.release   <> io.release
+  loadQueueRAR.io.ldWbPtr   <> virtualLoadQueue.io.ldWbPtr
+  loadQueueRAR.io.validCount<> io.rarValidCount
+  loadQueueRAR.io.query     <> io.ldu.rarNukeQuery
+
+  /**
+   * LoadQueueRAW
+   */
+  loadQueueRAW.io.redirect         <> io.redirect
+  loadQueueRAW.io.storeIn          <> io.sta.storeAddrIn
+  loadQueueRAW.io.stAddrReadySqPtr <> io.sq.stAddrReadySqPtr
+  loadQueueRAW.io.stIssuePtr       <> io.sq.stIssuePtr
+  loadQueueRAW.io.query            <> io.ldu.rawNukeQuery
+  io.mdpTrain                      := loadQueueRAW.io.mdpTrain
+
+  /**
+   * VirtualLoadQueue
+   */
+  virtualLoadQueue.io.redirect      <> io.redirect
+  virtualLoadQueue.io.vecCommit     <> io.vecFeedback
+  virtualLoadQueue.io.enq           <> io.enq
+  virtualLoadQueue.io.ldin          <> io.ldu.ldin // from load_s3
+  virtualLoadQueue.io.lqFull        <> io.lqFull
+  virtualLoadQueue.io.lqDeq         <> io.lqDeq
+  virtualLoadQueue.io.lqCancelCnt   <> io.lqCancelCnt
+  virtualLoadQueue.io.lqEmpty       <> io.lqEmpty
+  virtualLoadQueue.io.ldWbPtr       <> io.lqDeqPtr
+
+  /**
+   * Load uncache buffer
+   */
+  uncacheBuffer.io.redirect <> io.redirect
+  uncacheBuffer.io.bypass <> io.bypass
+  uncacheBuffer.io.rob <> io.rob
+  uncacheBuffer.io.uncache <> io.uncache
+
+  io.exceptionInfo <> uncacheBuffer.io.exceptionInfo
+
+  for ((buff, w) <- uncacheBuffer.io.req.zipWithIndex) {
+    // from load_s3
+    val ldinBits = io.ldu.ldin(w).bits
+    buff.valid := io.ldu.ldin(w).valid && ldinBits.rep_info.mmioOrNc
+    buff.bits := ldinBits
+  }
+
+  io.uncache.resp.ready := true.B
+
+  io.nuke_rollback := loadQueueRAW.io.rollback
+  io.nack_rollback(0) := uncacheBuffer.io.rollback
+
+  /* <------- DANGEROUS: Don't change sequence here ! -------> */
+
+  /**
+   * LoadQueueReplay
+   */
+  loadQueueReplay.io.redirect         <> io.redirect
+  loadQueueReplay.io.enq              <> io.ldu.ldin // from load_s3
+  loadQueueReplay.io.storeAddrIn      <> io.sta.storeAddrIn // from store_s1
+  loadQueueReplay.io.storeDataIn      <> io.std.storeDataIn // from store_s0
+  loadQueueReplay.io.replay           <> io.replay
+  loadQueueReplay.io.loadWakeup       <> io.loadWakeup
+  loadQueueReplay.io.stAddrReadySqPtr <> io.sq.stAddrReadySqPtr
+  loadQueueReplay.io.stAddrReadyVec   <> io.sq.stAddrReadyVec
+  loadQueueReplay.io.stDataReadySqPtr <> io.sq.stDataReadySqPtr
+  loadQueueReplay.io.stDataReadyVec   <> io.sq.stDataReadyVec
+  loadQueueReplay.io.sqEmpty          <> io.sq.sqEmpty
+  loadQueueReplay.io.sqDeqPtr         <> io.sq.sqDeqPtr
+  loadQueueReplay.io.lqFull           <> io.lq_rep_full
+  loadQueueReplay.io.ldWbPtr          <> virtualLoadQueue.io.ldWbPtr
+  loadQueueReplay.io.rarFull          <> loadQueueRAR.io.lqFull
+  loadQueueReplay.io.rawFull          <> loadQueueRAW.io.lqFull
+  loadQueueReplay.io.l2_hint          <> io.l2_hint
+  loadQueueReplay.io.tlb_hint         <> io.tlb_hint
+  loadQueueReplay.io.tlbReplayDelayCycleCtrl <> io.tlbReplayDelayCycleCtrl
+
+  loadQueueReplay.io.mmioWakeup := uncacheBuffer.io.mmioWakeup
+  loadQueueReplay.io.ncWakeup := uncacheBuffer.io.ncWakeup
+  // TODO: implement it!
+  loadQueueReplay.io.vecFeedback := io.vecFeedback
+
+  loadQueueReplay.io.debugTopDown <> io.debugTopDown
+
+  virtualLoadQueue.io.noUopsIssued := io.noUopsIssed
+
+  val full_mask = Cat(loadQueueRAR.io.lqFull, loadQueueRAW.io.lqFull, loadQueueReplay.io.lqFull)
+  XSPerfAccumulate("full_mask_000", full_mask === 0.U)
+  XSPerfAccumulate("full_mask_001", full_mask === 1.U)
+  XSPerfAccumulate("full_mask_010", full_mask === 2.U)
+  XSPerfAccumulate("full_mask_011", full_mask === 3.U)
+  XSPerfAccumulate("full_mask_100", full_mask === 4.U)
+  XSPerfAccumulate("full_mask_101", full_mask === 5.U)
+  XSPerfAccumulate("full_mask_110", full_mask === 6.U)
+  XSPerfAccumulate("full_mask_111", full_mask === 7.U)
+  XSPerfAccumulate("nuke_rollback", io.nuke_rollback.map(_.valid).reduce(_ || _).asUInt)
+  XSPerfAccumulate("nack_rollabck", io.nack_rollback.map(_.valid).reduce(_ || _).asUInt)
+
+  // perf cnt
+  val perfEvents = Seq(virtualLoadQueue, loadQueueRAR, loadQueueRAW, loadQueueReplay).flatMap(_.getPerfEvents) ++
+  Seq(
+    ("full_mask_000", full_mask === 0.U),
+    ("full_mask_001", full_mask === 1.U),
+    ("full_mask_010", full_mask === 2.U),
+    ("full_mask_011", full_mask === 3.U),
+    ("full_mask_100", full_mask === 4.U),
+    ("full_mask_101", full_mask === 5.U),
+    ("full_mask_110", full_mask === 6.U),
+    ("full_mask_111", full_mask === 7.U),
+    ("nuke_rollback", io.nuke_rollback.map(_.valid).reduce(_ || _).asUInt),
+    ("nack_rollback", io.nack_rollback.map(_.valid).reduce(_ || _).asUInt)
+  )
+  generatePerfEvent()
+  // end
+}

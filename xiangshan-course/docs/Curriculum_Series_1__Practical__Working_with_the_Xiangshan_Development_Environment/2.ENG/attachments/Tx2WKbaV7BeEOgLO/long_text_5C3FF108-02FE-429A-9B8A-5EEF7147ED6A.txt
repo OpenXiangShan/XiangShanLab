@@ -1,0 +1,77 @@
+uild/RISCV/cpu/base.cc:1579: warn: Start memcpy to NEMU from 0x73cb68200000, size=8589934592
+build/RISCV/cpu/base.cc:1582: warn: Start regcpy to NEMU
+build/RISCV/cpu/base.cc:1534: warn: CPU0 Diff at mmpt Ref value: 0, GEM5 value: 0x2100000000080005
+In CPU0: NEMU PC: 0x8000092a, GEM5 PC: 0x8000092a, inst: csrrw zero, mmpt, a5
+build/RISCV/cpu/base.cc:1634: warn: gem5-rRegsDisplay : 
+  $0 :                0   ra :                0   sp :         80006ff0   gp :                0 
+  tp :                0   t0 :         80200000   t1 :         8000e000   t2 :         80008000 
+  s0 :             1000   s1 :                0   a0 :             1000   a1 :         80100000 
+  a2 :         80005000   a3 :         80006000   a4 : 2100000000000000   a5 : 2100000000080005 
+  a6 :         2007fc00   a7 :         80000998   s2 :                0   s3 :                0 
+  s4 :                0   s5 :                0   s6 :                0   s7 :                0 
+  s8 :                0   s9 :                0  s10 :                0  s11 :                0 
+  t3 :         8000f000   t4 :         80010000   t5 :         8000b000   t6 :         8000c000 
+build/RISCV/cpu/base.cc:1647: warn: gem5-fRegsDisplay : 
+ ft0 :                0  ft1 :                0  ft2 :                0  ft3 :                0 
+ ft4 :                0  ft5 :                0  ft6 :                0  ft7 :                0 
+ fs0 :                0  fs1 :                0  fa0 :                0  fa1 :                0 
+ fa2 :                0  fa3 :                0  fa4 :                0  fa5 :                0 
+ fa6 :                0  fa7 :                0  fs2 :                0  fs3 :                0 
+ fs4 :                0  fs5 :                0  fs6 :                0  fs7 :                0 
+ fs8 :                0  fs9 :                0 fs10 :                0 fs11 :                0 
+ ft8 :                0  ft9 :                0 ft10 :                0 ft11 :                0 
+build/RISCV/cpu/base.cc:1701: warn: gem5-CsrDisplay : 
+pc :         8000092a      mstatus :        a00000000 mcause :                0 mepc    :                0
+                           sstatus :        200000000 scause :                0 sepc    :                0
+satp    :                0
+mmpt    : 2100000000080005
+mip     :                0 mie     :                0 mscratch:                0 sscratch:                0
+mideleg :             1444 medeleg :                0
+mtval   :                0 stval   :                0 mtvec   :                0 stvec   :                0
+privilege mode : 3
+build/RISCV/cpu/base.cc:1726: warn: gem5-VectorDisplay : 
+v00 : 0000000000000000_0000000000000000 v01 : 0000000000000000_0000000000000000
+v02 : 0000000000000000_0000000000000000 v03 : 0000000000000000_0000000000000000
+v04 : 0000000000000000_0000000000000000 v05 : 0000000000000000_0000000000000000
+v06 : 0000000000000000_0000000000000000 v07 : 0000000000000000_0000000000000000
+v08 : 0000000000000000_0000000000000000 v09 : 0000000000000000_0000000000000000
+v10 : 0000000000000000_0000000000000000 v11 : 0000000000000000_0000000000000000
+v12 : 0000000000000000_0000000000000000 v13 : 0000000000000000_0000000000000000
+v14 : 0000000000000000_0000000000000000 v15 : 0000000000000000_0000000000000000
+v16 : 0000000000000000_0000000000000000 v17 : 0000000000000000_0000000000000000
+v18 : 0000000000000000_0000000000000000 v19 : 0000000000000000_0000000000000000
+v20 : 0000000000000000_0000000000000000 v21 : 0000000000000000_0000000000000000
+v22 : 0000000000000000_0000000000000000 v23 : 0000000000000000_0000000000000000
+v24 : 0000000000000000_0000000000000000 v25 : 0000000000000000_0000000000000000
+v26 : 0000000000000000_0000000000000000 v27 : 0000000000000000_0000000000000000
+v28 : 0000000000000000_0000000000000000 v29 : 0000000000000000_0000000000000000
+v30 : 0000000000000000_0000000000000000 v31 : 0000000000000000_0000000000000000
+vtype   : 8000000000000000 vstart   :                0  vxsat   :                0
+vxrm    :                0 vl       :                0  vcsr    :                0
+
+
+build/RISCV/cpu/base.cc:1537: warn: start dump last 20 committed msg
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36529 pc:0x80000916] c_sd a4, 0(a5), paddr: 0x80005fd8
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36530 pc:0x80000918] c_addi a5, 8, res: 0x80005fe0
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36531 pc:0x8000091a] bne a3, a5, -4
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36532 pc:0x80000916] c_sd a4, 0(a5), paddr: 0x80005fe0
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36533 pc:0x80000918] c_addi a5, 8, res: 0x80005fe8
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36534 pc:0x8000091a] bne a3, a5, -4
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36535 pc:0x80000916] c_sd a4, 0(a5), paddr: 0x80005fe8
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36536 pc:0x80000918] c_addi a5, 8, res: 0x80005ff0
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36537 pc:0x8000091a] bne a3, a5, -4
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36538 pc:0x80000916] c_sd a4, 0(a5), paddr: 0x80005ff0
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36539 pc:0x80000918] c_addi a5, 8, res: 0x80005ff8
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36540 pc:0x8000091a] bne a3, a5, -4
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36541 pc:0x80000916] c_sd a4, 0(a5), paddr: 0x80005ff8
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36542 pc:0x80000918] c_addi a5, 8, res: 0x80006000
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36543 pc:0x8000091a] bne a3, a5, -4
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36619 pc:0x8000091e] addi a4, zero, 33, res: 0x21
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36620 pc:0x80000922] srli a5, a2, 12, res: 0x80005
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36621 pc:0x80000926] c_slli a4, 56, res: 0x2100000000000000
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36622 pc:0x80000928] c_add a5, a4, res: 0x2100000000080005
+build/RISCV/cpu/base.cc:1540: warn: V [sn:36623 pc:0x8000092a] csrrw zero, mmpt, a5
+build/RISCV/cpu/base.cc:1606: panic: Difftest failed!
+Memory Usage: 18346804 KBytes
+Program aborted at tick 5788206
+Aborted (core dumped)

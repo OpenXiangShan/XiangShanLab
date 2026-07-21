@@ -1,0 +1,111 @@
+package xiangshan.backend.fu.NewCSR.CSREvents
+
+import chisel3._
+import chisel3.util._
+import org.chipsalliance.cde.config.Parameters
+import utility.{SignExt, ZeroExt, GatedValidRegNext}
+import xiangshan.{ExceptionNO, HasXSParameter, TriggerAction}
+import xiangshan.ExceptionNO._
+import xiangshan.backend.fu.NewCSR
+import xiangshan.backend.fu.NewCSR.CSRBundles.{CauseBundle, OneFieldBundle, PrivState}
+import xiangshan.backend.fu.NewCSR.CSRConfig.{VaddrMaxWidth, XLEN}
+import xiangshan.backend.fu.NewCSR.CSRDefines.SatpMode
+import xiangshan.backend.fu.NewCSR._
+
+
+class TrapEntryDEventOutput extends Bundle with EventUpdatePrivStateOutput with EventOutputBase {
+  val dcsr            = ValidIO((new DcsrBundle).addInEvent(_.CAUSE, _.V, _.PRV))
+  val dpc             = ValidIO((new Epc       ).addInEvent(_.epc))
+  val targetPc        = ValidIO(new TargetPCBundle)
+  val debugMode       = ValidIO(Bool())
+  val debugIntrEnable = ValidIO(Bool())
+}
+
+class TrapEntryDEventInput(implicit override val p: Parameters) extends TrapEntryEventInput{
+  val hasTrap                      = Input(Bool())
+  val debugMode                    = Input(Bool())
+  val hasDebugIntr                 = Input(Bool())
+  val triggerEnterDebugMode        = Input(Bool())
+  val hasDebugEbreakException      = Input(Bool())
+  val hasSingleStep                = Input(Bool())
+  val breakPoint                   = Input(Bool())
+  val criticalErrorStateEnterDebug = Input(Bool())
+  val holdDpc                      = Input(Bool())
+}
+
+class TrapEntryDEventModule(implicit val p: Parameters) extends Module with CSREventBase with DebugMMIO {
+  val in = IO(new TrapEntryDEventInput)
+  val out = IO(new TrapEntryDEventOutput)
+
+  private val current = in
+  private val iMode   = current.iMode
+  private val satp    = current.satp
+  private val vsatp   = current.vsatp
+  private val hgatp   = current.hgatp
+
+  private val hasTrap                      = in.hasTrap
+  private val debugMode                    = in.debugMode
+  private val hasDebugIntr                 = in.hasDebugIntr
+  private val breakPoint                   = in.breakPoint
+  private val triggerEnterDebugMode        = in.triggerEnterDebugMode
+  private val hasDebugEbreakException      = in.hasDebugEbreakException
+  private val hasSingleStep                = in.hasSingleStep
+  private val criticalErrorStateEnterDebug = in.criticalErrorStateEnterDebug
+  private val isFetchMalAddr               = in.isFetchMalAddr
+
+  private val hasExceptionInDmode = debugMode && hasTrap
+  val causeIntr = DcsrCause.Haltreq.asUInt
+  val causeExp = MuxCase(DcsrCause.None.asUInt, Seq(
+    criticalErrorStateEnterDebug -> DcsrCause.Other.asUInt,
+    triggerEnterDebugMode        -> DcsrCause.Trigger.asUInt,
+    hasDebugEbreakException      -> DcsrCause.Ebreak.asUInt,
+    hasSingleStep                -> DcsrCause.Step.asUInt
+  ))
+
+  private val trapPC = genTrapVA(
+    iMode,
+    satp,
+    vsatp,
+    hgatp,
+    in.trapPc,
+  )
+
+  // ebreak jump debugEntry not debugException in dmode
+  // debug rom make hart write 0 to DebugMMIO.EXCEPTION when exception happened in debugMode.
+  // let debug module known hart got an exception.
+  // note: Need't know exception number in debugMode.
+  //       exception(EX_BP) must be ebreak here!
+  val debugPc = Mux(hasExceptionInDmode && !breakPoint, DebugException.U, DebugEntry.U)
+
+  out := DontCare
+  // output
+  out.dcsr.valid              := valid
+  out.dpc.valid               := valid && !in.holdDpc
+  // !debugMode trap || debugMode hasExp
+  out.targetPc.valid          := RegNext(valid || hasExceptionInDmode)
+  out.debugMode.valid         := valid
+  out.privState.valid         := valid
+  out.debugIntrEnable.valid   := valid
+
+  out.dcsr.bits.V             := current.privState.V.asUInt
+  out.dcsr.bits.PRV           := current.privState.PRVM.asUInt
+  out.dcsr.bits.CAUSE         := Mux(hasDebugIntr, causeIntr, causeExp)
+  out.dpc.bits.epc            := Mux(isFetchMalAddr, in.fetchMalTval(63, 1), trapPC(63, 1))
+
+  out.targetPc.bits.pc        := RegEnable(debugPc, valid || hasExceptionInDmode)
+  out.targetPc.bits.raiseIPF  := false.B
+  out.targetPc.bits.raiseIAF  := false.B
+  out.targetPc.bits.raiseIGPF := false.B
+  out.debugMode.bits          := true.B
+  out.privState.bits          := PrivState.ModeM
+  out.debugIntrEnable.bits    := false.B
+
+}
+
+trait TrapEntryDEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+  val trapToD = IO(Flipped(new TrapEntryDEventOutput))
+
+  addUpdateBundleInCSREnumType(trapToD.getBundleByName(self.modName.toLowerCase()))
+
+  reconnectReg()
+}

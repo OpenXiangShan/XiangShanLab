@@ -1,0 +1,866 @@
+package xiangshan.backend.fu.NewCSR
+
+import chisel3._
+import chisel3.experimental.SourceInfo
+import chisel3.util._
+import org.chipsalliance.cde.config.Parameters
+import utility.{SignExt, PerfEvent}
+import xiangshan.backend.fu.NewCSR.CSRBundles._
+import xiangshan.backend.fu.NewCSR.CSRDefines._
+import xiangshan.backend.fu.NewCSR.CSRDefines.{CSRROField => RO, CSRRWField => RW, _}
+import xiangshan.backend.fu.NewCSR.CSREvents._
+import xiangshan.backend.fu.NewCSR.CSREnumTypeImplicitCast._
+import xiangshan.backend.fu.NewCSR.ChiselRecordForField._
+import xiangshan.backend.fu.PerfCounterIO
+import xiangshan.backend.fu.NewCSR.CSRConfig._
+import xiangshan.backend.fu.NewCSR.CSRFunc._
+import xiangshan.backend.fu.util.CSRConst._
+import xiangshan.backend.decode.isa.CSRs
+import system.HasSoCParameter
+
+import scala.collection.immutable.SeqMap
+
+trait MachineLevel { self: NewCSR =>
+  // Machine level Custom Read/Write
+  val mbmc = if (HasBitmapCheck) Some(Module(new CSRModule("Mbmc", new MbmcBundle) {
+    val mbmc_lock = reg.BME.asBool
+    if (!HasBitmapCheckDefault) {
+      reg.BME := Mux(wen && !mbmc_lock, wdata.BME, reg.BME)
+      reg.CMODE := Mux(wen, wdata.CMODE, reg.CMODE)
+      reg.BMA := Mux(wen && !mbmc_lock, wdata.BMA, reg.BMA)
+    } else {
+      reg.BME := 1.U
+      reg.CMODE := 0.U
+      reg.BMA := BMAField.TestBMA
+    }
+    reg.BCLEAR := Mux(reg.BCLEAR.asBool, 0.U, Mux(wen && wdata.BCLEAR.asBool, 1.U, 0.U))
+    reg.KEYIDEN := Mux(wen, wdata.KEYIDEN, reg.KEYIDEN)
+  })
+    .setAddr(Mbmc))  else  None
+
+  val mstatus = Module(new MstatusModule)
+    .setAddr(CSRs.mstatus)
+
+  val misa = Module(new CSRModule("Misa", new MisaBundle))
+    .setAddr(CSRs.misa)
+
+  println(s"[CSR] supported isa ext: ${misa.bundle.getISAString}")
+
+  val medeleg = Module(new CSRModule("Medeleg", new MedelegBundle))
+    .setAddr(CSRs.medeleg)
+
+  val mideleg = Module(new CSRModule("Mideleg", new MidelegBundle))
+    .setAddr(CSRs.mideleg)
+
+  val mie = Module(new CSRModule("Mie", new MieBundle) with HasIpIeBundle with HasSoCParameter {
+    val fromHie  = IO(Flipped(new HieToMie))
+    val fromSie  = IO(Flipped(new SieToMie))
+    val fromVSie = IO(Flipped(new VSieToMie))
+
+    // bit 1 SSIE
+    when (fromSie.SSIE.valid) {
+      reg.SSIE := fromSie.SSIE.bits
+    }
+
+    // bit 2 VSSIE
+    when (fromHie.VSSIE.valid || fromVSie.VSSIE.valid) {
+      reg.VSSIE := Mux1H(Seq(
+        fromHie .VSSIE.valid -> fromHie .VSSIE.bits,
+        fromVSie.VSSIE.valid -> fromVSie.VSSIE.bits,
+      ))
+    }
+
+    // bit 5 STIE
+    when(fromSie.STIE.valid) {
+      reg.STIE := fromSie.STIE.bits
+    }
+
+    // bit 6 VSTIE
+    when(fromHie.VSTIE.valid || fromVSie.VSTIE.valid) {
+      reg.VSTIE := Mux1H(Seq(
+        fromHie .VSTIE.valid -> fromHie .VSTIE.bits,
+        fromVSie.VSTIE.valid -> fromVSie.VSTIE.bits,
+      ))
+    }
+
+    // bit 9 SEIE
+    when(fromSie.SEIE.valid) {
+      reg.SEIE := fromSie.SEIE.bits
+    }
+
+    // bit 10 VSEIE
+    when(fromHie.VSEIE.valid || fromVSie.VSEIE.valid) {
+      reg.VSEIE := Mux1H(Seq(
+        fromHie .VSEIE.valid -> fromHie .VSEIE.bits,
+        fromVSie.VSEIE.valid -> fromVSie.VSEIE.bits,
+      ))
+    }
+
+    // bit 12 SGEIE
+    when(fromHie.SGEIE.valid) {
+      reg.SGEIE := fromHie.SGEIE.bits
+    }
+
+    // bit 13~63 LCIP
+    reg.getLocal lazyZip fromSie.getLocal lazyZip fromVSie.getLocal foreach { case (rLCIE, sieLCIE, vsieLCIE) =>
+      when (sieLCIE.valid || vsieLCIE.valid) {
+        rLCIE := Mux1H(Seq(
+          sieLCIE .valid -> sieLCIE .bits,
+          vsieLCIE.valid -> vsieLCIE.bits,
+        ))
+      }
+    }
+
+    // 14~63 read only 0
+    regOut.getLocal.filterNot(_.lsb == InterruptNO.COI).foreach(_ := 0.U)
+    if (soc.IMSICParams.HasTEEIMSIC) {
+      reg.LC48IE := Mux(wen, wdata.LC48IE, reg.LC48IE)
+      regOut.LC48IE := reg.LC48IE
+    }
+  }).setAddr(CSRs.mie)
+
+  val mtvec = Module(new CSRModule("Mtvec", new XtvecBundle))
+    .setAddr(CSRs.mtvec)
+
+  // Todo: support "Stimecmp/Vstimecmp" Extension, Version 1.0.0
+  // Todo: support Sscounterenw Extension
+  val mcounteren = Module(new CSRModule("Mcounteren", new Counteren))
+    .setAddr(CSRs.mcounteren)
+
+  val mvien = Module(new CSRModule("Mvien", new MvienBundle))
+    .setAddr(CSRs.mvien)
+
+  val mvip = Module(new CSRModule("Mvip", new MvipBundle)
+    with HasIpIeBundle
+    with HasMachineEnvBundle
+  {
+    val toMip = IO(new MvipToMip).connectZeroNonRW
+    val fromMip = IO(Flipped(new MipToMvip))
+    val fromSip = IO(Flipped(new SipToMvip))
+    val fromVSip = IO(Flipped(new VSipToMvip))
+
+    // When bit 1 of mvien is zero, bit 1(SSIP) of mvip is an alias of the same bit (SSIP) of mip.
+    // But when bit 1 of mvien is one, bit 1(SSIP) of mvip is a separate writable bit independent of mip.SSIP.
+    // When the value of bit 1 of mvien is changed from zero to one, the value of bit 1 of mvip becomes UNSPECIFIED.
+    // XiangShan will keep the value in mvip.SSIP when mvien.SSIE is changed from zero to one
+    reg.SSIP := Mux(wen && this.mvien.SSIE.asBool, wdata.SSIP, reg.SSIP)
+    regOut.SSIP := Mux(this.mvien.SSIE.asBool, reg.SSIP, this.mip.SSIP)
+    toMip.SSIP.valid := wen && !this.mvien.SSIE.asBool
+    toMip.SSIP.bits := wdata.SSIP
+
+    // Bit 5 of mvip is an alias of the same bit (STIP) in mip when that bit is writable in mip.
+    // When STIP is not writable in mip (such as when menvcfg.STCE = 1), bit 5 of mvip is read-only zero.
+    // Todo: check mip writable when menvcfg.STCE = 1
+    regOut.STIP := Mux(this.menvcfg.STCE.asBool, 0.U, this.mip.STIP.asBool)
+    // Don't update mip.STIP when menvcfg.STCE is 1
+    toMip.STIP.valid := wen && !this.menvcfg.STCE.asBool
+    toMip.STIP.bits := wdata.STIP
+
+    // When bit 9 of mvien is zero, bit 9 of mvip is an alias of the software-writable bit 9 of mip (SEIP).
+    // But when bit 9 of mvien is one, bit 9 of mvip is a writable bit independent of mip.SEIP.
+    // Unlike for bit 1, changing the value of bit 9 of mvien does not affect the value of bit 9 of mvip.
+    toMip.SEIP.valid := wen && !this.mvien.SEIE.asUInt.asBool
+    toMip.SEIP.bits := wdata.SEIP
+    when (fromMip.SEIP.valid) {
+      reg.SEIP := fromMip.SEIP.bits
+    }
+
+    // write from sip
+    when (fromSip.SSIP.valid) {
+      reg.SSIP := fromSip.SSIP.bits
+    }
+
+    reg.getLocal lazyZip fromSip.getLocal lazyZip fromVSip.getLocal foreach { case (rLCIP, sipLCIP, vsipLCIP) =>
+      // sip should assert valid when mideleg=0 && mvien=1
+      when (sipLCIP.valid || vsipLCIP.valid) {
+        rLCIP := Mux1H(Seq(
+          sipLCIP .valid -> sipLCIP .bits,
+          vsipLCIP.valid -> vsipLCIP.bits,
+        ))
+      }
+    }
+  }).setAddr(CSRs.mvip)
+
+  val menvcfg = Module(new CSRModule("Menvcfg", new MEnvCfg))
+    .setAddr(CSRs.menvcfg)
+
+  val mcountinhibit = Module(new CSRModule("Mcountinhibit", new McountinhibitBundle))
+    .setAddr(CSRs.mcountinhibit)
+
+  val mhpmevents: Seq[CSRModule[_]] = (3 to 0x1F).map(num =>
+    Module(new CSRModule(s"Mhpmevent", new MhpmeventBundle) with HasOfFromPerfCntBundle {
+      when(wen){
+        reg.OF := wdata.OF
+      }.elsewhen(ofFromPerfCnt) {
+        reg.OF := ofFromPerfCnt
+      }
+    })
+      .setAddr(CSRs.mhpmevent3 - 3 + num).suggestName(s"Mhpmevent$num")
+  )
+
+  val mscratch = Module(new CSRModule("Mscratch", new ScratchBundle("Machine-mode scratch register.")))
+    .setAddr(CSRs.mscratch)
+
+  val mepc = Module(new CSRModule("Mepc", new Epc) with TrapEntryMEventSinkBundle)
+    .setAddr(CSRs.mepc)
+
+  val mcause = Module(new CSRModule("Mcause", new CauseBundle) with TrapEntryMEventSinkBundle)
+    .setAddr(CSRs.mcause)
+
+  val mtval = Module(new CSRModule("Mtval", new XtvalBundle) with TrapEntryMEventSinkBundle)
+    .setAddr(CSRs.mtval)
+
+  val mip = Module(new CSRModule("Mip", new MipBundle)
+    with HasIpIeBundle
+    with HasExternalInterruptBundle
+    with HasMachineEnvBundle
+    with HasLocalInterruptReqBundle
+    with HasAIABundle
+    with HasSoCParameter
+  {
+    // Alias write in
+    val fromMvip = IO(Flipped(new MvipToMip))
+    val fromSip  = IO(Flipped(new SipToMip))
+    val fromVSip = IO(Flipped(new VSipToMip))
+    // Alias write out
+    val toMvip   = IO(new MipToMvip).connectZeroNonRW
+    val toHvip   = IO(new MipToHvip).connectZeroNonRW
+
+    // bit 1 SSIP
+    when (fromMvip.SSIP.valid || fromSip.SSIP.valid) {
+      reg.SSIP := Mux1H(Seq(
+        fromMvip.SSIP.valid -> fromMvip.SSIP.bits,
+        fromSip .SSIP.valid -> fromSip .SSIP.bits,
+      ))
+    }
+
+    // bit 2 VSSIP reg in hvip
+    // alias of hvip.VSSIP
+    toHvip.VSSIP.valid := wen
+    toHvip.VSSIP.bits  := wdata.VSSIP
+    regOut.VSSIP := hvip.VSSIP
+
+    // bit 3 MSIP is read-only in mip, and is written by accesses to memory-mapped control registers,
+    // which are used by remote harts to provide machine-level interprocessor interrupts.
+    regOut.MSIP := platformIRP.MSIP
+
+    // bit 5 STIP
+    // If the stimecmp (supervisor-mode timer compare) register is implemented(menvcfg.STCE=1), STIP is read-only in mip.
+    regOut.STIP := Mux(this.menvcfg.STCE.asBool, platformIRP.STIP, reg.STIP.asBool)
+    when ((wen || fromMvip.STIP.valid) && !this.menvcfg.STCE) {
+      reg.STIP := Mux1H(Seq(
+        wen -> wdata.STIP,
+        fromMvip.STIP.valid -> fromMvip.STIP.bits,
+      ))
+    }.otherwise {
+      reg.STIP := reg.STIP
+    }
+
+    // bit 6 VSTIP
+    regOut.VSTIP := hvip.VSTIP || platformIRP.VSTIP
+
+    // bit 7 MTIP is read-only in mip, and is cleared by writing to the memory-mapped machine-mode timer compare register
+    regOut.MTIP := platformIRP.MTIP
+
+    // bit 9 SEIP
+    // When bit 9 of mvien is zero, the value of bit 9 of mvip is logically ORed into the readable value of mip.SEIP.
+    // when bit 9 of mvien is one, bit SEIP in mip is read-only and does not include the value of bit 9 of mvip.
+    //
+    // As explained in this issue(https://github.com/riscv/riscv-aia/issues/64),
+    // when mvien[9]=0, mip.SEIP is a software-writable bit and is special in its read value, which is the logical-OR of
+    // mip.SEIP reg and other source from the interrupt controller.
+    // mvip.SEIP is alias of mip.SEIP's reg part, and is independent of the other source from the interrupt controller.
+    //
+    // mip.SEIP is implemented as the alias of mvip.SEIP when mvien=0
+    // the read valid of SEIP is ORed by mvip.SEIP and the other source from the interrupt controller.
+
+    toMvip.SEIP.valid := wen && !this.mvien.SEIE
+    toMvip.SEIP.bits := wdata.SEIP
+    // When mvien.SEIE = 0, mip.SEIP is alias of mvip.SEIP.
+    // Otherwise, mip.SEIP is read only 0
+    regOut.SEIP := Mux(!this.mvien.SEIE, this.mvip.SEIP.asUInt, 0.U)
+    rdataFields.SEIP := regOut.SEIP || platformIRP.SEIP || aiaToCSR.seip
+
+    // bit 10 VSEIP
+    regOut.VSEIP := hvip.VSEIP || platformIRP.VSEIP || hgeip.asUInt(hstatusVGEIN.asUInt)
+
+    // bit 11 MEIP is read-only in mip, and is set and cleared by a platform-specific interrupt controller.
+    // MEIP can from PLIC and IMSIC
+    regOut.MEIP := platformIRP.MEIP || aiaToCSR.meip
+
+    // bit 12 SGEIP
+    regOut.SGEIP := Cat(hgeip.asUInt & hgeie.asUInt).orR
+
+    // bit 13 LCOFIP
+    when (fromSip.LCOFIP.valid || fromVSip.LCOFIP.valid || wen) {
+      reg.LCOFIP := Mux1H(Seq(
+        fromSip.LCOFIP.valid  -> fromSip.LCOFIP.bits,
+        fromVSip.LCOFIP.valid -> fromVSip.LCOFIP.bits,
+        wen -> wdata.LCOFIP,
+      ))
+    }.elsewhen(lcofiReq) {
+      reg.LCOFIP := lcofiReq
+    }.otherwise {
+      reg.LCOFIP := reg.LCOFIP
+    }
+
+    if (soc.IMSICParams.HasTEEIMSIC) {
+      // bit 48 LCOFIP
+      regOut.LC48IP := aiaToCSR.notice_pending
+    }
+  }).setAddr(CSRs.mip)
+
+  val mtinst = Module(new CSRModule("Mtinst", new XtinstBundle) with TrapEntryMEventSinkBundle)
+    .setAddr(CSRs.mtinst)
+
+  val mtval2 = Module(new CSRModule("Mtval2", new Mtval2Bundle) with TrapEntryMEventSinkBundle)
+    .setAddr(CSRs.mtval2)
+
+  val mseccfg = Module(new CSRModule("Mseccfg", new CSRBundle {
+    val PMM   = EnvPMM(33, 32, wNoEffect).withReset(EnvPMM.Disable).withDescription("Machine security memory protection mode from the Smmpm extension.")
+    val MLPE  = RO(10).withDescription("Machine landing-pad enable from the Zicfilp extension.")
+    val SSEED = RO( 9).withDescription("Seed CSR enable from the Zkr extension.")
+    val USEED = RO( 8).withDescription("User seed CSR enable from the Zkr extension.")
+    val RLB   = RO( 2).withDescription("Rule-locking bypass control from the Smepmp extension.")
+    val MMWP  = RO( 1).withDescription("Machine-mode whitelist policy control from the Smepmp extension.")
+    val MML   = RO( 0).withDescription("Machine-mode lock-down control from the Smepmp extension.")
+  })).setAddr(CSRs.mseccfg)
+
+  val mcycle = Module(new CSRModule("Mcycle", new CounterValueBundle("Machine cycle counter value.")) with HasMachineCounterControlBundle with SmcntrpmfBundle {
+    when(w.wen) {
+      reg := w.wdata
+    }.elsewhen(!this.mcountinhibit.CY.asUInt.asBool && countingEn) {
+      reg := reg.ALL.asUInt + 1.U
+    }.otherwise {
+      reg := reg
+    }
+  }).setAddr(CSRs.mcycle)
+
+
+  val minstret = Module(new CSRModule("Minstret", new CounterValueBundle("Machine retired-instruction counter value.")) with HasMachineCounterControlBundle with HasRobCommitBundle with SmcntrpmfBundle {
+    when(w.wen) {
+      reg := w.wdata
+    }.elsewhen(!this.mcountinhibit.IR && robCommit.instNum.valid && countingEn) {
+      reg := reg.ALL.asUInt + robCommit.instNum.bits
+    }.otherwise {
+      reg := reg
+    }
+  }).setAddr(CSRs.minstret)
+
+  val mhpmcounters: Seq[CSRModule[_]] = (3 to 0x1F).map(num =>
+    Module(new CSRModule(s"Mhpmcounter$num", new MhpmcounterBundle) with HasMachineCounterControlBundle with HasPerfCounterBundle {
+      val countingInhibit = this.mcountinhibit.asUInt(num) | !countingEn
+      val counterAdd = reg.ALL.asUInt +& perf.value
+      when (w.wen) {
+        reg := w.wdata
+      }.elsewhen (perf.value =/= 0.U && !countingInhibit) {
+        reg := counterAdd.tail(1)
+      }.otherwise {
+        reg := reg
+      }
+      // Count overflow never results from writes to the mhpmcountern or mhpmeventn registers, only from
+      // hardware increments of counter registers.
+      toMhpmeventOF := !countingInhibit & counterAdd.head(1)
+    }).setAddr(CSRs.mhpmcounter3 - 3 + num)
+  )
+
+  val mcyclecfg = Module(new CSRModule("Mcyclecfg", new EventInhibitBundle))
+    .setAddr(CSRs.mcyclecfg)
+
+  val minstretcfg = Module(new CSRModule("Minstretcfg", new EventInhibitBundle))
+    .setAddr(CSRs.minstretcfg)
+
+  // JEDEC JEP106 Manufacturer ID:
+  //   Bank 17 (16 continuations), Offset 0x6F (111)
+  val mvendorid = Module(new CSRModule("Mvendorid", new MvendoridBundle))
+    .setAddr(CSRs.mvendorid)
+
+  // architecture id for XiangShan is 25
+  // see https://github.com/riscv/riscv-isa-manual/blob/master/marchid.md
+  val marchid = Module(new CSRModule("Marchid", new CSRBundle {
+    val ALL = MarchidField(63, 0).withReset(MarchidField.XSArchid).withDescription("Machine architecture identifier assigned to XiangShan.")
+  })).setAddr(CSRs.marchid)
+
+  val mimpid = Module(new CSRModule("Mimpid", new CSRBundle {
+    val ALL = RO(0).withReset(0.U).withDescription("Machine implementation identifier.")
+  }))
+    .setAddr(CSRs.mimpid)
+
+  val mhartid = Module(new CSRModule("Mhartid", new CSRBundle {
+    val ALL = RO(hartIdLen - 1, 0).withDescription("Hardware thread identifier.")
+  }) {
+    val hartid = IO(Input(UInt(hartIdLen.W)))
+    this.regOut.ALL := hartid
+  })
+    .setAddr(CSRs.mhartid)
+
+  val mconfigptr = Module(new CSRModule("Mconfigptr", new CSRBundle {
+    val ALL = RO(63, 0).withDescription("Pointer to the machine configuration data structure.")
+  }))
+    .setAddr(CSRs.mconfigptr)
+
+  val mstateen0 = Module(new CSRModule("Mstateen0", new Mstateen0Bundle)).setAddr(CSRs.mstateen0)
+
+  val mstateen1 = Module(new CSRModule("Mstateen1", new MstateenNonZeroBundle)).setAddr(CSRs.mstateen1)
+
+  val mstateen2 = Module(new CSRModule("Mstateen2", new MstateenNonZeroBundle)).setAddr(CSRs.mstateen2)
+
+  val mstateen3 = Module(new CSRModule("Mstateen3", new MstateenNonZeroBundle)).setAddr(CSRs.mstateen3)
+
+  // smrnmi extension
+  val mnepc = Module(new CSRModule("Mnepc", new Epc) with TrapEntryMNEventSinkBundle {
+    rdata := SignExt(Cat(reg.epc.asUInt, 0.U(1.W)), XLEN)
+  })
+    .setAddr(CSRs.mnepc)
+
+  val mncause = Module(new CSRModule("Mncause", new CauseBundle) with TrapEntryMNEventSinkBundle)
+    .setAddr(CSRs.mncause)
+  val mnstatus = Module(new CSRModule("Mnstatus", new MnstatusBundle)
+    with TrapEntryMNEventSinkBundle
+    with MNretEventSinkBundle{
+    // NMIE write 0 with no effect
+    // as opensbi not support smrnmi, we init nmie with 1,and allow software to set nmie close for testing
+    // Attension, when set nmie to zero ,do not cause double trap when nmi interrupt has triggered
+//    when(!wdata.NMIE.asBool) {
+//      reg.NMIE := reg.NMIE
+//    }
+  }).setAddr(CSRs.mnstatus)
+  val mnscratch = Module(new CSRModule("Mnscratch", new ScratchBundle("Scratch register for resumable NMI handlers.")))
+    .setAddr(CSRs.mnscratch)
+
+  val mcontext = Module(new CSRModule("Mcontext", new McontextBundle) {
+    val fromHcontext = IO(Flipped(ValidIO(new McontextBundle)))
+    val toHcontext   = IO(Output(new McontextBundle))
+    toHcontext.HCONTEXT := regOut.HCONTEXT.asUInt
+    when(wen) {
+      reg.HCONTEXT := wdata.HCONTEXT.asUInt
+    }.elsewhen(fromHcontext.valid) {
+      reg.HCONTEXT := fromHcontext.bits.HCONTEXT
+    }
+  })
+    .setAddr(CSRs.mcontext)
+
+  val machineLevelCSRMods: Seq[CSRModule[_]] = Seq(
+    mstatus,
+    misa,
+    medeleg,
+    mideleg,
+    mie,
+    mtvec,
+    mcounteren,
+    mvien,
+    mvip,
+    menvcfg,
+    mcountinhibit,
+    mscratch,
+    mepc,
+    mcause,
+    mtval,
+    mip,
+    mtinst,
+    mtval2,
+    mseccfg,
+    mcycle,
+    minstret,
+    mvendorid,
+    marchid,
+    mimpid,
+    mhartid,
+    mconfigptr,
+    mstateen0,
+    mstateen1,
+    mstateen2,
+    mstateen3,
+    mnepc,
+    mncause,
+    mnstatus,
+    mnscratch,
+    mcyclecfg,
+    minstretcfg,
+    mcontext,
+  ) ++ mhpmevents ++ mhpmcounters ++ (if (HasBitmapCheck) Seq(mbmc.get) else Seq())
+
+
+  val machineLevelCSRMap: SeqMap[Int, (CSRAddrWriteBundle[_], UInt)] = SeqMap.from(
+    machineLevelCSRMods.map(csr => (csr.addr -> (csr.w -> csr.rdata))).iterator
+  )
+
+  val machineLevelCSROutMap: SeqMap[Int, UInt] = SeqMap.from(
+    machineLevelCSRMods.map(csr => (csr.addr -> csr.regOut.asInstanceOf[CSRBundle].asUInt)).iterator
+  )
+
+}
+
+class MbmcBundle extends  CSRBundle {
+  val BMA     = BMAField(63, 6, null).withReset(BMAField.ResetBMA).withDescription("Bitmap access-policy encoding.")
+  val KEYIDEN = RW(3).withReset(0.U).withDescription("Enable key-ID checking for bitmap accesses.")
+  val BME     = RW(2).withReset(0.U).withDescription("Enable bitmap checking.")
+  val BCLEAR  = RW(1).withReset(0.U).withDescription("Request clearing of bitmap state.")
+  val CMODE   = RW(0).withReset(0.U).withDescription("Bitmap checking mode selector.")
+}
+
+class MstatusBundle extends CSRBundle {
+
+  val SIE  = CSRRWField     (1).withReset(0.U).withDescription("Global interrupt enable for S-mode.")
+  val MIE  = CSRRWField     (3).withReset(0.U).withDescription("Global interrupt enable for M-mode.")
+  val SPIE = CSRRWField     (5).withReset(0.U).withDescription("Saved SIE value from before trap entry.")
+  val UBE  = CSRROField     (6).withReset(0.U).withDescription("U-mode endianness selector.")
+  val MPIE = CSRRWField     (7).withReset(0.U).withDescription("Saved MIE value from before trap entry.")
+  val SPP  = CSRRWField     (8).withReset(0.U).withDescription("Privilege level active before trap entry to S-mode.")
+  val VS   = ContextStatus  (10,  9).withReset(ContextStatus.Off).withDescription("Vector context status.")
+  val MPP  = PrivMode       (12, 11).withReset(PrivMode.U).withDescription("Privilege level active before trap entry to M-mode.")
+  val FS   = ContextStatus  (14, 13).withReset(ContextStatus.Off).withDescription("Floating-point context status.")
+  val XS   = ContextStatusRO(16, 15).withReset(0.U).withDescription("Additional user extension state summary.")
+  val MPRV = CSRRWField     (17).withReset(0.U).withDescription("Use MPP for load and store privilege checks when set.")
+  val SUM  = CSRRWField     (18).withReset(0.U).withDescription("Permit S-mode data accesses to pages marked as user.")
+  val MXR  = CSRRWField     (19).withReset(0.U).withDescription("Make executable pages readable when set.")
+  val TVM  = CSRRWField     (20).withReset(0.U).withDescription("Trap virtual-memory management operations in S-mode when set.")
+  val TW   = CSRRWField     (21).withReset(0.U).withDescription("Trap WFI in lower privilege modes when set.")
+  val TSR  = CSRRWField     (22).withReset(0.U).withDescription("Trap SRET when set.")
+  val SDT  = CSRRWField     (24).withReset(0.U).withDescription("S-mode disable-trap bit used by the Ssdbltrp extension.")
+  val UXL  = XLENField      (33, 32).withReset(XLENField.XLEN64).withDescription("Effective XLEN for U-mode.")
+  val SXL  = XLENField      (35, 34).withReset(XLENField.XLEN64).withDescription("Effective XLEN for S-mode.")
+  val SBE  = CSRROField     (36).withReset(0.U).withDescription("S-mode endianness selector.")
+  val MBE  = CSRROField     (37).withReset(0.U).withDescription("M-mode endianness selector.")
+  val GVA  = CSRRWField     (38).withReset(0.U).withDescription("Indicates that trap information was derived from a guest virtual address.")
+  val MPV  = VirtMode       (39).withReset(0.U).withDescription("Saved virtualization mode from before trap entry to M-mode.")
+  val MDT  = CSRRWField     (42).withReset(mdtInit.U).withDescription("M-mode disable-trap bit used by the Smdbltrp extension.")
+  val SD   = CSRROField     (63,
+    (_, _) => FS === ContextStatus.Dirty || VS === ContextStatus.Dirty
+  ).withDescription("Dirty summary bit for the floating-point or vector context.")
+}
+
+class MstatusModule(implicit override val p: Parameters) extends CSRModule("MStatus", new MstatusBundle)
+  with TrapEntryMEventSinkBundle
+  with TrapEntryHSEventSinkBundle
+  with DretEventSinkBundle
+  with MretEventSinkBundle
+  with MNretEventSinkBundle
+  with SretEventSinkBundle
+  with HasRobCommitBundle
+  with HasMachineEnvBundle
+{
+  val mstatus = IO(Output(bundle))
+  val sstatus = IO(Output(new SstatusBundle))
+  val sstatusRdata = IO(Output(UInt(64.W)))
+
+  val wAliasSstatus = IO(Input(new CSRAddrWriteBundle(new SstatusBundle)))
+  for ((name, field) <- wAliasSstatus.wdataFields.elements) {
+    reg.elements(name).asInstanceOf[CSREnumType].addOtherUpdate(
+      wAliasSstatus.wen && field.asInstanceOf[CSREnumType].isLegal,
+      field.asInstanceOf[CSREnumType]
+    )
+  }
+
+  // write connection
+  reconnectReg()
+
+  when (robCommit.fsDirty || writeFCSR) {
+    assert(reg.FS =/= ContextStatus.Off, "The [m|s]status.FS should not be Off when set dirty, please check decode")
+    reg.FS := ContextStatus.Dirty
+  }
+
+  when (robCommit.vsDirty || writeVCSR || robCommit.vstart.valid && robCommit.vstart.bits =/= 0.U) {
+    assert(reg.VS =/= ContextStatus.Off, "The [m|s]status.VS should not be Off when set dirty, please check decode")
+    reg.VS := ContextStatus.Dirty
+  }
+  // when MDT is explicitly written by 1, clear MIE
+  // only when reg.MDT is zero or wdata.MDT is zero , MIE can be explicitly written by 1
+  when (w.wdataFields.MDT && w.wen) {
+    reg.MIE := false.B
+  }
+  // when DTE is zero, SDT field is read-only zero(write any, read zero, side effect of write 1 is block)
+  val writeSstatusSDT = Wire(Bool())
+  val writeMstatusSDT = Wire(Bool())
+  val writeSDT        = Wire(Bool())
+  writeMstatusSDT := w.wdataFields.SDT.asBool
+  writeSstatusSDT := Mux(this.menvcfg.DTE.asBool, wAliasSstatus.wdataFields.SDT.asBool, reg.SDT.asBool)
+  writeSDT        := Mux(w.wen, writeMstatusSDT, wAliasSstatus.wen && writeSstatusSDT)
+  // menvcfg.DTE only control Smode dbltrp. Thus mstatus.sdt will not control by DTE.
+  // as sstatus is alias of mstatus, when menvcfg.DTE close write,
+  // sstatus.sdt cannot lead to shadow write of mstatus.sdt. \
+  // As a result, we add wmask of sdt, when write source is from alias write.
+  when (!this.menvcfg.DTE.asBool && wAliasSstatus.wen) {
+    reg.SDT := reg.SDT
+  }
+  // SDT and SIE is the same as MDT and MIE
+  when (writeSDT) {
+    reg.SIE := false.B
+  }
+  // read connection
+  mstatus :|= regOut
+  sstatus := mstatus
+  sstatus.SDT := regOut.SDT && menvcfg.DTE
+  rdata := mstatus.asUInt
+  sstatusRdata := sstatus.asUInt
+}
+
+class MnstatusBundle extends CSRBundle {
+  // OpenSBI does not support Smrnmi yet, so NMIE resets enabled for bring-up.
+  val NMIE   = CSRRWField  (3).withReset(1.U).withDescription("Enable non-maskable interrupt handling.")
+  val MNPV   = VirtMode    (7).withReset(0.U).withDescription("Saved virtualization mode for resumable NMI handling.")
+  val MNPELP = RO          (9).withReset(0.U).withDescription("Saved landing-pad state for resumable NMI handling.")
+  val MNPP   = PrivMode    (12, 11).withReset(PrivMode.U).withDescription("Saved privilege level for resumable NMI handling.")
+}
+
+class MisaBundle extends CSRBundle {
+  // Todo: reset with ISA string
+  val A = RO( 0).withReset(1.U).withDescription("Atomic extension supported.")
+  val B = RO( 1).withReset(1.U).withDescription("Bit-manipulation extension supported.")
+  val C = RO( 2).withReset(1.U).withDescription("Compressed instruction extension supported.")
+  val D = RO( 3).withReset(1.U).withDescription("Double-precision floating-point extension supported.")
+  val E = RO( 4).withReset(0.U).withDescription("Embedded base ISA (RV32E/RV64E) supported.")
+  val F = RO( 5).withReset(1.U).withDescription("Single-precision floating-point extension supported.")
+  val G = RO( 6).withReset(0.U).withDescription("Reserved aggregate ISA bit.")
+  val H = RO( 7).withReset(1.U).withDescription("Hypervisor extension supported.")
+  val I = RO( 8).withReset(1.U).withDescription("Integer base ISA (RV32I/RV64I/RV128I) supported.")
+  val J = RO( 9).withReset(0.U).withDescription("Reserved extension bit J.")
+  val K = RO(10).withReset(0.U).withDescription("Reserved extension bit K.")
+  val L = RO(11).withReset(0.U).withDescription("Reserved extension bit L.")
+  val M = RO(12).withReset(1.U).withDescription("Integer multiply and divide extension supported.")
+  val N = RO(13).withReset(0.U).withDescription("Tentatively reserved user-level interrupts extension bit.")
+  val O = RO(14).withReset(0.U).withDescription("Reserved extension bit O.")
+  val P = RO(15).withReset(0.U).withDescription("Tentatively reserved packed-SIMD extension bit.")
+  val Q = RO(16).withReset(0.U).withDescription("Quad-precision floating-point extension supported.")
+  val R = RO(17).withReset(0.U).withDescription("Reserved extension bit R.")
+  val S = RO(18).withReset(1.U).withDescription("Supervisor mode supported.")
+  val T = RO(19).withReset(0.U).withDescription("Reserved extension bit T.")
+  val U = RO(20).withReset(1.U).withDescription("User mode supported.")
+  val V = RO(21).withReset(1.U).withDescription("Vector extension supported.")
+  val W = RO(22).withReset(0.U).withDescription("Reserved extension bit W.")
+  val X = RO(23).withReset(0.U).withDescription("Non-standard extensions implemented.")
+  val Y = RO(24).withReset(0.U).withDescription("Reserved extension bit Y.")
+  val Z = RO(25).withReset(0.U).withDescription("Reserved extension bit Z.")
+  val MXL = XLENField(63, 62).withReset(XLENField.XLEN64).withDescription("Machine XLEN encoding.")
+
+  def getISAString = this.getFields.filter(x => x != MXL && x.init.litValue == 1).sortBy(_.lsb).map(x => ('A' + x.msb).toChar).mkString
+}
+
+class MedelegBundle extends ExceptionBundle {
+  this.getALL.foreach(_.setRW().withReset(0.U))
+  this.EX_MCALL.setRO().withReset(0.U) // never delegate machine level ecall
+  this.EX_DBLTRP.setRO().withReset(0.U)// double trap is not delegatable
+}
+
+class MidelegBundle extends InterruptBundle {
+  this.getALL.foreach(_.setRW().withReset(0.U))
+  // Don't delegate Machine level interrupts
+  this.getM.foreach(_.setRO().withReset(0.U))
+  // Ref: 13.4.2. Machine Interrupt Delegation Register (mideleg)
+  // When the hypervisor extension is implemented, bits 10, 6, and 2 of mideleg (corresponding to the standard VS-level
+  // interrupts) are each read-only one.
+  this.getVS.foreach(_.setRO().withReset(1.U))
+  // bit 12 of mideleg (corresponding to supervisor-level guest external interrupts) is also read-only one.
+  // VS-level interrupts and guest external interrupts are always delegated past M-mode to HS-mode.
+  this.SGEI.setRO().withReset(1.U)
+  this.getLocal.foreach(_.setRO().withReset(0.U))
+  this.LCOFI.setRW().withReset(0.U)
+}
+
+class MieBundle extends InterruptEnableBundle {
+  this.getNonLocal.foreach(_.setRW().withReset(0.U))
+  this.LCOFIE.setRW().withReset(0.U)
+  // add MIE.LC48IE for AIA
+  this.LC48IE.setRW().withReset(0.U)
+}
+
+class MipBundle extends InterruptPendingBundle {
+  // Ref: riscv privileged spec - 18.4.3. Machine Interrupt (mip and mie) Registers
+  // Bits SGEIP, VSEIP, VSTIP, and VSSIP in mip are aliases for the same bits in hypervisor CSR hip
+  //
+  // We implement SGEIP, VSEIP, VSTIP, and VSSIP in mip are registers,
+  // while these bits in hip are aliases for the same bits in mip.
+  //
+  // Ref: riscv interrupt spec - 2.1 Machine-level CSRs
+  // Existing CSRs mie, mip, and mideleg are widended to 64 bits to support a total of 64 interrupt causes.
+  this.getHS.foreach(_.setRW().withReset(0.U))
+  this.getVS.foreach(_.setRW().withReset(0.U))
+  this.LCOFIP.setRW().withReset(0.U)
+}
+
+class MvienBundle extends InterruptEnableBundle {
+  // Ref: riscv interrupt spec - 5.3 Interrupt filtering and virtual interrupts for supervisor level
+  // It is strongly recommended that bit 9 of mvien be writable.
+  // It is strongly recommended that bit 1 of mvien also be writable.
+  // A bit in mvien can be set to 1 only for major interrupts 1, 9, and 13–63.
+  this.SSIE.setRW().withReset(0.U)
+  this.SEIE.setRW().withReset(0.U)
+  this.getLocal.foreach(_.setRW().withReset(0.U))
+  this.LCOFIE.setRO().withReset(0.U)
+}
+
+class MvipBundle extends InterruptPendingBundle {
+  this.getHS.foreach(_.setRW().withReset(0.U))
+  this.getLocal.foreach(_.setRW().withReset(0.U))
+  this.LCOFIP.setRO().withReset(0.U)
+}
+
+class Epc extends CSRBundle {
+  val epc = RW(63, 1).withReset(0.U).withDescription("Exception program counter.")
+}
+
+class McountinhibitBundle extends CSRBundle {
+  val CY = RW(0).withReset(0.U).withDescription("Inhibit mcycle when set.")
+  val IR = RW(2).withReset(0.U).withDescription("Inhibit minstret when set.")
+  val HPM3 = RW(31, 3).withReset(0.U).withDescription("Inhibit mhpmcounter3 through mhpmcounter31 when set.")
+}
+
+class Mtval2Bundle extends FieldInitBundle(Some("Guest physical address or additional trap value captured on trap entry."))
+
+class MhpmcounterBundle extends FieldInitBundle(Some("Hardware performance-monitoring counter value."))
+
+class MEnvCfg extends EnvCfg {
+  if (CSRConfig.EXT_SSTC) {
+    this.STCE.setRW().withReset(1.U)
+  }
+  this.PBMTE.setRW().withReset(0.U)
+  if (CSRConfig.EXT_DBLTRP) {
+    // software write envcfg to open ssdbltrp if need
+    // set 0 to pass ci
+    this.DTE.setRW().withReset(0.U)
+  }
+}
+
+object MarchidField extends CSREnum with ROApply {
+  val XSArchid = Value(25.U)
+}
+
+class MvendoridBundle extends CSRBundle {
+  val Bank   = MvidBankField(31, 7).withReset(MvidBankField.BANK).withDescription("JEDEC manufacturer bank number.")
+  val Offset = MvidOffsetField(6, 0).withReset(MvidOffsetField.OFFSET).withDescription("JEDEC manufacturer offset within the bank.")
+}
+
+object MvidBankField extends CSREnum with ROApply {
+  val BANK = Value(16.U)
+}
+
+object MvidOffsetField extends CSREnum with ROApply {
+  val OFFSET = Value(0x6F.U)
+}
+
+class MieToHie extends Bundle {
+  val VSSIE = ValidIO(RW(0))
+  val VSTIE = ValidIO(RW(0))
+  val VSEIE = ValidIO(RW(0))
+  val SGEIE = ValidIO(RW(0))
+}
+
+class MvipToMip extends IpValidBundle {
+  this.getHS.foreach(_.bits.setRW())
+}
+
+class HipToMip extends IpValidBundle {
+  // Only hip.VSSIP is writable
+  this.VSSIP.bits.setRW()
+}
+
+class VSipToMip extends IpValidBundle {
+  this.LCOFIP.bits.setRW()
+}
+
+class MipToHvip extends IpValidBundle {
+  this.VSSIP.bits.setRW()
+}
+
+class MipToMvip extends IpValidBundle {
+  this.SEIP.bits.setRW()
+}
+
+class EventInhibitBundle extends CSRBundle {
+  val MINH    = RW(62).withReset(0.U).withDescription("Inhibit counting in M-mode.")
+  val SINH    = RW(61).withReset(0.U).withDescription("Inhibit counting in HS-mode.")
+  val UINH    = RW(60).withReset(0.U).withDescription("Inhibit counting in HU-mode.")
+  val VSINH   = RW(59).withReset(0.U).withDescription("Inhibit counting in VS-mode.")
+  val VUINH   = RW(58).withReset(0.U).withDescription("Inhibit counting in VU-mode.")
+}
+
+class MhpmeventBundle extends EventInhibitBundle {
+  val OF      = RW(63).withReset(0.U).withDescription("Overflow latch for the associated performance counter.")
+  val OPTYPE2 = OPTYPE(54, 50, wNoFilter).withReset(OPTYPE.OR).withDescription("Reduction operator used to combine EVENT3 with the lower event groups.")
+  val OPTYPE1 = OPTYPE(49, 45, wNoFilter).withReset(OPTYPE.OR).withDescription("Reduction operator used to combine EVENT2 with the lower event groups.")
+  val OPTYPE0 = OPTYPE(44, 40, wNoFilter).withReset(OPTYPE.OR).withDescription("Reduction operator used to combine EVENT1 with EVENT0.")
+  val EVENT3  = RW(39, 30).withReset(0.U).withDescription("High event-selector bits for the performance monitor.")
+  val EVENT2  = RW(29, 20).withReset(0.U).withDescription("Event-selector bits 29:20 for the performance monitor.")
+  val EVENT1  = RW(19, 10).withReset(0.U).withDescription("Event-selector bits 19:10 for the performance monitor.")
+  val EVENT0  = RW(9, 0).withReset(0.U).withDescription("Low event-selector bits for the performance monitor.")
+}
+
+object OPTYPE extends CSREnum with WARLApply {
+  val OR = Value(0.U)
+  val AND = Value(1.U)
+  val XOR = Value(2.U)
+  val ADD = Value(4.U)
+
+  override protected def legalValues: Seq[EnumType] = Seq(OR, AND, XOR, ADD)
+}
+
+class McontextBundle extends CSRBundle {
+  override val len = 14
+  val HCONTEXT = RW(13, 0).withReset(0.U).withDescription("Machine trigger context value.")
+}
+
+trait HasOfFromPerfCntBundle { self: CSRModule[_] =>
+  val ofFromPerfCnt = IO(Input(Bool()))
+}
+
+trait HasMipToAlias { self: CSRModule[_] =>
+  val mipAlias = Output(new MipBundle)
+}
+
+trait HasMachineDelegBundle { self: CSRModule[_] =>
+  val mideleg = IO(Input(new MidelegBundle))
+  val medeleg = IO(Input(new MedelegBundle))
+}
+
+trait HasExternalInterruptBundle {
+  val platformIRP = IO(new Bundle {
+    val MEIP  = Input(Bool())
+    val MTIP  = Input(Bool())
+    val MSIP  = Input(Bool())
+    val SEIP  = Input(Bool())
+    val STIP  = Input(Bool())
+    val VSEIP = Input(Bool())
+    val VSTIP = Input(Bool())
+    // debug interrupt from debug module
+    val debugIP = Input(Bool())
+  })
+}
+trait HasNonMaskableIRPBundle {
+  val nonMaskableIRP = IO(new Bundle {
+    val NMI_43 = Input(Bool())
+    val NMI_31 = Input(Bool())
+  })
+}
+
+trait HasMachineCounterControlBundle { self: CSRModule[_] =>
+  val mcountinhibit = IO(Input(new McountinhibitBundle))
+}
+
+trait HasRobCommitBundle { self: CSRModule[_] =>
+  val robCommit = IO(Input(new RobCommitCSR))
+  val writeFCSR = IO(Input(Bool()))
+  val writeVCSR = IO(Input(Bool()))
+  val isVirtMode = IO(Input(Bool()))
+}
+
+trait HasMachineEnvBundle { self: CSRModule[_] =>
+  val menvcfg = IO(Input(new MEnvCfg))
+}
+
+trait HasPerfCounterBundle { self: CSRModule[_] =>
+  val countingEn    = IO(Input(Bool()))
+  val perf          = IO(Input(new PerfEvent))
+  val toMhpmeventOF = IO(Output(Bool()))
+}
+
+trait HasLocalInterruptReqBundle { self: CSRModule[_] =>
+  val lcofiReq = IO(Input(Bool()))
+}
+
+trait HasMachineFlushL2Bundle { self: CSRModule[_] =>
+  val l2FlushDone = IO(Input(Bool()))
+}
+
+trait SmcntrpmfBundle { self: CSRModule[_] =>
+  val countingEn = IO(Input(Bool()))
+}

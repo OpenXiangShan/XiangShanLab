@@ -1,0 +1,74 @@
+name: "🎉 提交作业：hello xiangshan"
+description: "提交您完成的 hello xiangshan 任务，分享学习成果"
+title: "[作业提交]："
+labels: ["hello-xiangshan", "submission" , "showcase"]
+assignees:
+  - "course-maintainers"  # 或指定具体用户名
+body:
+  - type: markdown
+    attributes:
+      value: |
+        恭喜完成 hello xiangshan 任务！🎉
+        
+        请填写以下信息，分享您的学习成果：
+        - 您的成果将在社区中展示
+        - 有助于我们了解不同学习者的进展
+        - 为其他学习者提供参考
+        
+        ---
+        
+  - type: input
+    id: nickname
+    attributes:
+      label: "您的称呼"
+      description: "您希望在社区中显示的名称（昵称、姓名或 GitHub 用户名）"
+      placeholder: "例如：王豪 或 @HisionWang"
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: user-type
+    attributes:
+      label: "您的身份"
+      description: "帮助我们更好地为不同群体优化课程"
+      options:
+        - "开芯院内部员工"
+        - "合作企业/高校成员"
+        - "香山爱好者（个人学习者）"
+        - "其他"
+    validations:
+      required: true
+      
+  - type: textarea
+    id: screenshow
+    attributes:
+      label: "任务完成截图"
+      description: "请上传 hello xiangshan 运行成功的完整截图或相关文件"
+      
+  - type: textarea
+    id: experience
+    attributes:
+      label: "学习心得与反馈（可选）"
+      description: "分享您的学习体验、遇到的困难或对课程的建议"
+      placeholder: "这次学习中，我最大的收获是...\n我遇到的困难是...\n对课程的建议..."
+      
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: "确认事项"
+      description: "请确认以下事项"
+      options:
+        - label: "我确认截图和输出为我本人完成的学习成果"
+          required: true
+        - label: "我同意此提交将公开展示在香山课程社区中（昵称和截图）"
+          required: true
+        - label: "我同意开芯院在课程改进中使用我的匿名化反馈（可选）"
+          
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        
+        **感谢您的参与！您的每一步都是对开源硬件教育的贡献！ 🌟**
+        
+        

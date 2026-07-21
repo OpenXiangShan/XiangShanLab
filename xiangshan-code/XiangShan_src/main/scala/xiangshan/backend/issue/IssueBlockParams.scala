@@ -1,0 +1,526 @@
+package xiangshan.backend.issue
+
+import org.chipsalliance.cde.config.Parameters
+import chisel3._
+import chisel3.util._
+import utils.SeqUtils
+import xiangshan.backend.BackendParams
+import xiangshan.backend.Bundles._
+import xiangshan.backend.datapath.DataConfig.{DataConfig, FpData, IntData, V0Data, VecData, VlData}
+import xiangshan.backend.datapath.WbConfig._
+import xiangshan.backend.datapath.{WakeUpConfig, WakeUpSource}
+import xiangshan.backend.exu.ExeUnitParams
+import xiangshan.backend.fu.{FuConfig, FuType}
+import xiangshan.SelImm
+import xiangshan.backend.decode.Imm
+import xiangshan.backend.issue.EntryBundles.IssueQueueRespBundle
+import xiangshan.backend.fu.FuConfig._
+
+case class IssueBlockParams(
+  // top down
+  private val exuParams: Seq[ExeUnitParams],
+  val numEntries       : Int,
+  numEnq               : Int,
+  numComp              : Int,
+  numDeqOutside        : Int = 0,
+  numWakeupFromOthers  : Int = 0,
+  XLEN                 : Int = 64,
+  VLEN                 : Int = 128,
+  // calculate in scheduler
+  var idxInSchBlk      : Int = 0,
+)(
+  implicit
+  val schdType: SchedulerType,
+) {
+  var backendParam: BackendParams = null
+
+  val exuBlockParams: Seq[ExeUnitParams] = exuParams.filterNot(_.fakeUnit)
+
+  val allExuParams = exuParams
+
+  def updateIdx(idx: Int): Unit = {
+    this.idxInSchBlk = idx
+  }
+
+
+  def inIntSchd: Boolean = schdType == IntScheduler()
+
+  def inFpSchd: Boolean = schdType == FpScheduler()
+
+  def inVfSchd: Boolean = schdType == VecScheduler()
+
+  def isMemAddrIQ: Boolean = LduCnt > 0 || StaCnt > 0 || VlduCnt > 0 || VstuCnt > 0 || HyuCnt > 0
+
+  def isMemBlockIQ: Boolean = LduCnt > 0 || StaCnt > 0 || StdCnt > 0 || VlduCnt > 0 || VstuCnt > 0 || HyuCnt > 0
+
+  def isLdAddrIQ: Boolean = LduCnt > 0
+
+  def isStAddrIQ: Boolean = StaCnt > 0
+
+  def isStdIQ: Boolean = StdCnt > 0
+
+  def isHyAddrIQ: Boolean = HyuCnt > 0
+
+  def isVecLduIQ: Boolean = (VlduCnt + VseglduCnt) > 0
+
+  def isVecStuIQ: Boolean = (VstuCnt + VsegstuCnt) > 0
+
+  def isVecMemIQ: Boolean = isVecLduIQ || isVecStuIQ
+
+  def needLqIdx: Boolean = isLdAddrIQ || isVecMemIQ
+
+  def needSqIdx: Boolean = isStAddrIQ || isStdIQ || isVecMemIQ || isLdAddrIQ
+
+  def needFeedBackSqIdx: Boolean = isVecStuIQ
+
+  // There is no snresp for load, so there is no need to provide feedback on lqidx
+  def needFeedBackLqIdx: Boolean = isLdAddrIQ
+
+  def needLoadDependency: Boolean = exuBlockParams.map(_.needLoadDependency).reduce(_ || _)
+
+  def numExu: Int = exuBlockParams.count(!_.fakeUnit)
+
+  def numIntSrc: Int = exuBlockParams.map(_.numIntSrc).max
+
+  def numFpSrc: Int = exuBlockParams.map(_.numFpSrc).max
+
+  def numVecSrc: Int = exuBlockParams.map(_.numVecSrc).max
+
+  def numVfSrc: Int = exuBlockParams.map(_.numVfSrc).max
+
+  def numV0Src: Int = exuBlockParams.map(_.numV0Src).max
+
+  def numVlSrc: Int = exuBlockParams.map(_.numVlSrc).max
+
+  def numRegSrc: Int = exuBlockParams.map(_.numRegSrc).max
+
+  def numSrc: Int = exuBlockParams.map(_.numSrc).max
+
+  def readIntRf: Boolean = numIntSrc > 0
+
+  def readFpRf: Boolean = numFpSrc > 0
+
+  def readVecRf: Boolean = numVecSrc > 0
+
+  def readVfRf: Boolean = numVfSrc > 0
+
+  def readV0Rf: Boolean = numV0Src > 0
+
+  def readVlRf: Boolean = numVlSrc > 0
+
+  def writeIntRf: Boolean = exuBlockParams.map(_.writeIntRf).reduce(_ || _)
+
+  def writeFpRf: Boolean = exuBlockParams.map(_.writeFpRf).reduce(_ || _)
+
+  def writeFflags: Boolean = exuBlockParams.map(_.writeFflags).reduce(_ || _)
+
+  def writeVecRf: Boolean = exuBlockParams.map(_.writeVecRf).reduce(_ || _)
+
+  def writeV0Rf: Boolean = exuBlockParams.map(_.writeV0Rf).reduce(_ || _)
+
+  def writeVlRf: Boolean = exuBlockParams.map(_.writeVlRf).reduce(_ || _)
+
+  def exceptionOut: Seq[Int] = exuBlockParams.map(_.exceptionOut).reduce(_ ++ _).distinct.sorted
+
+  def hasLoadError: Boolean = exuBlockParams.map(_.hasLoadError).reduce(_ || _)
+
+  def flushPipe: Boolean = exuBlockParams.map(_.flushPipe).reduce(_ || _)
+
+  def replayInst: Boolean = exuBlockParams.map(_.replayInst).reduce(_ || _)
+
+  def trigger: Boolean = exuBlockParams.map(_.trigger).reduce(_ || _)
+
+  def needExceptionGen: Boolean = exceptionOut.nonEmpty || flushPipe || replayInst || trigger
+
+  def needPc: Boolean = exuBlockParams.map(_.needPc).reduce(_ || _)
+
+  def needRasAction: Boolean = exuBlockParams.map(_.hasRasAction).reduce(_ || _)
+
+  def needIsRVC: Boolean = exuBlockParams.map(_.needIsRVC).reduce(_ || _)
+
+  def needTaken: Boolean = JmpCnt + BrhCnt > 0
+
+  def needFtqPtr: Boolean = exuBlockParams.map(_.needFtqPtr).reduce(_ || _)
+
+  def needFtqPtrOffset: Boolean = exuBlockParams.map(_.needFtqPtrOffset).reduce(_ || _)
+
+  def needSrcFrm: Boolean = exuBlockParams.map(_.needSrcFrm).reduce(_ || _)
+
+  def needSrcVxrm: Boolean = exuBlockParams.map(_.needSrcVxrm).reduce(_ || _)
+
+  def writeVConfig: Boolean = exuBlockParams.map(_.writeVlRf).reduce(_ || _)
+
+  def writeVType: Boolean = exuBlockParams.map(_.writeVType).reduce(_ || _)
+
+  def numWriteIntRf: Int = exuBlockParams.count(_.writeIntRf)
+
+  def numWriteFpRf: Int = exuBlockParams.count(_.writeFpRf)
+
+  def numWriteVecRf: Int = exuBlockParams.count(_.writeVecRf)
+
+  def numWriteVfRf: Int = exuBlockParams.count(_.writeVfRf)
+
+  def numNoDataWB: Int = exuBlockParams.count(_.hasNoDataWB)
+
+  def dataBitsMax: Int = if (numVecSrc > 0) VLEN else XLEN
+
+  def numDeq: Int = numDeqOutside + exuBlockParams.length
+
+  def numSimp: Int = numEntries - numEnq - numComp
+
+  def isAllComp: Boolean = numComp == (numEntries - numEnq)
+
+  def isAllSimp: Boolean = numComp == 0
+
+  def hasCompAndSimp: Boolean = !(isAllComp || isAllSimp)
+
+  def JmpCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.jmp)).sum
+
+  def BrhCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.brh)).sum
+
+  def I2fCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.i2f)).sum
+
+  def CsrCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.csr)).sum
+
+  def AluCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.alu)).sum
+
+  def MulCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.mul)).sum
+
+  def DivCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.div)).sum
+
+  def FenceCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.fence)).sum
+
+  def BkuCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.bku)).sum
+
+  def VsetCnt: Int = exuBlockParams.map(_.fuConfigs.count(x => x.fuType == FuType.vsetiwi || x.fuType == FuType.vsetiwf || x.fuType == FuType.vsetfwf)).sum
+
+  def FmacCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.fmac)).sum
+
+  def fDivSqrtCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.fDivSqrt)).sum
+
+  def LduCnt: Int = exuBlockParams.count(x => x.hasLoadFu && !x.hasStoreAddrFu)
+
+  def StaCnt: Int = exuBlockParams.count(x => !x.hasLoadFu && x.hasStoreAddrFu)
+
+  def MouCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.mou)).sum
+
+  def StdCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.name == "std")).sum
+
+  def HyuCnt: Int = exuBlockParams.count(_.hasHyldaFu) // only count hylda, since it equals to hysta
+
+  def LdExuCnt = LduCnt + HyuCnt
+
+  def VipuCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.vipu)).sum
+
+  def VlduCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.vldu)).sum
+
+  def VstuCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.vstu)).sum
+
+  def VseglduCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.vsegldu)).sum
+
+  def VsegstuCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.vsegstu)).sum
+
+  def numRedirect: Int = exuBlockParams.count(_.hasRedirect)
+
+  def numWriteRegCache: Int = exuBlockParams.map(x => if (x.needWriteRegCache) 1 else 0).sum
+
+  def needWriteRegCache: Boolean = numWriteRegCache > 0
+
+  def needReadRegCache: Boolean = exuBlockParams.map(_.needReadRegCache).reduce(_ || _)
+
+  def needReadIntRegFile: Boolean = exuBlockParams.map(_.readIntRf).reduce(_ || _)
+
+  def needReadFpRegFile: Boolean = exuBlockParams.map(_.readFpRf).reduce(_ || _)
+
+  def needIntWen: Boolean = exuBlockParams.map(_.needIntWen).reduce(_ || _)
+
+  def needFpWen: Boolean = exuBlockParams.map(_.needFpWen).reduce(_ || _)
+
+  def needVecWen: Boolean = exuBlockParams.map(_.needVecWen).reduce(_ || _)
+
+  def needV0Wen: Boolean = exuBlockParams.map(_.needV0Wen).reduce(_ || _)
+
+  def needVlWen: Boolean = exuBlockParams.map(_.needVlWen).reduce(_ || _)
+
+  def needOg2Resp: Boolean = exuBlockParams.map(_.needOg2).reduce(_ || _)
+
+  def needS0Resp = this.isStAddrIQ || this.isStdIQ  || this.isVecStuIQ
+
+  def needFakeS1Resp = this.isStAddrIQ
+
+  def needS2Resp = this.isStAddrIQ
+
+  def needSnResp = this.isVecStuIQ || this.isLdAddrIQ
+
+  // TODO needOg0Resp needOg1Resp
+  def issueTimerMaxValue: Int = 1 + Seq(needOg2Resp, needS0Resp, needFakeS1Resp, needS2Resp, needSnResp).count(_ == true)
+
+  def issueTimerWidth = issueTimerMaxValue.U.getWidth
+
+
+  def needUncertainWakeupFromExu: Boolean = exuBlockParams.map(_.fuConfigs).flatten.map(x => FuConfig.needUncertainWakeupFuConfigs.contains(x)).reduce(_ || _)
+
+  def needWakeupFromI2F: Boolean = {
+    val exuI2FWBPort = backendParam.allExuParams(backendParam.getExuIdxI2F).getFpWBPort.get.port
+    exuBlockParams.map{ x =>
+      if (x.getFpWBPort.isEmpty) false
+      else (x.getFpWBPort.get.port == exuI2FWBPort) && x.isFpExeUnit
+    }.reduce(_ || _)
+  }
+
+  def needWakeupFromF2I: Boolean = {
+    val exuF2IWBPort = backendParam.allExuParams(backendParam.getExuIdxF2I).getIntWBPort.get.port
+    exuBlockParams.map { x =>
+      if (x.getIntWBPort.isEmpty) false
+      else (x.getIntWBPort.get.port == exuF2IWBPort) && x.isIntExeUnit
+    }.reduce(_ || _)
+  }
+  /**
+    * Get the regfile type that this issue queue need to read
+    */
+  def pregReadSet: Set[DataConfig] = exuBlockParams.map(_.pregRdDataCfgSet).fold(Set())(_ union _)
+
+  /**
+    * Get the regfile type that this issue queue need to read
+    */
+  def pregWriteSet: Set[DataConfig] = exuBlockParams.map(_.pregWbDataCfgSet).fold(Set())(_ union _)
+
+  /**
+    * Get the max width of psrc
+    */
+  def rdPregIdxWidth = {
+    this.pregReadSet.map(cfg => backendParam.getPregParams(cfg).addrWidth).fold(0)(_ max _)
+  }
+
+  /**
+    * Get the max width of pdest
+    */
+  def wbPregIdxWidth = {
+    this.pregWriteSet.map(cfg => backendParam.getPregParams(cfg).addrWidth).fold(0)(_ max _)
+  }
+
+  def iqWakeUpSourcePairs: Seq[WakeUpConfig] = exuBlockParams.flatMap(_.iqWakeUpSourcePairs)
+
+  /**
+    * Get exu source wake up
+    */
+  def wakeUpInExuSources: Seq[WakeUpSource] = {
+    exuBlockParams
+      .flatMap(_.iqWakeUpSinkPairs)
+      .map(_.source)
+      .distinctBy(_.name)
+  }
+
+  def wakeUpOutExuSources: Seq[WakeUpSource] = {
+    exuBlockParams
+      .flatMap(_.iqWakeUpSourcePairs)
+      .map(_.source)
+      .distinctBy(_.name)
+  }
+
+  def wakeUpToExuSinks = exuBlockParams
+    .flatMap(_.iqWakeUpSourcePairs)
+    .map(_.sink).distinct
+
+  def numWakeupToIQ: Int = wakeUpInExuSources.size
+
+  def numWakeupFromIQ: Int = wakeUpInExuSources.size
+
+  def numAllWakeUp: Int = numWakeupFromWB + numWakeupFromIQ + numWakeupFromOthers
+
+  def numWakeupFromWB = {
+    val pregSet = this.pregReadSet
+    pregSet.map(cfg => backendParam.getRfWriteSize(cfg)).sum
+  }
+
+  def hasIQWakeUp: Boolean = numWakeupFromIQ > 0 && numRegSrc > 0
+
+  def needWakeupFromIntWBPort = backendParam.allExuParams.filter(x => !wakeUpInExuSources.map(_.name).contains(x.name) && this.readIntRf).groupBy(x => x.getIntWBPort.getOrElse(IntWB(port = -1)).port).filter(_._1 != -1)
+
+  def needWakeupFromFpWBPort = backendParam.allExuParams.filter(x => !wakeUpInExuSources.map(_.name).contains(x.name) && this.readFpRf).groupBy(x => x.getFpWBPort.getOrElse(FpWB(port = -1)).port).filter(_._1 != -1)
+
+  def needWakeupFromVfWBPort = backendParam.allExuParams.filter(x => !wakeUpInExuSources.map(_.name).contains(x.name) && this.readVecRf).groupBy(x => x.getVfWBPort.getOrElse(VfWB(port = -1)).port).filter(_._1 != -1)
+
+  def needWakeupFromV0WBPort = backendParam.allExuParams.filter(x => !wakeUpInExuSources.map(_.name).contains(x.name) && this.readV0Rf).groupBy(x => x.getV0WBPort.getOrElse(V0WB(port = -1)).port).filter(_._1 != -1)
+
+  def needWakeupFromVlWBPort = backendParam.allExuParams.filter(x => !wakeUpInExuSources.map(_.name).contains(x.name) && this.readVlRf).groupBy(x => x.getVlWBPort.getOrElse(VlWB(port = -1)).port).filter(_._1 != -1)
+
+  def hasWakeupFromMem: Boolean = backendParam.allExuParams.filter(x => wakeUpInExuSources.map(_.name).contains(x.name)).map(_.isMemExeUnit).fold(false)(_ | _)
+
+  def hasWakeupFromVf: Boolean = backendParam.allExuParams.filter(x => wakeUpInExuSources.map(_.name).contains(x.name)).map(_.isVfExeUnit).fold(false)(_ | _)
+
+  def getFuCfgs: Seq[FuConfig] = exuBlockParams.flatMap(_.fuConfigs).distinct
+
+  def deqFuCfgs: Seq[Seq[FuConfig]] = exuBlockParams.map(_.fuConfigs)
+
+  def aluDeqNeedPickJump = (deqFuCfgs.size == 2) && deqFuCfgs.flatten.contains(AluCfg) && deqFuCfgs.flatten.contains(JmpCfg)
+
+  def deqFuInterSect: Seq[FuConfig] = if (numDeq == 2) deqFuCfgs(0).intersect(deqFuCfgs(1)) else Seq()
+
+  def deqFuSame: Boolean = (numDeq == 2) && deqFuInterSect.length == deqFuCfgs(0).length && deqFuCfgs(0).length == deqFuCfgs(1).length
+
+  def deqFuDiff: Boolean = (numDeq == 2) && deqFuInterSect.length == 0
+
+  def deqImmTypes: Seq[Imm] = getFuCfgs.flatMap(_.immType).distinct
+
+  // set load imm to 32-bit for fused_lui_load
+  def deqImmTypesMaxLen: Int = if (isLdAddrIQ || isHyAddrIQ) 32 else deqImmTypes.map(x => x).maxBy(_.len).len
+
+  def needImm: Boolean = deqImmTypes.nonEmpty
+
+  // cfgs(exuIdx)(set of exu's wb)
+
+  /**
+    * Get [[PregWB]] of this IssueBlock
+    * @return set of [[PregWB]] of [[ExeUnit]]
+    */
+  def getWbCfgs: Seq[Set[PregWB]] = {
+    exuBlockParams.map(exu => exu.wbPortConfigs.toSet)
+  }
+
+  def canAccept(fuType: UInt): Bool = {
+    Cat(getFuCfgs.map(_.fuType.U === fuType)).orR
+  }
+
+  def bindBackendParam(param: BackendParams): Unit = {
+    backendParam = param
+  }
+
+  def wakeUpSourceExuIdx: Seq[Int] = {
+    wakeUpInExuSources.map(x => backendParam.getExuIdx(x.name))
+  }
+
+  def genOg1InUopDecoupledBundle(implicit p: Parameters): MixedVec[DecoupledIO[Og1InUop]] = {
+    MixedVec(this.exuBlockParams.map(x => DecoupledIO(new Og1InUop(this, x))))
+  }
+
+  def genExuInputDecoupledBundle(implicit p: Parameters): MixedVec[DecoupledIO[ExuInput]] = {
+    MixedVec(this.exuBlockParams.map(x => DecoupledIO(x.genExuInputBundle)))
+  }
+
+  def genExuInputDecoupledCopySrcBundle(implicit p: Parameters): MixedVec[DecoupledIO[ExuInput]] = {
+    MixedVec(this.exuBlockParams.map(x => DecoupledIO(x.genExuInputCopySrcBundle)))
+  }
+
+  def genNewExuInputDecoupledCopySrcBundle(implicit p: Parameters): MixedVec[DecoupledIO[NewExuInput]] = {
+    MixedVec(this.exuBlockParams.map(x => DecoupledIO(x.genNewExuInputCopySrcBundle)))
+  }
+
+  def genExuOutputDecoupledBundle(implicit p: Parameters): MixedVec[DecoupledIO[ExuOutput]] = {
+    MixedVec(this.exuParams.map(x => DecoupledIO(x.genExuOutputBundle)))
+  }
+
+  def genNewExuOutputDecoupledBundle(implicit p: Parameters): MixedVec[DecoupledIO[NewExuOutput]] = {
+    MixedVec(this.exuParams.map(x => DecoupledIO(x.genNewExuOutputBundle)))
+  }
+
+  def genExuOutputValidBundle(implicit p: Parameters): MixedVec[ValidIO[ExuOutput]] = {
+    MixedVec(this.exuParams.map(x => ValidIO(x.genExuOutputBundle)))
+  }
+
+  def genNewExuOutputValidBundle(implicit p: Parameters): MixedVec[ValidIO[NewExuOutput]] = {
+    MixedVec(this.exuParams.map(x => ValidIO(x.genNewExuOutputBundle)))
+  }
+
+  def genWriteBackRobValidBundle(implicit p: Parameters): MixedVec[ValidIO[WriteBackRobBundle]] = {
+    MixedVec(this.exuParams.map(x => ValidIO(x.genWriteBackRobBundle)))
+  }
+
+  def genExuBypassValidBundle(implicit p: Parameters): MixedVec[ValidIO[ExuBypassBundle]] = {
+    MixedVec(this.exuParams.filterNot(_.fakeUnit).map(x => ValidIO(x.genExuBypassBundle)))
+  }
+
+  def genIssueDecoupledBundle(implicit p: Parameters): MixedVec[DecoupledIO[Og0InUop]] = {
+    MixedVec(exuBlockParams.filterNot(_.fakeUnit).map(x => DecoupledIO(new Og0InUop(this, x))))
+  }
+
+  def genIssueValidBundle(implicit p: Parameters): MixedVec[ValidIO[Og0InUop]] = {
+    MixedVec(exuBlockParams.filterNot(_.fakeUnit).map(x => ValidIO(new Og0InUop(this, x))))
+  }
+
+  def genIssueDeqOg1PayloadBundle(implicit p: Parameters): MixedVec[IssueQueueDeqOg1Payload] = {
+    MixedVec(exuBlockParams.filterNot(_.fakeUnit).map(x => new IssueQueueDeqOg1Payload(x)))
+  }
+
+  def genExuWakeUpOutValidBundle(implicit p: Parameters): MixedVec[DecoupledIO[IssueQueueIQWakeUpBundle]] = {
+    val uncertainExuParams = this.allExuParams.filter(_.needUncertainWakeup)
+    MixedVec(uncertainExuParams.map(param => {
+      val isCopyPdest = param.copyWakeupOut
+      val copyNum = param.copyNum
+      DecoupledIO(new IssueQueueIQWakeUpBundle(backendParam.getExuIdx(param.name), backendParam, isCopyPdest, copyNum))
+    }))
+  }
+
+  def genWBWakeUpSinkValidBundle(implicit p: Parameters): MixedVec[ValidIO[IssueQueueWBWakeUpBundle]] = {
+    val intBundle: Seq[ValidIO[IssueQueueWBWakeUpBundle]] = schdType match {
+      case IntScheduler() => needWakeupFromIntWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, IntData()))).toSeq
+      case _ => Seq()
+    }
+    val fpBundle = schdType match {
+      case FpScheduler() => needWakeupFromFpWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, FpData()))).toSeq
+      case _ => Seq()
+    }
+    val vfBundle = schdType match {
+      case VecScheduler() => needWakeupFromVfWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, VecData()))).toSeq
+      case _ => Seq()
+    }
+    val v0Bundle = schdType match {
+      case VecScheduler() => needWakeupFromV0WBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, V0Data()))).toSeq
+      case _ => Seq()
+    }
+    val vlBundle = schdType match {
+      case VecScheduler() => needWakeupFromVlWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, VlData()))).toSeq
+      case _ => Seq()
+    }
+    MixedVec(intBundle ++ fpBundle ++ vfBundle ++ v0Bundle ++ vlBundle)
+  }
+
+  def genIQWakeUpSourceValidBundle(implicit p: Parameters): MixedVec[ValidIO[IssueQueueIQWakeUpBundle]] = {
+    MixedVec(exuBlockParams.filter(_.isIQWakeUpSource).map(x => ValidIO(new IssueQueueIQWakeUpBundle(x.exuIdx, backendParam, x.copyWakeupOut, x.copyNum))))
+  }
+
+  def genIQWakeUpSinkValidBundle(implicit p: Parameters): MixedVec[ValidIO[IssueQueueIQWakeUpBundle]] = {
+    MixedVec(this.wakeUpInExuSources.map(x => ValidIO(new IssueQueueIQWakeUpBundle(backendParam.getExuIdx(x.name), backendParam))))
+  }
+
+  def genOGRespBundle(implicit p: Parameters) = {
+    implicit val issueBlockParams = this
+    MixedVec(exuBlockParams.map(_ => new OGRespBundle))
+  }
+
+  def genOG2RespBundle(implicit p: Parameters) = {
+    implicit val issueBlockParams = this
+    MixedVec(exuBlockParams.map(_ => new IssueQueueRespBundle))
+  }
+
+  def genWbFuBusyTableWriteBundle(implicit p: Parameters) = {
+    implicit val issueBlockParams = this
+    MixedVec(exuBlockParams.map(x => new WbFuBusyTableWriteBundle(x)))
+  }
+
+  def genWbFuBusyTableReadBundle(implicit p: Parameters) = {
+    implicit val issueBlockParams = this
+    MixedVec(exuBlockParams.map{ x =>
+      new WbFuBusyTableReadBundle(x)
+    })
+  }
+
+  def genWbConflictBundle()(implicit p: Parameters) = {
+    implicit val issueBlockParams = this
+    MixedVec(exuBlockParams.map { x =>
+      new WbConflictBundle(x)
+    })
+  }
+
+  def getIQName = {
+    "IssueQueue" ++ getFuCfgs.map(_.name).distinct.map(_.capitalize).reduce(_ ++ _)
+  }
+
+  def getIQFuName = {
+    getFuCfgs.map(_.name).distinct.map(_.capitalize).reduce(_ ++ _)
+  }
+
+  def getEntryName = {
+    "Entries" ++ getFuCfgs.map(_.name).distinct.map(_.capitalize).reduce(_ ++ _)
+  }
+}

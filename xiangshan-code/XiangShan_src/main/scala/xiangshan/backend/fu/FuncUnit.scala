@@ -1,0 +1,341 @@
+package xiangshan.backend.fu
+
+import org.chipsalliance.cde.config.Parameters
+import chisel3._
+import chisel3.util._
+import utility._
+import utils.OptionWrapper
+import xiangshan._
+import xiangshan.backend.Bundles.{VIAluCtrlSignals, VPUCtrlSignals}
+import xiangshan.backend.rob.RobPtr
+import xiangshan.frontend.ftq.FtqPtr
+import xiangshan.backend.datapath.DataConfig._
+import xiangshan.backend.fu.vector.Bundles.{VType, Vl, Vxsat}
+import xiangshan.ExceptionNO.illegalInstr
+import xiangshan.backend.fu.wrapper.{CSRInput, CSRToDecode}
+import xiangshan.frontend.bpu.{BranchAttribute, BranchInfo}
+
+trait HasFuLatency {
+  val latencyVal: Option[Int]
+  val extraLatencyVal: Option[Int]
+  val uncertainLatencyVal: Option[Int]
+  val uncertainEnable: Option[Int]
+  val orginLatencyVal: Option[Int]
+}
+
+case class CertainLatency(value: Int, extraValue: Int = 0) extends HasFuLatency {
+  override val latencyVal: Option[Int] = Some(value + extraValue)
+  override val extraLatencyVal: Option[Int] = Some(extraValue)
+  override val uncertainLatencyVal: Option[Int] = None
+  override val uncertainEnable: Option[Int] = None
+  override val orginLatencyVal: Option[Int] = Some(value)
+}
+
+case class UncertainLatency(value: Option[Int]) extends HasFuLatency {
+  override val latencyVal: Option[Int] = None
+  override val extraLatencyVal: Option[Int] = None
+  override val uncertainLatencyVal: Option[Int] = value
+  override val uncertainEnable: Option[Int] = Some(0) // for gate uncertain fu
+  override val orginLatencyVal: Option[Int] = None
+}
+
+object UncertainLatency {
+  def apply(): UncertainLatency = UncertainLatency(None)
+  def apply(value: Int): UncertainLatency = UncertainLatency(Some(value))
+}
+
+class FuncUnitCtrlInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+  val fuOpType    = FuOpType()
+  val toRobValid  = Bool()
+  val robIdx      = new RobPtr
+  val pdest       = UInt(PhyRegIdxWidth.W)
+  val pdestVl     = Option.when(cfg.writeVlRf)(UInt(VlPhyRegIdxWidth.W))
+  val rfWen       = OptionWrapper(cfg.needIntWen, Bool())
+  val fpWen       = OptionWrapper(cfg.needFpWen,  Bool())
+  val vecWen      = OptionWrapper(cfg.needVecWen, Bool())
+  val v0Wen       = OptionWrapper(cfg.needV0Wen, Bool())
+  val vlWen       = OptionWrapper(cfg.needVlWen, Bool())
+  val flushPipe   = OptionWrapper(cfg.flushPipe,  Bool())
+  val isRVC       = OptionWrapper(cfg.hasIsRVC, Bool())
+  val rasAction   = OptionWrapper(cfg.hasRasAction, BranchAttribute.RasAction())
+  val ftqIdx      = OptionWrapper(cfg.needPc || cfg.replayInst || cfg.isSta || cfg.isCsr, new FtqPtr)
+  val ftqOffset   = OptionWrapper(cfg.needPc || cfg.replayInst || cfg.isSta || cfg.isCsr, UInt(FetchBlockInstOffsetWidth.W))
+  val predictInfo = OptionWrapper(cfg.needPdInfo, new Bundle {
+    val target     = UInt(VAddrData().dataWidth.W)
+    val fixedTaken = Bool()
+    val predTaken  = Bool()
+  })
+  val fpu         = OptionWrapper(cfg.writeFflags, new FPUCtrlSignals)
+  val vpu         = OptionWrapper(cfg.needVecCtrl, new VPUCtrlSignals)
+  val vialuCtrl   = OptionWrapper(cfg.needVIaluCtrl, new VIAluCtrlSignals)
+}
+
+class FuncUnitCtrlOutput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+  val toRobValid    = Bool()
+  val robIdx        = new RobPtr
+  val pdest         = UInt(PhyRegIdxWidth.W) // Todo: use maximum of pregIdxWidth of different pregs
+  val pdestVl       = Option.when(cfg.writeVlRf)(UInt(VlPhyRegIdxWidth.W))
+  val rfWen         = OptionWrapper(cfg.needIntWen, Bool())
+  val fpWen         = OptionWrapper(cfg.needFpWen,  Bool())
+  val vecWen        = OptionWrapper(cfg.needVecWen, Bool())
+  val v0Wen         = OptionWrapper(cfg.needV0Wen, Bool())
+  val vlWen         = OptionWrapper(cfg.needVlWen, Bool())
+  val exceptionVec  = OptionWrapper(cfg.exceptionOut.nonEmpty, ExceptionVec())
+  val flushPipe     = OptionWrapper(cfg.flushPipe,  Bool())
+  val replay        = OptionWrapper(cfg.replayInst, Bool())
+  val isRVC         = OptionWrapper(cfg.hasIsRVC, Bool())
+  val fpu           = OptionWrapper(cfg.writeFflags, new FPUCtrlSignals)
+  val vpu           = OptionWrapper(cfg.needVecCtrl, new VPUCtrlSignals)
+}
+
+class FuncUnitDataInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+  val src       = MixedVec(cfg.genSrcDataVec)
+  val vl        = Option.when(cfg.readVl)(Vl())
+  val imm       = UInt(cfg.destDataBits.W)
+  val pc        = OptionWrapper(cfg.needPc || cfg.aluNeedPc, UInt(VAddrData().dataWidth.W))
+  val nextPcOffset = OptionWrapper(cfg.needPc, UInt((FetchBlockInstOffsetWidth + 2).W))
+
+  def getSrcMask    : UInt = src(cfg.maskSrcIdx)
+}
+
+class FuncUnitDataOutput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+  val data      = UInt(cfg.destDataBits.W)
+  val fflags    = OptionWrapper(cfg.writeFflags, UInt(5.W))
+  val vxsat     = OptionWrapper(cfg.writeVxsat, Vxsat())
+  val redirect  = OptionWrapper(cfg.hasRedirect, ValidIO(new Redirect))
+}
+
+class FuncUnitInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+  val needCtrlPipe = cfg.latency.latencyVal.nonEmpty && (!cfg.isStd)
+  val ctrl = new FuncUnitCtrlInput(cfg)
+  val ctrlPipe = OptionWrapper(needCtrlPipe, Vec(cfg.latency.latencyVal.get + 1, new FuncUnitCtrlInput(cfg)))
+  val validPipe = OptionWrapper(needCtrlPipe, Vec(cfg.latency.latencyVal.get + 1, Bool()))
+  val data = new FuncUnitDataInput(cfg)
+  val dataPipe = OptionWrapper(needCtrlPipe, Vec(cfg.latency.latencyVal.get + 1, new FuncUnitDataInput(cfg)))
+  val perfDebugInfo = OptionWrapper(backendParams.debugEn, new PerfDebugInfo())
+  val debug_seqNum = OptionWrapper(backendParams.debugEn, InstSeqNum())
+}
+
+class FuncUnitOutput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+  val ctrl = new FuncUnitCtrlOutput(cfg)
+  val res = new FuncUnitDataOutput(cfg)
+  val perfDebugInfo = OptionWrapper(backendParams.debugEn, new PerfDebugInfo())
+  val debug_seqNum = OptionWrapper(backendParams.debugEn, InstSeqNum())
+}
+
+class FuncUnitIO(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+  val flush = Flipped(ValidIO(new Redirect))
+  val in = Flipped(DecoupledIO(new FuncUnitInput(cfg)))
+  val out = DecoupledIO(new FuncUnitOutput(cfg))
+  val outValidAhead3Cycle = OptionWrapper(FuConfig.needUncertainWakeupFuConfigs.contains(cfg), Output(Bool()))
+  val outRFWenAhead3Cycle = OptionWrapper(cfg.isCsr, Output(Bool()))
+  val outPdestAhead3Cycle = OptionWrapper(cfg.isCsr, Output(UInt(PhyRegIdxWidth.W)))
+  val wakeupSuccess = OptionWrapper(FuConfig.needUncertainWakeupFuConfigs.contains(cfg), Input(Bool()))
+  val csrin = OptionWrapper(cfg.isCsr, new CSRInput)
+  val csrio = OptionWrapper(cfg.isCsr, new CSRFileIO)
+  val csrToDecode = OptionWrapper(cfg.isCsr, Output(new CSRToDecode))
+  val toFrontendBJUResolve = OptionWrapper(cfg.isBrh || cfg.isJmp, Output(Valid(new Resolve)))
+  val fenceio = OptionWrapper(cfg.isFence, new FenceIO)
+  val frm = OptionWrapper(cfg.needSrcFrm, Input(UInt(3.W)))
+  val vxrm = OptionWrapper(cfg.needSrcVxrm, Input(UInt(2.W)))
+  val vtype = OptionWrapper(cfg.writeVlRf, (Valid(new VType)))
+  val vlIsZero = OptionWrapper(cfg.writeVlRf, Output(Bool()))
+  val vlIsVlmax = OptionWrapper(cfg.writeVlRf, Output(Bool()))
+  val instrAddrTransType = Option.when(cfg.isJmp || cfg.isBrh || cfg.isAlu)(Input(new AddrTransType))
+}
+
+abstract class FuncUnit(val cfg: FuConfig)(implicit p: Parameters) extends XSModule with HasCriticalErrors {
+  val io = IO(new FuncUnitIO(cfg))
+  io.in.bits.debug_seqNum.foreach(x => PerfCCT.updateInstPos(x, PerfCCT.InstPos.AtFU.id.U, io.in.valid, clock, reset))
+  io.out.bits.debug_seqNum.foreach(x => PerfCCT.updateInstPos(x, PerfCCT.InstPos.AtBypassVal.id.U, io.out.valid, clock, reset))
+  val criticalErrors = Seq(("none", false.B))
+
+  // should only be used in non-piped fu
+  def connectNonPipedCtrlSingal: Unit = {
+    io.out.bits.ctrl.toRobValid := RegEnable(io.in.bits.ctrl.toRobValid, io.in.fire)
+    io.out.bits.ctrl.robIdx := RegEnable(io.in.bits.ctrl.robIdx, io.in.fire)
+    io.out.bits.ctrl.pdest  := RegEnable(io.in.bits.ctrl.pdest, io.in.fire)
+    io.out.bits.ctrl.rfWen  .foreach(_ := RegEnable(io.in.bits.ctrl.rfWen.get, io.in.fire))
+    io.out.bits.ctrl.fpWen  .foreach(_ := RegEnable(io.in.bits.ctrl.fpWen.get, io.in.fire))
+    io.out.bits.ctrl.vecWen .foreach(_ := RegEnable(io.in.bits.ctrl.vecWen.get, io.in.fire))
+    io.out.bits.ctrl.v0Wen .foreach(_ := RegEnable(io.in.bits.ctrl.v0Wen.get, io.in.fire))
+    io.out.bits.ctrl.vlWen .foreach(_ := RegEnable(io.in.bits.ctrl.vlWen.get, io.in.fire))
+    // io.out.bits.ctrl.flushPipe should be connected in fu
+    io.out.bits.ctrl.isRVC.foreach(_ := RegEnable(io.in.bits.ctrl.isRVC.get, io.in.fire))
+    io.out.bits.ctrl.fpu      .foreach(_ := RegEnable(io.in.bits.ctrl.fpu.get, io.in.fire))
+    io.out.bits.ctrl.vpu      .foreach(_ := RegEnable(io.in.bits.ctrl.vpu.get, io.in.fire))
+    io.out.bits.perfDebugInfo.foreach(_ := RegEnable(io.in.bits.perfDebugInfo.get, io.in.fire))
+    io.out.bits.debug_seqNum.foreach(_ := RegEnable(io.in.bits.debug_seqNum.get, io.in.fire))
+  }
+
+  def connectNonPipedCtrlDataHoldBypass: Unit = {
+    io.out.bits.ctrl.toRobValid := DataHoldBypass(io.in.bits.ctrl.toRobValid, io.in.fire)
+    io.out.bits.ctrl.robIdx := DataHoldBypass(io.in.bits.ctrl.robIdx, io.in.fire)
+    io.out.bits.ctrl.pdest := DataHoldBypass(io.in.bits.ctrl.pdest, io.in.fire)
+    io.out.bits.ctrl.rfWen.foreach(_ := DataHoldBypass(io.in.bits.ctrl.rfWen.get, io.in.fire))
+    io.out.bits.ctrl.fpWen.foreach(_ := DataHoldBypass(io.in.bits.ctrl.fpWen.get, io.in.fire))
+    io.out.bits.ctrl.vecWen.foreach(_ := DataHoldBypass(io.in.bits.ctrl.vecWen.get, io.in.fire))
+    io.out.bits.ctrl.v0Wen.foreach(_ := DataHoldBypass(io.in.bits.ctrl.v0Wen.get, io.in.fire))
+    io.out.bits.ctrl.vlWen.foreach(_ := DataHoldBypass(io.in.bits.ctrl.vlWen.get, io.in.fire))
+    // io.out.bits.ctrl.flushPipe should be connected in fu
+    io.out.bits.ctrl.isRVC.foreach(_ := DataHoldBypass(io.in.bits.ctrl.isRVC.get, io.in.fire))
+    io.out.bits.ctrl.fpu.foreach(_ := DataHoldBypass(io.in.bits.ctrl.fpu.get, io.in.fire))
+    io.out.bits.ctrl.vpu.foreach(_ := DataHoldBypass(io.in.bits.ctrl.vpu.get, io.in.fire))
+    io.out.bits.perfDebugInfo.foreach(_ := DataHoldBypass(io.in.bits.perfDebugInfo.get, io.in.fire))
+    io.out.bits.debug_seqNum.foreach(_ := DataHoldBypass(io.in.bits.debug_seqNum.get, io.in.fire))
+  }
+
+  def connect0LatencyCtrlSingal: Unit = {
+    io.out.bits.ctrl.toRobValid := io.in.bits.ctrl.toRobValid
+    io.out.bits.ctrl.robIdx := io.in.bits.ctrl.robIdx
+    io.out.bits.ctrl.pdest := io.in.bits.ctrl.pdest
+    io.out.bits.ctrl.rfWen.foreach(_ := io.in.bits.ctrl.rfWen.get)
+    io.out.bits.ctrl.fpWen.foreach(_ := io.in.bits.ctrl.fpWen.get)
+    io.out.bits.ctrl.vecWen.foreach(_ := io.in.bits.ctrl.vecWen.get)
+    io.out.bits.ctrl.v0Wen.foreach(_ := io.in.bits.ctrl.v0Wen.get)
+    io.out.bits.ctrl.vlWen.foreach(_ := io.in.bits.ctrl.vlWen.get)
+    // io.out.bits.ctrl.flushPipe should be connected in fu
+    io.out.bits.ctrl.isRVC.foreach(_ := io.in.bits.ctrl.isRVC.get)
+    io.out.bits.ctrl.fpu.foreach(_ := io.in.bits.ctrl.fpu.get)
+    io.out.bits.ctrl.vpu.foreach(_ := io.in.bits.ctrl.vpu.get)
+    io.out.bits.perfDebugInfo.foreach(_ := io.in.bits.perfDebugInfo.get)
+    io.out.bits.debug_seqNum.foreach(_ := io.in.bits.debug_seqNum.get)
+  }
+  io.outValidAhead3Cycle.foreach{x =>
+    println(s"${cfg.name}: has outValidAhead3Cycle")
+    x := false.B
+  }
+}
+
+/**
+  * @author LinJiaWei, Yinan Xu
+  */
+trait HasPipelineReg { this: FuncUnit =>
+  def latency: Int
+
+  val latdiff :Int = cfg.latency.extraLatencyVal.getOrElse(0)
+  val preLat :Int = latency - latdiff
+  require(latency >= 0 && latdiff >=0)
+
+  def pipelineReg(init: FuncUnitInput , valid:Bool, ready: Bool,latency: Int, flush:ValidIO[Redirect]): (Seq[FuncUnitInput],Seq[Bool],Seq[Bool])={
+    val rdyVec = Seq.fill(latency)(Wire(Bool())) :+ ready
+    val validVec = valid +: Seq.fill(latency)(RegInit(false.B))
+    val ctrlVec = init.ctrl +: Seq.fill(latency)(Reg(chiselTypeOf(io.in.bits.ctrl)))
+    val dataVec = init.data +: Seq.fill(latency)(Reg(chiselTypeOf(io.in.bits.data)))
+    val perfVec = init.perfDebugInfo.map(_ +: Seq.fill(latency)(Reg(chiselTypeOf(io.in.bits.perfDebugInfo.get))))
+    val seqNumVec = init.debug_seqNum.map(_ +: Seq.fill(latency)(Reg(chiselTypeOf(io.in.bits.debug_seqNum.get))))
+
+    val robIdxVec = ctrlVec.map(_.robIdx)
+
+    // if flush(0), valid 0 will not given, so set flushVec(0) to false.B
+    val flushVec = validVec.zip(robIdxVec).map(x => x._1 && x._2.needFlush(flush))
+
+    for (i <- 0 until latency) {
+      rdyVec(i) := !validVec(i + 1) || rdyVec(i + 1).asTypeOf(Bool())
+    }
+    for (i <- 1 to latency) {
+      validVec(i) := validVec(i - 1)
+      when(rdyVec(i - 1) && validVec(i - 1)) {
+        ctrlVec(i) := ctrlVec(i - 1)
+        dataVec(i) := dataVec(i - 1)
+        perfVec.foreach(_(i) := perfVec.get(i - 1))
+        seqNumVec.foreach(_(i) := seqNumVec.get(i-1))
+      }
+    }
+
+    (ctrlVec.zip(dataVec).zipWithIndex.map{
+      case((ctrl,data), i) => {
+        val out = Wire(new FuncUnitInput(cfg))
+        out.ctrl := ctrl
+        out.ctrlPipe.foreach(_ := 0.U.asTypeOf(out.ctrlPipe.get))
+        out.validPipe.foreach(_ := 0.U.asTypeOf(out.validPipe.get))
+        out.dataPipe.foreach(_ := 0.U.asTypeOf(out.dataPipe.get))
+        out.data := data
+        out.perfDebugInfo.foreach(_ := perfVec.get(i))
+        out.debug_seqNum.foreach(_ := seqNumVec.get(i))
+        out
+      }
+    },validVec, rdyVec)
+  }
+  val (pipeReg : Seq[FuncUnitInput], validVecThisFu ,rdyVec ) = pipelineReg(io.in.bits, io.in.valid,io.out.ready,preLat, io.flush)
+  val validVec = io.in.bits.validPipe.get.zip(validVecThisFu).map(x => x._1 && x._2)
+  val ctrlVec = io.in.bits.ctrlPipe.get
+  val dataVec = io.in.bits.dataPipe.get
+  val perfVec = pipeReg.map(_.perfDebugInfo)
+  val seqNumVec = pipeReg.map(_.debug_seqNum)
+
+
+  val fixtiminginit = Wire(new FuncUnitInput(cfg))
+  fixtiminginit.ctrl := ctrlVec.last
+  fixtiminginit.ctrlPipe.foreach(_ := 0.U.asTypeOf(fixtiminginit.ctrlPipe.get))
+  fixtiminginit.validPipe.foreach(_ := 0.U.asTypeOf(fixtiminginit.validPipe.get))
+  fixtiminginit.dataPipe.foreach(_ := 0.U.asTypeOf(fixtiminginit.dataPipe.get))
+  fixtiminginit.data := dataVec.last
+  fixtiminginit.perfDebugInfo.foreach(_ := perfVec.last.get)
+  fixtiminginit.debug_seqNum.foreach(_ := seqNumVec.last.get)
+
+  // fixtiming pipelinereg
+  val (fixpipeReg : Seq[FuncUnitInput], fixValidVec, fixRdyVec) = pipelineReg(fixtiminginit, validVec.last,rdyVec.head ,latdiff, io.flush)
+  val fixDataVec = fixpipeReg.map(_.data)
+  val fixPerfVec = fixpipeReg.map(_.perfDebugInfo)
+  val fixSeqNumVec = fixpipeReg.map(_.debug_seqNum)
+  val pcVec = fixDataVec.map(_.pc)
+
+  io.in.ready := fixRdyVec.head
+  io.out.valid := fixValidVec.last
+  io.out.bits.ctrl.toRobValid := ctrlVec.last.toRobValid
+  io.out.bits.ctrl.robIdx := ctrlVec.last.robIdx
+  io.out.bits.ctrl.pdest := ctrlVec.last.pdest
+  io.out.bits.ctrl.rfWen.foreach(_ := ctrlVec.last.rfWen.get)
+  io.out.bits.ctrl.fpWen.foreach(_ := ctrlVec.last.fpWen.get)
+  io.out.bits.ctrl.vecWen.foreach(_ := ctrlVec.last.vecWen.get)
+  io.out.bits.ctrl.v0Wen.foreach(_ := ctrlVec.last.v0Wen.get)
+  io.out.bits.ctrl.vlWen.foreach(_ := ctrlVec.last.vlWen.get)
+  io.out.bits.ctrl.fpu.foreach(_ := ctrlVec.last.fpu.get)
+  io.out.bits.ctrl.vpu.foreach(_ := ctrlVec.last.vpu.get)
+  io.out.bits.perfDebugInfo.foreach(_ := fixPerfVec.last.get)
+  io.out.bits.debug_seqNum.foreach(_ := fixSeqNumVec.last.get)
+
+  // vstart illegal
+  if (cfg.exceptionOut.nonEmpty) {
+    val outVstart = ctrlVec.last.vpu.get.vstart
+    val vstartIllegal = outVstart =/= 0.U
+    io.out.bits.ctrl.exceptionVec.get := 0.U.asTypeOf(io.out.bits.ctrl.exceptionVec.get)
+    io.out.bits.ctrl.exceptionVec.get(illegalInstr) := vstartIllegal
+  }
+
+  def regEnable(i: Int): Bool = validVec(i - 1) && rdyVec(i - 1)
+
+  def PipelineReg[TT <: Data](i: Int)(next: TT) = {
+    val lat = preLat min i
+    RegEnable(
+      next,
+      regEnable(lat)
+    )
+  }
+
+  def SNReg[TT <: Data](in: TT, n: Int): TT ={
+    val lat = preLat min n
+    var next = in
+    for (i <- 1 to lat) {
+      next = PipelineReg[TT](i)(next)
+    }
+    next
+  }
+
+  def S1Reg[TT <: Data](next: TT): TT = PipelineReg[TT](1)(next)
+
+  def S2Reg[TT <: Data](next: TT): TT = PipelineReg[TT](2)(next)
+
+  def S3Reg[TT <: Data](next: TT): TT = PipelineReg[TT](3)(next)
+
+  def S4Reg[TT <: Data](next: TT): TT = PipelineReg[TT](4)(next)
+
+  def S5Reg[TT <: Data](next: TT): TT = PipelineReg[TT](5)(next)
+
+}
+
+abstract class PipedFuncUnit(override val cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+  with HasPipelineReg {
+  override def latency: Int = cfg.latency.latencyVal.get
+}

@@ -1,0 +1,29 @@
+name: "📚 报告文档问题"
+description: "报告文档中的错误或不清晰内容"
+title: "[文档问题]："
+labels: ["documentation","bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "请填写以下信息来报告文档问题"
+      
+  - type: input
+    id: doc-path
+    attributes:
+      label: "文档路径"
+      description: "例如：docs/zh-CN/01-xxx.md"
+      placeholder: "请输入文档路径"
+      
+  - type: textarea
+    id: description
+    attributes:
+      label: "问题描述"
+      description: "请清晰描述你发现的问题"
+      placeholder: "请描述问题..."
+      
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: "建议修改"
+      description: "如果你知道如何修改，请在这里说明（可选）"
+      placeholder: "建议修改为..."

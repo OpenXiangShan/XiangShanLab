@@ -1,0 +1,143 @@
+package mytop
+
+import chisel3._
+import chisel3.util._
+import org.chipsalliance.cde.config.Parameters
+import freechips.rocketchip.diplomacy._
+import freechips.rocketchip.util._
+import _root_.circt.stage.ChiselStage
+import chisel3.experimental.SourceInfo
+import freechips.rocketchip.amba.axi4._
+import device._
+
+object MultiAdderNodeImp extends SimpleNodeImp[Int, Int, Int, UInt] {
+  override def edge(
+      pd: Int,
+      pu: Int,
+      p: Parameters,
+      sourceInfo: SourceInfo
+  ): Int = {
+    println(s"Negotiation: upstream wants ${pu} bits, downstream wants ${pd} bits")
+    val negotiated = if (pu < pd) pu else pd
+    println(s"Negotiated result: ${negotiated} bits")
+    negotiated
+  }
+  
+  override def bundle(ei: Int): UInt = {
+    println(s"Generating hardware: UInt(${ei}.W)")
+    UInt(ei.W)
+  }
+  
+  override def render(e: Int): RenderedEdge =
+    RenderedEdge(colour = "#000000", label = s"${e}-bit")
+}
+
+class MultiAdderModule()(implicit p: Parameters) extends LazyModule {
+
+  
+  val node = new NexusNode(MultiAdderNodeImp)(
+    { inParams =>
+      println(s"Adder module received upstream params: ${inParams}")
+      32
+    },
+    { outParams =>
+      println(s"Adder module received downstream params: ${outParams}")
+      32
+    }
+  )
+
+  val outer = this
+  lazy val module = new LazyModuleImp(outer){
+    val inputs = outer.node.in.map { case (data, edgeParams) =>
+      val width = edgeParams
+      println(s"Input port width: ${width} bits")
+      data
+    }
+
+    val outputs = outer.node.out.map { case (data, edgeParams) =>
+      val width = edgeParams
+      println(s"Output port width: ${width} bits")
+      data
+    }
+
+    val sum = inputs.reduce(_ + _)
+    outputs.foreach(_ := sum)
+
+    printf(s"Adder inputs: ${inputs.length}, outputs: ${outputs.length}\n")
+    printf(s"Result: 0x%x\n", sum)
+  }
+}
+
+case class AXI4EdgeParameters(
+  master: AXI4MasterPortParameters,
+  slave:  AXI4SlavePortParameters,
+  params: Parameters,
+  sourceInfo: SourceInfo)
+{
+  val bundle = AXI4BundleParameters(master, slave)
+}
+
+class MultiAdderTopModule(
+  //edge: AXI4EdgeParameters
+  )(implicit p: Parameters) extends LazyModule {
+  //val axiBus = AXI4Xbar()
+  //val dmac = LazyModule(new AXI4DMAC(Seq(AddressSet(0x40003000L, 0xfff))))
+  //val node = AXI4MasterNode(List(edge.master))
+  //dmac.node := axiBus
+
+  val adder = LazyModule(new MultiAdderModule)
+
+  //AXI4SlaveNode
+  val outputNodes = new SinkNode(MultiAdderNodeImp)( 
+    Seq(16, 32, 64)
+  )
+
+  //AXI4MasterNode
+  val inputNodes = new SourceNode(MultiAdderNodeImp)(
+    Seq(8, 16, 32, 64, 128)
+  )
+  
+
+  
+  adder.node :=* inputNodes
+  outputNodes :*= adder.node
+  
+  
+  lazy val module = new LazyModuleImp(this) {
+    inputNodes.out.zipWithIndex.foreach { case ((wire, edgeParams), i) =>
+      val width = edgeParams
+      val in = IO(Input(UInt(width.W))).suggestName(s"in_${i}_${width}bit")
+      wire := in
+      
+      printf(s"Input port ${i}: width=${width}, value=0x%x\n", in)
+    }
+    
+    outputNodes.in.zipWithIndex.foreach { case ((wire, edgeParams), i) =>
+      val width = edgeParams
+      val out = IO(Output(UInt(width.W))).suggestName(s"out_${i}_${width}bit")
+      out := wire
+    }
+  }
+}
+
+object TOP extends App {
+  println("=" * 50)
+  println("Starting Diplomacy parameter negotiation")
+  println("=" * 50)
+  implicit val p: Parameters = Parameters.empty
+  val top = LazyModule(new MultiAdderTopModule())
+
+  //OR:val top = LazyModule(new MultiAdderTopModule()(Parameters.empty))
+  
+  println("\n" + "=" * 50)
+  println("Generating hardware")
+  println("=" * 50)
+  
+  println(
+    ChiselStage.emitSystemVerilog(
+      top.module,
+      firtoolOpts = Array("-disable-all-randomization", "-strip-debug-info")
+    )
+  )
+
+}

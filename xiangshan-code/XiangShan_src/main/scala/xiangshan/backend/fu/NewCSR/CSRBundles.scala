@@ -1,0 +1,220 @@
+package xiangshan.backend.fu.NewCSR
+
+import chisel3._
+import chisel3.util._
+import chisel3.experimental.BundleLiterals._
+import org.chipsalliance.cde.config.Parameters
+import xiangshan.backend.fu.NewCSR.CSRDefines.{CSRROField => RO, CSRRWField => RW, CSRWARLField => WARL, _}
+import xiangshan.backend.fu.NewCSR.CSRFunc._
+import xiangshan.backend.fu.fpu.Bundles.Fflags
+import xiangshan.backend.fu.vector.Bundles.{Vl, Vstart, Vxsat}
+import xiangshan.frontend.bpu.BpuCtrl
+import xiangshan.mem.prefetch.PrefetchCtrl
+import chisel3.experimental.noPrefix
+
+object CSRBundles {
+  class XtvecBundle extends CSRBundle {
+    val mode = XtvecMode(1, 0, wNoFilter).withReset(0.U)
+      .withDescription("Trap-vector mode selector.")
+    val addr = WARL(63, 2, wNoFilter).withReset(0.U)
+      .withDescription("Base address of the trap handler.")
+  }
+
+  class CauseBundle extends CSRBundle {
+    val Interrupt = RW(63).withReset(0.U)
+      .withDescription("Set when the trap was caused by an interrupt.")
+    val ExceptionCode = RW(62, 0).withReset(0.U)
+      .withDescription("Trap cause code.")
+  }
+
+  class Counteren extends CSRBundle {
+    // Todo: remove reset after adding mcounteren in difftest
+    val CY = RW(0).withReset(0.U)
+      .withDescription("Permit cycle reads below the current privilege level.")
+    val TM = RW(1).withReset(0.U)
+      .withDescription("Permit time reads below the current privilege level.")
+    val IR = RW(2).withReset(0.U)
+      .withDescription("Permit instret reads below the current privilege level.")
+    val HPM = RW(31, 3).withReset(0.U)
+      .withDescription("Permit hpmcounter3 through hpmcounter31 reads below the current privilege level.")
+  }
+
+  class OneFieldBundle(description: Option[String] = None) extends CSRBundle {
+    val ALL = {
+      val field = RW(63, 0)
+      description.foreach(field.withDescription)
+      field
+    }
+  }
+
+  class FieldInitBundle(description: Option[String] = None) extends OneFieldBundle(description) {
+    this.ALL.setRW().withReset(0.U)
+  }
+
+  class XtvalBundle extends FieldInitBundle(Some("Trap value captured for the most recent exception."))
+
+  class XtinstBundle extends FieldInitBundle(Some("Transformed instruction or pseudoinstruction captured on trap entry."))
+
+  class ScratchBundle(description: String) extends OneFieldBundle(Some(description))
+
+  class CounterValueBundle(description: String) extends FieldInitBundle(Some(description))
+
+  class ZeroFieldBundle(description: String, width: Int = 64) extends CSRBundle {
+    override val len: Int = width
+    val ALL = RO(width - 1, 0).withReset(0.U).withDescription(description)
+  }
+
+  abstract class EnvCfg extends CSRBundle {
+    // Set all fields not supported as RO in base class
+    val STCE  =      RO(    63)           .withReset(0.U).withDescription("Enable supervisor and virtual-supervisor timer compare CSRs from the Sstc extension.")
+    val PBMTE =      RO(    62)           .withReset(0.U).withDescription("Enable page-based memory types during address translation from the Svpbmt extension.")
+    val ADUE  =      RO(    61)           .withReset(0.U).withDescription("Enable hardware A/D-bit update during page-table walks from the Svadu extension.")
+    val DTE   =      RO(    59)           .withReset(0.U).withDescription("Enable double-trap support for lower privilege modes from the Ssdbltrp extension.")
+    val PMM   =  EnvPMM(33, 32, wNoEffect).withReset(EnvPMM.Disable).withDescription("Environment protection and memory-type mode from the Smnpm extension.")
+    val CBZE  =      RW(     7)           .withReset(1.U).withDescription("Enable cache-block zero operations from the Zicboz extension.")
+    val CBCFE =      RW(     6)           .withReset(1.U).withDescription("Enable cache-block clean-and-flush operations from the Zicbom extension.")
+    val CBIE  = EnvCBIE( 5,  4, wNoEffect).withReset(EnvCBIE.Inval).withDescription("Enable cache-block invalidate operations from the Zicbom extension.")
+    val SSE   =      RO(     3)           .withReset(0.U).withDescription("Enable the Zicfiss shadow-stack extension below M-mode.")
+    val LPE   =      RO(     2)           .withReset(0.U).withDescription("Enable the Zicfilp landing-pad extension.")
+    val FIOM  =      RO(     0)           .withReset(0.U).withDescription("Fence of I/O implies memory ordering.")
+  }
+
+  class PrivState extends Bundle { self =>
+    val PRVM = PrivMode(0)
+    val V    = VirtMode(0)
+
+    def isModeM: Bool = isModeMImpl()
+
+    def isModeHS: Bool = isModeHSImpl()
+
+    def isModeHU: Bool = isModeHUImpl()
+
+    def isModeVU: Bool = isModeVUImpl()
+
+    def isModeVS: Bool = isModeVSImpl()
+
+    def isModeHUorVU: Bool = this.PrvmIsU()
+
+    def isModeHSorHU: Bool = (this.PrvmIsU() || this.PrvmIsS()) && !this.isVirtual
+
+    def isVirtual: Bool = this.V.isOneOf(VirtMode.On)
+
+    private[this] object PrvmIsM {
+      val v: Bool = dontTouch(WireInit(self.PRVM === PrivMode.M).suggestName("PrvmIsM"))
+      def apply(): Bool = v
+    }
+
+    private[this] object PrvmIsS {
+      val v: Bool = dontTouch(WireInit(self.PRVM === PrivMode.S).suggestName("PrvmIsS"))
+      def apply(): Bool = v
+    }
+
+    private[this] object PrvmIsU {
+      val v: Bool = dontTouch(WireInit(self.PRVM === PrivMode.U).suggestName("PrvmIsU"))
+      def apply(): Bool = v
+    }
+
+    private[this] object isModeMImpl {
+      val v: Bool = dontTouch(WireInit(PrvmIsM()).suggestName("isModeM"))
+      def apply(): Bool = v
+    }
+
+    private[this] object isModeHSImpl {
+      val v: Bool = dontTouch(WireInit(!self.isVirtual && noPrefix(PrvmIsS())).suggestName("isModeHS"))
+      def apply(): Bool = v
+    }
+
+    private[this] object isModeHUImpl {
+      val v: Bool = dontTouch(WireInit(!self.isVirtual && noPrefix(PrvmIsU())).suggestName("isModeHU"))
+      def apply(): Bool = v
+    }
+
+    private[this] object isModeVSImpl {
+      val v: Bool = dontTouch(WireInit(self.isVirtual && noPrefix(PrvmIsS())).suggestName("isModeVS"))
+      def apply(): Bool = v
+    }
+
+    private[this] object isModeVUImpl {
+      val v: Bool = dontTouch(WireInit(self.isVirtual && noPrefix(PrvmIsU())).suggestName("isModeVU"))
+      def apply(): Bool = v
+    }
+
+    // VU < VS < HS < M
+    // HU < HS < M
+    def < (that: PrivState): Bool = {
+      (this.isVirtual && (that.isModeM || that.isModeHS)) ||
+        (this.V === that.V && this.PRVM < that.PRVM)
+    }
+
+    def > (that: PrivState): Bool = {
+      (that.isVirtual && (this.isModeM || this.isModeHS)) ||
+        (that.V === this.V && that.PRVM < this.PRVM)
+    }
+  }
+
+  object PrivState {
+    def ModeM: PrivState = WireInit((new PrivState).Lit(
+      _.PRVM -> PrivMode.M,
+      _.V    -> VirtMode.Off,
+    ))
+
+    def ModeHS: PrivState = WireInit((new PrivState).Lit(
+      _.PRVM -> PrivMode.S,
+      _.V    -> VirtMode.Off,
+    ))
+
+    def ModeHU: PrivState = WireInit((new PrivState).Lit(
+      _.PRVM -> PrivMode.U,
+      _.V    -> VirtMode.Off,
+    ))
+
+    def ModeVS: PrivState = WireInit((new PrivState).Lit(
+      _.PRVM -> PrivMode.S,
+      _.V    -> VirtMode.On,
+    ))
+
+    def ModeVU: PrivState = WireInit((new PrivState).Lit(
+      _.PRVM -> PrivMode.U,
+      _.V    -> VirtMode.On,
+    ))
+  }
+
+  class RobCommitCSR(implicit p: Parameters) extends Bundle {
+    // need contain 8x8
+    val instNum = ValidIO(UInt(7.W))
+    val fflags  = ValidIO(Fflags())
+    val fsDirty = Bool()
+    val vxsat   = ValidIO(Vxsat())
+    val vsDirty = Bool()
+    val vtype   = ValidIO(new CSRVTypeBundle)
+    val vl      = Vl()
+    val vstart  = ValidIO(Vstart())
+  }
+
+  class CSRCustomState(implicit p: Parameters) extends Bundle {
+    // Prefetcher
+    val pf_ctrl = Output(new PrefetchCtrl)
+    // Load violation predictor
+    val lvpred_disable = Output(Bool())
+    val no_spec_load = Output(Bool())
+    val storeset_wait_store = Output(Bool())
+    val storeset_no_fast_wakeup = Output(Bool())
+    val lvpred_timeout = Output(UInt(5.W))
+    // Branch predictor
+    val bp_ctrl = Output(new BpuCtrl)
+    // Memory Block
+    val sbuffer_timeout = Output(UInt(22.W))
+    val sbuffer_threshold = Output(UInt(4.W))
+    val ldld_vio_check_enable = Output(Bool())
+    val soft_prefetch_enable = Output(Bool())
+    val cache_error_enable = Output(Bool())
+    val uncache_write_outstanding_enable = Output(Bool())
+    val hd_misalign_st_enable = Output(Bool())
+    val hd_misalign_ld_enable = Output(Bool())
+    val power_down_enable = Output(Bool())
+    val flush_l2_enable = Output(Bool())
+    // Rename
+    val fusion_enable = Output(Bool())
+    val wfi_enable = Output(Bool())
+  }
+}

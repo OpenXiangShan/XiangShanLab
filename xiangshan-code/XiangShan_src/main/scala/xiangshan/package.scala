@@ -1,0 +1,1050 @@
+/***************************************************************************************
+* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
+*
+* XiangShan is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*          http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
+***************************************************************************************/
+
+import chisel3._
+import chisel3.util._
+import utils.NamedUInt
+import org.chipsalliance.cde.config.Parameters
+import freechips.rocketchip.tile.XLen
+import xiangshan.ExceptionNO._
+import xiangshan.backend.fu._
+import xiangshan.backend.fu.fpu._
+import xiangshan.backend.fu.vector._
+import xiangshan.backend.issue._
+import xiangshan.backend.fu.FuConfig
+import xiangshan.backend.decode.{Imm, ImmUnion}
+
+package object xiangshan {
+  object SrcType {
+    def imm = "b0000".U
+    def pc  = "b0000".U
+    def xp  = "b0001".U
+    def fp  = "b0010".U
+    def vp  = "b0100".U
+    def v0  = "b1000".U
+    def no  = "b0000".U // this src read no reg but cannot be Any value
+
+    // alias
+    def reg = this.xp
+    def DC  = imm // Don't Care
+    def X   = BitPat("b0000")
+
+    def isPc(srcType: UInt) = srcType===pc
+    def isImm(srcType: UInt) = srcType===imm
+    def isXp(srcType: UInt) = srcType(0)
+    def isFp(srcType: UInt) = srcType(1)
+    def isVp(srcType: UInt) = srcType(2)
+    def isV0(srcType: UInt) = srcType(3)
+    def isPcOrImm(srcType: UInt) = isPc(srcType) || isImm(srcType)
+    def isNotReg(srcType: UInt): Bool = !srcType.orR
+    def isVfp(srcType: UInt) = isVp(srcType) || isFp(srcType)
+    def apply() = UInt(4.W)
+  }
+
+  object SrcState {
+    def busy    = "b0".U
+    def rdy     = "b1".U
+    // def specRdy = "b10".U // speculative ready, for future use
+    def apply() = UInt(1.W)
+
+    def isReady(state: UInt): Bool = state === this.rdy
+    def isBusy(state: UInt): Bool = state === this.busy
+  }
+
+  def FuOpTypeWidth = 9
+  object FuOpType {
+    def apply() = UInt(FuOpTypeWidth.W)
+    def X     = BitPat("b0_0000_0000")
+
+    // mv/cvt ##  f/i(input) ## f/i(output) ## intr's func
+    def FMVFX     = BitPat("b1_0_1_000000") // i2f
+    def FMVXF     = BitPat("b1_1_0_000000") // f2i
+  }
+  object VlduType {
+    // bit encoding: | vector or scala (2bit) || mop (2bit) | lumop(5bit) |
+    // only unit-stride use lumop
+    // mop [1:0]
+    // 0 0 : unit-stride
+    // 0 1 : indexed-unordered
+    // 1 0 : strided
+    // 1 1 : indexed-ordered
+    // lumop[4:0]
+    // 0 0 0 0 0 : unit-stride load
+    // 0 1 0 0 0 : unit-stride, whole register load
+    // 0 1 0 1 1 : unit-stride, mask load, EEW=8
+    // 1 0 0 0 0 : unit-stride fault-only-first
+    def vle       = "b01_00_00000".U
+    def vlr       = "b01_00_01000".U // whole
+    def vlm       = "b01_00_01011".U // mask
+    def vleff     = "b01_00_10000".U
+    def vluxe     = "b01_01_00000".U // index
+    def vlse      = "b01_10_00000".U // strided
+    def vloxe     = "b01_11_00000".U // index
+
+    def isUnitStride(fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U
+    def isWhole  (fuOpType: UInt): Bool = isUnitStride(fuOpType) && fuOpType(4, 0) === "b01000".U && (fuOpType(8) ^ fuOpType(7))
+    def isMasked (fuOpType: UInt): Bool = isUnitStride(fuOpType) && fuOpType(4, 0) === "b01011".U && (fuOpType(8) ^ fuOpType(7))
+    def isStrided(fuOpType: UInt): Bool = fuOpType(6, 5) === "b10".U && (fuOpType(8) ^ fuOpType(7))
+    def isIndexed(fuOpType: UInt): Bool = fuOpType(5) && (fuOpType(8) ^ fuOpType(7))
+    def isVecLd  (fuOpType: UInt): Bool = fuOpType(8, 7) === "b01".U
+    def isFof    (fuOpType: UInt): Bool = isVecLd(fuOpType) && fuOpType(4)
+  }
+
+  object VstuType {
+    // bit encoding: | padding (2bit) || mop (2bit) | sumop(5bit) |
+    // only unit-stride use sumop
+    // mop [1:0]
+    // 0 0 : unit-stride
+    // 0 1 : indexed-unordered
+    // 1 0 : strided
+    // 1 1 : indexed-ordered
+    // sumop[4:0]
+    // 0 0 0 0 0 : unit-stride load
+    // 0 1 0 0 0 : unit-stride, whole register load
+    // 0 1 0 1 1 : unit-stride, mask load, EEW=8
+    def vse       = "b10_00_00000".U
+    def vsr       = "b10_00_01000".U // whole
+    def vsm       = "b10_00_01011".U // mask
+    def vsuxe     = "b10_01_00000".U // index
+    def vsse      = "b10_10_00000".U // strided
+    def vsoxe     = "b10_11_00000".U // index
+
+    def isWhole  (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01000".U && (fuOpType(8) ^ fuOpType(7))
+    def isMasked (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01011".U && (fuOpType(8) ^ fuOpType(7))
+    def isStrided(fuOpType: UInt): Bool = fuOpType(6, 5) === "b10".U && (fuOpType(8) ^ fuOpType(7))
+    def isIndexed(fuOpType: UInt): Bool = fuOpType(5) && (fuOpType(8) ^ fuOpType(7))
+    def isVecSt  (fuOpType: UInt): Bool = fuOpType(8, 7) === "b10".U
+  }
+
+  object IF2VectorType {
+    // use last 2 bits for vsew
+    def iDup2Vec   = "b1_00".U
+    def fDup2Vec   = "b1_01".U
+    def immDup2Vec = "b1_10".U
+    def i2Vec      = "b0_00".U
+    def f2Vec      = "b0_01".U
+    def imm2Vec    = "b0_10".U
+    def needDup(bits: UInt): Bool = bits(2)
+    def isImm(bits: UInt): Bool = bits(1)
+    def isFp(bits: UInt): Bool = bits(0)
+    def isFmv(bits: UInt): Bool = bits(0) & !bits(2)
+    def FMX_D_X    = "b0_01_11".U
+    def FMX_W_X    = "b0_01_10".U
+    def FMX_H_X   =  "b0_01_01".U
+  }
+
+  object CommitType {
+    def NORMAL = "b00".U  // int/fp
+    def BRANCH = "b01".U  // branch
+    def LOAD   = "b10".U  // load
+    def STORE  = "b11".U  // store
+
+    def apply() = UInt(2.W)
+    def isLoadStore(commitType: UInt): Bool = commitType(1)
+    def lsInstIsStore(commitType: UInt): Bool = commitType(0)
+    def isStore(commitType: UInt): Bool = isLoadStore(commitType) && lsInstIsStore(commitType)
+    def isBranch(commitType: UInt): Bool = commitType(0) && !commitType(1)
+  }
+
+  object RedirectLevel {
+    def flushAfter = "b0".U
+    def flush      = "b1".U
+
+    def apply() = UInt(1.W)
+    // def isUnconditional(level: UInt) = level(1)
+    def flushItself(level: UInt) = level(0)
+    // def isException(level: UInt) = level(1) && level(0)
+  }
+
+  object ExceptionVec {
+    val ExceptionVecSize = 24
+    def apply() = Vec(ExceptionVecSize, Bool())
+    def apply(init: Bool) = VecInit(Seq.fill(ExceptionVecSize)(init))
+  }
+
+  object PMAMode {
+    def R = "b1".U << 0 //readable
+    def W = "b1".U << 1 //writeable
+    def X = "b1".U << 2 //executable
+    def I = "b1".U << 3 //cacheable: icache
+    def D = "b1".U << 4 //cacheable: dcache
+    def S = "b1".U << 5 //enable speculative access
+    def A = "b1".U << 6 //enable atomic operation, A imply R & W
+    def C = "b1".U << 7 //if it is cacheable is configable
+    def Reserved = "b0".U
+
+    def apply() = UInt(7.W)
+
+    def read(mode: UInt) = mode(0)
+    def write(mode: UInt) = mode(1)
+    def execute(mode: UInt) = mode(2)
+    def icache(mode: UInt) = mode(3)
+    def dcache(mode: UInt) = mode(4)
+    def speculate(mode: UInt) = mode(5)
+    def atomic(mode: UInt) = mode(6)
+    def configable_cache(mode: UInt) = mode(7)
+
+    def strToMode(s: String) = {
+      var result = 0.U(8.W)
+      if (s.toUpperCase.indexOf("R") >= 0) result = result + R
+      if (s.toUpperCase.indexOf("W") >= 0) result = result + W
+      if (s.toUpperCase.indexOf("X") >= 0) result = result + X
+      if (s.toUpperCase.indexOf("I") >= 0) result = result + I
+      if (s.toUpperCase.indexOf("D") >= 0) result = result + D
+      if (s.toUpperCase.indexOf("S") >= 0) result = result + S
+      if (s.toUpperCase.indexOf("A") >= 0) result = result + A
+      if (s.toUpperCase.indexOf("C") >= 0) result = result + C
+      result
+    }
+  }
+
+
+  object CSROpType {
+    //                 | func3|
+    def jmp     = "b010_000".U
+    def wfi     = "b100_000".U
+    def wrs_nto = "b100_010".U
+    def wrs_sto = "b100_011".U
+    def wrt     = "b001_001".U
+    def set     = "b001_010".U
+    def clr     = "b001_011".U
+    def wrti    = "b001_101".U
+    def seti    = "b001_110".U
+    def clri    = "b001_111".U
+
+    def isSystemOp (op: UInt): Bool = op(4)
+    def isWfi      (op: UInt): Bool = op(5) && !op(1)
+    def isWrsNto   (op: UInt): Bool = op(5) && op(1, 0) === "b10".U
+    def isWrsSto   (op: UInt): Bool = op(5) && op(1, 0) === "b11".U
+    def isCsrAccess(op: UInt): Bool = op(3)
+    def isReadOnly (op: UInt): Bool = op(3) && op(2, 0) === 0.U
+    def notReadOnly(op: UInt): Bool = op(3) && op(2, 0) =/= 0.U
+    def isCSRRW    (op: UInt): Bool = op(3) && op(1, 0) === "b01".U
+    def isCSRRSorRC(op: UInt): Bool = op(3) && op(1)
+
+    def getCSROp(op: UInt) = op(1, 0)
+    def needImm(op: UInt) = op(2)
+
+    def getFunc3(op: UInt) = op(2, 0)
+  }
+
+  // jump
+  object JumpOpType {
+    def jal  = ALUOpType.jal
+    def jalr = ALUOpType.jalr
+    def auipc = ALUOpType.auipc
+    def jumpOpisJalr(op: UInt) = op(0)
+    def jumpOpisAuipc(op: UInt) = op(1)
+  }
+
+  object FenceOpType {
+    def fence  = "b10000".U
+    def sfence = "b10001".U
+    def fencei = "b10010".U
+    def hfence_v = "b10011".U
+    def hfence_g = "b10100".U
+    def nofence= "b00000".U
+  }
+
+  object ALUOpType {
+    // shift optype
+    def slliuw     = "b000_0000".U // slliuw: ZEXT(src1[31:0]) << shamt
+    def sll        = "b000_0001".U // sll:     src1 << src2
+
+    def bclr       = "b000_0010".U // bclr:    src1 & ~(1 << src2[5:0])
+    def bset       = "b000_0011".U // bset:    src1 | (1 << src2[5:0])
+    def binv       = "b000_0100".U // binv:    src1 ^ (1 << src2[5:0])
+
+    def srl        = "b000_0101".U // srl:     src1 >> src2
+    def bext       = "b000_0110".U // bext:    (src1 >> src2)[0]
+    def sra        = "b000_0111".U // sra:     src1 >> src2 (arithmetic)
+
+    def rol        = "b000_1001".U // rol:     (src1 << src2) | (src1 >> (xlen - src2))
+    def ror        = "b000_1011".U // ror:     (src1 >> src2) | (src1 << (xlen - src2))
+
+    // RV64 32bit optype
+    def addw       = "b001_0000".U // addw:      SEXT((src1 + src2)[31:0])
+    def oddaddw    = "b001_0001".U // oddaddw:   SEXT((src1[0] + src2)[31:0])
+    def subw       = "b001_0010".U // subw:      SEXT((src1 - src2)[31:0])
+    def lui32addw  = "b001_0011".U // lui32addw: SEXT(SEXT(src2[11:0], 32) + {src2[31:12], 12'b0}, 64)
+
+    def addwbit    = "b001_0100".U // addwbit:   (src1 + src2)[0]
+    def addwbyte   = "b001_0101".U // addwbyte:  (src1 + src2)[7:0]
+    def addwzexth  = "b001_0110".U // addwzexth: ZEXT((src1  + src2)[15:0])
+    def addwsexth  = "b001_0111".U // addwsexth: SEXT((src1  + src2)[15:0])
+
+    def sllw       = "b001_1000".U // sllw:     SEXT((src1 << src2)[31:0])
+    def srlw       = "b001_1001".U // srlw:     SEXT((src1[31:0] >> src2)[31:0])
+    def sraw       = "b001_1010".U // sraw:     SEXT((src1[31:0] >> src2)[31:0])
+    def rolw       = "b001_1100".U
+    def rorw       = "b001_1101".U
+
+    // ADD-op
+    def adduw      = "b010_0000".U // adduw:  src1[31:0]  + src2
+    def oddadd     = "b010_0001".U // oddadd:  src1[0]     + src2
+    def add        = "b010_0010".U // add:     src1        + src2
+    def lui32add   = "b010_0011".U // lui32add: SEXT(src2[11:0]) + {src2[63:12], 12'b0}
+
+    def sr29add    = "b010_0100".U // sr29add: src1[63:29] + src2
+    def sr30add    = "b010_0101".U // sr30add: src1[63:30] + src2
+    def sr31add    = "b010_0110".U // sr31add: src1[63:31] + src2
+    def sr32add    = "b010_0111".U // sr32add: src1[63:32] + src2
+
+    def sh1adduw   = "b010_1000".U // sh1adduw: {src1[31:0], 1'b0} + src2
+    def sh1add     = "b010_1001".U // sh1add: {src1[62:0], 1'b0} + src2
+    def sh2adduw   = "b010_1010".U // sh2add_uw: {src1[31:0], 2'b0} + src2
+    def sh2add     = "b010_1011".U // sh2add: {src1[61:0], 2'b0} + src2
+    def sh3adduw   = "b010_1100".U // sh3add_uw: {src1[31:0], 3'b0} + src2
+    def sh3add     = "b010_1101".U // sh3add: {src1[60:0], 3'b0} + src2
+    def sh4add     = "b010_1111".U // sh4add: {src1[59:0], 4'b0} + src2
+
+    // SUB-op: src1 - src2
+    def sub        = "b011_0000".U
+    def sltu       = "b011_0001".U
+    def slt        = "b011_0010".U
+    def maxu       = "b011_0100".U
+    def minu       = "b011_0101".U
+    def max        = "b011_0110".U
+    def min        = "b011_0111".U
+
+    // Zicond
+    def czero_eqz  = "b111_0100".U
+    def czero_nez  = "b111_0110".U
+
+    // auipc/jal/jalr
+    def jal        = "b111_1000".U
+    def jalr       = "b111_1001".U
+    def auipc      = "b111_1010".U
+
+    // misc optype
+    def and        = "b100_0000".U
+    def andn       = "b100_0001".U
+    def or         = "b100_0010".U
+    def orn        = "b100_0011".U
+    def xor        = "b100_0100".U
+    def xnor       = "b100_0101".U
+    def orcb       = "b100_0110".U
+
+    def sextb      = "b100_1000".U
+    def packh      = "b100_1001".U
+    def sexth      = "b100_1010".U
+    def packw      = "b100_1011".U
+
+    def revb       = "b101_0000".U
+    def rev8       = "b101_0001".U
+    def pack       = "b101_0010".U
+    def orh48      = "b101_0011".U
+
+    def szewl1     = "b101_1000".U
+    def szewl2     = "b101_1001".U
+    def szewl3     = "b101_1010".U
+    def byte2      = "b101_1011".U
+
+    def andlsb     = "b110_0000".U
+    def andzexth   = "b110_0001".U
+    def orlsb      = "b110_0010".U
+    def orzexth    = "b110_0011".U
+    def xorlsb     = "b110_0100".U
+    def xorzexth   = "b110_0101".U
+    def orcblsb    = "b110_0110".U
+    def orcbzexth  = "b110_0111".U
+    // for xstrap
+    def xstrap     = "b111_1111".U
+
+    def logicToLsb(func: UInt) = Cat("b110".U(3.W), func(3, 1), 0.U(1.W))
+    def logicToZexth(func: UInt) = Cat("b110".U(3.W), func(3, 1), 1.U(1.W))
+
+    def isShift(func: UInt): Bool      = func(6, 4) === "b000".U
+    def isWiden(func: UInt): Bool      = func(6, 4) === "b001".U
+    def isAddOp(func: UInt): Bool      = func(6, 4) === "b010".U
+    def isCompare(func: UInt): Bool    = func(6, 4) === "b011".U
+    def isMisc(func: UInt): Bool       = func(6) & (!func(5) | !func(4))
+
+    def isAddw(func: UInt): Bool       = func(3, 0) === "b0000".U
+    def isOddaddw(func: UInt): Bool    = func(3, 0) === "b0001".U
+    def isSubw(func: UInt): Bool       = func(3, 0) === "b0010".U
+    def isLui32addw(func: UInt): Bool  = func(3, 0) === "b0011".U
+    def isAddwOrSubw(func: UInt): Bool = !func(3) && !func(2) && !func(0) || func(2)
+    def isSr29add(func: UInt): Bool    = func(1, 0) === "b00".U
+    def isSr30add(func: UInt): Bool    = func(1, 0) === "b01".U
+    def isSr31add(func: UInt): Bool    = func(1, 0) === "b10".U
+    def isSr32add(func: UInt): Bool    = func(1, 0) === "b11".U
+    def isSh1add(func: UInt): Bool     = func(2, 1) === "b00".U
+    def isSh2add(func: UInt): Bool     = func(2, 1) === "b01".U
+    def isSh3add(func: UInt): Bool     = func(2, 1) === "b10".U
+    def isSh4add(func: UInt): Bool     = func(2, 1) === "b11".U
+
+    def isAdd(func: UInt): Bool     = isAddOp(func) && func(3, 2) === "b00".U
+    def isSradd(func: UInt): Bool   = isAddOp(func) && func(3, 2) === "b01".U
+    def isShadd(func: UInt): Bool   = isAddOp(func) && func(3)
+    def isMaxMin(func: UInt): Bool  = isCompare(func) && func(2, 1) === "b11".U
+    def isMaxMinU(func: UInt): Bool = isCompare(func) && func(2, 1) === "b10".U
+    def isSlt(func: UInt): Bool     = isCompare(func) && func(2, 1) === "b01".U
+    def isSltu(func: UInt): Bool    = isCompare(func) && func(2, 0) === "b001".U
+    def isSub(func: UInt): Bool     = isCompare(func) && func(2, 0) === "b000".U
+    def isSll(func: UInt): Bool     = isShift(func) && func(3, 1) === "b000".U
+    def isBclr(func: UInt): Bool    = isShift(func) && func(3, 0) === "b0010".U
+    def isBset(func: UInt): Bool    = isShift(func) && func(3, 0) === "b0011".U
+    def isBinv(func: UInt): Bool    = isShift(func) && func(3, 0) === "b0100".U
+    def isSrl(func: UInt): Bool     = isShift(func) && func(3, 0) === "b0101".U
+    def isBext(func: UInt): Bool    = isShift(func) && func(3, 0) === "b0110".U
+    def isSra(func: UInt): Bool     = isShift(func) && func(3, 0) === "b0111".U
+    def isRol(func: UInt): Bool     = isShift(func) && func(3) && !func(1)
+    def isRor(func: UInt): Bool     = isShift(func) && func(3) &&  func(1)
+    def isAddwOp(func: UInt): Bool  = isWiden(func) && (!func(3) & !func(2) & (!func(1) | func(0)) | !func(3) & func(2))
+    def isSubwOp(func: UInt): Bool  = isWiden(func) && func(3, 0) === "b0010".U
+    def isSllw(func: UInt): Bool    = isWiden(func) && func(3, 0) === "b1000".U
+    def isSrlw(func: UInt): Bool    = isWiden(func) && func(3, 2) === "b10".U && func(0)
+    def isSraw(func: UInt): Bool    = isWiden(func) && func(3, 1) === "b101".U
+    def isRolw(func: UInt): Bool    = isWiden(func) && func(3, 2) === "b11".U && !func(0)
+    def isRorw(func: UInt): Bool    = isWiden(func) && func(3, 2) === "b11".U &&  func(0)
+
+    def isZicond(func: UInt): Bool  = func(6, 4).andR && !func(3)
+    def isJmp(func: UInt): Bool     = func(6, 3).andR && !func(2)
+
+    def apply() = UInt(FuOpTypeWidth.W)
+  }
+
+  object VSETOpType {
+    val setVlmaxBit = 0
+    val keepVlBit   = 1
+    // destTypeBit == 0: write vl to rd
+    // destTypeBit == 1: write vconfig
+    val destTypeBit = 5
+
+    // vsetvli's uop
+    //   rs1!=x0, normal
+    //     uop0: r(rs1), w(vconfig)     | x[rs1],vtypei  -> vconfig
+    //     uop1: r(rs1), w(rd)          | x[rs1],vtypei  -> x[rd]
+    def uvsetvcfg_xi        = "b1010_0000".U
+    def uvsetrd_xi          = "b1000_0000".U
+    //   rs1==x0, rd!=x0, set vl to vlmax, set rd to vlmax, set vtype
+    //     uop0: w(vconfig)             | vlmax, vtypei  -> vconfig
+    //     uop1: w(rd)                  | vlmax, vtypei  -> x[rd]
+    def uvsetvcfg_vlmax_i   = "b1010_0001".U
+    def uvsetrd_vlmax_i     = "b1000_0001".U
+    //   rs1==x0, rd==x0, keep vl, set vtype
+    //     uop0: r(vconfig), w(vconfig) | ld_vconfig.vl, vtypei -> vconfig
+    def uvsetvcfg_keep_v    = "b1010_0010".U
+
+    // vsetvl's uop
+    //   rs1!=x0, normal
+    //     uop0: r(rs1,rs2), w(vconfig) | x[rs1],x[rs2]  -> vconfig
+    //     uop1: r(rs1,rs2), w(rd)      | x[rs1],x[rs2]  -> x[rd]
+    def uvsetvcfg_xx        = "b0110_0000".U
+    def uvsetrd_xx          = "b0100_0000".U
+    //   rs1==x0, rd!=x0, set vl to vlmax, set rd to vlmax, set vtype
+    //     uop0: r(rs2), w(vconfig)     | vlmax, vtypei  -> vconfig
+    //     uop1: r(rs2), w(rd)          | vlmax, vtypei  -> x[rd]
+    def uvsetvcfg_vlmax_x   = "b0110_0001".U
+    def uvsetrd_vlmax_x     = "b0100_0001".U
+    //   rs1==x0, rd==x0, keep vl, set vtype
+    //     uop0: r(rs2), w(vtmp)             | x[rs2]               -> vtmp
+    //     uop0: r(vconfig,vtmp), w(vconfig) | old_vconfig.vl, vtmp -> vconfig
+    def uvmv_v_x            = "b0110_0010".U
+    def uvsetvcfg_vv        = "b0111_0010".U
+
+    // vsetivli's uop
+    //     uop0: w(vconfig)             | vli, vtypei    -> vconfig
+    //     uop1: w(rd)                  | vli, vtypei    -> x[rd]
+    def uvsetvcfg_ii        = "b0010_0000".U
+    def uvsetrd_ii          = "b0000_0000".U
+
+    // read vec, write int
+    // keep vl
+    def csrrvl              = "b0001_0110".U
+
+    def isVsetvl  (func: UInt)  = func(6)
+    def isVsetvli (func: UInt)  = func(7)
+    def isVsetivli(func: UInt)  = func(7, 6) === 0.U
+    def isNormal  (func: UInt)  = func(1, 0) === 0.U
+    def isSetVlmax(func: UInt)  = func(setVlmaxBit)
+    def isKeepVl  (func: UInt)  = func(keepVlBit)
+    // RG: region
+    def writeIntRG(func: UInt)  = !func(5)
+    def writeVecRG(func: UInt)  = func(5)
+    def readIntRG (func: UInt)  = !func(4)
+    def readVecRG (func: UInt)  = func(4)
+    // modify fuOpType
+    def keepVl(func: UInt)      = func | (1 << keepVlBit).U
+    def setVlmax(func: UInt)    = func | (1 << setVlmaxBit).U
+  }
+
+  object BRUOpType {
+    // branch
+    def beq        = "b000_000".U
+    def bne        = "b000_001".U
+    def blt        = "b000_100".U
+    def bge        = "b000_101".U
+    def bltu       = "b001_000".U
+    def bgeu       = "b001_001".U
+
+    def getBranchType(func: UInt) = func(3, 1)
+    def isBranchInvert(func: UInt) = func(0)
+  }
+
+  object DIVOpType {
+    // div
+    // bit encoding: | type (2bit) | isWord(1bit) | isSign(1bit) | opcode(1bit) |
+    def div    = "b10000".U
+    def divu   = "b10010".U
+    def rem    = "b10001".U
+    def remu   = "b10011".U
+
+    def divw   = "b10100".U
+    def divuw  = "b10110".U
+    def remw   = "b10101".U
+    def remuw  = "b10111".U
+
+    def isSign(op: UInt) = !op(1)
+    def isW(op: UInt) = op(2)
+    def isH(op: UInt) = op(0)
+  }
+
+  object LSUOpType {
+    // The max length is 6 bits
+    // load pipeline
+
+    // normal load
+    // Note: bit(1, 0) are size, DO NOT CHANGE
+    // bit encoding: | load 0 | is unsigned(1bit) | size(2bit) |
+    def lb       = "b0000".U
+    def lh       = "b0001".U
+    def lw       = "b0010".U
+    def ld       = "b0011".U
+    def lbu      = "b0100".U
+    def lhu      = "b0101".U
+    def lwu      = "b0110".U
+    // hypervior load
+    // bit encoding: | hlv 1 | hlvx 1 | is unsigned(1bit) | size(2bit) |
+    def hlvb   = "b10000".U
+    def hlvh   = "b10001".U
+    def hlvw   = "b10010".U
+    def hlvd   = "b10011".U
+    def hlvbu  = "b10100".U
+    def hlvhu  = "b10101".U
+    def hlvwu  = "b10110".U
+    def hlvxhu = "b11101".U
+    def hlvxwu = "b11110".U
+    def isHlv(op: UInt): Bool = op(4) && (op(5) === "b0".U) && (op(8, 7) === "b00".U)
+    def isHlvx(op: UInt): Bool = op(4) && op(3) && (op(5) === "b0".U) && (op(8, 7) === "b00".U)
+
+    // Zicbop software prefetch
+    // bit encoding: | prefetch 1 | 0 | prefetch type (2bit) |
+    def prefetch_i = "b1000".U // TODO
+    def prefetch_r = "b1001".U
+    def prefetch_w = "b1010".U
+
+    def isPrefetch(op: UInt): Bool = op(3) && (op(5, 4) === "b000".U) && (op(8, 7) === "b00".U)
+
+    // store pipeline
+    // normal store
+    // bit encoding: | store 00 | size(2bit) |
+    def sb       = "b0000".U
+    def sh       = "b0001".U
+    def sw       = "b0010".U
+    def sd       = "b0011".U
+
+    //hypervisor store
+    // bit encoding: |hsv 1 | store 00 | size(2bit) |
+    def hsvb = "b10000".U
+    def hsvh = "b10001".U
+    def hsvw = "b10010".U
+    def hsvd = "b10011".U
+    def isHsv(op: UInt): Bool = op(4) && (op(5) === "b0".U) && (op(8, 7) === "b00".U)
+    // l1 cache op
+    // bit encoding: | cbo_zero 01 | size(2bit) 11 |
+    def cbo_zero  = "b0111".U
+
+    // llc op
+    // bit encoding: | prefetch 11 | suboptype(2bit) |
+    def cbo_clean = "b1100".U
+    def cbo_flush = "b1101".U
+    def cbo_inval = "b1110".U
+
+    def getCmoOpcode(op: UInt): UInt = op(1, 0)
+    def isCbo(op: UInt): Bool = op(3, 2) === "b11".U && (op(6, 4) === "b000".U)
+    def isCboAll(op: UInt): Bool = isCbo(op) || op(3,0) === cbo_zero
+    def isCboClean(op: UInt): Bool = isCbo(op) && (op(3, 0) === cbo_clean)
+    def isCboFlush(op: UInt): Bool = isCbo(op) && (op(3, 0) === cbo_flush)
+    def isCboInval(op: UInt): Bool = isCbo(op) && (op(3, 0) === cbo_inval)
+
+    // atomics
+    // bit(1, 0) are size
+    // since atomics use a different fu type
+    // so we can safely reuse other load/store's encodings
+    // bit encoding: | optype(4bit) | size (2bit) |
+    // Only the least significant AMOFuOpWidth = 6 bits of fuOpType are used,
+    // therefore the MSBs are reused to identify uopIdx of AMOCAS.[WDQ]
+    def AMOFuOpWidth = 6
+    def lr_w      = "b000010".U
+    def sc_w      = "b000110".U
+    def amoswap_w = "b001010".U
+    def amoadd_w  = "b001110".U
+    def amoxor_w  = "b010010".U
+    def amoand_w  = "b010110".U
+    def amoor_w   = "b011010".U
+    def amomin_w  = "b011110".U
+    def amomax_w  = "b100010".U
+    def amominu_w = "b100110".U
+    def amomaxu_w = "b101010".U
+    def amocas_w  = "b101110".U
+
+    def lr_d      = "b000011".U
+    def sc_d      = "b000111".U
+    def amoswap_d = "b001011".U
+    def amoadd_d  = "b001111".U
+    def amoxor_d  = "b010011".U
+    def amoand_d  = "b010111".U
+    def amoor_d   = "b011011".U
+    def amomin_d  = "b011111".U
+    def amomax_d  = "b100011".U
+    def amominu_d = "b100111".U
+    def amomaxu_d = "b101011".U
+    def amocas_d  = "b101111".U
+
+    def amocas_q  = "b101100".U
+
+    def getAmocasUopIdx(opType: UInt): UInt = (opType >> this.AMOFuOpWidth).asUInt
+
+    def size(op: UInt) = op(1,0)
+
+    def sizeIs(sz: this.type => Size)(op: UInt): Bool = {
+      op(Size.width - 1, 0) === sz(this).U
+    }
+
+    sealed abstract class Size(uint: UInt) {
+      def U: UInt = this.uint
+    }
+    case object B extends Size("b00".U(Size.width.W))
+    case object H extends Size("b01".U(Size.width.W))
+    case object W extends Size("b10".U(Size.width.W))
+    case object D extends Size("b11".U(Size.width.W))
+    // Todo: Use encode b100 when expending size field to 3bits in OpType.
+    case object Q extends Size("b00".U(Size.width.W))
+    object Size {
+      val width = 2
+    }
+
+    def makeLsUop(isHlv: Bool, isHlvx: Bool, size: UInt): UInt = {
+      Cat(isHlv, isHlvx, 0.U(1.W), size)
+    }
+
+    def getVecLSMop(fuOpType: UInt): UInt = fuOpType(6, 5)
+
+    def isAllUS   (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && (fuOpType(8) ^ fuOpType(7))// Unit-Stride Whole Masked
+    def isUStride (fuOpType: UInt): Bool = fuOpType(6, 0) === "b00_00000".U && (fuOpType(8) ^ fuOpType(7))
+    def isWhole   (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01000".U && (fuOpType(8) ^ fuOpType(7))
+    def isMasked  (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01011".U && (fuOpType(8) ^ fuOpType(7))
+    def isStrided (fuOpType: UInt): Bool = fuOpType(6, 5) === "b10".U && (fuOpType(8) ^ fuOpType(7))
+    def isIndexed (fuOpType: UInt): Bool = fuOpType(5) && (fuOpType(8) ^ fuOpType(7))
+    def isLr      (fuOpType: UInt): Bool = fuOpType === lr_w || fuOpType === lr_d
+    def isSc      (fuOpType: UInt): Bool = fuOpType === sc_w || fuOpType === sc_d
+    def isAMOCASQ (fuOpType: UInt): Bool = fuOpType === amocas_q
+    def isAMOCASWD(fuOpType: UInt): Bool = fuOpType === amocas_w || fuOpType === amocas_d
+    def isAMOCAS  (fuOpType: UInt): Bool = fuOpType(5, 2) === "b1011".U
+  }
+
+  object BKUOpType {
+
+    def clmul       = "b000000".U
+    def clmulh      = "b000001".U
+    def clmulr      = "b000010".U
+    def xpermn      = "b000100".U
+    def xpermb      = "b000101".U
+
+    def clz         = "b001000".U
+    def clzw        = "b001001".U
+    def ctz         = "b001010".U
+    def ctzw        = "b001011".U
+    def cpop        = "b001100".U
+    def cpopw       = "b001101".U
+
+    // 01xxxx is reserve
+    def aes64es     = "b100000".U
+    def aes64esm    = "b100001".U
+    def aes64ds     = "b100010".U
+    def aes64dsm    = "b100011".U
+    def aes64im     = "b100100".U
+    def aes64ks1i   = "b100101".U
+    def aes64ks2    = "b100110".U
+
+    // merge to two instruction sm4ks & sm4ed
+    def sm4ed0      = "b101000".U
+    def sm4ed1      = "b101001".U
+    def sm4ed2      = "b101010".U
+    def sm4ed3      = "b101011".U
+    def sm4ks0      = "b101100".U
+    def sm4ks1      = "b101101".U
+    def sm4ks2      = "b101110".U
+    def sm4ks3      = "b101111".U
+
+    def sha256sum0  = "b110000".U
+    def sha256sum1  = "b110001".U
+    def sha256sig0  = "b110010".U
+    def sha256sig1  = "b110011".U
+    def sha512sum0  = "b110100".U
+    def sha512sum1  = "b110101".U
+    def sha512sig0  = "b110110".U
+    def sha512sig1  = "b110111".U
+
+    def sm3p0       = "b111000".U
+    def sm3p1       = "b111001".U
+  }
+
+  object BTBtype {
+    def B = "b00".U  // branch
+    def J = "b01".U  // jump
+    def I = "b10".U  // indirect
+    def R = "b11".U  // return
+
+    def apply() = UInt(2.W)
+  }
+
+  object SelImm {
+    def IMM_X  = "b0111".U
+    def IMM_S  = "b1110".U
+    def IMM_SB = "b0001".U
+    def IMM_U  = "b0010".U
+    def IMM_UJ = "b0011".U
+    def IMM_I  = "b0100".U
+    def IMM_Z  = "b0101".U
+    def INVALID_INSTR = "b0110".U
+    def IMM_B6 = "b1000".U
+
+    def IMM_OPIVIS = "b1001".U
+    def IMM_OPIVIU = "b1010".U
+    def IMM_VSETVLI   = "b1100".U
+    def IMM_VSETIVLI  = "b1101".U
+    def IMM_LUI32 = "b1011".U
+    def IMM_VRORVI = "b1111".U
+
+    def X      = BitPat("b0000")
+
+    def apply() = UInt(4.W)
+
+    def mkString(immType: UInt) : String = {
+      val strMap = Map(
+        IMM_S.litValue         -> "S",
+        IMM_SB.litValue        -> "SB",
+        IMM_U.litValue         -> "U",
+        IMM_UJ.litValue        -> "UJ",
+        IMM_I.litValue         -> "I",
+        IMM_Z.litValue         -> "Z",
+        IMM_OPIVIS.litValue    -> "VIS",
+        IMM_OPIVIU.litValue    -> "VIU",
+        IMM_VSETVLI.litValue   -> "VSETVLI",
+        IMM_VSETIVLI.litValue  -> "VSETIVLI",
+        IMM_LUI32.litValue     -> "LUI32",
+        IMM_VRORVI.litValue    -> "VRORVI",
+        INVALID_INSTR.litValue -> "INVALID",
+      )
+      strMap(immType.litValue)
+    }
+
+    def getImmUnion(immType: UInt) : Imm = {
+      val iuMap = Map(
+        IMM_S.litValue         -> ImmUnion.S,
+        IMM_SB.litValue        -> ImmUnion.B,
+        IMM_U.litValue         -> ImmUnion.U,
+        IMM_UJ.litValue        -> ImmUnion.J,
+        IMM_I.litValue         -> ImmUnion.I,
+        IMM_Z.litValue         -> ImmUnion.Z,
+        IMM_OPIVIS.litValue    -> ImmUnion.OPIVIS,
+        IMM_OPIVIU.litValue    -> ImmUnion.OPIVIU,
+        IMM_VSETVLI.litValue   -> ImmUnion.VSETVLI,
+        IMM_VSETIVLI.litValue  -> ImmUnion.VSETIVLI,
+        IMM_LUI32.litValue     -> ImmUnion.LUI32,
+        IMM_VRORVI.litValue    -> ImmUnion.VRORVI,
+      )
+      iuMap(immType.litValue)
+    }
+  }
+
+  object UopSplitType {
+    def SCA_SIM          = "b000000".U //
+    def VSET             = "b010001".U // dirty: vset
+    def VEC_VVV          = "b010010".U // VEC_VVV
+    def VEC_VXV          = "b010011".U // VEC_VXV
+    def VEC_0XV          = "b010100".U // VEC_0XV
+    def VEC_VVW          = "b010101".U // VEC_VVW
+    def VEC_WVW          = "b010110".U // VEC_WVW
+    def VEC_VXW          = "b010111".U // VEC_VXW
+    def VEC_WXW          = "b011000".U // VEC_WXW
+    def VEC_WVV          = "b011001".U // VEC_WVV
+    def VEC_WXV          = "b011010".U // VEC_WXV
+    def VEC_EXT2         = "b011011".U // VF2 0 -> V
+    def VEC_EXT4         = "b011100".U // VF4 0 -> V
+    def VEC_EXT8         = "b011101".U // VF8 0 -> V
+    def VEC_VVM          = "b011110".U // VEC_VVM
+    def VEC_VXM          = "b011111".U // VEC_VXM
+    def VEC_SLIDE1UP     = "b100000".U // vslide1up.vx
+    def VEC_FSLIDE1UP    = "b100001".U // vfslide1up.vf
+    def VEC_SLIDE1DOWN   = "b100010".U // vslide1down.vx
+    def VEC_FSLIDE1DOWN  = "b100011".U // vfslide1down.vf
+    def VEC_VRED         = "b100100".U // VEC_VRED
+    def VEC_SLIDEUP      = "b100101".U // VEC_SLIDEUP
+    def VEC_SLIDEDOWN    = "b100111".U // VEC_SLIDEDOWN
+    def VEC_M0X          = "b101001".U // VEC_M0X  0MV
+    def VEC_MVV          = "b101010".U // VEC_MVV  VMV
+    def VEC_VWW          = "b101100".U //
+    def VEC_RGATHER      = "b101101".U // vrgather.vv, vrgather.vi
+    def VEC_RGATHER_VX   = "b101110".U // vrgather.vx
+    def VEC_RGATHEREI16  = "b101111".U // vrgatherei16.vv
+    def VEC_COMPRESS     = "b110000".U // vcompress.vm
+    def VEC_US_LDST      = "b110001".U // vector unit-strided load/store
+    def VEC_S_LDST       = "b110010".U // vector strided load/store
+    def VEC_I_LDST       = "b110011".U // vector indexed load/store
+    def VEC_US_FF_LD     = "b110100".U // vector unit-stride fault-only-first load
+    def VEC_VFV          = "b111000".U // VEC_VFV
+    def VEC_VFW          = "b111001".U // VEC_VFW
+    def VEC_WFW          = "b111010".U // VEC_WVW
+    def VEC_VFM          = "b111011".U // VEC_VFM
+    def VEC_VFRED        = "b111100".U // VEC_VFRED
+    def VEC_VFREDOSUM    = "b111101".U // VEC_VFREDOSUM
+    def VEC_MVNR         = "b000100".U // vmvnr
+
+    def AMO_CAS_W        = "b110101".U // amocas_w
+    def AMO_CAS_D        = "b110110".U // amocas_d
+    def AMO_CAS_Q        = "b110111".U // amocas_q
+    // dummy means that the instruction is a complex instruction but uop number is 1
+    def dummy     = "b111111".U
+
+    def X = BitPat("b000000")
+
+    def apply() = UInt(6.W)
+    def needSplit(UopSplitType: UInt) = UopSplitType(4) || UopSplitType(5)
+
+    def isAMOCAS(UopSplitType: UInt): Bool = UopSplitType === AMO_CAS_W || UopSplitType === AMO_CAS_D || UopSplitType === AMO_CAS_Q
+  }
+
+  object ExceptionNO {
+    def instrAddrMisaligned = 0
+    def instrAccessFault    = 1
+    def illegalInstr        = 2
+    def breakPoint          = 3
+    def loadAddrMisaligned  = 4
+    def loadAccessFault     = 5
+    def storeAddrMisaligned = 6
+    def storeAccessFault    = 7
+    def ecallU              = 8
+    def ecallS              = 9
+    def ecallVS             = 10
+    def ecallM              = 11
+    def instrPageFault      = 12
+    def loadPageFault       = 13
+    // def singleStep          = 14
+    def storePageFault      = 15
+    def doubleTrap          = 16
+    def softwareCheck       = 18
+    def hardwareError       = 19
+    def instrGuestPageFault = 20
+    def loadGuestPageFault  = 21
+    def virtualInstr        = 22
+    def storeGuestPageFault = 23
+
+    // Just alias
+    def EX_IAM    = instrAddrMisaligned
+    def EX_IAF    = instrAccessFault
+    def EX_II     = illegalInstr
+    def EX_BP     = breakPoint
+    def EX_LAM    = loadAddrMisaligned
+    def EX_LAF    = loadAccessFault
+    def EX_SAM    = storeAddrMisaligned
+    def EX_SAF    = storeAccessFault
+    def EX_UCALL  = ecallU
+    def EX_HSCALL = ecallS
+    def EX_VSCALL = ecallVS
+    def EX_MCALL  = ecallM
+    def EX_IPF    = instrPageFault
+    def EX_LPF    = loadPageFault
+    def EX_SPF    = storePageFault
+    def EX_DT     = doubleTrap
+    def EX_SWC    = softwareCheck
+    def EX_HWE    = hardwareError
+    def EX_IGPF   = instrGuestPageFault
+    def EX_LGPF   = loadGuestPageFault
+    def EX_VI     = virtualInstr
+    def EX_SGPF   = storeGuestPageFault
+
+    def getAddressMisaligned = Seq(EX_IAM, EX_LAM, EX_SAM)
+
+    def getAccessFault = Seq(EX_IAF, EX_LAF, EX_SAF)
+
+    def getPageFault = Seq(EX_IPF, EX_LPF, EX_SPF)
+
+    def getGuestPageFault = Seq(EX_IGPF, EX_LGPF, EX_SGPF)
+
+    def getLSGuestPageFault = Seq(EX_LGPF, EX_SGPF)
+
+    def getFetchFault = Seq(EX_IAM, EX_IAF, EX_IPF)
+
+    def getLoadFault = Seq(EX_LAM, EX_LAF, EX_LPF, EX_HWE)
+
+    def getStoreFault = Seq(EX_SAM, EX_SAF, EX_SPF, EX_HWE)
+
+    def priorities = Seq(
+      doubleTrap,
+      breakPoint, // TODO: different BP has different priority
+      instrPageFault,
+      instrGuestPageFault,
+      instrAccessFault,
+      softwareCheck,
+      illegalInstr,
+      virtualInstr,
+      instrAddrMisaligned,
+      ecallM, ecallS, ecallVS, ecallU,
+      storeAddrMisaligned,
+      loadAddrMisaligned,
+      storePageFault,
+      loadPageFault,
+      storeGuestPageFault,
+      loadGuestPageFault,
+      storeAccessFault,
+      loadAccessFault,
+      hardwareError
+    )
+
+    def getHigherExcpThan(excp: Int): Seq[Int] = {
+      val idx = this.priorities.indexOf(excp, 0)
+      require(idx != -1, s"The irq($excp) does not exists in IntPriority Seq")
+      this.priorities.slice(0, idx)
+    }
+
+    def all = priorities.distinct.sorted
+    def frontendSet = Seq(
+      instrAddrMisaligned,
+      instrAccessFault,
+      illegalInstr,
+      instrPageFault,
+      instrGuestPageFault,
+      virtualInstr,
+      breakPoint
+    )
+    def partialSelect(vec: Vec[Bool], select: Seq[Int]): Vec[Bool] = {
+      val new_vec = Wire(ExceptionVec())
+      new_vec.foreach(_ := false.B)
+      select.foreach(i => new_vec(i) := vec(i))
+      new_vec
+    }
+    def partialSelect(vec: Vec[Bool], select: Seq[Int], unSelect: Seq[Int]): Vec[Bool] = {
+      val new_vec = Wire(ExceptionVec())
+      new_vec.foreach(_ := false.B)
+      select.diff(unSelect).foreach(i => new_vec(i) := vec(i))
+      new_vec
+    }
+    def selectFrontend(vec: Vec[Bool]): Vec[Bool] = partialSelect(vec, frontendSet)
+    def selectAll(vec: Vec[Bool]): Vec[Bool] = partialSelect(vec, ExceptionNO.all)
+    def selectByFu(vec:Vec[Bool], fuConfig: FuConfig): Vec[Bool] =
+      partialSelect(vec, fuConfig.exceptionOut)
+    def selectByFuAndUnSelect(vec:Vec[Bool], fuConfig: FuConfig, unSelect: Seq[Int]): Vec[Bool] =
+      partialSelect(vec, fuConfig.exceptionOut, unSelect)
+  }
+
+  object TopDownCounters extends Enumeration {
+    val NoStall = Value("NoStall") // Base
+    // frontend
+    val OverrideBubble = Value("OverrideBubble")
+    val FtqUpdateBubble = Value("FtqUpdateBubble")
+    // val ControlRedirectBubble = Value("ControlRedirectBubble")
+    val TAGEMissBubble = Value("TAGEMissBubble")
+    val SCMissBubble = Value("SCMissBubble")
+    val ITTAGEMissBubble = Value("ITTAGEMissBubble")
+    val RASMissBubble = Value("RASMissBubble")
+    val MemVioRedirectBubble = Value("MemVioRedirectBubble")
+    val OtherRedirectBubble = Value("OtherRedirectBubble")
+    val FtqFullStall = Value("FtqFullStall")
+
+    val ICacheMissBubble = Value("ICacheMissBubble")
+    val ITLBMissBubble = Value("ITLBMissBubble")
+    val BTBMissBubble = Value("BTBMissBubble")
+    val FetchFragBubble = Value("FetchFragBubble")
+    val FrontendOtherCoreStall = Value("FrontendOtherCoreStall")
+
+    // backend
+    // long inst stall at rob head
+    val DivStall = Value("DivStall") // int div, float div/sqrt
+    val IntNotReadyStall = Value("IntNotReadyStall") // int-inst at rob head exec long
+    val FPNotReadyStall = Value("FPNotReadyStall") // fp-inst at rob head exec long
+    val MemNotReadyStall = Value("MemNotReadyStall") // mem-inst at rob head exec long
+    val OtherNotReadyStall = Value("OtherNotReadyStall")
+    val RobStall = Value("RobStall")
+    val LqStall = Value("LqStall")
+    val SqStall = Value("SqStall")
+    // freelist full
+    val IntFlStall = Value("IntFlStall")
+    val FpFlStall = Value("FpFlStall")
+    val VecFlStall = Value("VecFlStall")
+    val V0FlStall = Value("V0FlStall")
+    val VlFlStall = Value("VlFlStall")
+    val MultiFlStall = Value("MultiFlStall")
+    // fusion bubble
+    val FusionBubble = Value("FusionBubble")
+    // dispatch stall
+    // dispatch stall for dispatch policy
+    // TODO: explain only load store exist
+    val LoadDispatchPolicyStall = Value("LoadDispatchPolicyStall")
+    val StoreDispatchPolicyStall = Value("StoreDispatchPolicyStall")
+    val OtherDispatchPolicyStall = Value("OtherDispatchPolicyStall")
+    // dispatch stall for issuequeue full
+    val BalanceDispatchPolicyStallAlu = Value("BalanceDispatchPolicyStallAlu")
+    val BalanceDispatchPolicyStallBrh = Value("BalanceDispatchPolicyStallBrh")
+    val BalanceDispatchPolicyStallInt = Value("BalanceDispatchPolicyStallInt")
+    val BalanceDispatchPolicyStallFp = Value("BalanceDispatchPolicyStallFp")
+    val BalanceDispatchPolicyStallVec = Value("BalanceDispatchPolicyStallVec")
+    val BalanceDispatchPolicyStallLoad = Value("BalanceDispatchPolicyStallLoad")
+    val BalanceDispatchPolicyStallStore = Value("BalanceDispatchPolicyStallStore")
+    val OtherBalanceDispatchPolicyStall = Value("OtherBalanceDispatchPolicyStall")
+    val IQEnqPolicyStallIssued = Value("IQEnqPolicyStallIssued")
+    val IQEnqPolicyStall = Value("IQEnqPolicyStall")
+    val IntIQFullStallAlu = Value("IntIQFullStallAlu")
+    val IntIQFullStallBrh = Value("IntIQFullStallBrh")
+    val IntIQFullStallOther = Value("IntIQFullStallOther")
+    val FpIQFullStall = Value("FpIQFullStall")
+    val VecIQFullStall = Value("VecIQFullStall")
+    val LoadIQFullStall = Value("LoadIQFullStall")
+    val StoreIQFullStall = Value("StoreIQFullStall")
+    val OtherIQFullStall = Value("OtherIQFullStall")
+
+    // memblock
+    val LoadTLBStall = Value("LoadTLBStall")
+    val LoadL1Stall = Value("LoadL1Stall")
+    val LoadL2Stall = Value("LoadL2Stall")
+    val LoadL3Stall = Value("LoadL3Stall")
+    val LoadMemStall = Value("LoadMemStall")
+    val StoreStall = Value("StoreStall") // include store tlb miss
+    val AtomicStall = Value("AtomicStall") // atomic, load reserved, store conditional
+
+    // xs replay (different to gem5)
+    val LoadVioReplayStall = Value("LoadVioReplayStall")
+    val LoadMSHRReplayStall = Value("LoadMSHRReplayStall")
+
+    // bad speculation
+    val ControlRedirectStall = Value("ControlRedirectStall")
+    val MemVioRedirectStall = Value("MemVioRedirectStall")
+    val OtherRedirectStall = Value("OtherRedirectStall")
+    val ControlRecoveryStall = Value("ControlRecoveryStall")
+    val MemVioRecoveryStall = Value("MemVioRecoveryStall")
+    val OtherRecoveryStall = Value("OtherRecoveryStall")
+
+    val FlushedInsts = Value("FlushedInsts") // control flushed, memvio flushed, others
+    val SpecialInsts = Value("SpecialInsts")
+
+    val BackendOtherCoreStall = Value("BackendOtherCoreStall")
+
+    val NumStallReasons = Value("NumStallReasons")
+  }
+}
