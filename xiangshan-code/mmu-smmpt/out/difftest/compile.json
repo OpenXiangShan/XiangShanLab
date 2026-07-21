@@ -1,8 +1,0 @@
-{
-    "value": {
-        "analysisFile": "/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/out/difftest/compile.dest/zinc",
-        "classes": "ref:v0:622c60f2:/nfs/home/yuanmiaomiao/HardwareVerification/test-chips/mmu-mpt/mmu-smmpt/out/difftest/compile.dest/classes"
-    },
-    "valueHash": -1544775946,
-    "inputsHash": 1968910532
-}

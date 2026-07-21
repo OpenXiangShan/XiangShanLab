@@ -1,4 +1,0 @@
-interface:
-  display_name: "XiangShan MPT DUT"
-  short_description: "Regenerate a compact MPT DUT from XiangShan"
-  default_prompt: "Use $xiangshan-mpt-dut to rebuild a simple DUT around XiangShan MPT checker logic."

@@ -1,8 +1,0 @@
-{
-    "value": [
-        "qref:v1:50528653:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/scala-library/2.13.17/scala-library-2.13.17.jar",
-        "qref:v1:faef1ed1:/nfs/home/yuanmiaomiao/.cache/coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/scala-reflect/2.13.17/scala-reflect-2.13.17.jar"
-    ],
-    "valueHash": -48883706,
-    "inputsHash": -2009759053
-}
