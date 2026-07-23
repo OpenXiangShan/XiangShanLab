@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scenarios Extractor"
+  short_description: "Generate code-grounded XiangShan verification scenarios"
+  default_prompt: "Use $scenarios-extractor to generate detailed XiangShan scenario descriptions for MDP."
