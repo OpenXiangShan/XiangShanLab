@@ -1,0 +1,4 @@
+interface:
+  display_name: "XiangShan Scenario Wave Test"
+  short_description: "Generate XiangShan tests and verify waves"
+  default_prompt: "Use $xiangshan-scenario-wave-test to reproduce a XiangShan microarchitectural scenario from source and verify it with wavekit."
