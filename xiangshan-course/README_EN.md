@@ -1,98 +1,112 @@
 # Xiangshan Processor Learning Course
 
-> Xiangshan Processor Learning Course
+> Xiangshan Processor Learning Course documentation repository
 
-[中文版请访问这里](./README.md)
+[中文版 README](./README.md)
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE-CODE)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/Docs%20License-CC_BY--NC_4.0-lightgrey.svg)](docs/LICENSE)
 
-Welcome to the official learning platform for the Xiangshan Processor! This repository contains the Xiangshan Processor series course documentation published by Beijing Institute of Open Source Chip, serving learners at three levels:
+This repository is the documentation hub for the Xiangshan Processor Learning Course. It is intended for learners who want to systematically study the Xiangshan development environment, Chisel/Diplomacy programming, the RISC-V specification, Xiangshan microarchitecture, typical scenario analysis, debugging methods, and the development tools that follow.
 
-1. 🏢 New employee training at Beijing Institute of Open Source Chip
-2. 🎓 Members of partner enterprises/universities
-3. ❤️ Individual Xiangshan enthusiasts
+The repository is currently centered on Markdown documents, images, attachments, and user guides. Course content is still being expanded, and some directories are reserved for future chapters.
 
-Ultimate Goal: Pass the **Xiangshan Certification** through systematic learning.
+## Course Overview
 
-## 📖 Documentation Directory
+### 1. [Xiangshan Development Environment](./docs/1-xiangshan-development-environment/2.ENG/Introduction_Preface.md)
 
-- [Chinese Documentation](docs/zh-CN/) - Licensed under CC BY-NC 4.0
-- [English Documentation](docs/en/) - Licensed under CC BY-NC 4.0
-- [Experiment Code](labs/) - Licensed under Apache License 2.0
+- [Chinese Course](./docs/1-xiangshan-development-environment/1.CHN/)
+- [English Course](./docs/1-xiangshan-development-environment/2.ENG/)
+- [Environment FAQ](./docs/1-xiangshan-development-environment/FAQ/xs-env-FAQ.md)
 
-## 🚀 Detailed Learning Instructions
+The main content includes the development environment overview, tool preparation, applications, instruction simulators, NEMU/Spike reference models, DRAMsim3, the Xiangshan simulation flow, GEM5, and the Difftest co-simulation framework.
 
-> **Note**  
-> This course is currently in the **internal testing phase**.  
-> The only content currently available is the basic "hello xiangshan" task.  
-> Beijing Institute of Open Source Chip employees and interviewees are welcome to participate in testing and learning. If you encounter any issues (documentation errors, technical questions, or process suggestions), please provide feedback via [GitHub Issues](https://github.com/OpenXiangShan/XiangShanLab/issues).
+### 2. [Xiangshan Programming](./docs/2-xiangshan-programming/)
 
-### Step 1: Registration and Learning
+- [Chisel Programming](./docs/2-xiangshan-programming/1-chisel/Chapter_1_Basic_Scala_Syntax.md)
+- [Diplomacy and Protocol Extensions](./docs/2-xiangshan-programming/2-diplomacy/Chapter_10_An_Introduction_to_the_Basics_of_Diplomacy.md)
 
-1. **Visit the official website**: [Not available yet](https://.com)
-2. **Register an account**: Click the registration button and fill in the necessary information
-3. **Start learning**: After logging in, enter the course page and start from Chapter 1
+The main content includes basic Scala/Chisel syntax, engineering practice, common errors, Chisel fundamentals, Xiangshan Chisel coding standards, Diplomacy basics, TileLink/AXI extensions, and practical exercises.
 
-> **Note**  
-> The complete directory and documentation for this course will ultimately be published on the **official Xiangshan website**.  
-> The website is currently under development. To learn the "hello xiangshan" basic task, please visit:  
-> [Chapter1_OverviewoftheXiangshanDevelopmentEnvironment.md](docs/课程体系1：操作篇-香山开发环境操作/2.ENG/Chapter1_OverviewoftheXiangshanDevelopmentEnvironment.md)
+### 3. [RISC-V Specification](./docs/3-riscv-specification/)
 
-### Step 2: Problem Feedback (Optional but Important)
+- [RISC-V Specification](./docs/3-riscv-specification/)
 
-If you discover any issues during the learning process:
+This section is used to collect course-related learning materials for the RISC-V specification.
 
-1. **Identify the problem type**: Documentation errors, unclear content, broken links, translation issues, etc.
-2. **Go to GitHub**: Directly visit the [Issues page](https://github.com/OpenXiangShan/XiangShanLab/issues)
-3. **Select a template**: Click "New Issue" and select the "📚 Documentation Issue Report" template
-4. **Fill in the information**:
-   - Your identity (helps us optimize content)
-   - Document path (e.g., docs/zh-CN/01-Basics/01-Environment-Setup.md)
-   - Problem type (typos, technical errors, etc.)
-   - Detailed description and suggestions for modification
-5. **Submit the Issue**: Click "Submit new issue" and wait for the team to process it
+### 4. [Xiangshan Microarchitecture Analysis](./docs/4-xiangshan-microarchitecture-analysis/)
 
-### Step 3: Complete Assignments and Share Your Initial Experience (For the Testing Phase)
+- [Superscalar Basics](./docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md)
+- [Xiangshan Design Documents](./docs/4-xiangshan-microarchitecture-analysis/2-xiangshan-design-document/)
+- [Xiangshan Source Code Analysis](./docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/)
 
-Currently available task: Complete the "hello xiangshan" task.
+The main content includes pipelines, hazards, dependencies, superscalar issue, out-of-order execution, Tomasulo/Scoreboard, register renaming, dispatch queues, issue queues, bypass networks, execution units, physical registers, CSR, ROB, and source code analysis of the frontend/backend/memory subsystems.
 
-1. **Read the course materials and practice**: The course page is [Chapter1_OverviewoftheXiangshanDevelopmentEnvironment.md](docs/课程体系1：操作篇-香山开发环境操作/2.ENG/Chapter1_OverviewoftheXiangshanDevelopmentEnvironment.md)
-2. **Run and take a screenshot**: Ensure the screenshot includes the complete running result
-3. **Go to GitHub**: Visit the [Issues page](https://github.com/OpenXiangShan/XiangShanLab/issues)
-4. **Select a template**: Click "New Issue" and select the "🎉 Submit hello xiangshan" template
-5. **Fill in the information**:
-   - Display name (the name you wish to show in the community)
-   - Your identity
-   - Upload the screenshot
-   - Share your learning insights (optional but welcome)
-6. **Submit the Issue**: Click "Submit new issue", and your work will be showcased in the community
+### 5. [Xiangshan Scenario Analysis](./docs/5-xiangshan-scenarios-analysis/)
 
-## Node Descriptions
+- [Scenario Descriptions](./docs/5-xiangshan-scenarios-analysis/scenarios-description/)
+- [Scenario Analysis](./docs/5-xiangshan-scenarios-analysis/scenarios-analysis/)
 
-| Node | Description | Related Links |
-|------|-------------|---------------|
-| Official Website Registration | Register a learning account on the Xiangshan official website | [Official website address (Not available yet)](https://.com) |
-| Start Learning | Access course content and study chapter by chapter | [Course Documentation](docs/) |
-| Submit Documentation Issues | Report documentation problems using GitHub Issues | [Documentation Issue Template](.github/ISSUE_TEMPLATE/documentation-issue.yml) |
-| Submit Assignments | Share completion screenshots of hello xiangshan | [Assignment Submission Template](.github/ISSUE_TEMPLATE/hello-xiangshan-submission.yml) |
+The main content includes scalar load/store/add, vector load/store/add, AMO, CBO, DIV, FENCE, JAL/JALR, prefetching, BPU, instruction cache, MDP, and related scenarios.
 
----
+### 6. [Xiangshan Debugging](./docs/6-xiangshan-debug/)
 
-## 📄 License Description
+- [Upper Beginner Level](./docs/6-xiangshan-debug/Upper_Beginner_Level/)
 
-This repository contains different types of content under different open-source licenses:
+The main content includes bug analysis categories, instruction generator issues, Xiangshan RTL issues, exception triggering, CSR, PMA/PMP, X-state, uninitialized state, and incorrect instruction execution results.
 
-| Content Type | Directory | License | Commercial Use |
-|--------------|-----------|---------|----------------|
-| Teaching Documentation | `docs/` | CC BY-NC 4.0 | ❌ Prohibited |
-| Experiment Code | `labs/` | Apache 2.0 | ✅ Allowed |
-| Certification Exams | Not Public | Reserved Ownership | Requires Authorization |
+### 7-8. Development and Tools
 
-**Important**: Providing paid training, certification, or examination services based on the content of this course requires explicit authorization from Beijing Institute of Open Source Chip.
+- [Xiangshan Development](./docs/7-xiangshan-development/)
+- [Xiangshan Development Tools](./docs/8-xiangshan-development-tools/)
 
-## 🤝 Contact Us
+These two directories are currently empty and reserved for future course content.
 
-- Official website: (Not provided)
-- Problem Feedback: [GitHub Issues](https://github.com/OpenXiangShan/XiangShanLab/issues)
-- Internal Collaboration: (Not provided)
+## Repository Structure
+
+- `docs/`: main course documentation
+  - `1-xiangshan-development-environment/`: development environment
+  - `2-xiangshan-programming/`: Chisel / Diplomacy programming
+  - `3-riscv-specification/`: RISC-V specification
+  - `4-xiangshan-microarchitecture-analysis/`: Xiangshan microarchitecture analysis
+  - `5-xiangshan-scenarios-analysis/`: typical scenario analysis
+  - `6-xiangshan-debug/`: debugging methods and issue analysis
+  - `7-xiangshan-development/`: future development content
+  - `8-xiangshan-development-tools/`: future development tools content
+- `user-guide/`: task submission and issue reporting guides
+- `assets/`: shared repository assets
+
+## Course Outline
+
+1. [Xiangshan Development Environment](./docs/1-xiangshan-development-environment/1.CHN/Introduction_Preface.md)
+2. [Xiangshan Programming](./docs/2-xiangshan-programming/1-chisel/Chapter_1_Basic_Scala_Syntax.md)
+3. [RISC-V Specification](./docs/3-riscv-specification/)
+4. [Xiangshan Microarchitecture Analysis](./docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md)
+5. [Xiangshan Scenario Analysis](./docs/5-xiangshan-scenarios-analysis/scenarios-description/scalar-load-scenarios.md)
+6. [Xiangshan Debugging](./docs/6-xiangshan-debug/Upper_Beginner_Level/Bug_Analysis_Categories.md)
+7. [Xiangshan Development](./docs/7-xiangshan-development/)
+8. [Xiangshan Development Tools](./docs/8-xiangshan-development-tools/)
+
+## Suggested Learning Path
+
+1. Start with `docs/1-xiangshan-development-environment/` for environment setup and basic workflow.
+2. Continue with `docs/2-xiangshan-programming/` for Chisel and Diplomacy.
+3. Read `docs/3` through `docs/6` to go deeper into architecture, scenarios, and debugging.
+4. Use `user-guide/` for task submission and issue reporting.
+
+## Documentation Notes
+
+- `docs/1-xiangshan-development-environment/1.CHN/`: Chinese materials
+- `docs/1-xiangshan-development-environment/2.ENG/`: English materials
+- Most other chapters are currently Chinese-first, with some bilingual or English-titled files.
+
+## Licenses
+
+- Documentation: see `docs/LICENSE`
+- Code and repository scripts: see `LICENSE-CODE`
+
+## Related Links
+
+- [Hello Xiangshan submission guide](./user-guide/how-to-commit-hello-xiangshan.md)
+- [Documentation issue guide](./user-guide/how-to-report-document-issues.md)
+
