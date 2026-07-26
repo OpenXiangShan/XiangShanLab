@@ -33,10 +33,10 @@
 ## Mechanism Model
 | Aspect | Description | Source evidence |
 | --- | --- | --- |
-| Goal | 用多级前端预测链在低延迟与高准确率之间折中，尽早给出下一 fetch PC，同时在晚级发现更准确目标/方向时修正早级结果 | `frontend.md`; `regenerate_frontend_docs.py` BPU/FauFTB/FTB/Tage/SC/ITTAGE/RAS 条目 |
-| Inputs | reset vector, CSR 控制, FTQ ready, backend redirect, FTQ commit update, PC/history/meta, call/ret/JALR 类型 | `regenerate_frontend_docs.py` BPU/FauFTB/FTB/ITTAGE/RAS sections |
+| Goal | Use a multi-level frontend prediction chain to balance low latency and high accuracy: produce the next fetch PC early, then correct the early result when a later stage finds a more accurate target or direction. | `frontend.md`; `regenerate_frontend_docs.py` BPU/FauFTB/FTB/Tage/SC/ITTAGE/RAS entries |
+| Inputs | Reset vector, CSR controls, FTQ ready, backend redirect, FTQ commit update, PC/history/meta, and call/return/JALR type information. | `regenerate_frontend_docs.py` BPU/FauFTB/FTB/ITTAGE/RAS sections |
 | Internal state | S0-S3 pipeline valid/ready/fire, FTQ pointers, history/folded history, FTB/ITTAGE tables, SC counters/threshold, RAS spec/commit stack, `TageBTable` base counters | `verification-special-attention.md`; `add_verification_attention.py` line refs below |
-| Algorithm/control rule | 早级低延迟、晚级覆盖；TAGE 用 folded history/tag/provider/alternate；SC 只在阈值与加权和满足时翻转；ITTAGE 以更长历史选择 target provider；RAS 以 push/pop/cancel/recovery 维护 return target；BPU 负责组合、比较、redirect 优先级和历史修复 | `predictor-papers.md`; `regenerate_frontend_docs.py` |
+| Algorithm/control rule | Early stages provide low latency and later stages override or repair them. TAGE uses folded history, tags, providers, and alternates. SC flips direction only when threshold and weighted-sum conditions are met. ITTAGE selects an indirect-target provider with longer history. RAS maintains return targets through push, pop, cancel, and recovery. BPU composes predictions, compares stages, arbitrates redirect priority, and repairs history. | `predictor-papers.md`; `regenerate_frontend_docs.py` |
 | Outputs | FTQ prediction block, next PC, branch mask, target, redirect, history recovery, FTQ metadata | `frontend.md`; `regenerate_frontend_docs.py` |
 | Observability | `S0-S3` valid/ready/fire, `multiHit`, `false hit`, `s2_redirect`, `s3_redirect`, FTQ occupancy/pointers, RAS snapshots, predictor metadata scoreboard | `add_verification_attention.py`; `verification-special-attention.md` |
 
@@ -246,28 +246,28 @@
 | RAS state | stack top, speculative/commit snapshots, near-overflow gating | Prove call/return repair and underflow/overflow legality |
 | FTQ / IBuffer / IFU backpressure | `resp.ready`, enqueue/dequeue, flush kill | Verify the chain does not lose payload under stall |
 
-## 验证特别注意
+## Verification Special Attention
 | Verification ID | Risk / invariant | Directed stimulus | Expected observation | Required checker / coverage |
 | --- | --- | --- | --- | --- |
-| `F_RESET_IDLE` | 复位后不能泄露未初始化预测 | reset 释放前后持续查询 PC | 首个有效预测块和首个更新都来自合法 entry | FSM checker, reset/first-request cover |
-| `F_FIRST_REQUEST` | 第一个请求必须建立正确的 active transition | 空表/冷启动后发首个合法 PC | 无陈旧 payload、无重复训练 | Handshake checker, first-entry cover |
-| `F_HOLD_BACKPRESSURE` | `valid && !ready` 期间 payload 必须稳定 | 拉低 FTQ/IFU/IBuffer ready | stage 不误推进，payload 不漂移 | Handshake checker, payload stability |
-| `F_REQ_AND_FLUSH` | 接受与 flush/redirect 竞争时必须按代码优先级处理 | 在 lookup/update 同拍注入 redirect | 错误路径不训练、不提交 | Flush/replay checker, metadata scoreboard |
-| `F_RESP_AND_REPLAY` | 完成与 replay/retry 竞争时只能有一次合法更新 | 让晚级错误和重试同时出现 | 只发生一次合法完成或一次合法重试 | Flush/replay checker |
-| `C_SAME_ENTRY_RW` | 同 entry 读写必须符合旁路/旧值/新值规则 | lookup 与 update 同 index/way | 读旧/读新/旁路/阻塞与代码一致 | Storage conflict checker |
-| `C_MULTI_WRITE_SAME_ENTRY` | 多写同 entry 不能静默丢失请求 | 同拍多个有效更新候选 | 有优先级或断言；未胜出请求有定义好的结局 | Multi-write checker |
-| `C_REDIRECT_REDIRECT` | 多个 redirect 源必须收敛成一个恢复目标 | 同窗口制造 S2/S3/backend redirect | 只有一个 winner，history 只修复一次 | Redirect checker, recovery scoreboard |
-| `RESOURCE_CONTENTION` | 资源填满后必须能排空 | FTQ / RAS / 表项 / 队列饱和后释放 sink | 满/空恢复正确，持续吞吐可回升 | Occupancy checker, performance checker |
-| `I_WRAP_PTR` | 环形指针必须正确回绕 | 让 FTQ 和 RAS 指针跨最大值 | phase/age 不反转，old/new 顺序正确 | Pointer-age checker |
-| `H_SAME_INDEX_DIFF_TAG` | alias 不能伪造成真 hit | 构造同 index 不同 tag 的 PC/历史 | 只能命中真实 tag；无 tag 表仅允许方向 alias | Index/hash checker |
-| `P_LIVELOCK_REPLAY_LOOP` | 重复 redirect/replay 不能卡死 | 连续制造方向和 target 的晚级差异 | 在公平条件下有限周期恢复稳定 | Forward-progress checker |
-| `PB_RECOVERY_THROUGHPUT` | 恢复后吞吐应回到基线窗口 | 饱和后注入 redirect，再恢复稳定流 | 旧路径被杀干净，持续吞吐恢复 | Performance checker |
+| `F_RESET_IDLE` | Uninitialized predictions must not leak after reset. | Keep querying PCs around reset release. | The first valid prediction block and first update both come from legal entries. | FSM checker, reset/first-request cover |
+| `F_FIRST_REQUEST` | The first request must establish the correct active transition. | Issue the first legal PC after empty-table/cold-start state. | No stale payload and no duplicate training. | Handshake checker, first-entry cover |
+| `F_HOLD_BACKPRESSURE` | Payload must remain stable during `valid && !ready`. | Pull down FTQ/IFU/IBuffer ready. | Stages do not advance incorrectly and payloads do not drift. | Handshake checker, payload stability |
+| `F_REQ_AND_FLUSH` | Accept competing with flush/redirect must follow code-defined priority. | Inject redirect in the same cycle as lookup/update. | Wrong-path work does not train or commit. | Flush/replay checker, metadata scoreboard |
+| `F_RESP_AND_REPLAY` | Completion competing with replay/retry must produce only one legal update. | Make late-stage error and retry occur together. | Exactly one legal completion or one legal retry occurs. | Flush/replay checker |
+| `C_SAME_ENTRY_RW` | Same-entry read/write must follow bypass/old-value/new-value rules. | Drive lookup and update to the same index/way. | Read-old, read-new, bypass, or block behavior matches code. | Storage conflict checker |
+| `C_MULTI_WRITE_SAME_ENTRY` | Multiple writes to the same entry must not silently drop requests. | Present multiple valid update candidates in the same cycle. | A priority or assertion exists; losing requests have defined behavior. | Multi-write checker |
+| `C_REDIRECT_REDIRECT` | Multiple redirect sources must converge to one recovery target. | Generate S2/S3/backend redirects in the same window. | There is exactly one winner and history is repaired once. | Redirect checker, recovery scoreboard |
+| `RESOURCE_CONTENTION` | Full resources must be able to drain. | Saturate FTQ, RAS, predictor entries, or queues, then release the sink. | Full/empty state recovers correctly and sustained throughput can return. | Occupancy checker, performance checker |
+| `I_WRAP_PTR` | Circular pointers must wrap correctly. | Drive FTQ and RAS pointers across their maximum values. | Phase/age does not invert and old/new ordering remains correct. | Pointer-age checker |
+| `H_SAME_INDEX_DIFF_TAG` | Aliases must not become false true-hits. | Construct same-index/different-tag PC or history patterns. | Only the real tag can hit; tables without tags may only direction-alias. | Index/hash checker |
+| `P_LIVELOCK_REPLAY_LOOP` | Repeated redirect/replay must not stall forever. | Continuously create late-stage direction and target differences. | Under fairness, the predictor returns to a stable state within finite cycles. | Forward-progress checker |
+| `PB_RECOVERY_THROUGHPUT` | Throughput should return to the baseline window after recovery. | Saturate, inject redirect, then restore a stable stream. | Old-path state is fully killed and sustained throughput recovers. | Performance checker |
 
 ## Evidence Gaps
 | Gap | Next file/search/action |
 | --- | --- |
-| 本 workspace 没有直接挂出的 XiangShan checkout | 在完整本地 checkout 上读取 `src/main/scala/xiangshan/frontend/*.scala` 并用 `nl -ba` 复核 line refs |
-| 目前的 line refs 来自 analyzer 的已整理锚点 | 用 `analyze-xiangshan-kunminghu` 重新对 `BPU.scala`, `FTB.scala`, `Tage.scala`, `SC.scala`, `ITTAGE.scala`, `newRAS.scala`, `NewFtq.scala` 做一次源码复核 |
-| `TageBTable`、`useAltOnNa`、`multiHit` 等关键判定的精确 bit-slice 未重摘录 | 复查实际 Scala 源码中的 index/tag/history fold 定义，再把刺激转换成脚本化地址组 |
-| `Bim.scala` 在当前实现中被块注释 | 若后续 commit 恢复独立 Bim，再补单独的 baseline/alias 场景 |
+| This workspace does not directly expose a XiangShan checkout. | Read `src/main/scala/xiangshan/frontend/*.scala` in a complete local checkout and recheck line references with `nl -ba`. |
+| Current line references come from analyzer-prepared anchors. | Re-run `analyze-xiangshan-kunminghu` source review for `BPU.scala`, `FTB.scala`, `Tage.scala`, `SC.scala`, `ITTAGE.scala`, `newRAS.scala`, and `NewFtq.scala`. |
+| Exact bit slices for key decisions such as `TageBTable`, `useAltOnNa`, and `multiHit` have not been restated here. | Recheck index/tag/history-fold definitions in the effective Scala source, then convert stimuli into scriptable address/history groups. |
+| `Bim.scala` is block-commented in the current implementation. | If a later commit restores an independent Bim predictor, add separate baseline and alias scenarios for it. |
 
