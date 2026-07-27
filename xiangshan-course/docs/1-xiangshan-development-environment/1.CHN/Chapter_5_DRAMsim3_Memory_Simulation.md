@@ -16,7 +16,7 @@
 
 :::
 
-![1771064569265-1b78e18a-2819-4be8-a46a-4519380fdc62.png](./img/C0-w4A1fMtO3189n/1771064569265-1b78e18a-2819-4be8-a46a-4519380fdc62-560484.png)
+![figure-001-dramsim3-memory-simulation](./img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
 
 ## 5.1 关于内存仿真
 

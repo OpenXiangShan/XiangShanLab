@@ -16,7 +16,7 @@
 
 :::
 
-![1771068691800-b38a602b-a511-4c65-b520-c62f1204e9a9.png](./img/-U527MQWZ2MsCMFu/1771068691800-b38a602b-a511-4c65-b520-c62f1204e9a9-640842.png)
+![figure-001-simulation-process-overview](./img/chapter-6-the-xiang-shan-simulation-process/figure-001-simulation-process-overview.png)
 
 ## 6.1 为什么必须做CPU仿真
 
@@ -166,7 +166,7 @@ make emu EMU_TRACE=1 -j32
 最终成功的输出结果：这里终端输出`hello xiangshan`即为成功。\
 参考成功的示例：
 
-![1770621631510-97acd557-05e5-4eb1-aed2-c6ae8f1ac81e.png](./img/-U527MQWZ2MsCMFu/1770621631510-97acd557-05e5-4eb1-aed2-c6ae8f1ac81e-178328.png)
+![figure-002-nemu-run](./img/chapter-6-the-xiang-shan-simulation-process/figure-002-nemu-run.png)
 
 图1：香山仿真成功运行Hello World程序
 
@@ -475,7 +475,7 @@ guiConfFile (write)= /nfs/home/yourhome/xs-env/XiangShan/novas.conf (working dir
 
 成功显示波形界面：
 
-![1768548114223-5f126a7d-97ff-4fd3-b8d9-46e36b1e418e.png](./img/-U527MQWZ2MsCMFu/1768548114223-5f126a7d-97ff-4fd3-b8d9-46e36b1e418e-080101.png)
+![figure-003-bashrc-waveform-bash](./img/chapter-6-the-xiang-shan-simulation-process/figure-003-bashrc-waveform-bash.png)
 
 ### 6.6.4 关联波形和代码的命令
 

@@ -25,7 +25,7 @@
 4. **TileLink协议扩展层**：协议落地核心层，为Diplomacy通用骨架填充TileLink专属规则，包含总线参数体系、拓扑节点、协商逻辑、硬件通道定义。
 5. **RTL生成层**：硬件落地层，将协商完成的标准化总线参数，转换为可综合的总线时序逻辑、IO端口电路，最终输出Verilog代码。
 
-![cf4534db1cb61efbe4f9ca81b0a86ca3.svg](./img/tB2JbKAsiIUga3ta/cf4534db1cb61efbe4f9ca81b0a86ca3-220425.svg)
+![figure-001-rtl-io-port-verilog](./img/chapter-11-the-diplomacy-framework-and-the-tile-link-protocol-extension/figure-001-rtl-io-port-verilog.svg)
 
 ## TileLink对Diplomacy的核心扩展机制
 
@@ -123,7 +123,7 @@ def apply(master: TLMasterPortParameters, slave: TLSlavePortParameters) =
 
 层级逻辑：**单体设备属性 → 端口聚合参数 → 互联协商收敛 → 硬件配置参数 → 物理总线电路**
 
-![f8579c341d7fd11f49406f6301d91ea3.svg](./img/tB2JbKAsiIUga3ta/f8579c341d7fd11f49406f6301d91ea3-708151.svg)
+![figure-002-port-tlimp-tile-link](./img/chapter-11-the-diplomacy-framework-and-the-tile-link-protocol-extension/figure-002-port-tlimp-tile-link.svg)
 
 ### 2.2 TLImp协议适配核心
 
@@ -176,7 +176,7 @@ case class TLNexusNode(
 
 #### 2.3.1 节点继承关系
 
-![9bf1c4fadd08bf04a29141e02d51206c.svg](./img/tB2JbKAsiIUga3ta/9bf1c4fadd08bf04a29141e02d51206c-167879.svg)
+![figure-003-tlbundle-tile-link-framework](./img/chapter-11-the-diplomacy-framework-and-the-tile-link-protocol-extension/figure-003-tlbundle-tile-link-framework.svg)
 
 ### 2.4 TLBundle硬件总线结构
 
@@ -195,7 +195,7 @@ TLBundle是TileLink协议的最终硬件载体，框架根据协商参数`hasBCE
 
 双向参数流动与自定义协商是Diplomacy+TileLink架构的核心能力，通过Up/Down双向参数传输、clientFn/managerFn自定义修改，实现总线参数的精准适配与自动对齐。
 
-![97b083aa3f99e2655851aeccf689bbb5.svg](./img/tB2JbKAsiIUga3ta/97b083aa3f99e2655851aeccf689bbb5-681468.svg)
+![figure-004-diplomacy-tile-link-up](./img/chapter-11-the-diplomacy-framework-and-the-tile-link-protocol-extension/figure-004-diplomacy-tile-link-up.svg)
 
 ### 3.1 双向参数流向定义
 

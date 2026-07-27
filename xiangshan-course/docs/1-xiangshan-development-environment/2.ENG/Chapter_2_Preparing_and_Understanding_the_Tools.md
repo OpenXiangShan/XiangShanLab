@@ -27,7 +27,7 @@ If you can’t do this, it’s not a matter of your ability - it’s because you
 
 ## 1.1 XiangShan Development Process and Corresponding Tools
 
-![1773819748645-b805e97d-7666-4274-9002-af3843b8ebcc.png](./img/6flL2-kSqypo6hta/1773819748645-b805e97d-7666-4274-9002-af3843b8ebcc-897488.png)
+![figure-001-xiang-shan-development-process](./img/chapter-2-preparing-and-understanding-the-tools/figure-001-xiang-shan-development-process.png)
 
 图1：
 
@@ -231,7 +231,7 @@ Yes, the latest version of Chisel supports SystemVerilog by default, offering mo
 
 ### 2.1.2 Chisel Compilation Process
 
-![1773819652623-385ededc-a41f-47c0-a591-4b6b43c4a541.png](./img/6flL2-kSqypo6hta/1773819652623-385ededc-a41f-47c0-a591-4b6b43c4a541-663892.png)
+![figure-002-chisel-compilation-process-latest](./img/chapter-2-preparing-and-understanding-the-tools/figure-002-chisel-compilation-process-latest.png)
 
 Figure 2: Chisel Compilation Process
 
@@ -338,7 +338,7 @@ The mill tool generates a configuration file in the project directory. This file
 
 ### 2.2.3 Analysis of the build.sc Code Structure
 
-![1770194988083-8d3cbcf9-064d-4d58-b700-3d9b5c04dea5.png](./img/6flL2-kSqypo6hta/1770194988083-8d3cbcf9-064d-4d58-b700-3d9b5c04dea5-882116.png)
+![figure-003-sc-structure-mill](./img/chapter-2-preparing-and-understanding-the-tools/figure-003-sc-structure-mill.png)
 
 Figure 2: Analysis of the main structure of the build.sc code
 
@@ -484,7 +484,7 @@ This is a compilation under RISC-V, so the `gcc`command is prefixed. By default,
 ### 2.4.3 How do the commands in the Makefile compile C code into executable RISC-V code?
 
 The compilation process using `makefile.compiler`is described below:\
-![1770888738675-e81de847-0643-4330-b2f2-f29b9bfc9cf7.png](./img/6flL2-kSqypo6hta/1770888738675-e81de847-0643-4330-b2f2-f29b9bfc9cf7-776462.webp)
+![figure-004-do-commands-makefile-compile](./img/chapter-2-preparing-and-understanding-the-tools/figure-004-do-commands-makefile-compile.webp)
 
 :::info
 Understanding the make Compilation Process
@@ -586,7 +586,7 @@ Function: Provides code hints and navigation
 
 1. **Download and install the plugin**
 
-![1770255916439-d21661f6-4838-489c-8be5-116341f16562.png](./img/6flL2-kSqypo6hta/1770255916439-d21661f6-4838-489c-8be5-116341f16562-086856.png)
+![figure-005-metals-vs-download-install](./img/chapter-2-preparing-and-understanding-the-tools/figure-005-metals-vs-download-install.png)
 
 Figure 3: Metals plugin installation interface
 

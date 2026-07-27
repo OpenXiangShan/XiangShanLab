@@ -16,7 +16,7 @@
 
 :::
 
-## ![1771038423705-5af4c1c3-eb5d-4346-8795-22067b4006ed.png](./img/D1HuLA9s5CPQMt3m/1771038423705-5af4c1c3-eb5d-4346-8795-22067b4006ed-732127.png)
+## ![figure-001-cpu-bug-run-debug](./img/chapter-4-instruction-emulator-cpu-simulation-and-reference-models-nemu-spike/figure-001-cpu-bug-run-debug.png)
 
 ## 4.1 模拟指令器的作用
 
@@ -590,7 +590,7 @@ export GCB_REF_SO=`realpath build/riscv64-nemu-interpreter-so`
 
 使用`menuconfig`命令，配置需要查看的对象，之后选中进行`debug`。
 
-![1768895022679-4182fabd-385d-43c9-b14e-ec8abfe9606a.png](./img/D1HuLA9s5CPQMt3m/1768895022679-4182fabd-385d-43c9-b14e-ec8abfe9606a-646087.png)
+![figure-002-debug-menuconfig-inspect-nemu](./img/chapter-4-instruction-emulator-cpu-simulation-and-reference-models-nemu-spike/figure-002-debug-menuconfig-inspect-nemu.png)
 
 图1：NEMU menuconfig调试配置界面
 

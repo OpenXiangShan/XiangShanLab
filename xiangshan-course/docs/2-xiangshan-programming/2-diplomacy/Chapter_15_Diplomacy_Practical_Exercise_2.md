@@ -17,7 +17,7 @@
 
 基于我们提供的代码，系统架构如下：
 
-![画板](./img/-m7P6j_IlYybh2Nn/1779690268033-dec1b36e-35ab-48db-8d90-af43915bf77d-882835.jpeg)
+![figure-001-system-architecture](./img/chapter-15-diplomacy-practical-exercise-2/figure-001-system-architecture.jpeg)
 
 **代码中出现的模块及其功能**：
 

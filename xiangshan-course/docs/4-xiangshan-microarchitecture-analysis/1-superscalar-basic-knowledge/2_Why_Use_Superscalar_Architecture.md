@@ -12,7 +12,7 @@
 
 根据计算机体系结构经典理论，程序执行时间由三个因素决定：
 
-![1778228172505-8f10db01-5b5e-4a6d-85ad-6cf5e133d652.png](./img/kOzN-DCAcFxAkkWD/1778228172505-8f10db01-5b5e-4a6d-85ad-6cf5e133d652-822344.png)
+![figure-001-cpi](./img/2-why-use-superscalar-architecture/figure-001-cpi.png)
 
 **执行时间 = 指令总数 × CPI × 时钟周期时间**
 

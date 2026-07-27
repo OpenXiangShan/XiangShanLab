@@ -675,7 +675,7 @@ object IopmpParams {
 
 基于我们提供的代码，系统架构如下：
 
-![画板](./img/GLTHpG_6wLNu1qQD/1779690268033-dec1b36e-35ab-48db-8d90-af43915bf77d-989529.jpeg)
+![figure-001-system-architecture](./img/chapter-14-diplomacy-practical-exercise-1/figure-001-system-architecture.jpeg)
 
 **代码中出现的模块及其功能**：
 

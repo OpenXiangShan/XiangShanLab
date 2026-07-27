@@ -57,7 +57,7 @@ make verilog
 
 当看到成功生成 Verilog 的提示时，表明环境已准备就绪。现在，你已经能够顺利地将使用 Diplomacy 框架编写的 Chisel 代码转换为 Verilog 代码。
 
-![1773136903957-f6f0104d-ad55-46e7-b6b9-0337810ab246.png](./img/CFgvX7cbhIHBixKr/1773136903957-f6f0104d-ad55-46e7-b6b9-0337810ab246-900163.png)
+![figure-001-verilog-diplomacy-framework-chisel](./img/chapter-13-programming-practices-with-diplomacy/figure-001-verilog-diplomacy-framework-chisel.png)
 
 生成的 Verilog 代码位于以下目录中：
 
@@ -137,7 +137,7 @@ cd ChiselMyTop/
 make verilog
 ```
 
-![1773142828150-a63adb31-7c21-4cf5-9bc5-1c5b8bcb772f.png](./img/CFgvX7cbhIHBixKr/1773142828150-a63adb31-7c21-4cf5-9bc5-1c5b8bcb772f-154943.png)
+![figure-002-verilog](./img/chapter-13-programming-practices-with-diplomacy/figure-002-verilog.png)
 
 成功输出verilog代码，环境搭建成功。
 
@@ -224,7 +224,7 @@ object TOP extends App {
 
 上面的代码运行的结果是：
 
-![1776160366187-e831c895-3218-419b-91e6-0614adfbf28c.png](./img/CFgvX7cbhIHBixKr/1776160366187-e831c895-3218-419b-91e6-0614adfbf28c-396634.png)
+![figure-003-rename-run-result-plain](./img/chapter-13-programming-practices-with-diplomacy/figure-003-rename-run-result-plain.png)
 
 ```plain
 package mytop

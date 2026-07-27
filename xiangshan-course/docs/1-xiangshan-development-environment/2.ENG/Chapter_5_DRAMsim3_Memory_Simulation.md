@@ -16,7 +16,7 @@ By the end of this chapter, you should be able to answer the following questions
 
 :::
 
-![1771064569265-1b78e18a-2819-4be8-a46a-4519380fdc62.png](./img/Jrun5BOFKjec-0hP/1771064569265-1b78e18a-2819-4be8-a46a-4519380fdc62-840516.png)
+![figure-001-objectives-first-start-question](./img/chapter-5-dramsim3-memory-simulation/figure-001-objectives-first-start-question.png)
 
 ## 5.1 About Memory Simulation
 

@@ -152,9 +152,9 @@ MFC_ARGS = --target $(CHISEL_TARGET) \
 
 **优化效果**：精准打印未初始化端口、类型不匹配位置、位宽错误具体行列，大幅提升排错效率。
 
-![1779417822033-0ab1d649-8462-460f-b10e-ac7c84254331.png](./img/qsnzrUL2Yqgi2cut/1779417822033-0ab1d649-8462-460f-b10e-ac7c84254331-392349.png)
+![figure-001-port-module-new](./img/chapter-7-common-syntax-errors-in-chisel/figure-001-port-module-new.png)
 
-![1779417850680-c555aa65-cac1-4137-87ed-76089525559b.png](./img/qsnzrUL2Yqgi2cut/1779417850680-c555aa65-cac1-4137-87ed-76089525559b-988648.png)
+![figure-002-port-module-new](./img/chapter-7-common-syntax-errors-in-chisel/figure-002-port-module-new.png)
 
 ## 报错速查总口诀
 

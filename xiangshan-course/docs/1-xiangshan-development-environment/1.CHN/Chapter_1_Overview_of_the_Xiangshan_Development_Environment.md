@@ -18,7 +18,7 @@
 
 ## 1.1 香山环境的整体架构
 
-![1778742075650-5f81d957-9a5c-437e-98a5-53800d014b73.png](./img/HwOjzyf_D-IM3VVV/1778742075650-5f81d957-9a5c-437e-98a5-53800d014b73-549267.png)
+![figure-001-xiangshan-environment-architecture-overview](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-001-xiangshan-environment-architecture-overview.png)
 
 图1：香山环境的整体框架
 
@@ -86,7 +86,7 @@
 
 ## 1.3 香山开发环境学习路径
 
-![1773819758648-3b96213e-c08c-4321-b3af-3ff7b7551cc5.png](./img/HwOjzyf_D-IM3VVV/1773819758648-3b96213e-c08c-4321-b3af-3ff7b7551cc5-530672.png)
+![figure-002-development-environment-learning-run](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-002-development-environment-learning-run.png)
 
 图2：程序运行流程图
 
@@ -154,7 +154,7 @@
 | **香山Gem5** | <https://github.com/OpenXiangShan/GEM5.git> | 适配香山的周期级系统模拟器 | 用于架构探索和性能分析 |
 | **香山设计文档** | <https://github.com/OpenXiangShan/XiangShan-doc.git> | 香山昆明湖V2 微架构设计文档 | 了解香山微架构, 包括处理器前端、后端、访存等 |
 
-![1770806502366-0a0f3e4a-44da-4f48-b970-ce712305f090.png](./img/HwOjzyf_D-IM3VVV/1770806502366-0a0f3e4a-44da-4f48-b970-ce712305f090-028835.png)
+![figure-003-development-environment-frontend-backend](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-003-development-environment-frontend-backend.png)
 
 图3. 香山代码仓库截图
 
@@ -171,7 +171,7 @@
 
 :::
 
-![1773385727542-b2b4cadc-241f-4ffa-89c3-4d414f10ae94.png](./img/HwOjzyf_D-IM3VVV/1773385727542-b2b4cadc-241f-4ffa-89c3-4d414f10ae94-147343.png)
+![figure-004-development-environment-info](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-004-development-environment-info.png)
 
 :::info
 在对话框问感兴趣的问题，由大模型做仓库介绍和代码讲解
@@ -180,7 +180,7 @@
 
 :::
 
-![1773385957337-8626e146-ce86-4cc7-9231-ad62650a5a1c.png](./img/HwOjzyf_D-IM3VVV/1773385957337-8626e146-ce86-4cc7-9231-ad62650a5a1c-819998.png)
+![figure-005-development-environment-workload-cpu](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-005-development-environment-workload-cpu.png)
 
 ## 1.4 Workload 运行流程
 
@@ -309,7 +309,7 @@ cd $NOOP_HOME
 Hello XiangShan!
 ```
 
-![1770882600453-461702bc-7d74-4357-924b-3677969832cd.png](./img/HwOjzyf_D-IM3VVV/1770882600453-461702bc-7d74-4357-924b-3677969832cd-648534.png)
+![figure-006-xiang-shan-diff](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-006-xiang-shan-diff.png)
 
 恭喜！你成功运行了第一个程序！
 
@@ -336,7 +336,7 @@ make emu CONFIG=MinimalConfig EMU_TRACE=1 -j32
 
 现在的香山 RTL 包含了我们手动注入的错误, 因此包含加法指令的程序都有可能出现错误, 你应该会看到输出:
 
-![1772243408467-23ecd62d-4b4a-40e5-8e1c-73beddb5b59e.png](./img/HwOjzyf_D-IM3VVV/1772243408467-23ecd62d-4b4a-40e5-8e1c-73beddb5b59e-442573.png)
+![figure-007-diff-rtl-add-pc](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-007-diff-rtl-add-pc.png)
 
 这表明, DiffTest 在 PC `0x0080000078`处发现了测试设计 (DUT, 也就是香山处理器核) 和参考设计 (REF, 也就是 NEMU 指令集模拟器) 在 `a0`寄存器出现了不一样的结果 (我们认为 REF 是正确的实现, 所以 `right`表示 REF 给出的值, 而 `wrong`表示 DUT 给出的值). 因为出现了错误, 所以程序的执行被迫停止. 在香山仿真中, 仿真程序还会列举出所有寄存器的内容, 为调试错误提供帮助. 在最后, 请记得将刚才植入错误的文件恢复原样:
 
@@ -387,7 +387,7 @@ make init
 
 ## 1.8 学习路径规划
 
-![画板](./img/HwOjzyf_D-IM3VVV/1773648085655-e578c4a6-3ddc-4eeb-84d4-4d629b508379-474519.jpeg)
+![figure-008-learning](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-008-learning.jpeg)
 
 ## 1.9 学习收获与建议
 

@@ -14,7 +14,7 @@ By the end of this chapter, you should be able to:
 
 :::
 
-![1770715590089-0d4a497b-381c-47c2-aa33-15d939bf1ee2.png](./img/Oq9TatLa7y_9AvgD/1770715590089-0d4a497b-381c-47c2-aa33-15d939bf1ee2-782041.webp)
+![figure-001-objectives-applications-overview](./img/chapter-3-applications/figure-001-objectives-applications-overview.webp)
 
 本章讲解横向绿色板块
 
@@ -66,7 +66,7 @@ Source code: [GitHub - OpenXiangShan/nexus-am](https://github.com/OpenXiangShan/
 * Implements basic **system call interfaces and exception handling**
 * Supports multiple ISAs and configurations
 
-![1770712564169-fa5f9058-3cf5-482e-99b7-8c896b076803.png](./img/Oq9TatLa7y_9AvgD/1770712564169-fa5f9058-3cf5-482e-99b7-8c896b076803-885874.png)
+![figure-002-core-objectives-supports-multiple](./img/chapter-3-applications/figure-002-core-objectives-supports-multiple.png)
 
 Figure 1: Structure of the Nexus-AM framework
 
@@ -600,7 +600,7 @@ To solve the “too slow” problem mentioned above, XiangShan employed **SimPoi
 
 <font style="color:rgb(38, 38, 38);"></font>
 
-![1770715819511-591a73d5-6a47-41da-803a-4298fba520f5.png](./img/Oq9TatLa7y_9AvgD/1770715819511-591a73d5-6a47-41da-803a-4298fba520f5-417200.png)
+![figure-003-sim-point-checkpoint-triumph](./img/chapter-3-applications/figure-003-sim-point-checkpoint-triumph.png)
 
 Figure 2: SimPoint Technology Principles
 

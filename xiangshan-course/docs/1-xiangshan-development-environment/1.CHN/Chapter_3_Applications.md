@@ -14,7 +14,7 @@
 
 :::
 
-![1770715590089-0d4a497b-381c-47c2-aa33-15d939bf1ee2.png](./img/AtlIPgGy5UlzS5oR/1770715590089-0d4a497b-381c-47c2-aa33-15d939bf1ee2-639589.webp)
+![figure-001-applications-overview](./img/chapter-3-applications/figure-001-applications-overview.webp)
 
 本章讲解横向绿色板块
 
@@ -66,7 +66,7 @@ CPU 不会直接运行你的 C 代码，它只运行经过 AM 包装、符合特
 * 实现了基本的**系统调用接口和异常处理**
 * 支持多种ISA和配置
 
-![1770712564169-fa5f9058-3cf5-482e-99b7-8c896b076803.png](./img/AtlIPgGy5UlzS5oR/1770712564169-fa5f9058-3cf5-482e-99b7-8c896b076803-031038.png)
+![figure-002-isa-nexus-am-framework](./img/chapter-3-applications/figure-002-isa-nexus-am-framework.png)
 
 图1：nexus-am框架结构
 
@@ -599,7 +599,7 @@ ssh yourhome@open08 NOOP_HOME=/nfs/home/yourhome/xs-env/XiangShan numactl -m 1 -
 
 <font style="color:rgb(38, 38, 38);"></font>
 
-![1770715819511-591a73d5-6a47-41da-803a-4298fba520f5.png](./img/AtlIPgGy5UlzS5oR/1770715819511-591a73d5-6a47-41da-803a-4298fba520f5-434213.png)
+![figure-003-sim-point-checkpoint](./img/chapter-3-applications/figure-003-sim-point-checkpoint.png)
 
 图2：SimPoint技术原理
 
