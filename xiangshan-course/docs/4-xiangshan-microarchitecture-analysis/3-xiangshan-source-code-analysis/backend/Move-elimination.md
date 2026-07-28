@@ -642,26 +642,5 @@ pdest = psrc(0) = PR20
 🎉 **恭喜你完成了 Move 指令消除的学习！** 这是寄存器重命名之后最精妙的微架构优化之一——看似简单的"省一步"，背后却牵动了 Freelist 架构、引用计数、提交逻辑等多个模块的协同设计。掌握了 Move 消除，你就理解了高性能处理器中"零开销数据搬运"的实现奥秘。接下来，让我们继续探索香山流水线中更多精彩的微架构优化。
 
 
-> 更新: 2026-06-02 10:56:38
-
-## 验证特别注意
-
-> 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。每个期望必须以当前 `kunminghu-v2` 有效 Chisel 为准。
-
-| Verification ID | 风险 / 不变量 | 定向激励 | 期望观察 | Checker / Coverage |
-| --- | --- | --- | --- | --- |
-| `ME_LEGALITY` | 非纯 move 被错误消除 | 覆盖整型 move、带异常/触发器/单步、非 move ALU 指令 | 只有代码定义的 `isMove` 且满足条件者共享源 pdest；证据 [backend/rename/freelist/MEFreeList.scala:45-66](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala#L45-L66) | Move legality checker；opcode/exception cross |
-| `ME_REF_INC_DEC` | 共享物理寄存器引用计数溢出、下溢或提前释放 | 多级 move 链后以不同提交/flush 顺序释放映射 | refCounter 每次建立映射只加一次、映射消亡只减一次，归零才回 free list；证据 [backend/rename/freelist/MEFreeList.scala:59-86](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala#L59-L86) | Reference-count scoreboard；overflow/underflow assertions |
-| `C_MULTI_WRITE_SAME_ENTRY` | 同拍多个 move 引用同一源 pdest | 多个 lane 从同一源物理寄存器产生 move | 合并后的引用增量等于有效 move 数，不丢增量、不重复释放 | Multi-update counter checker；same-pdest cross |
-| `F_REQ_AND_FLUSH` | move 消除映射与 redirect 回滚竞争 | 消除 move 被接受同拍或随后触发 snapshot redirect | 推测引用和映射完整撤销，head 恢复与 refCounter 延迟关系一致；证据 [backend/rename/freelist/MEFreeList.scala:77-100](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala#L77-L100) | Snapshot/refcount recovery checker |
-| `ME_NO_EXEC` | 已消除 move 仍进入执行或重复完成 | 建立可消除 move，并对执行队列施加不同反压 | dispatch 保留 `eliminatedMove` 元数据且不产生普通执行副作用；证据 [backend/dispatch/NewDispatch.scala:720-740](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala#L720-L740) | Dispatch/ROB lifecycle scoreboard |
-| `ME_COMMIT_VISIBILITY` | 消除后提交、异常和 difftest 可见性不一致 | move 链跨提交边界并插入异常、redirect | ROB 只完成一次，架构映射和调试可见结果正确；证据 [backend/rob/Rob.scala:1506-1537](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/rob/Rob.scala#L1506-L1537) | Commit/difftest scoreboard |
-| `PB_RECOVERY_THROUGHPUT` | 高比例 move 或 refCounter 压力导致永久停顿 | 长 move 链填充共享引用后提交并注入 redirect | 引用最终归零并回收，rename/dispatch 吞吐恢复 | Forward-progress/performance checker |
-
-### 通用判定原则
-
-- `valid && !ready` 期间 payload 必须稳定；只有 `fire` 才能推进指针、状态或训练一次。
-- flush/redirect/replay 的胜负关系必须按代码优先级检查；错误路径不得提交、写表、训练预测器或暴露异常/数据。
-- 资源填满后必须验证可排空；重复冲突、retry 或 redirect 不得形成 deadlock/livelock，并检查低优先级旧请求是否饥饿。
-- 环形指针必须覆盖最大值到零的 wrap；表索引必须构造 same-index/different-tag 和同拍 read/write 冲突组。
-- 性能覆盖至少记录占用率、反压周期、redirect 恢复延迟、重试次数和恢复后的持续吞吐。
+> 更新: 2026-06-02 10:56:38  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/beryss0adppkq5nr>

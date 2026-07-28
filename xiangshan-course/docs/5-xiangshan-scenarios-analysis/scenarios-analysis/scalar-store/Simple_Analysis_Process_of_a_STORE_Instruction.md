@@ -20,11 +20,11 @@
 
 此处选择位于程序计数器（pc）地址 `0x80000134`的指令，其原始内容为压缩指令 `0xe406`。经过前端解压后，实际指令为 `0x00113423`。
 
-![figure-001-store-instruction-select](../../img/simple-analysis-process-of-a-store-instruction/figure-001-store-instruction-select.png)
+![1774337920540-c32536b1-31fc-4425-85eb-c7e66d0406d6.png](../../img/simple-analysis-process-of-a-store-instruction/figure-001-store-instruction-select.png)
 
 <font style="color:rgb(38, 38, 38);">单独分析这条指令，对照指令集手册：</font>
 
-![figure-002-store-instruction-analysis](../../img/simple-analysis-process-of-a-store-instruction/figure-002-store-instruction-analysis.png)
+![1774338126317-1e223e54-5a15-49b9-8c27-e74d1095a38d.png](../../img/simple-analysis-process-of-a-store-instruction/figure-002-store-instruction-analysis.png)
 
 <font style="color:rgb(38, 38, 38);">（ 本图来源于 </font>[<font style="color:rgb(22, 119, 255);">链接</font>](https://ai-embedded.com/risc-v/riscv-isa-manual/)<font style="color:rgb(38, 38, 38);"> ）</font>
 
@@ -48,7 +48,7 @@
 * 这个推导是清晰和正确的。`ra`的值由调用 `main`函数的那条指令设置。
 * 调用 `main`的指令位于 `0x8000016e`：`jal ra, 8000012a <main>`。这是一条跳转并链接指令，硬件会将其**下一条指令的地址**存入 `ra`寄存器。
 
-![figure-003-store-instruction-jal](../../img/simple-analysis-process-of-a-store-instruction/figure-003-store-instruction-jal.png)
+![1774339065865-55d1aa5d-c100-4f3b-80cc-5fcdd95ddf6c.png](../../img/simple-analysis-process-of-a-store-instruction/figure-003-store-instruction-jal.png)
 
 * `0x8000016e`的下一条指令地址是 `0x80000172`。
 * 因此，当 CPU 跳转到 `main`函数入口 (`0x8000012a`) 开始执行时，`ra`寄存器的值就是 `0x80000172`。这个值在 `main`函数执行期间保持不变，直到被其他跳转指令修改。
@@ -66,11 +66,11 @@
 
 因此，我们可以直接查看译码模块（Decode）的输出波形。（经过一段迷迷糊糊的查找，最终确认目标指令被注入到了下标为3的那一路译码器（decoder\_3），时刻为16767）：
 
-![figure-004-decode-stage-inspect-waveform](../../img/simple-analysis-process-of-a-store-instruction/figure-004-decode-stage-inspect-waveform.png)
+![1774339860686-48a4c0a2-c4db-4a1b-a8d7-b93ea509ccbb.png](../../img/simple-analysis-process-of-a-store-instruction/figure-004-decode-stage-inspect-waveform.png)
 
 因此，我们直接提取该模块中下标为 3 的译码信号，即与 `io_*_3_*`相关的信号，具体如下：
 
-![figure-005-decode-stage-signal-io](../../img/simple-analysis-process-of-a-store-instruction/figure-005-decode-stage-signal-io.png)
+![1774345192952-c99cc082-20fe-4bd5-b329-afc3a8e9ce63.png](../../img/simple-analysis-process-of-a-store-instruction/figure-005-decode-stage-signal-io.png)
 
 在仿真时间为 16767 ps 的时刻，可以观察到译码产生的信号如上图所示。在 `valid`信号有效的前提下，我们可以先检查译码得到的信号是否符合预期。
 
@@ -78,22 +78,22 @@
 
 `commitType`为 `0x3`。可以发现，这与前面加法指令的 `commitType`（`0x0`）明显不同。那么这个信号代表什么含义呢？我们可以直接查看 Chisel 代码中的相关描述：
 
-![figure-006-decode-stage-commit-type](../../img/simple-analysis-process-of-a-store-instruction/figure-006-decode-stage-commit-type.png)
+![1774343079698-02fdf73d-b3a8-4113-9f80-6e9f37bfb00c.png](../../img/simple-analysis-process-of-a-store-instruction/figure-006-decode-stage-commit-type.png)
 
-![figure-007-decode-stage-commit-type](../../img/simple-analysis-process-of-a-store-instruction/figure-007-decode-stage-commit-type.png)
+![1774343128355-8fc71d94-d48e-416f-9b8e-8d6bf056e57a.png](../../img/simple-analysis-process-of-a-store-instruction/figure-007-decode-stage-commit-type.png)
 
 通过代码描述基本可以确定：如果一条指令是 store 类指令但非 AMO 指令，`commitType[0]`位会被拉高；如果该指令会使用到 LDU 或 STU（即进行访存操作），`commitType[1]`位也会被拉高。可以非常清晰地判断出，我们所追踪的这条 sd 指令同时满足以上两个条件，因此其 `commitType`将被赋值为 `0x3`。波形中的实际数据完全符合预期。
 
 接下来的其他数据还包括 `fuType`和 `fuOpType`两个信号。结合前面对加法指令的分析，基本可以确定这两个信号代表：这条指令将使用哪个功能单元，以及在该单元上执行的具体操作是什么。对于一条 store 指令，可以确定它将使用 STU 这类访存单元，具体操作是存储一条 64 位的数据。
 
 从波形中可以看到，`fuType`的值为 `0x10000`，其独热编码的第 17 位（下标16）为高。现在来看它实际代表的意义：\
-![figure-008-decode-stage-waveform-fu](../../img/simple-analysis-process-of-a-store-instruction/figure-008-decode-stage-waveform-fu.png)
+![1774344232024-cdc4d6ab-c8a7-4d76-8ff8-c5ca93553788.png](../../img/simple-analysis-process-of-a-store-instruction/figure-008-decode-stage-waveform-fu.png)
 
 你可以手动数一下，确认 `stu`是否被安排在第 17 个位置。从波形中可以看出，其行为完全符合预期。
 
 对于 `fuOpType`的值为 `0x3`，我们同样在代码中查找它所代表的具体含义：
 
-![figure-009-decode-stage-fu-op](../../img/simple-analysis-process-of-a-store-instruction/figure-009-decode-stage-fu-op.png)
+![1774344482009-dc228c97-0c61-4396-a9cb-be42bc9c375f.png](../../img/simple-analysis-process-of-a-store-instruction/figure-009-decode-stage-fu-op.png)
 
 既然这条指令的 `fuType`是“stu”，那么其 `fuOpType`的属性自然对应 `LSUOpType`。我们需要在其中查找当值为 `0x3`时所代表的意义。从上图的代码中可以清楚地看到，`0x3`表示当前这条存数指令具体是一条“sd”指令，即存储的数据宽度为 64 位。
 
@@ -110,7 +110,7 @@
 
 观察代码：
 
-![figure-010-decode-stage-signal-sel](../../img/simple-analysis-process-of-a-store-instruction/figure-010-decode-stage-signal-sel.png)
+![1774345359595-b56c2e06-6044-437f-bd4a-9f9e068a4380.png](../../img/simple-analysis-process-of-a-store-instruction/figure-010-decode-stage-signal-sel.png)
 
 实际上，由于不同类型的指令，其立即数的编码格式也不同，因此需要一个信号来指示当前指令的类型。`selImm`值为 `0xe`，根据代码描述，这明确表示该指令是一条 S 型指令，意味着其立即数应按照 S 型的格式进行解析。这个行为是完全正确的。
 
@@ -160,7 +160,7 @@
 
 流程大致如下：在译码阶段，相关的读取信号就已经被送入RAT。之后，会经过一系列复杂的处理，主要包括各种旁路（bypass）选择操作。最终，我们直接观察读取到的信号和结果：
 
-![figure-011-rat-flow-decode-stage](../../img/simple-analysis-process-of-a-store-instruction/figure-011-rat-flow-decode-stage.png)
+![1774925844853-0644a2c3-cf1e-448f-84d5-634a2e37c316.png](../../img/simple-analysis-process-of-a-store-instruction/figure-011-rat-flow-decode-stage.png)
 
 通过对前面指令的分析，我们知道这条指令的两个源操作数分别是逻辑 2 号寄存器（`sp`）和逻辑 1 号寄存器（`ra`）。因此，在译码阶段就会将这两个地址（2 和 1）向外发出。经过一个周期的延迟，我们观察 RAT 读取的结果。
 
@@ -168,7 +168,7 @@
 
 为了验证这一点，我们需要将最终从重命名模块输出的信号提取出来观察：
 
-![figure-012-rat-rename-stage-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-012-rat-rename-stage-signal.png)
+![1774926356657-204d64e2-78da-4019-8b07-6074ec806d15.png](../../img/simple-analysis-process-of-a-store-instruction/figure-012-rat-rename-stage-signal.png)
 
 会惊奇地发现，最终的结果是：`rs2`（即逻辑 1 号寄存器，`ra`）确实被映射到了物理寄存器 19 号。但是，对于 `rs1`（即逻辑 1 号寄存器，`ra`），我们从 RAT 表读出的数据是 13 号寄存器，为什么最终传出的信号却显示它被映射到了物理寄存器 20 号呢？
 
@@ -178,7 +178,7 @@
 
 我们直接查看波形图来验证：
 
-![figure-013-rat-inspect-waveform-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-013-rat-inspect-waveform-signal.png)
+![1774927039698-20f19585-fd43-4949-b847-159e4b688968.png](../../img/simple-analysis-process-of-a-store-instruction/figure-013-rat-inspect-waveform-signal.png)
 
 通过逐一比较各路信号可以发现，下标为 0 的那路指令确实在对 RAT 表进行写入。其写入地址是 2，表明要更新逻辑寄存器 2 号（`sp`）的映射关系。写入的数据是 20，说明该指令会对逻辑寄存器 2 号进行回写，并将结果存入 20 号物理寄存器。那么，我们的 `sd`指令若要获取正确的 2 号逻辑寄存器的值，就应该去 20 号物理寄存器读取。因此，`sd`指令获取的 2 号逻辑寄存器的映射关系，**应当是 20 号物理寄存器**，而 RAT 表直接读出的 13 号映射反而是过时的旧值。
 
@@ -193,7 +193,7 @@
 
 在重命名阶段，系统会自动记录每一次的分配情况，独立地为每条有效指令分配 ROB 表项值，而无需实时查询 ROB 页表的状态。其具体的代码实现和分配逻辑，详见“一条ADD指令的简单分析”。这里我们直接查看分配结果，确认其具体分配到了哪一个表项：
 
-![figure-014-rob-rename-stage-add](../../img/simple-analysis-process-of-a-store-instruction/figure-014-rob-rename-stage-add.png)
+![1774938590514-77f973e6-afec-43ac-8781-7b5605e25967.png](../../img/simple-analysis-process-of-a-store-instruction/figure-014-rob-rename-stage-add.png)
 
 可以确定，系统为该指令分配的 ROB 表项值是 49。这表明在后续的分发阶段，这条指令的相关信息将被写入 ROB 表的第 49 项。
 
@@ -208,7 +208,7 @@
 
 在分发阶段，对于一条 `sd`指令而言，相较于普通的 `add`指令，其内部需要处理的事务相对更加复杂一些。
 
-![figure-015-dispatch-stage-sd-add](../../img/simple-analysis-process-of-a-store-instruction/figure-015-dispatch-stage-sd-add.png)
+![1774941224480-ab60f680-9fed-474a-b21e-fa02bce593fd.png](../../img/simple-analysis-process-of-a-store-instruction/figure-015-dispatch-stage-sd-add.png)
 
 通过查看架构图可以发现，在这个阶段，指令流首次开始与 LSQ 建立交互。
 
@@ -216,7 +216,7 @@
 
 那么，访存所需的地址和数据该如何获取呢？这需要访存指令继续向后续流水线（发射、执行等）推进，一路获取这两个关键信息，直至最终到达执行单元进行计算。
 
-![figure-016-dispatch-stage-memory-address](../../img/simple-analysis-process-of-a-store-instruction/figure-016-dispatch-stage-memory-address.png)
+![1774941883793-43b57777-8a81-4b0b-828f-fb1564c9ea48.png](../../img/simple-analysis-process-of-a-store-instruction/figure-016-dispatch-stage-memory-address.png)
 
 也就是上图中红色圆圈标识的地方，访存指令在计算出地址和数据后，会将这些信息送入 LDU 单元，随后进入访存流水线进行后续操作。
 
@@ -224,7 +224,7 @@
 
 > 我们先来弄清楚这里为什么会有编号 0 到 16 一共 17 个发射队列。可以查看架构图：
 >
-> ![figure-017-dispatch-stage-analysis-add](../../img/simple-analysis-process-of-a-store-instruction/figure-017-dispatch-stage-analysis-add.png)
+> ![1773975913411-cfd2bc9a-a17d-4338-941a-bf329715661b.png](../../img/simple-analysis-process-of-a-store-instruction/figure-017-dispatch-stage-analysis-add.png)
 >
 > 波形中的 17 个发射队列指的就是上图这些。你可能会数一数，发现图中一共画了 19 个方块，为什么数量对不上呢？对此，笔者暂时也没有完全弄懂原因，推测可能是在 `memScheduler`中有队列进行了合并。但对于前面的 `IntScheduler`部分，其序号应该是能对应上的。
 
@@ -232,7 +232,7 @@
 
 因为对于 store 指令，它需要“写地址”和“写数据”两类信息，而在香山中，这两类数据的计算会被分开、独立进行发射。
 
-具体到架构图中：![figure-018-dispatch-stage-store-address](../../img/simple-analysis-process-of-a-store-instruction/figure-018-dispatch-stage-store-address.png)
+具体到架构图中：![1774337008924-947f75af-cf64-44bc-aee9-c1c58bfd3c57.png](../../img/simple-analysis-process-of-an-add-instruction/figure-063-store-execute-address.png)
 
 * **STA (Store Address)** 队列负责发射地址计算。
 * **STD (Store Data)** 队列负责发射数据计算。
@@ -251,13 +251,13 @@ TODO：(目前还未确定到底有没有以上“配对关系”)
 
 先来确认分发模块对 ROB 的操作方式，提取以下信号进行查看和验证：
 
-![figure-019-rob-dispatch-stage-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-019-rob-dispatch-stage-signal.png)
+![1774943734198-e9c6d3bc-80bf-468e-a8b6-00dcc336c063.png](../../img/simple-analysis-process-of-a-store-instruction/figure-019-rob-dispatch-stage-signal.png)
 
 首先，根据 `*valid`信号确认当前进入分发阶段的指令是有效的。接着，查看这条指令是如何向 ROB 发起写入请求的：通过 `enqRob_req_*_valid`信号确认它在当前周期发起了请求，而 `*robIdx_value`表示要写入的 ROB 表项索引。可以看到，在当前请求周期内，系统将对 ROB 表项的第 49 项进行写入。这与我们之前在重命名阶段确认的、为该指令分配的 ROB 表项地址（49）完全一致。因此，这里发生的请求行为符合预期。
 
 接下来，我们直接查看第 49 号表项被写入的具体信息：
 
-![figure-020-rob-inspect](../../img/simple-analysis-process-of-a-store-instruction/figure-020-rob-inspect.png)
+![1774944497593-d5193878-92c0-4ce9-a061-8fd154a5576d.png](../../img/simple-analysis-process-of-a-store-instruction/figure-020-rob-inspect.png)
 
 可以比较清晰地看到，ROB 第 49 号表项被写入了符合预期的信息：
 
@@ -271,13 +271,13 @@ TODO：(目前还未确定到底有没有以上“配对关系”)
 
 在分发阶段，如果识别到当前指令是一条访存相关的指令，系统会根据架构图中的设计，在以下位置（或对应模块）进行特殊处理：
 
-![figure-021-lsq-dispatch-stage-memory](../../img/simple-analysis-process-of-a-store-instruction/figure-021-lsq-dispatch-stage-memory.png)
+![1774947085225-079c87a7-616c-4ed5-80e3-0a0811f39863.png](../../img/simple-analysis-process-of-a-store-instruction/figure-021-lsq-dispatch-stage-memory.png)
 
 在指令进入分发阶段后，会向 `LsqEnqCtrl`模块发起请求。该模块会进行一系列处理，目前我们仅关心它如何识别当前访存指令是 store 操作还是 load 操作。根据不同的操作类型，它会计算出一个 `*sqIdx_value`或 `*lqIdx_value`，然后将这个值连同其他信号一起，向外部的 Mem 单元发送出去，从而将对应的访存信息填入相应的 Store Queue 或 Load Queue 中。
 
 因此，我们直接查看它如何向外界发起请求：
 
-![figure-022-lsq-inspect-rob-idx](../../img/simple-analysis-process-of-a-store-instruction/figure-022-lsq-inspect-rob-idx.png)
+![1774950083170-aa69f463-f37d-451b-b954-fb1dee03c0e0.png](../../img/simple-analysis-process-of-a-store-instruction/figure-022-lsq-inspect-rob-idx.png)
 
 发送的写入请求会延迟一个周期生效。从请求的信息来看，将 `*robIdx`为 49 的这条访存指令写入到了 Store Queue 的第 2 个位置。通过 `*robIdx`的值可以确认，这正是我们一直追踪的那条 sd 指令。在流水线的后端，由于没有 PC 值作为标识，这个 ROB 索引可以被用作指令的唯一标识。
 
@@ -287,9 +287,9 @@ TODO：StoreQuene的写入情况
 
 观察以下信号即可确定对于StoreQuene的写入情况
 
-![figure-023-lsq-signal-store-queue](../../img/simple-analysis-process-of-a-store-instruction/figure-023-lsq-signal-store-queue.png)
+![1775099186798-20d17aa9-88e6-4193-b624-5c1b5462ec65.png](../../img/simple-analysis-process-of-a-store-instruction/figure-023-lsq-signal-store-queue.png)
 
-![figure-024-lsq-signal-store-queue](../../img/simple-analysis-process-of-a-store-instruction/figure-024-lsq-signal-store-queue.png)
+![1775099419893-a152e18c-92d3-4c0f-ad2c-5c314e7bc169.png](../../img/simple-analysis-process-of-a-store-instruction/figure-024-lsq-signal-store-queue.png)
 
 其实可以观察到，刚写入进去之后，他的数据和地址都是没有准备好的
 
@@ -299,7 +299,7 @@ TODO：StoreQuene的写入情况
 
 因此，在分发阶段拉出读取BusyTable的相关信号：
 
-![figure-025-busy-table-dispatch-stage](../../img/simple-analysis-process-of-a-store-instruction/figure-025-busy-table-dispatch-stage.png)
+![1775008184845-2a7f3c3d-ff25-4c44-86ab-c7e88d854f79.png](../../img/simple-analysis-process-of-a-store-instruction/figure-025-busy-table-dispatch-stage.png)
 
 从波形图中可以总结如下：
 
@@ -326,7 +326,7 @@ TODO：StoreQuene的写入情况
 
 完成了以上对一条 sd 指令来说最基本的分发任务后，指令便可以准备发射到后续的流水线了。那么，它将进入哪个具体的发射队列呢？这需要通过以下信号来确认：
 
-![figure-026-sd-dispatch-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-026-sd-dispatch-signal.png)
+![1775011085578-8158d063-e468-42f9-bc2d-f39c96a01a19.png](../../img/simple-analysis-process-of-a-store-instruction/figure-026-sd-dispatch-signal.png)
 
 可以观察到，下标为 3 的这路指令，其发射队列选择信号指向的是下标为 11 的队列。
 
@@ -334,7 +334,7 @@ TODO：StoreQuene的写入情况
 
 <font style="color:#DF2A3F;"></font>
 
-![figure-027-issue-architecture-diagram](../../img/simple-analysis-process-of-a-store-instruction/figure-027-issue-architecture-diagram.png)
+![1775011549585-5e45c60d-fb7b-493f-88c0-8f2b8ab378c9.png](../../img/simple-analysis-process-of-a-store-instruction/figure-027-issue-architecture-diagram.png)
 
 <font style="color:#DF2A3F;">在香山的最新版本中，此处发射队列的架构图已经过时</font>
 
@@ -342,17 +342,17 @@ TODO：StoreQuene的写入情况
 
 <font style="color:#DF2A3F;">最新版本中是以三大类划分的：整数，浮点，向量：</font>
 
-![figure-028-issue-architecture-diagram-queue](../../img/simple-analysis-process-of-a-store-instruction/figure-028-issue-architecture-diagram-queue.png)
+![1776926645934-07fdeb63-4913-45a0-9514-b9d064269542.png](../../img/simple-analysis-process-of-a-store-instruction/figure-028-issue-architecture-diagram-queue.png)
 
-![figure-029-issue-architecture-diagram-queue](../../img/simple-analysis-process-of-a-store-instruction/figure-029-issue-architecture-diagram-queue.png)
+![1776926655380-773095cc-74a1-4d73-b274-7d29e061cf87.png](../../img/simple-analysis-process-of-a-store-instruction/figure-029-issue-architecture-diagram-queue.png)
 
-![figure-030-sta-std-architecture](../../img/simple-analysis-process-of-a-store-instruction/figure-030-sta-std-architecture.png)<font style="color:#DF2A3F;">（一共19个发射队列（sta和std为一个））</font>
+![1776926661410-72af2876-0a5c-4077-864e-f8ceb56724de.png](../../img/simple-analysis-process-of-a-store-instruction/figure-030-sta-std-architecture.png)<font style="color:#DF2A3F;">（一共19个发射队列（sta和std为一个））</font>
 
 虽然架构图中下标为 11 的发射队列标注为某个 `IssueQueueLdu`队列，但我们依然坚持“波形是检验真理的唯一标准”。而且，一条存储数据的“sd”指令，怎么可能被发射到一个名字里带有“ld”的队列中呢？
 
 根据波形里的实际指示，这条 `sd`指令的“数据”和“地址”这两部分操作，实际被分别存入了以下两个发射队列：
 
-![figure-031-issue-waveform-sd-address](../../img/simple-analysis-process-of-a-store-instruction/figure-031-issue-waveform-sd-address.png)
+![1775012126112-79dc4671-ec63-4aaf-9aec-70ad6987e2b2.png](../../img/simple-analysis-process-of-a-store-instruction/figure-031-issue-waveform-sd-address.png)
 
 它们分别是 <code>**IssueQueueStaMou_1**</code> 和 <code>**IssueQueueStdMou_1**</code> 这两个发射队列，分别用于发射地址计算相关的操作和数据相关的操作。
 
@@ -360,7 +360,7 @@ TODO：StoreQuene的写入情况
 
 既然已经明确了指令将被存入\*\* **<code>**IssueQueueStaMou_1**</code>** \*\*和 <code>**IssueQueueStdMou_1**</code> 两个队列，我们接下来自然要拉出这两个队列中相应的信号进行观察：
 
-![figure-032-issue-execute-mem-scheduler](../../img/simple-analysis-process-of-a-store-instruction/figure-032-issue-execute-mem-scheduler.png)
+![1775012630279-96e079f2-eeea-4029-be88-6114f39929ac.png](../../img/simple-analysis-process-of-a-store-instruction/figure-032-issue-execute-mem-scheduler.png)
 
 如上图所示，蓝色信号来自 `IssueQueueStaMou_1`模块，绿色信号来自 `IssueQueueStdMou_1`模块。
 
@@ -375,7 +375,7 @@ TODO：StoreQuene的写入情况
 
 在分发阶段结束后的两个周期，可以看到相关的指令信息被填入了 `entryReg*`对应的表项中：
 
-![figure-033-sta-issue-execute-dispatch](../../img/simple-analysis-process-of-a-store-instruction/figure-033-sta-issue-execute-dispatch.png)
+![1775014139016-514c06c8-2a0b-430d-bcad-b8f09f56fae5.png](../../img/simple-analysis-process-of-a-store-instruction/figure-033-sta-issue-execute-dispatch.png)
 
 `*robIdx_value`被填入了 49，这正是我们追踪的 sd 指令。同时，寄存器中还存放着 `*imm`立即数（值为 8）以及 `*psrc`源操作数（来自第 20 号物理寄存器）等相关信息，这与前面的分析完全一致。
 
@@ -385,7 +385,7 @@ TODO：StoreQuene的写入情况
 
 此时，我们就可以从这个可以发射的周期位置继续向后观察：
 
-![figure-034-sta-issue-execute-waveform](../../img/simple-analysis-process-of-a-store-instruction/figure-034-sta-issue-execute-waveform.png)
+![1775024538854-1e1a5c2b-54a4-4cb1-a301-7f9c0990fa1b.png](../../img/simple-analysis-process-of-a-store-instruction/figure-034-sta-issue-execute-waveform.png)
 
 （仅观察蓝色波形信号，绿色信号属于 std 通路的数据）
 
@@ -399,7 +399,7 @@ TODO：StoreQuene的写入情况
 
 在确认数据正常发射到 DataPath 之后，我们再来看看 DataPath 如何将其发往下一级流水线，即 MemExu 单元：
 
-![figure-035-sta-issue-execute-mem](../../img/simple-analysis-process-of-a-store-instruction/figure-035-sta-issue-execute-mem.png)
+![1775025599681-cb81df2d-868a-4150-bf55-7b9188c59404.png](../../img/simple-analysis-process-of-a-store-instruction/figure-035-sta-issue-execute-mem.png)
 
 可以看到，在下一个周期，数据成功发往了下一个流水级。在 `*valid`信号有效的情况下，我们依然可以通过 `*robIdx`和 `*sqIdx`的值来确认当前数据是否来自我们一直在追踪的指令。很明显，49 和 2 这两个数字我们已经非常熟悉了。`*imm`为 8，这也是正确的。
 
@@ -407,17 +407,17 @@ TODO：StoreQuene的写入情况
 
 事实也确实如此。我们继续观察这些信息后续的流向，直接提取后续旁路网络的输出结果。从架构图中可以推测，旁路输出可能是在当前周期完成的：
 
-![figure-036-sta-issue-execute-result](../../img/simple-analysis-process-of-a-store-instruction/figure-036-sta-issue-execute-result.png)
+![1775026086234-b32ad342-bcc2-4469-9533-f5fcf0e22f67.png](../../img/simple-analysis-process-of-a-store-instruction/figure-036-sta-issue-execute-result.png)
 
 你会发现，DataPath 和 Bypass 之间没有寄存器，因此我们观察 Bypass 网络在当前周期的波形输入与输出：
 
-![figure-037-sta-issue-execute-bypass](../../img/simple-analysis-process-of-a-store-instruction/figure-037-sta-issue-execute-bypass.png)
+![1775026255396-06f8dd74-62e5-4b99-9230-9d13cf19a6c5.png](../../img/simple-analysis-process-of-a-store-instruction/figure-037-sta-issue-execute-bypass.png)
 
 可以清楚地发现，Bypass 网络的输入已经是我们预期要获取的正确数据，即我们推测的 `0x80009fe0`。在下一个周期，这个数据经过一拍寄存后，被传递到后续的流水线，也就是 Bypass 网络的输出。
 
 在 Bypass 网络完成输出后，数据就进入了访存流水线的第 0 级。
 
-![figure-038-sta-issue-execute-bypass](../../img/simple-analysis-process-of-a-store-instruction/figure-038-sta-issue-execute-bypass.png)
+![1775026658370-45a6178e-7ef8-4b1c-b8e7-0aacd7619029.png](../../img/simple-analysis-process-of-a-store-instruction/figure-038-sta-issue-execute-bypass.png)
 
 至此，一条 `sd`指令的地址部分（`sta`）在后端的发射与进入执行单元的大致行为追踪就告一段落。
 
@@ -425,7 +425,7 @@ TODO：StoreQuene的写入情况
 
 下面我们来看这条 `sd`访存指令的数据计算部分，即 `std`，在后端的发射与执行过程。
 
-![figure-039-std-issue-execute-sd](../../img/simple-analysis-process-of-a-store-instruction/figure-039-std-issue-execute-sd.png)
+![1775026947474-dced5f29-d927-41d2-a55b-688b8d405a29.png](../../img/simple-analysis-process-of-a-store-instruction/figure-039-std-issue-execute-sd.png)
 
 在分发阶段执行结束后，可以看到相关信息被填入了 `entryReg*`对应的表项。通过 `*robIdx`的值（49）可以确认当前数据是我们追踪的 sd 指令。`*psrc`被填入了 19，这明确表示将要写入内存的数据来自第 19 号物理寄存器。
 
@@ -433,21 +433,21 @@ TODO：StoreQuene的写入情况
 
 接下来，我们直接查看下一周期它被发射到 DataPath 的数据情况：
 
-![figure-040-std-issue-execute-inspect](../../img/simple-analysis-process-of-a-store-instruction/figure-040-std-issue-execute-inspect.png)
+![1775027408530-6a596e58-9bbc-4fa7-9958-258878331b88.png](../../img/simple-analysis-process-of-a-store-instruction/figure-040-std-issue-execute-inspect.png)
 
 在 `*valid`信号有效时，根据 `*robIdx_value`或 `*sqIdx_value`的值，可以确认当前信息来自我们正在追踪的 `sd`指令。`*rf*addr`的值为 19，这符合预期，DataPath 即将接收到我们发送的 `std`操作信息。
 
 继续观察数据向后传递的情况：
 
-![figure-041-std-issue-execute-bypass](../../img/simple-analysis-process-of-a-store-instruction/figure-041-std-issue-execute-bypass.png)
+![1775027708495-03322e3c-8a44-4d65-8425-42277fafc088.png](../../img/simple-analysis-process-of-a-store-instruction/figure-041-std-issue-execute-bypass.png)
 
 经过 Bypass 网络的处理，可以看到在下一周期，Bypass 网络输入的数据正是我们期待的值。`*toMemExu*src_0`的数据为 `0x80000172`，这与我们之前的预期相符，表明这个值将被写入指定的内存地址。
 
 紧接着，数据继续向外传递。再经过一个周期，在离开 Bypass 网络后，它顺利进入了 StoreUnit 的 `std`处理单元：
 
-![figure-042-std-issue-execute-bypass](../../img/simple-analysis-process-of-a-store-instruction/figure-042-std-issue-execute-bypass.png)
+![1775028162005-f1a6e5ff-a9e5-4f17-a283-2f73a63b2509.png](../../img/simple-analysis-process-of-a-store-instruction/figure-042-std-issue-execute-bypass.png)
 
-![figure-043-std-issue-execute-bypass](../../img/simple-analysis-process-of-a-store-instruction/figure-043-std-issue-execute-bypass.png)
+![1775028256242-613a5909-6f01-4df7-96be-df3356f413ae.png](../../img/simple-analysis-process-of-a-store-instruction/figure-043-std-issue-execute-bypass.png)
 
 至此，一条 `sd`指令的数据准备部分（`std`）在后端的主要执行流程就分析完毕了。
 
@@ -463,7 +463,7 @@ Store 指令的地址计算通路走的是 **StoreUnit 流水线**（数据通�
 
 首先在 **S0 阶段**，即第 0 级流水线。此时该流水级刚刚接收到来自执行单元的数据，我们直接查看相应的波形图：
 
-![figure-044-sta-address-store-unit](../../img/simple-analysis-process-of-a-store-instruction/figure-044-sta-address-store-unit.png)
+![1775096461173-37e08fae-80c2-4728-b4cf-c20544a44684.png](../../img/simple-analysis-process-of-a-store-instruction/figure-044-sta-address-store-unit.png)
 
 包括一个来自寄存器的源操作数 `*stin_src*`，其值为 `0x80009fe0`，以及地址所需的立即数 `*imm`，值为 `8`。在第 0 级流水线（S0），首先要完成的任务是根据这两个值计算出所需的虚拟地址。可以看到，在 S0 阶段，`s0_vaddr`的值已被成功计算出来，为 `0x80009fe8`，这完全符合预期。
 
@@ -471,19 +471,19 @@ Store 指令的地址计算通路走的是 **StoreUnit 流水线**（数据通�
 
 接着，我们查看 S1 流水阶段的重点波形：
 
-![figure-045-sta-address-store-unit](../../img/simple-analysis-process-of-a-store-instruction/figure-045-sta-address-store-unit.png)
+![1775097660647-bb5122cc-bc84-4d09-8691-05cfe881cddb.png](../../img/simple-analysis-process-of-a-store-instruction/figure-045-sta-address-store-unit.png)
 
 在此流水级（S1）阶段，最重要的事件是接收来自 TLB 的响应。信号 `*resp*paddr*`是 TLB 返回的物理地址。即便当前情况比较特殊，我们看到返回的物理地址与虚拟地址相同，但依然需要理解这里已经完成了虚拟地址到物理地址的转换。
 
 除了接收来自 TLB 的物理地址外，在这一流水级还会将相关信息发送给 Store Queue。例如，通过 `*lsq_bits*`等信号，可以观察到系统正在向 Store Queue 发送有效信息。`*lsq_valid`信号确认了当前传输有效。`*robIdx_value`的值（49）告知 Store Queue 当前信息来自我们一直追踪的 sd 指令。同时，其他有效信号，如虚拟地址（`*vaddr`）和物理地址（`*paddr`），以及许多其他信号，也被一并传输过去。
 
-![figure-046-sta-address-store-unit](../../img/simple-analysis-process-of-a-store-instruction/figure-046-sta-address-store-unit.png)
+![1775098792544-c4142b39-daa7-4e84-a5b8-aab6f822990d.png](../../img/simple-analysis-process-of-a-store-instruction/figure-046-sta-address-store-unit.png)
 
 以上便是向 SQ 写入信息的全过程。
 
 接着，我们继续观察 SQ 内部的写入情况。由于 `*sqIdx*`为 2，我们提取索引为 2 的表项数据进行查看：
 
-![figure-047-sta-address-store-unit](../../img/simple-analysis-process-of-a-store-instruction/figure-047-sta-address-store-unit.png)
+![1775099605881-c13b2215-7a35-4e71-9423-1541291a68fd.png](../../img/simple-analysis-process-of-a-store-instruction/figure-047-sta-address-store-unit.png)
 
 可以看到，相关数据已成功写入 SQ 中。
 
@@ -495,13 +495,13 @@ Store 指令的数据通路走的是 **StdExeUnit 流水线**，我们可以简�
 
 实际上，这可能不称为一个典型的“流水线级”，因为此模块的逻辑较为简单：
 
-![figure-048-store-std-unit-queue](../../img/simple-analysis-process-of-a-store-instruction/figure-048-store-std-unit-queue.png)
+![1775100557174-475ec0af-c8c0-4741-a1c2-48d62deaf7cf.png](../../img/simple-analysis-process-of-a-store-instruction/figure-048-store-std-unit-queue.png)
 
-![figure-049-store-std-unit-queue](../../img/simple-analysis-process-of-a-store-instruction/figure-049-store-std-unit-queue.png)
+![1775100193935-9c2b8ab7-bdd8-4da9-a25e-37a6a6d1dc0c.png](../../img/simple-analysis-process-of-a-store-instruction/figure-049-store-std-unit-queue.png)
 
 数据离开执行阶段后，便进入了上述模块。我们直接提取这个模块中对应的数据来查看：
 
-![figure-050-store-std-unit-queue](../../img/simple-analysis-process-of-a-store-instruction/figure-050-store-std-unit-queue.png)
+![1775100314038-5ed0a0d3-2339-4670-a824-3f6f06878d89.png](../../img/simple-analysis-process-of-a-store-instruction/figure-050-store-std-unit-queue.png)
 
 上图圈出的信号属于 `std`通路的输出。它将得到的数据向外传输，包括 `*valid`有效信号，并通过 `*robIdx*`的值来标识当前指令是我们一直追踪的 `sd`指令。接着，这个小模块的输出数据会传到 SQ 的写入端口，即上图中未被圈出的信号。可以看到 `*storeDataIn*`相关的所有信号，表明当前正在向 Store Queue 写入数据。
 
@@ -509,7 +509,7 @@ Store 指令的数据通路走的是 **StdExeUnit 流水线**，我们可以简�
 
 接下来，我们可以再查看一下 Store Queue 的状态：
 
-![figure-051-store-std-unit-queue](../../img/simple-analysis-process-of-a-store-instruction/figure-051-store-std-unit-queue.png)
+![1775100985103-fb0ce2d3-6608-447c-8886-505e0c94db31.png](../../img/simple-analysis-process-of-a-store-instruction/figure-051-store-std-unit-queue.png)
 
 可以看到，`datavalid`的状态已经发生了改变。这表明 `std`操作已成功完成，并正确地将数据写入了 SQ。
 
@@ -517,21 +517,21 @@ Store 指令的数据通路走的是 **StdExeUnit 流水线**，我们可以简�
 
 SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才发出来这些信息的，目前暂不清楚触发SQ对Sbuffer发出写请求的条件的。
 
-![figure-052-store-queue-buffer-sta](../../img/simple-analysis-process-of-a-store-instruction/figure-052-store-queue-buffer-sta.png)
+![1775630721671-d5f2036f-2943-4926-85f2-075d7374e883.png](../../img/simple-analysis-process-of-a-store-instruction/figure-052-store-queue-buffer-sta.png)
 
-![figure-053-store-queue-buffer-sta](../../img/simple-analysis-process-of-a-store-instruction/figure-053-store-queue-buffer-sta.png)
+![1775630756702-695d8f48-dc48-44da-87ad-814d52eee872.png](../../img/simple-analysis-process-of-a-store-instruction/figure-053-store-queue-buffer-sta.png)
 
 结合SQ的状态来看这个写请求的发出：
 
-![figure-054-store-queue-buffer](../../img/simple-analysis-process-of-a-store-instruction/figure-054-store-queue-buffer.png)
+![1775631118364-b18636db-00c6-4fb6-9e4e-2f73a78b5ea7.png](../../img/simple-analysis-process-of-a-store-instruction/figure-054-store-queue-buffer.png)
 
 接着看SBuffer的情况：
 
-![figure-055-store-queue-buffer-trace](../../img/simple-analysis-process-of-a-store-instruction/figure-055-store-queue-buffer-trace.png)
+![1775614509749-d58c95db-718f-401a-920a-128ead90894f.png](../../img/simple-analysis-process-of-a-store-instruction/figure-055-store-queue-buffer-trace.png)
 
 往回trace就会发现这些玩意儿都是来自于StoreQ的，所以直接看后面某些时刻这些接口传入的信号。
 
-![figure-056-store-queue-buffer-trace](../../img/simple-analysis-process-of-a-store-instruction/figure-056-store-queue-buffer-trace.png)
+![1775111795012-9b970317-ada8-44c6-b3c3-889bdb32e219.png](../../img/simple-analysis-process-of-a-store-instruction/figure-056-store-queue-buffer-trace.png)
 
 写入 Sbuffer 的接口时序正确。由于地址 `0x80009fe8`的第 3 位为 1，且该指令是 64 位写操作，因此对应的字节掩码为 `0xff00`，这与预期相符。
 
@@ -539,25 +539,25 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 在上面的过程中，在sta和std大致结束之后，可以在memBlock这个模块中找到如下发往WriteBack的信号来观察
 
-![figure-057-rob-sta-std-mem](../../img/simple-analysis-process-of-a-store-instruction/figure-057-rob-sta-std-mem.png)
+![1775619760115-c834a1dc-0f95-42ba-8a1c-9e5290899794.png](../../img/simple-analysis-process-of-a-store-instruction/figure-057-rob-sta-std-mem.png)
 
 （trace这些信号可以确定他们来自于StoreUnit）
 
 会发现在这sta以及std计算完成之后，memBlock自然地向写回阶段去回写数据了：
 
-![figure-058-rob-sta-std-mem](../../img/simple-analysis-process-of-a-store-instruction/figure-058-rob-sta-std-mem.png)
+![1775619636299-7d311ad3-c3f2-4983-8491-78e45215c3c6.png](../../img/simple-analysis-process-of-a-store-instruction/figure-058-rob-sta-std-mem.png)
 
 对于我们这条sd指令，他是包含着两个部分的，一个是sta一个是std，所以在这俩微操作就位之后，在robEntries中的opnum马上就变了：
 
-![figure-059-rob-sd-sta-std](../../img/simple-analysis-process-of-a-store-instruction/figure-059-rob-sd-sta-std.png)
+![1775619829410-27a9f7fe-673d-45b2-96d2-9f0c763f8ee3.png](../../img/simple-analysis-process-of-a-store-instruction/figure-059-rob-sd-sta-std.png)
 
 这也就意味着该指令本身当前已经具备提交条件了，之所以还没提交是因为前面有指令阻塞着嘞。
 
 等到前面表项的指令提交之后，他自己也就可以顺理成章地提交了：
 
-![figure-060-rob-signal-index-valid](../../img/simple-analysis-process-of-a-store-instruction/figure-060-rob-signal-index-valid.png)
+![1775629809932-001348a9-f96b-4f16-b0e5-528c7bfa4eb1.png](../../img/simple-analysis-process-of-a-store-instruction/figure-060-rob-signal-index-valid.png)
 
-![figure-061-rob-signal-index-valid](../../img/simple-analysis-process-of-a-store-instruction/figure-061-rob-signal-index-valid.png)
+![1775629963194-9a0d0a58-7a17-4c2f-8880-f3c90dda8dd6.png](../../img/simple-analysis-process-of-a-store-instruction/figure-061-rob-signal-index-valid.png)
 
 上图的信号表示当前周期的需要提交的指令，数据表示rob的index，\*valid拉高即表示当前周期正在提交。
 
@@ -581,7 +581,7 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 不过我们知道了满足一些常见的条件时例如被填满了时，就会访问Dcahe了，所以直接去看他访问Dcahe的接口就好。无论是看波形图还是看代码，都能比较清楚认出，Sbuffer访问Dcahe的接口协议是比较简单的，就是最基本的valid、ready握手协议：
 
-![figure-062-store-buffer-dcache-interface](../../img/simple-analysis-process-of-a-store-instruction/figure-062-store-buffer-dcache-interface.png)
+![1775615927702-9b3f9b8c-7b8d-417a-bde5-b6b6fc092ee1.png](../../img/simple-analysis-process-of-a-store-instruction/figure-062-store-buffer-dcache-interface.png)
 
 所以直接去观察这些信号就好咯
 
@@ -589,11 +589,11 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 <code><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">DCacheToSbufferIO</font></code> 是香山处理器中\*\*<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">DCache暴露给 SBuffer</font>**的核心交互接口，承载 SBuffer 与 DCache 之间**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">Cache 行粒度</font>\*\*的存数请求 / 响应交互。接口继承 <code><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">DCacheBundle</font></code>，复用 DCache 相关的基础参数（如 Cache 行大小、地址位宽、路数等）；所有信号的设计围绕 “存数请求下发→DCache 处理→响应返回” 的核心流程展开。
 
-![figure-063-interface-dcache-store-buffer](../../img/simple-analysis-process-of-a-store-instruction/figure-063-interface-dcache-store-buffer.png)
+![1775530208179-d36f9f78-37ef-4e24-8b56-8fb9db17fac9.png](../../img/simple-analysis-process-of-a-store-instruction/figure-063-interface-dcache-store-buffer.png)
 
 1. <code><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">val req = Flipped(Decoupled(new DCacheLineReq))</font></code>
 
-![figure-064-interface-val-req-flipped](../../img/simple-analysis-process-of-a-store-instruction/figure-064-interface-val-req-flipped.png)
+![1775530835520-5283304c-36f2-4f1d-b539-ff0b0b18243c.png](../../img/simple-analysis-process-of-a-store-instruction/figure-064-interface-val-req-flipped.png)
 
 | <font style="color:black;">维度</font> | <font style="color:black;">具体说明</font> |
 | --- | --- |
@@ -604,11 +604,11 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 如图所示，连续给dcahe发送了若干写Cache的请求：
 
-![figure-065-interface-dcache-cache-val](../../img/simple-analysis-process-of-a-store-instruction/figure-065-interface-dcache-cache-val.png)
+![1775530543559-878963c3-503a-4c31-b345-e3d0de9aee2b.png](../../img/simple-analysis-process-of-a-store-instruction/figure-065-interface-dcache-cache-val.png)
 
 2. <code><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">val main_pipe_hit_resp = ValidIO(new DCacheLineResp)</font></code>
 
-![figure-066-interface-val-pipe-hit](../../img/simple-analysis-process-of-a-store-instruction/figure-066-interface-val-pipe-hit.png)
+![1775530879052-3ed12305-2cde-41e6-acb0-c6c63e0f8dd9.png](../../img/simple-analysis-process-of-a-store-instruction/figure-066-interface-val-pipe-hit.png)
 
 | <font style="color:black;">维度</font> | <font style="color:black;">具体说明</font> |
 | --- | --- |
@@ -624,9 +624,9 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">先看Sbuffer的接口，看他是怎么发出请求并且接收响应的。</font>
 
-![figure-067-store-buffer-interface](../../img/simple-analysis-process-of-a-store-instruction/figure-067-store-buffer-interface.png)
+![1775631537116-adad6e29-6df5-47a3-ae01-c4f4361fbf09.png](../../img/simple-analysis-process-of-a-store-instruction/figure-067-store-buffer-interface.png)
 
-![figure-068-store-buffer-interface](../../img/simple-analysis-process-of-a-store-instruction/figure-068-store-buffer-interface.png)
+![1775616835606-ff98ceda-71f1-4e18-9f0f-88942550d37b.png](../../img/simple-analysis-process-of-a-store-instruction/figure-068-store-buffer-interface.png)
 
 实际上通过这个图就可以大致判断出来，id为1的那个请求这么早就被Cache响应回去了，可能是hit了的应该，其他的可能都miss了。
 
@@ -634,9 +634,9 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 果然！你会发现，除了id为1的那个请求，也就是访问地址为0x80200fc0的那个请求之外的请求，其余的请求后续都让Dcache通过TileLink总线往下一级Cache发请求去了：
 
-![figure-069-id-address-dcache](../../img/simple-analysis-process-of-a-store-instruction/figure-069-id-address-dcache.png)
+![1775617278409-61f735c4-ed35-4633-b62e-11b5508a149c.png](../../img/simple-analysis-process-of-a-store-instruction/figure-069-id-address-dcache.png)
 
-![figure-070-id-address-dcache](../../img/simple-analysis-process-of-a-store-instruction/figure-070-id-address-dcache.png)
+![1775617073437-cfa78cf2-5697-4f16-aaf4-090dc7f2b7fe.png](../../img/simple-analysis-process-of-a-store-instruction/figure-070-id-address-dcache.png)
 
 当然，这里也简单地提到了一个Dcahe与下一级L2Cache之间的交互接口，后续章节再探索他们俩之间的具体交互行为。
 
@@ -644,15 +644,15 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 ？为什么Dcache的结构和数据位宽对不上？
 
-![figure-071-dcache-waveform-tag-bits](../../img/simple-analysis-process-of-a-store-instruction/figure-071-dcache-waveform-tag-bits.png)
+![1775788873272-f4219fa3-f9ac-4ea2-b6bd-87c67a446ec8.png](../../img/simple-analysis-process-of-a-store-instruction/figure-071-dcache-waveform-tag-bits.png)
 
 如果按以上规格，tag：34bits，index：8bits，offset：6bits
 
 但是波形和手册里都是：
 
-![figure-072-dcache-waveform-manual-analysis](../../img/simple-analysis-process-of-a-store-instruction/figure-072-dcache-waveform-manual-analysis.png)
+![1775789003351-8a2e49a0-c457-43b1-a737-18465648f262.png](../../img/simple-analysis-process-of-a-store-instruction/figure-072-dcache-waveform-manual-analysis.png)
 
-![figure-073-dcache-waveform-manual-analysis](../../img/simple-analysis-process-of-a-store-instruction/figure-073-dcache-waveform-manual-analysis.png)
+![1775789028119-a8218208-80ca-477d-af37-2e6977f3aa72.png](../../img/simple-analysis-process-of-a-store-instruction/figure-073-dcache-waveform-manual-analysis.png)
 
 那接着上文分析，我们就得详细地看一下Dcahe中具体有哪些行为可以判断当前请求时命中还是缺失呢。
 
@@ -664,11 +664,11 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 通过信号追踪的功能，发现了地址进入了mainPipe的模块里面，通过IO传了进去：
 
-![figure-074-dcache-waveform-signal-address](../../img/simple-analysis-process-of-a-store-instruction/figure-074-dcache-waveform-signal-address.png)
+![1775787701834-0bb88268-9303-4390-a4b2-f7c1787f23bc.png](../../img/simple-analysis-process-of-a-store-instruction/figure-074-dcache-waveform-signal-address.png)
 
 再追踪这个传入的地址信号：
 
-![figure-075-dcache-waveform-address-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-075-dcache-waveform-address-signal.png)、
+![1775787805988-7d430068-3042-45c3-bcd9-f4f8593575ec.png](../../img/simple-analysis-process-of-a-store-instruction/figure-075-dcache-waveform-address-signal.png)、
 
 轻易地发现了命中信号的对比逻辑。
 
@@ -676,21 +676,21 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 所以先来看命中过程中的对比逻辑吧：在前面的分析可以清晰得知，访问地址为0x80200fc0的那个请求是命中的，所以我们就追着这条请求的相关信号看：
 
-![figure-076-hit-analysis-address-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-076-hit-analysis-address-signal.png)
+![1775789254721-0947e725-a1d8-4f5d-a0d2-2dbbfb053ad1.png](../../img/simple-analysis-process-of-a-store-instruction/figure-076-hit-analysis-address-signal.png)
 
-![figure-077-hit-analysis-address-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-077-hit-analysis-address-signal.png)
+![1775788724084-f1e621a2-94e2-4494-babe-7df1ddc8af29.png](../../img/simple-analysis-process-of-a-store-instruction/figure-077-hit-analysis-address-signal.png)
 
 当地址信号进入MainPipa流水级之后，上图所描述的内容是：将被打一拍被赋值到信号s1\_req\_addr中，然后在该地址中提取tag数据（\[47:12]位中的数据为Tag信息），然后用index信号去找到4路way各自的对应位置的tag，去对比4路way各自的tag数据，最终的结果也就表明，当前是对比上了way0的数据的，也就是第一个way
 
 ，表明访问地址为0x80200fc0的那个请求所需要的数据目前是有效存在于cache块中的。并且我们还可以看到meta\*信号的值是0x2，先查找设计手册得知这个值所代表的意义：
 
-![figure-078-hit-address-cache-meta](../../img/simple-analysis-process-of-a-store-instruction/figure-078-hit-address-cache-meta.png)
+![1775789526195-258a516b-9330-46b4-a0da-aec9224e1d3c.png](../../img/simple-analysis-process-of-a-store-instruction/figure-078-hit-address-cache-meta.png)
 
 于是发现当前Cache块的状态是Trunk状态：“Trunk”通常意味着该缓存行是“主线有效”或“主路径”数据，可能表示数据已验证、未被修改、且是主流访问路径上的数据。可能表示“已确认一致性”或“共享有效”。
 
 所以，综合以上信号，way0的hit信号被拉高，整体指示hit的信号s1\_tag\_match也被拉高了，指示当前请求的Cache块是命中的，可以直接对Cache进行操作。
 
-![figure-079-hit-signal-tag-match](../../img/simple-analysis-process-of-a-store-instruction/figure-079-hit-signal-tag-match.png)
+![1775790530856-8d2665c7-6258-4083-b0e8-26a02779f547.png](../../img/simple-analysis-process-of-a-store-instruction/figure-079-hit-signal-tag-match.png)
 
 可以看到hit信号是一级一级在Cache的流水线中不断往下传的。
 
@@ -706,23 +706,23 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 同时也可以看一下miss信号的传递过程：
 
-![figure-080-hit-miss-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-080-hit-miss-signal.png)
+![1775802545894-0bb21f2b-d70d-4e38-995e-0c3bb57abb80.png](../../img/simple-analysis-process-of-a-store-instruction/figure-080-hit-miss-signal.png)
 
 也可以看到miss信号也是一直没有生效的
 
 接下来可以看看响应是怎么返回去的。但我们是看的是，sd指令，Sbuffer对Dcache的访问就是写操作，所以Dcache只会接受来自Sbuffer的数据，在能成功接收时才会返一个指示信号表明此时已经接收，前文已经确认了这一点：
 
-![figure-068-store-buffer-interface](../../img/simple-analysis-process-of-a-store-instruction/figure-068-store-buffer-interface.png)
+![1775616835606-ff98ceda-71f1-4e18-9f0f-88942550d37b.png](../../img/simple-analysis-process-of-a-store-instruction/figure-068-store-buffer-interface.png)
 
 也就是这些响应信号。那么这个时候再来看看生成这些响应信号的逻辑吧。
 
-![figure-081-hit-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-081-hit-signal.png)
+![1775801814650-253ddb1c-5d77-4e10-a652-53e7e308ff00.png](../../img/simple-analysis-process-of-a-store-instruction/figure-081-hit-signal.png)
 
 会发现总响应信号是和s3\_hit这个周期一起拉高的。
 
-![figure-082-hit-signal-store-go](../../img/simple-analysis-process-of-a-store-instruction/figure-082-hit-signal-store-go.png)
+![1775802268149-5e2d9173-c5bf-4dbf-96c0-aa8bbed593c2.png](../../img/simple-analysis-process-of-a-store-instruction/figure-082-hit-signal-store-go.png)
 
-![figure-083-hit-signal-store-go](../../img/simple-analysis-process-of-a-store-instruction/figure-083-hit-signal-store-go.png)
+![1775802861518-c8074b78-6092-40aa-8e16-d77f75517295.png](../../img/simple-analysis-process-of-a-store-instruction/figure-083-hit-signal-store-go.png)
 
 可以看到该信号只要在s3有效的时候，让s3\_store\_can\_go信号有效时候就表示这条hit的Sbuffer访问Dcache的操作已经完成了，而这个信号自然在没有miss的情况下都是拉高，所以自然就在s3流水级拉高了。
 
@@ -732,11 +732,11 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 首先自然的，data数据进入流水线后，也会随着io、s1、s2等一直往下传，这个我们直接追踪波形就能确定：
 
-![figure-084-hit-io-waveform-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-084-hit-io-waveform-signal.png)
+![1775803610130-90cd01c5-3ebd-4aac-aaaa-ed66a7333609.png](../../img/simple-analysis-process-of-a-store-instruction/figure-084-hit-io-waveform-signal.png)
 
 在io流水级和s1流水级，数据信号只是传递，没有其他的用途。但是一旦数据信号到达s2流水级成为s2\_req\_store\_data这个数据，就有其他的用途或走向了：
 
-![figure-085-hit-io-signal-req](../../img/simple-analysis-process-of-a-store-instruction/figure-085-hit-io-signal-req.png)
+![1775803398872-c23a45f6-8308-4f98-982f-0a0f176f8af3.png](../../img/simple-analysis-process-of-a-store-instruction/figure-085-hit-io-signal-req.png)
 
 会根据miss信号的值给另外的一个信号*new\_data*进行赋值，实际上，很容易猜出这个新赋值的信号的意义是什么，他表示将要往DataArray写的数据，而能往DataArray写的数据实际上总共就两个来源，要么是Store操作进行写入的值，要么就是充填更新Dcache时从L2Cache拿过来的值。这时再往上看那一串代码，实际上就是在做了一个选择操作，在这两个值中间选一个。那么很显然，在我们这条hit了的请求下 ，这时候请求进入s2流水级时要进行的操作肯定选第一个情况，往DataArray中写值。所以在上图中，会看到*new\_data*信号被赋上了s2\_req\_store\_data的值。
 
@@ -744,37 +744,37 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 实际上还会发现在s2流水级，miss了的请求还会向外发送请求。
 
-![figure-086-hit-miss](../../img/simple-analysis-process-of-a-store-instruction/figure-086-hit-miss.png)
+![1775804664582-cef5c34c-3fe2-4487-a754-cb23a7549190.png](../../img/simple-analysis-process-of-a-store-instruction/figure-086-hit-miss.png)
 
 ***
 
 接下来就会看到这个一个64B的Cache块大小就被划分为8个Bank信号了，这也和前面设计手册所描述的Cache结构十分的统一：
 
-![figure-087-hit-b-cache-bank](../../img/simple-analysis-process-of-a-store-instruction/figure-087-hit-b-cache-bank.png)
+![1775804784364-4fc943a5-4173-4a99-8139-e6270dc423e2.png](../../img/simple-analysis-process-of-a-store-instruction/figure-087-hit-b-cache-bank.png)
 
-![figure-088-hit-b-cache-bank](../../img/simple-analysis-process-of-a-store-instruction/figure-088-hit-b-cache-bank.png)
+![1775805497301-ebf2218c-fa69-4002-ac86-2a3b0e967066.png](../../img/simple-analysis-process-of-a-store-instruction/figure-088-hit-b-cache-bank.png)
 
-![figure-089-hit-b-cache-bank](../../img/simple-analysis-process-of-a-store-instruction/figure-089-hit-b-cache-bank.png)
+![1775805607667-11847a4c-d0de-43b4-9499-a47483a3eb1a.png](../../img/simple-analysis-process-of-a-store-instruction/figure-089-hit-b-cache-bank.png)
 
 一点一点地追踪他的信号就会发现，最后会发现这个信号一步一步地去了DataArray模块
 
 波形：
 
-![figure-090-hit-waveform-array-bank](../../img/simple-analysis-process-of-a-store-instruction/figure-090-hit-waveform-array-bank.png)
+![1775806189127-66ad538b-8436-4602-80ba-85392aded38d.png](../../img/simple-analysis-process-of-a-store-instruction/figure-090-hit-waveform-array-bank.png)
 
 会发现数据也是一点一点去到了ArrayBank中，去写ArrayBank去咯。
 
 当然，写的时候还有写使能和信号：
 
-![figure-091-hit-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-091-hit-signal.png)
+![1775806313504-ef87ac0f-ac3e-4628-a33c-bd41e2322d2f.png](../../img/simple-analysis-process-of-a-store-instruction/figure-091-hit-signal.png)
 
 写使能的来源：
 
-![figure-092-hit-waveform-signal-store](../../img/simple-analysis-process-of-a-store-instruction/figure-092-hit-waveform-signal-store.png)
+![1775806387501-1b8885c7-d9ea-46bc-aed8-0fb27ee78abf.png](../../img/simple-analysis-process-of-a-store-instruction/figure-092-hit-waveform-signal-store.png)
 
-![figure-093-hit-waveform-signal-store](../../img/simple-analysis-process-of-a-store-instruction/figure-093-hit-waveform-signal-store.png)
+![1775806458420-92a3c50a-3a92-4410-bf2d-990faac28108.png](../../img/simple-analysis-process-of-a-store-instruction/figure-093-hit-waveform-signal-store.png)
 
-![figure-094-hit-waveform-signal-store](../../img/simple-analysis-process-of-a-store-instruction/figure-094-hit-waveform-signal-store.png)
+![1775806508218-3680eae6-8db3-40b7-ab5e-64757abf9408.png](../../img/simple-analysis-process-of-a-store-instruction/figure-094-hit-waveform-signal-store.png)
 
 会发现，已经不需要看波形了，写使能信号的开源就是s3流水级的各种信号，当当前流水级有效，并且满足下面的条件之一：要么是store操作hit，目前正在写；要么就是一个miss的请求要回填数据了。
 
@@ -786,29 +786,29 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 还是结合前面看的波形信号，在下图Sbuffer与Dcache的交互时序中，图中的四个项请求中，唯有第二项请求是hit的，其他三项都是miss 的请求：
 
-![figure-070-id-address-dcache](../../img/simple-analysis-process-of-a-store-instruction/figure-070-id-address-dcache.png)
+![1775617073437-cfa78cf2-5697-4f16-aaf4-090dc7f2b7fe.png](../../img/simple-analysis-process-of-a-store-instruction/figure-070-id-address-dcache.png)
 
 所以我就选择第一个请求来看就好了，这条请求地址为0x80000a40，通过观察这条指令的行为来确定Dcache是如何去处理一条Miss请求的。固然，肯定还是需要经过那一条一条的流水线，所以就来看流水线的行为，其实在前面分析hit行为的时候，就提到过miss请求向外发请求的行为（应该是向MissQuene发请求），是在s2流水级。所以我们还是一点一点往后看吧。
 
 从后往前看吧，因为目前不知道miss信号生成是什么逻辑，只能确定在后面的某个周期会向MissQ发送请求。那就从发送请求那边往回看：
 
-![figure-095-miss-signal-q-mq](../../img/simple-analysis-process-of-a-store-instruction/figure-095-miss-signal-q-mq.png)
+![1775809895692-f0433368-4040-4042-8534-a6558017f952.png](../../img/simple-analysis-process-of-a-store-instruction/figure-095-miss-signal-q-mq.png)
 
-![figure-096-miss-signal-q-mq](../../img/simple-analysis-process-of-a-store-instruction/figure-096-miss-signal-q-mq.png)
+![1775810448913-07e75112-a964-4d64-a559-47178cd1db1b.png](../../img/simple-analysis-process-of-a-store-instruction/figure-096-miss-signal-q-mq.png)
 
 发现实际上就是过了两个周期就往MQ里面送发请求了。
 
 那么最重要的肯定就是发请求的使能信号io\_miss\_req\_valid信号的使能生成逻辑了，往前跟踪：
 
-![figure-097-miss-signal-io-req](../../img/simple-analysis-process-of-a-store-instruction/figure-097-miss-signal-io-req.png)
+![1775810503020-ab4dfcb1-3c07-44a3-8de4-a8ad32fa11dc.png](../../img/simple-analysis-process-of-a-store-instruction/figure-097-miss-signal-io-req.png)
 
 发现用的s2\_can\_go\_to\_mq信号的逻辑来主要决定的,继续往前追踪：
 
-![figure-098-miss-go-mq-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-098-miss-go-mq-signal.png)
+![1775810583324-081b9093-e66a-48df-bc0b-dc979df045a1.png](../../img/simple-analysis-process-of-a-store-instruction/figure-098-miss-go-mq-signal.png)
 
 发现是由这么一套逻辑生成的，我们还是主要着眼于看见“s1\_tag\_match”这个信号，发现当没有出现hit的信号的时候，也就主要会把这个值拉高。
 
-![figure-099-miss-tag-match-signal](../../img/simple-analysis-process-of-a-store-instruction/figure-099-miss-tag-match-signal.png)
+![1775810815631-6aca9d7f-01c0-45ac-bd4d-0e6d21d8ce7e.png](../../img/simple-analysis-process-of-a-store-instruction/figure-099-miss-tag-match-signal.png)
 
 所以，对MQ发送请求的使能信号的过程大致就是以上这种过程。（s1\_req\_miss的实际所代表的意义暂不明确）
 
@@ -824,3 +824,4 @@ SQ发出写SBuffer的请求，但是是再sta和std都OK之后，过了很久才
 
 
 > 更新: 2026-05-08 09:51:28  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/ehf7z3to1gl1ih4i>

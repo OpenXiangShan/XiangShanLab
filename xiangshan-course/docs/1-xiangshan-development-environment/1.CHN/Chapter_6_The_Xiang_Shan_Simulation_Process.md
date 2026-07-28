@@ -1,4 +1,4 @@
-# 第六章 香山核仿真流程
+# 第六章：香山核仿真流程
 
 # 6 香山核仿真流程
 
@@ -16,7 +16,7 @@
 
 :::
 
-![figure-001-simulation-process-overview](./img/chapter-6-the-xiang-shan-simulation-process/figure-001-simulation-process-overview.png)
+![1771068691800-b38a602b-a511-4c65-b520-c62f1204e9a9.png](img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
 
 ## 6.1 为什么必须做CPU仿真
 
@@ -166,7 +166,7 @@ make emu EMU_TRACE=1 -j32
 最终成功的输出结果：这里终端输出`hello xiangshan`即为成功。\
 参考成功的示例：
 
-![figure-002-nemu-run](./img/chapter-6-the-xiang-shan-simulation-process/figure-002-nemu-run.png)
+![1770621631510-97acd557-05e5-4eb1-aed2-c6ae8f1ac81e.png](img/chapter-6-the-xiang-shan-simulation-process/figure-002-nemu-run.png)
 
 图1：香山仿真成功运行Hello World程序
 
@@ -314,7 +314,7 @@ make emu -j32
 
 [VCS验证框架介绍 - XiangShan官方文档](https://docs.xiangshan.cc/zh-cn/latest/tools/vcs/)
 
-[附件: Environment_Kunminghu_VCS_Verdi_Compilation_and_Simulation_Flow_1.pdf](./attachments/-U527MQWZ2MsCMFu/Environment_Kunminghu_VCS_Verdi_Compilation_and_Simulation_Flow_1.pdf)
+[附件: 【环境】昆明湖vcs+verdi编译仿真流程(1).pdf](./attachments/-U527MQWZ2MsCMFu/【环境】昆明湖vcs+verdi编译仿真流程\(1\).pdf)
 
 进入香山根目录，执行，进行编译：
 
@@ -475,7 +475,7 @@ guiConfFile (write)= /nfs/home/yourhome/xs-env/XiangShan/novas.conf (working dir
 
 成功显示波形界面：
 
-![figure-003-bashrc-waveform-bash](./img/chapter-6-the-xiang-shan-simulation-process/figure-003-bashrc-waveform-bash.png)
+![1768548114223-5f126a7d-97ff-4fd3-b8d9-46e36b1e418e.png](img/chapter-6-the-xiang-shan-simulation-process/figure-003-bashrc-waveform-bash.png)
 
 ### 6.6.4 关联波形和代码的命令
 
@@ -539,3 +539,4 @@ verdi -ssf simv.fsdb -dbdir ./build/simv.daidir
 
 
 > 更新: 2026-04-24 01:48:05  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/brepomof51awtmkm>

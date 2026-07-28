@@ -281,7 +281,7 @@ when(isMove(i) || hasExceptionExceptFlushPipe) {
 
 1. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">官方文档</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：</font>[<font style="color:rgb(0, 102, 255);">香山处理器重命名模块设计文档</font>](https://link.wtturl.cn/?target=https%3A%2F%2Fdocs.xiangshan.cc%2Fzh-cn%2Flatest%2Fbackend%2Frename%2F\&scene=im\&aid=582478\&lang=zh)
 2. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">经典论文</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：RENO: A Rename-Based Instruction Optimizer (ISCA 2005)</font>
-3. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">相关章节</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：下一章我们将学习 "指令融合" 技术，它与 Move 消除都是在重命名阶段实现的重要优化</font>
 
 
-> 更新: 2026-05-29 16:45:29  
+> 更新: 2026-06-03 10:24:42  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/ybked8vakgq3ildt>

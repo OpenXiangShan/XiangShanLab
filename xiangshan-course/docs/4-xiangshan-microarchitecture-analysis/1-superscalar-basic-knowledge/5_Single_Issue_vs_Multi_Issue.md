@@ -1,6 +1,6 @@
 # 5. 单发射 vs. 多发射
 
-[附件: Single_Issue_vs_Multi_Issue_Core_Tradeoff_In_Processor_Performance.pptx](./attachments/CjhqwUNZSf3oW9Re/Single_Issue_vs_Multi_Issue_Core_Tradeoff_In_Processor_Performance.pptx)
+[附件: 单发射 vs. 多发射：处理器性能的核心抉择.pptx](./attachments/CjhqwUNZSf3oW9Re/单发射 vs. 多发射：处理器性能的核心抉择.pptx)
 
 <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">💡</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> </font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">学习目标</font>**
 
@@ -21,7 +21,7 @@
 
 _<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">图 1：处理器性能演进与 ILP 的贡献</font>_
 
-![figure-001-ilp-risc-v](./img/5-single-issue-vs-multi-issue/figure-001-ilp-risc-v.jpeg)
+![1778480657603-fcc2cceb-c771-493a-bfe3-c713cb41164f.jpeg](img/5-single-issue-vs-multi-issue/figure-001-ilp-risc-v.jpeg)
 
 **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山 RISC-V 的演进</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：从初代单发射的 "香山 1 号" 原型，到现在 4 发射乱序执行的 "南湖" 架构，正是沿着提高指令级并行性的路线发展。</font>
 
@@ -981,3 +981,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 > 更新: 2026-05-12 11:45:52  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/gxqhgm1yibgywucr>

@@ -734,26 +734,5 @@ Move 消除指令的 pdest 等于源操作数的 PR，数据早已就绪。如�
 * [Bug分类与分析](21-bug-classification-and-analysis)
 
 
-> 更新: 2026-06-02 10:56:42
-
-## 验证特别注意
-
-> 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。每个期望必须以当前 `kunminghu-v2` 有效 Chisel 为准。
-
-| Verification ID | 风险 / 不变量 | 定向激励 | 期望观察 | Checker / Coverage |
-| --- | --- | --- | --- | --- |
-| `RESOURCE_CONTENTION` | ROB、LSQ、各 Dispatch Queue 资源联锁错误 | 分别及同时填满 ROB、LSQ、整数/浮点/访存队列 | 只有全部必需资源允许的 lane 才 fire，不能部分丢失；证据 [backend/dispatch/NewDispatch.scala:784-835](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala#L784-L835) | Multi-sink handshake checker；resource cross |
-| `DISPATCH_PREFIX_ORDER` | 部分宽度分发越过更老阻塞 lane | 阻塞中间 lane 的目标队列，保持年轻 lane 可接收 | `notBlockedByPrevious` 保证程序序前缀接受；证据 [backend/dispatch/NewDispatch.scala:810-825](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala#L810-L825) | Oldest-prefix checker；lane-mask coverage |
-| `C_BANK_CONFLICT` | 多个 uop 竞争同一队列端口/执行类别 | 同拍构造多个相同 fuType 且端口不足的 uop | grant one-hot，失败候选保持并在资源释放后重试 | Arbiter checker；port-conflict/fairness cross |
-| `F_HOLD_BACKPRESSURE` | 任一 sink 不 ready 时 rename payload 漂移 | 保持 `fromRename.valid` 并持续改变其他资源 ready | 未 fire lane 的 uop、pdest、srcState、ROB/LSQ 请求保持一致 | Handshake checker；no-loss/no-duplicate scoreboard |
-| `F_REQ_AND_FLUSH` | redirect 与 ROB/LSQ/DQ enqueue 同拍 | 所有 enqueue valid 时注入 redirect | 错误路径不进入任何 sink，或按代码接受后被唯一 kill，不能残留半提交状态 | Flush checker；cross-sink transaction scoreboard |
-| `DISPATCH_SPECIAL` | 异常、单步和 eliminated move 的路由/阻塞不一致 | 将三类特殊 uop 与普通 uop 混合在同一组 | 特殊属性传播及序列化条件正确；证据 [backend/dispatch/NewDispatch.scala:720-740](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala#L720-L740) | Special-uop routing checker |
-| `P_DEADLOCK_ALL_STALL` | 多 sink ready 反馈形成死锁或饥饿 | 填满所有 sink 后逐一释放单个队列 | 最老请求最终跨过 dispatch，各 sink drain，吞吐恢复 | Forward-progress/performance checker |
-
-### 通用判定原则
-
-- `valid && !ready` 期间 payload 必须稳定；只有 `fire` 才能推进指针、状态或训练一次。
-- flush/redirect/replay 的胜负关系必须按代码优先级检查；错误路径不得提交、写表、训练预测器或暴露异常/数据。
-- 资源填满后必须验证可排空；重复冲突、retry 或 redirect 不得形成 deadlock/livelock，并检查低优先级旧请求是否饥饿。
-- 环形指针必须覆盖最大值到零的 wrap；表索引必须构造 same-index/different-tag 和同拍 read/write 冲突组。
-- 性能覆盖至少记录占用率、反压周期、redirect 恢复延迟、重试次数和恢复后的持续吞吐。
+> 更新: 2026-06-02 10:56:42  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/rx0ps1qslgayqqlb>

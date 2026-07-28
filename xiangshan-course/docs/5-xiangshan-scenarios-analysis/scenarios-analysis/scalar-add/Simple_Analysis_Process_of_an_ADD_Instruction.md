@@ -8,41 +8,46 @@
 
 [surfer软件链接](https://surfer-project.org/)
 
+# 详细知识点：
+
+1. 重命名读操作的bypass路径
+2. 回写端口竞争机制
+
 # 1.软件与波形文件准备：
 
 （1）下载并安装波形查看软件：[surfer软件链接](https://surfer-project.org/)
 
-![figure-001-setup-install-viewer](../../img/simple-analysis-process-of-an-add-instruction/figure-001-setup-install-viewer.png)
+![1773641037463-2e18316b-1bb7-43a6-b297-7a9379d745e7.png](../../img/simple-analysis-process-of-an-add-instruction/figure-001-setup-install-viewer.png)
 
 （2）打开波形文件及状态文件
 
 首先，运行可执行文件（.exe）：
 
-![figure-002-setup-run-execute](../../img/simple-analysis-process-of-an-add-instruction/figure-002-setup-run-execute.png)
+![1773641070447-068af2b5-1147-4e32-a61d-f6b1bfce6f65.png](../../img/simple-analysis-process-of-an-add-instruction/figure-002-setup-run-execute.png)
 
-![figure-003-setup-run-execute](../../img/simple-analysis-process-of-an-add-instruction/figure-003-setup-run-execute.jpeg)
+![1773715365367-580f5cb0-8081-4e11-9e91-cc518829ebbb.jpeg](../../img/simple-analysis-process-of-an-add-instruction/figure-003-setup-run-execute.jpeg)
 
 然后，打开波形文件：
 
-![figure-004-setup-open-state](../../img/simple-analysis-process-of-an-add-instruction/figure-004-setup-open-state.png)
+![1773641147814-9c1a2d1b-32d9-44e8-8d32-f3ab155162c2.png](../../img/simple-analysis-process-of-an-add-instruction/figure-004-setup-open-state.png)
 
 此时，软件会自动检测到一个状态文件。这个文件实际上就是压缩包内的 `hello.surf.ron`文件，用于保存对波形所做的各项操作状态，例如显示哪些波形、设置的标记等。请点击“使用”这个状态文件。：
 
-![figure-005-setup-state-open](../../img/simple-analysis-process-of-an-add-instruction/figure-005-setup-state-open.png)
+![1773641182033-06ce7780-f9cb-4073-a36c-4b7f59c39e9b.png](../../img/simple-analysis-process-of-an-add-instruction/figure-005-setup-state-open.png)
 
 成功打开后的界面截图如下：
 
-![figure-006-setup-open-screenshot](../../img/simple-analysis-process-of-an-add-instruction/figure-006-setup-open-screenshot.png)
+![1773641380552-88e26312-32b1-45f2-82fd-6e4fb44548a1.png](../../img/simple-analysis-process-of-an-add-instruction/figure-006-setup-open-screenshot.png)
 
 # 2.找到一条合适的 `add`指令
 
 打开反汇编文件（即压缩包中的 `hello-riscv64-xs.txt`文件）：
 
-![figure-007-add-open-disassembly](../../img/simple-analysis-process-of-an-add-instruction/figure-007-add-open-disassembly.png)
+![1773641519830-3ae34d08-778e-44ed-bc4a-6150050c3178.png](../../img/simple-analysis-process-of-an-add-instruction/figure-007-add-open-disassembly.png)
 
 此处选择位于程序计数器（pc）地址 `0x80000122`的指令，其内容为 `0x006f0133`。单独分析这条指令，对照指令集手册：
 
-![figure-008-add-select-pc](../../img/simple-analysis-process-of-an-add-instruction/figure-008-add-select-pc.png)
+![1773641630350-ca2bac29-79bf-4e13-9564-4610c906d6ea.png](../../img/simple-analysis-process-of-an-add-instruction/figure-008-add-select-pc.png)
 
 （ 本图来源于 [链接](https://ai-embedded.com/risc-v/riscv-isa-manual/) ）
 
@@ -84,27 +89,27 @@
 
 目前只对后端进行分析，分析的起点显然是 `CtrlBlock`模块
 
-![figure-009-start-backend-analysis](../../img/simple-analysis-process-of-an-add-instruction/figure-009-start-backend-analysis.png)
+![1773642856838-5f8f97e3-076c-4220-b62a-d886b2a83551.png](../../img/simple-analysis-process-of-an-add-instruction/figure-009-start-backend-analysis.png)
 
 通过阅读设计手册可知，指令在进入后端时，首先会进入译码阶段。在译码阶段，由 6 个 `DecodeUnit`模块负责对输入的 6 条指令进行译码。
 
-![figure-010-start-manual-backend](../../img/simple-analysis-process-of-an-add-instruction/figure-010-start-manual-backend.png)
+![1773642951648-fe1a3c4f-ddd8-42fb-a6c6-f3e1f2291333.png](../../img/simple-analysis-process-of-an-add-instruction/figure-010-start-manual-backend.png)
 
 首先查看 `DecodeStage`中的代码以验证此猜想：
 
-![figure-011-start-inspect-decode](../../img/simple-analysis-process-of-an-add-instruction/figure-011-start-inspect-decode.png)
+![1773643134048-b5acf657-d9b9-4ec9-afce-0390d0736f86.png](../../img/simple-analysis-process-of-an-add-instruction/figure-011-start-inspect-decode.png)
 
 由此可知，系统生成了 6 个 `DecodeUnit`实例，并分别向其输入了数据。因此，当前的观察重点应放在 `DecodeUnit`模块上。为此，我们首先查看该模块的代码：
 
-![figure-012-start-decode-unit](../../img/simple-analysis-process-of-an-add-instruction/figure-012-start-decode-unit.png)
+![1773643329438-e196b47d-86db-4d99-9870-66052937b81a.png](../../img/simple-analysis-process-of-an-add-instruction/figure-012-start-decode-unit.png)
 
 如上图所示，我们已定位到该模块的 IO 端口。接下来查看这些端口的定义：
 
-![figure-013-start-io-port](../../img/simple-analysis-process-of-an-add-instruction/figure-013-start-io-port.png)
+![1773643434168-2a9af6a3-2e90-4d1e-b12e-288c733187ea.png](../../img/simple-analysis-process-of-an-add-instruction/figure-013-start-io-port.png)
 
 由此可知，`DecodeUnitEnqIO`是该模块的输入接口，`DecodeUnitDeqIO`是其输出接口。查阅这两组接口的定义如下：
 
-![figure-014-start-decode-unit](../../img/simple-analysis-process-of-an-add-instruction/figure-014-start-decode-unit.png)
+![1773643499568-4d03ac37-c634-45e5-8862-614ca60d7d5d.png](../../img/simple-analysis-process-of-an-add-instruction/figure-014-start-decode-unit.png)
 
 因此，对 `DecodeUnit`模块的研究将主要聚焦于这两组信号。
 
@@ -114,11 +119,11 @@
 
 查看第 0 个 DecodeUnit 的输入和输出：
 
-![figure-015-decode-stage-unit-inspect](../../img/simple-analysis-process-of-an-add-instruction/figure-015-decode-stage-unit-inspect.png)
+![1773643892501-9ef6eb5a-0517-42f9-8337-81365b07da30.png](../../img/simple-analysis-process-of-an-add-instruction/figure-015-decode-stage-unit-inspect.png)
 
 该模块的输入与输出内容如下：
 
-![figure-016-decode-stage-unit-chisel](../../img/simple-analysis-process-of-an-add-instruction/figure-016-decode-stage-unit-chisel.png)
+![1773644859068-ebea2c8e-7678-41f1-82c1-ae38386fcd61.png](../../img/simple-analysis-process-of-an-add-instruction/figure-016-decode-stage-unit-chisel.png)
 
 | chisel | verilog | 含义 |
 | --- | --- | --- |
@@ -159,7 +164,7 @@
 
 \*\*首先，理解这两个 \*\*<code>**srcType**</code>\*\*的意义。\*\*我们先看 DecodeUnit 模块如何为这条 add 指令写入该值：
 
-![figure-017-decode-stage-unit-type](../../img/simple-analysis-process-of-an-add-instruction/figure-017-decode-stage-unit-type.png)
+![1773645487182-07046b71-df60-4511-991b-ad194e9dc4b8.png](../../img/simple-analysis-process-of-an-add-instruction/figure-017-decode-stage-unit-type.png)
 
 在代码中很容易发现，`srcType_0`之所以为 `0x1`以及 `srcType_1`之所以为 `0x1`，是因为 DecodeUnit 为这两个位置写入了 `SrcType.reg`这个值。
 
@@ -167,11 +172,11 @@
 
 为了确认“来源于寄存器”的指示信号是否确实对应“0x1”，我们继续查看关于 `srcType`的定义：
 
-![figure-018-decode-stage-unit-register](../../img/simple-analysis-process-of-an-add-instruction/figure-018-decode-stage-unit-register.png)
+![1773644762490-05bed4a2-1569-4e80-bd04-29061d834cd5.png](../../img/simple-analysis-process-of-an-add-instruction/figure-018-decode-stage-unit-register.png)
 
 查找结果如下：
 
-![figure-019-decode-stage-unit-result](../../img/simple-analysis-process-of-an-add-instruction/figure-019-decode-stage-unit-result.png)
+![1773645310882-95b69030-14b4-429d-a983-c291361bdcdd.png](../../img/simple-analysis-process-of-an-add-instruction/figure-019-decode-stage-unit-result.png)
 
 从代码中可以看到，定义了：
 
@@ -184,11 +189,11 @@ def reg = this.xp
 
 \*\*接着，分析 \*\*<code>**fuType**</code>\*\*为 \*\*<code>**0x40**</code>\*\*与 \*\*<code>**fuOpType**</code>\*\*为 \*\*<code>**0x21**</code>**所代表的意义。**
 
-![figure-020-decode-stage-unit-analysis](../../img/simple-analysis-process-of-an-add-instruction/figure-020-decode-stage-unit-analysis.png)
+![1773646069416-02f6d047-b710-4d7d-835e-cc70bdd5801e.png](../../img/simple-analysis-process-of-an-add-instruction/figure-020-decode-stage-unit-analysis.png)
 
 结果如下：
 
-![figure-021-decode-stage-unit-result](../../img/simple-analysis-process-of-an-add-instruction/figure-021-decode-stage-unit-result.png)
+![1773646163390-bc4b2a70-bf29-48d5-9281-2788a1f5b631.png](../../img/simple-analysis-process-of-an-add-instruction/figure-021-decode-stage-unit-result.png)
 
 可以看出，这个值采用独热编码。`fuType`为 `0x40`，即二进制 `8b0100_0000`，意味着下标为 6 的位置是 `1b1`。
 
@@ -202,13 +207,13 @@ val alu = addType(name = "alu")
 
 紧接着，分析 `fuOpType`为 `0x21`的含义。可以推测，这个值指示了 ALU 执行的具体操作是加法。我们来验证一下：
 
-![figure-022-decode-stage-unit-analysis](../../img/simple-analysis-process-of-an-add-instruction/figure-022-decode-stage-unit-analysis.png)
+![1773646502266-a0ce1c71-1adb-490c-b52b-717564fa2af5.png](../../img/simple-analysis-process-of-an-add-instruction/figure-022-decode-stage-unit-analysis.png)
 
 在定义 `fuOpType`的代码处，可以看到当值为 `0x21`时，其注释表明它代表普通的加法操作。
 
 通过以上分析，相信你对输入 DecodeUnit 模块的信号以及该模块输出的信号，都有了较深入的理解，对于其他指令也能独立判断这些信号的意义了。
 
-![figure-016-decode-stage-unit-chisel](../../img/simple-analysis-process-of-an-add-instruction/figure-016-decode-stage-unit-chisel.png)
+![1773644859068-ebea2c8e-7678-41f1-82c1-ae38386fcd61.png](../../img/simple-analysis-process-of-an-add-instruction/figure-016-decode-stage-unit-chisel.png)
 
 总结如下：
 
@@ -221,27 +226,27 @@ val alu = addType(name = "alu")
 
 至此，对译码模块的探索可以暂时告一段落。在学习初期，我们只需要了解香山架构是如何对简单指令进行译码的。即在下图中：
 
-![figure-023-rename-stage-decode](../../img/simple-analysis-process-of-an-add-instruction/figure-023-rename-stage-decode.png)
+![1773711982179-77c0d600-b23b-47ec-ba2f-773d7a379ba6.png](../../img/simple-analysis-process-of-an-add-instruction/figure-023-rename-stage-decode.png)
 
 在紫色板块（DecodeStage）中，我们只需理解被红色方框框出的部分。因为其他部分主要服务于向量指令，而学习初期我们暂不关注此类复杂指令。因此，可以认为译码模块的探究已经完成，接下来应转向对重命名（Rename）阶段的探究。
 
 在探究重命名的实现之前，强烈建议先熟悉其理论基础，这将帮助你更好地理解此处的架构设计。理论学习可参考《香山源代码剖析 第二册》P1011，或直接阅读下方图片：
 
-![figure-024-rename-stage-inspect-architecture](../../img/simple-analysis-process-of-an-add-instruction/figure-024-rename-stage-inspect-architecture.png)
+![1773712880661-a4fa527a-2b32-4ead-8982-48a3aae340fe.png](../../img/simple-analysis-process-of-an-add-instruction/figure-024-rename-stage-inspect-architecture.png)
 
-![figure-025-rename-stage-inspect-architecture](../../img/simple-analysis-process-of-an-add-instruction/figure-025-rename-stage-inspect-architecture.png)
+![1773712889737-f2cb0cbd-6d0f-4a62-a13b-15e63126fc70.png](../../img/simple-analysis-process-of-an-add-instruction/figure-025-rename-stage-inspect-architecture.png)
 
-![figure-026-rename-stage-inspect-architecture](../../img/simple-analysis-process-of-an-add-instruction/figure-026-rename-stage-inspect-architecture.png)
+![1773712907621-6686d9b4-b98b-46aa-8c46-688ac255506c.png](../../img/simple-analysis-process-of-an-add-instruction/figure-026-rename-stage-inspect-architecture.png)
 
 熟悉了上述理论知识后，接下来需要查看架构图：
 
-![figure-027-rename-stage-inspect-architecture](../../img/simple-analysis-process-of-an-add-instruction/figure-027-rename-stage-inspect-architecture.png)
+![1773712285764-776c1ecc-6fa5-4d1f-bf31-f30298d87676.png](../../img/simple-analysis-process-of-an-add-instruction/figure-027-rename-stage-inspect-architecture.png)
 
 可以发现，在 DecodeStage 译码结束后，会大致将两类信号向外传递，即上图中标红的数字 1 和 2。接下来，我们将主要从这两类信号开始，分析指令进入后续流水级的具体行为。
 
 在查看此架构图时，需要注意一个关键点：图中所有用橙色标示的区域，通常都可以认为内部包含寄存器。例如下图框出的这些部分：
 
-![figure-028-rename-stage-inspect-architecture](../../img/simple-analysis-process-of-an-add-instruction/figure-028-rename-stage-inspect-architecture.png)
+![1773807937411-95884ed2-9fe7-4b84-9658-19482d6f094a.png](../../img/simple-analysis-process-of-an-add-instruction/figure-028-rename-stage-inspect-architecture.png)
 
 而其他部分通常只包含组合逻辑。
 
@@ -254,17 +259,17 @@ val alu = addType(name = "alu")
 
 首先观察第一组信号的波形，需要找到 `DecodePipeRename`这个模块。
 
-![figure-029-decode-signal-waveform-find](../../img/simple-analysis-process-of-an-add-instruction/figure-029-decode-signal-waveform-find.png)
+![1773808408144-3a99f62c-9890-4512-8384-342a06f0dd5c.png](../../img/simple-analysis-process-of-an-add-instruction/figure-029-decode-signal-waveform-find.png)
 
 提取该模块的主要输出信号，并结合之前译码阶段的部分信号，以观察其行为：
 
-![figure-030-decode-signal-stage-waveform](../../img/simple-analysis-process-of-an-add-instruction/figure-030-decode-signal-stage-waveform.png)
+![1773809006332-ce11d62c-a3f5-4e87-aed7-2a1f852ccc94.png](../../img/simple-analysis-process-of-an-add-instruction/figure-030-decode-signal-stage-waveform.png)
 
 从 Decode 模块的输入和输出信号波形可以看出，其输入与输出之间是直接组合逻辑相连的，中间没有寄存器。Decode 模块的输出信号会直接传入 `DecodePipeRename`模块。
 
 只有当 `valid`信号和 `ready`信号同时有效时，数据才能通过这个寄存器被锁存，并打入下一个流水级。这两个信号是非常关键的控制信号。例如，在图中所示的情况下：
 
-![figure-031-decode-signal-valid-ready](../../img/simple-analysis-process-of-an-add-instruction/figure-031-decode-signal-valid-ready.png)
+![1773809367959-b21bfaa6-1bdb-47a4-86e6-7404ff51cac7.png](../../img/simple-analysis-process-of-an-add-instruction/figure-031-decode-signal-valid-ready.png)
 
 `valid`信号一直保持为高电平，这表明当前位于译码阶段的这条加法指令已准备好进入下一流水级。
 
@@ -274,7 +279,7 @@ val alu = addType(name = "alu")
 
 当然，我们可以再检查一下这些进入重命名（Rename）阶段的必要信号是否正确：
 
-![figure-032-decode-signal-rename-stage](../../img/simple-analysis-process-of-an-add-instruction/figure-032-decode-signal-rename-stage.png)
+![1773809714094-19f515aa-a7e3-4fef-95ee-d4572138d833.png](../../img/simple-analysis-process-of-an-add-instruction/figure-032-decode-signal-rename-stage.png)
 
 | 波形信号名 | 位宽 | 核心含义 | 对应 Chisel 源码位置 | 补充说明 |
 | --- | --- | --- | --- | --- |
@@ -301,11 +306,11 @@ val alu = addType(name = "alu")
 
 在前面我们还提到，存在第2组信号，用于读取RAT表。接下来我们继续分析这组信号：
 
-![figure-033-rat-signal-analysis-decode](../../img/simple-analysis-process-of-an-add-instruction/figure-033-rat-signal-analysis-decode.png)
+![1773810132382-fa9b3699-83a8-4289-8617-bf8cf250d679.png](../../img/simple-analysis-process-of-an-add-instruction/figure-033-rat-signal-analysis-decode.png)
 
 很明显，这组信号在译码阶段就直接传入了RAT表，中间没有经过任何寄存器。
 
-![figure-034-rat-signal-decode-stage](../../img/simple-analysis-process-of-an-add-instruction/figure-034-rat-signal-decode-stage.png)
+![1773810258096-c72ff462-3b9f-4971-8900-ce99e1cd3311.png](../../img/simple-analysis-process-of-an-add-instruction/figure-034-rat-signal-decode-stage.png)
 
 那么，我们直接查看 RAT 表的输入。在熟悉重命名理论知识的前提下，我们知道此处的读取操作必然以两个逻辑源寄存器地址（`lsrc`）作为索引，即：
 
@@ -314,7 +319,7 @@ val alu = addType(name = "alu")
 
 系统会以 `30`和 `6` 这两个数值进行读取。找到对应的波形图：
 
-![figure-035-rat-find-waveform-architecture](../../img/simple-analysis-process-of-an-add-instruction/figure-035-rat-find-waveform-architecture.png)
+![1773810481334-2732b4a0-7b88-40a7-8f50-fff9bd74a3fe.png](../../img/simple-analysis-process-of-an-add-instruction/figure-035-rat-find-waveform-architecture.png)
 
 无论是从架构图推断，还是通过波形图确认，我们都能看出RAT在指令仍处于译码阶段时，就已经接收到了两个需要读取的地址，即上图中红框标记的30和6。这个行为是正确的。
 
@@ -324,11 +329,11 @@ val alu = addType(name = "alu")
 
 这里就是读端口在代码中所处的位置：
 
-![figure-036-rat-port-signal](../../img/simple-analysis-process-of-an-add-instruction/figure-036-rat-port-signal.png)
+![1773813994380-c91feed8-f8c8-48e3-9b8b-0e049b98bf3a.png](../../img/simple-analysis-process-of-an-add-instruction/figure-036-rat-port-signal.png)
 
 在代码中，我们可以看到这样的一些代码片段，它们清楚地说明了这组信号之间的时序关系。
 
-![figure-037-rat-signal](../../img/simple-analysis-process-of-an-add-instruction/figure-037-rat-signal.png)
+![1773814287584-d7f6ebdb-df07-4f8f-9be2-d60386306c86.png](../../img/simple-analysis-process-of-an-add-instruction/figure-037-rat-signal.png)
 
 上图代码提供了以下关键信息：
 
@@ -342,7 +347,7 @@ val alu = addType(name = "alu")
 
 接下来，我们再查看波形进行验证：
 
-![figure-038-rat-inspect-waveform-signal](../../img/simple-analysis-process-of-an-add-instruction/figure-038-rat-inspect-waveform-signal.png)
+![1773815080728-dee9f01a-e6de-43fc-94b1-194d31b2d6c5.png](../../img/simple-analysis-process-of-an-add-instruction/figure-038-rat-inspect-waveform-signal.png)
 
 | 波形信号名 | 位宽 | 核心功能 | 对应 Chisel 源码位置 | 波形补充说明 |
 | --- | --- | --- | --- | --- |
@@ -367,7 +372,7 @@ val alu = addType(name = "alu")
 
 理解了吗？现在，我们可以进一步核对 `spec_table`中第 30 号和第 6 号位置的数据是否确实为 10 和 7：
 
-![figure-039-rat-spec-table-waveform](../../img/simple-analysis-process-of-an-add-instruction/figure-039-rat-spec-table-waveform.png)
+![1773815514755-d970c65a-f1ef-4539-9895-70e30a67ade8.png](../../img/simple-analysis-process-of-an-add-instruction/figure-039-rat-spec-table-waveform.png)
 
 | 波形信号名 | 位宽 | 核心功能 | 对应 Chisel 源码位置 | 波形补充说明 |
 | --- | --- | --- | --- | --- |
@@ -402,19 +407,19 @@ val alu = addType(name = "alu")
 
 没错，正是 `bypass`中的处理导致了这一结果。我们再来仔细阅读 `bypass`部分的代码：
 
-![figure-040-rat-bypass-result](../../img/simple-analysis-process-of-an-add-instruction/figure-040-rat-bypass-result.png)
+![1773815756203-cae58cfb-2971-41e0-a19e-d17e3f35e037.png](../../img/simple-analysis-process-of-an-add-instruction/figure-040-rat-bypass-result.png)
 
 发现了吗？之所以需要这些处理，是因为**读取操作和写入操作可能同时发生**。为了保证逻辑上的正确性，必须设置这样的旁路路径来检测：当前正在写入的值，是否恰好是本次读取所期望的值。如果是，**那么这个尚未真正写入的值，才是我们真正想要读取的正确数据**。
 
 下图清晰地展示了这条旁路路径以及读数据的时序关系。请你结合代码来理解，一定能彻底弄清楚。实际上，下图已经把写数据的时序逻辑也清楚地标明了。写信号在进入重命名（Rename）阶段后，还会再打一拍，变成 `t1_wspec`信号，之后才能真正访问到 `spec_table`。明确这一点，将有助于我们后续的理解。
 
-![figure-041-rat-signal-rename-stage](../../img/simple-analysis-process-of-an-add-instruction/figure-041-rat-signal-rename-stage.jpeg)
+![画板](../../img/simple-analysis-process-of-an-add-instruction/figure-041-rat-signal-rename-stage.jpeg)
 
 清楚了读时序逻辑、旁路机制以及写操作的时序逻辑后，再来看波形就非常简单了。回顾一下前面尚未解决的问题：
 
 > 查看 `spec_table_30`时就会发现问题：读取这个位置时的值不是 0 吗，为什么读出来是 10？
 
-![figure-042-rat-waveform-add-rename](../../img/simple-analysis-process-of-an-add-instruction/figure-042-rat-waveform-add-rename.png)
+![1773817660534-fe226ad2-5b02-45ca-acea-6da0b2b16786.png](../../img/simple-analysis-process-of-an-add-instruction/figure-042-rat-waveform-add-rename.png)
 
 可以清楚地发现，当我们的加法指令进入重命名阶段后，在同一个周期内，`t1_wSpec`信号正在对 SpecTable\_30 表进行写入操作，写入的值恰好是 10。
 
@@ -447,13 +452,13 @@ val alu = addType(name = "alu")
 
 首先，来看第一个任务的行为。我们直接推测，指令在有效（`valid`）且需要回写（`rfWen`）时，才会触发 Freelist 分配物理寄存器。在代码中，`needIntDest`信号用于指示是否需要分配物理寄存器。我们直接查看它的实现方式：
 
-![figure-043-rat-valid-rf-wen](../../img/simple-analysis-process-of-an-add-instruction/figure-043-rat-valid-rf-wen.png)
+![1773818625538-ac96cdaa-dbe0-40d0-b9b5-0978eb703a17.png](../../img/simple-analysis-process-of-an-add-instruction/figure-043-rat-valid-rf-wen.png)
 
-![figure-044-rat-valid-rf-wen](../../img/simple-analysis-process-of-an-add-instruction/figure-044-rat-valid-rf-wen.png)
+![1773818801236-967a109a-37ba-470d-968e-f46ed08ec992.png](../../img/simple-analysis-process-of-an-add-instruction/figure-044-rat-valid-rf-wen.png)
 
 这完美印证了我们的猜想：当 `valid`信号和 `rfWen`信号均为高电平时，请求新物理寄存器的信号（`needIntDest`）就会被拉高。
 
-![figure-045-rat-valid-signal-rf](../../img/simple-analysis-process-of-an-add-instruction/figure-045-rat-valid-signal-rf.png)
+![1773818984948-d0f4f155-0e43-46ca-b6d8-fa55eda4c35f.png](../../img/simple-analysis-process-of-an-add-instruction/figure-045-rat-valid-signal-rf.png)
 
 之后，Freelist 模块会根据这个请求信号，返回一个“当前空闲的”物理寄存器。
 
@@ -461,7 +466,7 @@ val alu = addType(name = "alu")
 
 我们接着看波形：
 
-![figure-046-rat-waveform-rename-signal](../../img/simple-analysis-process-of-an-add-instruction/figure-046-rat-waveform-rename-signal.png)
+![1773818088797-3ee84660-f241-4dfe-b2f2-a05a0fd5b8ab.png](../../img/simple-analysis-process-of-an-add-instruction/figure-046-rat-waveform-rename-signal.png)
 
 重命名控制和分配信号
 
@@ -483,7 +488,7 @@ RAT 写端口信号
 | `t1_wSpec_0_addr[4:0]` | 5bit | 打拍后的重命名表写地址，与`io_specWritePorts_0_addr`<br/>的值完全一致，用于时序同步 | 同上 | 红框周期值为`2`<br/>，对应逻辑寄存器`x2` |
 | `t1_wSpec_0_data[7:0]` | 8bit | 打拍后的重命名表写数据，与`io_specWritePorts_0_data`<br/>的值完全一致，用于时序同步 | 同上 | 红框周期值为`11`<br/>，对应新的物理寄存器号 |
 
-RAT 存储和 多发射辅助信号
+RAT 存储和多发射辅助信号
 
 | 信号名 | 位宽 | 核心功能 | 对应 Chisel 源码位置 | 波形关键说明 |
 | --- | --- | --- | --- | --- |
@@ -508,7 +513,7 @@ RAT 存储和 多发射辅助信号
 
 为指令分配 ROB 表项的操作，同样在重命名阶段进行。查看波形：
 
-![figure-047-rob-rename-stage-inspect](../../img/simple-analysis-process-of-an-add-instruction/figure-047-rob-rename-stage-inspect.png)
+![1773819925887-2f48fcf7-2e7b-4b06-adce-062c5b0b7c1d.png](../../img/simple-analysis-process-of-an-add-instruction/figure-047-rob-rename-stage-inspect.png)
 
 重命名模块输出和资源分配信号
 
@@ -523,9 +528,9 @@ RAT 存储和 多发射辅助信号
 
 这大致通过以下代码实现分配：
 
-![figure-048-rob](../../img/simple-analysis-process-of-an-add-instruction/figure-048-rob.png)
+![1773820178862-33651faf-4cfa-40cd-8cd0-eb2070a22fe0.png](../../img/simple-analysis-process-of-an-add-instruction/figure-048-rob.png)
 
-![figure-049-rob](../../img/simple-analysis-process-of-an-add-instruction/figure-049-rob.png)
+![1773820228559-c78b7d30-a839-4da5-a0bc-2799a1ac46f0.png](../../img/simple-analysis-process-of-an-add-instruction/figure-049-rob.png)
 
 （暂未深入探究上述分配逻辑。）
 
@@ -535,15 +540,15 @@ RAT 存储和 多发射辅助信号
 
 在对本节查看过的信号进行总结前，我们来查看最终传递给分发阶段（Dispatch）的信号具体有哪些。可以发现，在这两个阶段之间也存在一个 `RenamePipeDispatch`模块。
 
-![figure-050-rename-dispatch-signal-inspect](../../img/simple-analysis-process-of-an-add-instruction/figure-050-rename-dispatch-signal-inspect.png)
+![1773820479516-8597c176-9a81-45bb-b16f-568c382f11f6.png](../../img/simple-analysis-process-of-an-add-instruction/figure-050-rename-dispatch-signal-inspect.png)
 
 因此，我们可以直接查看这个模块的输出，也可以查看 Dispatch 模块的输入。此处我选择查看后者：
 
-![figure-051-rename-dispatch-signal-inspect](../../img/simple-analysis-process-of-an-add-instruction/figure-051-rename-dispatch-signal-inspect.png)
+![1773820635344-c23105b5-789d-44c9-b185-75cec0d87ef8.png](../../img/simple-analysis-process-of-an-add-instruction/figure-051-rename-dispatch-signal-inspect.png)
 
 在这个模块中，我们提取以下信号进行观察：
 
-![figure-052-rename-dispatch-signal](../../img/simple-analysis-process-of-an-add-instruction/figure-052-rename-dispatch-signal.png)
+![1773820756690-6e9c4af8-0225-4226-b3dc-aeceb404b908.png](../../img/simple-analysis-process-of-an-add-instruction/figure-052-rename-dispatch-signal.png)
 
 模块之间的握手信号：
 
@@ -588,15 +593,15 @@ RAT 存储和 多发射辅助信号
 
 查看架构图可知，在重命名（Rename）模块与分发（Dispatch）模块之间也存在一个 `RenamePipeDispatch`模块。基本可以确认，这是两级流水线之间的流水线寄存器。其行为模式与我们前面分析过的 `DecodePipeRename`模块几乎完全相同，因此这里不再赘述。读者可自行查看该模块相关的输入、输出信号波形。
 
-![figure-053-signal-inspect-architecture-diagram](../../img/simple-analysis-process-of-an-add-instruction/figure-053-signal-inspect-architecture-diagram.png)
+![1773971578279-11d87699-666b-47b9-b42f-efbaa2b7f758.png](../../img/simple-analysis-process-of-an-add-instruction/figure-053-signal-inspect-architecture-diagram.png)
 
 此处直接观察进入分发模块的数据信号，定位到该模块：
 
-![figure-054-signal-dispatch-stage](../../img/simple-analysis-process-of-an-add-instruction/figure-054-signal-dispatch-stage.png)
+![1773971988477-c34a5e7c-d2f3-43d9-a9e1-38acb1909b57.png](../../img/simple-analysis-process-of-an-add-instruction/figure-054-signal-dispatch-stage.png)
 
 提取以下相关信号进行观察：
 
-![figure-055-signal-waveform-ps-dispatch](../../img/simple-analysis-process-of-an-add-instruction/figure-055-signal-waveform-ps-dispatch.png)
+![1773972050846-ce217155-c58e-45e1-95e8-59da04638e41.png](../../img/simple-analysis-process-of-an-add-instruction/figure-055-signal-waveform-ps-dispatch.png)
 
 在波形中可以观察到，在仿真时间 2337 ps 这一时刻，第 0 路进入分发阶段的指令主要包含以下信息：
 
@@ -624,11 +629,11 @@ RAT 存储和 多发射辅助信号
 
 进入分发阶段后，如上节所示，指令已经知晓其两个源操作数分别来自物理寄存器 10 号和 7 号。那么，进入此阶段后，它的重要任务之一自然是查询这两个所需数据的状态，即检查 10 号和 7 号物理寄存器的数据是否就绪，是否仍处于繁忙状态。因此，它需要读取分发阶段下的子模块 `intBusyTable`，以获取这两个物理寄存器的状态信息。
 
-![figure-056-busy-table-dispatch-stage](../../img/simple-analysis-process-of-an-add-instruction/figure-056-busy-table-dispatch-stage.png)
+![1773972999812-bd84702e-f2cf-46f0-8867-ae3d886d0b78.png](../../img/simple-analysis-process-of-an-add-instruction/figure-056-busy-table-dispatch-stage.png)
 
 拉取此模块的如下信号：
 
-![figure-057-busy-table-signal-rename](../../img/simple-analysis-process-of-an-add-instruction/figure-057-busy-table-signal-rename.png)
+![1773972967879-d83c19b9-5589-4187-ba07-a10aeee50464.png](../../img/simple-analysis-process-of-an-add-instruction/figure-057-busy-table-signal-rename.png)
 
 重命名到分发模块的信号：
 
@@ -687,7 +692,7 @@ busy table 查询信号：
 
 现在，我们拉出以下信号进行查看
 
-![figure-058-busy-table-signal-inspect](../../img/simple-analysis-process-of-an-add-instruction/figure-058-busy-table-signal-inspect.png)
+![1773973821424-d758ba16-d700-436d-9c1b-cf28c573e5bd.png](../../img/simple-analysis-process-of-an-add-instruction/figure-058-busy-table-signal-inspect.png)
 
 | 信号名 | 波形数值 | 核心功能 | 与全链路信号的联动关系 |
 | --- | --- | --- | --- |
@@ -711,13 +716,35 @@ busy table 查询信号：
 
 因此，观察此模块的信号：
 
-![figure-059-rob-signal-inspect](../../img/simple-analysis-process-of-an-add-instruction/figure-059-rob-signal-inspect.png)
+![1773974763523-ea010c15-8d04-4125-a24a-74904c5c214a.png](../../img/simple-analysis-process-of-an-add-instruction/figure-059-rob-signal-inspect.png)
 
 提取以下信号进行查看：
 
-![figure-060-rob-signal-inspect](../../img/simple-analysis-process-of-an-add-instruction/figure-060-rob-signal-inspect.png)
+![1773974571338-e9e67f8b-a3c5-4e5f-bf8e-2b19429b4fe6.png](../../img/simple-analysis-process-of-an-add-instruction/figure-060-rob-signal-inspect.png)
 
 首先是 ROB 入队的请求信号
+
+| 信号名 | 位宽 | 核心功能 | 波形数值与验证说明 |
+| --- | --- | --- | --- |
+| `io_enq_req_0_valid` | 1bit | ROB 入队请求的**握手有效信号**，由重命名模块驱动，告诉 ROB：「我有一条有效指令，申请入队」 | 2338ps 时值为`1`<br/>，说明发起了有效的入队请求，是指令入队的前提条件 |
+| `io_enq_req_0_bits_pc[49:0]` | 50bit | 入队指令的 PC 值，是指令的唯一身份标识 | 值为`0000080000122`<br/>，和你全程跟踪的 add 指令 PC 完全一致，**第一步就确认入队的是目标指令** |
+| `io_enq_req_0_bits_instr[31:0]` | 32bit | 入队指令的原始机器码 | 值为`006f0133`<br/>，对应 RISC-V 的 add 加法指令，和之前的指令机器码完全匹配，双重确认指令身份 |
+| `io_enq_req_0_bits_robIdx_value[5:0]` | 6bit | 给这条指令预分配的 ROB 表项索引，也就是这条指令的「排队号」 | 值为`35`<br/>，和之前重命名阶段的`robIdxHead_value=35`<br/>完全对应，说明这条指令要写入 ROB 的**第 35 号专属表项** |
+
+显示重命名的 rob 的 35 号表项里面保存了对应的目标指令
+
+| 信号名 | 位宽 | 核心功能 | 波形数值与验证说明 |
+| --- | --- | --- | --- |
+| `robEntries_35_valid` | 1bit | ROB 表项的**有效位**，是入队成功的核心标志：`=1`<br/>表示表项已被占用，存储了有效指令；`=0`<br/>表示表项空闲，可分配给新指令 | 2338ps 后从`0`<br/>变为`1`<br/>，**直接证明这条 add 指令成功入队 ROB，35 号表项被正式占用** |
+| `robEntries_35_debug_pc[49:0]` | 50bit | 表项中存储的指令 PC 值（debug 信号专门用于波形调试） | 从无效值变为`0000080000122`<br/>，和入队请求的 PC 完全一致，确认表项存储的就是目标指令 |
+| `robEntries_35_debug_instr[31:0]` | 32bit | 表项中存储的指令机器码 | 从无效值变为`006f0133`<br/>，和入队请求的机器码完全匹配 |
+| `robEntries_35_debug_fuType[34:0]` | 35bit | 表项中存储的指令功能单元类型 | 变为`000000040`<br/>，对应 ALU 整数运算单元，和之前重命名阶段的`fuType`<br/>完全一致 |
+| `robEntries_35_debug_ldest[5:0]` | 6bit | 表项中存储的目标逻辑寄存器号 | 变为`2`<br/>，对应 RISC-V 的`x2`<br/>寄存器，和之前的`ldest=2`<br/>完全匹配 |
+| `robEntries_35_debug_pdest[7:0]` | 8bit | 表项中存储的目标物理寄存器号 | 变为`11`<br/>，和重命名阶段分配的`pdest=11`<br/>完全一致，后续指令写回、提交都会用到这个值 |
+| `robEntries_35_uopNum[6:0]` | 7bit | 表项中存储的微操作数量 | 值为`01`<br/>，说明这条普通整数指令只对应 1 个微操作，无需拆分 |
+| `robEntries_35_realDestSize[6:0]` | 7bit | 目标寄存器的位宽标识 | 值为`01`<br/>，对应 RV64 的 64 位整数寄存器 |
+| `robEntries_35_rfWen` | 1bit | 表项中存储的寄存器写使能信号 | 值为`1`<br/>，和之前的`rfWen=1`<br/>一致，说明这条指令执行完成后需要写回目标寄存器，提交时要更新处理器架构状态 |
+| `robEntries_35_commitType[2:0]` | 3bit | 表项中存储的指令提交类型 | 值为`0`<br/>，表示这是**普通整数指令的正常提交**，无异常、分支、特权操作等特殊处理 |
 
 在 2338 ps 这一时刻（可以确认这是在指令进入分发阶段后，经过一拍寄存器延迟再进入 ROB 的，从架构图中也能确认两者之间存在一级寄存器），`rob`模块的 `io_enq_req_0_*`端口被赋予了这条指令对应的请求信号，我们可以通过其 `pc`值和指令码来识别。
 
@@ -739,11 +766,11 @@ busy table 查询信号：
 
 首先，需要确定指令具体可进入哪个发射队列。这个判断由分发（dispatch）模块中的以下信号决定
 
-![figure-061-issue-dispatch-signal-inspect](../../img/simple-analysis-process-of-an-add-instruction/figure-061-issue-dispatch-signal-inspect.png)
+![1773975798498-b2b9dbe6-839d-424b-ada2-963645cf9ddf.png](../../img/simple-analysis-process-of-an-add-instruction/figure-061-issue-dispatch-signal-inspect.png)
 
 我们先来弄清楚这里为什么会有编号 0 到 16 一共 17 个发射队列。可以查看架构图：
 
-![figure-062-issue-inspect-architecture-diagram](../../img/simple-analysis-process-of-an-add-instruction/figure-062-issue-inspect-architecture-diagram.png)
+![1773975913411-cfd2bc9a-a17d-4338-941a-bf329715661b.png](../../img/simple-analysis-process-of-a-store-instruction/figure-017-dispatch-stage-analysis-add.png)
 
 波形中的 17 个发射队列指的就是上图这些。你可能会数一数，发现图中一共画了 19 个方块，为什么数量对不上呢？对此，笔者暂时也没有完全弄懂原因，推测可能是在 `memScheduler`中有队列进行了合并。但对于前面的 `IntScheduler`部分，其序号应该是能对应上的。
 
@@ -751,7 +778,7 @@ busy table 查询信号：
 
 看完store指令的执行过程后，就明白了这里为什么数量对不上了。因为对于store指令，是需要写数据、写地址两类的，所以这两类数据分别会进行发射。
 
-也就是说在图中的：![figure-063-store-execute-address](../../img/simple-analysis-process-of-an-add-instruction/figure-063-store-execute-address.png)
+也就是说在图中的：![1774337008924-947f75af-cf64-44bc-aee9-c1c58bfd3c57.png](../../img/simple-analysis-process-of-an-add-instruction/figure-063-store-execute-address.png)
 
 1（"sta":store address算地址的队列）、3（"std":store data算数据的队列）是一对；同理2、4队列是一对。
 
@@ -761,11 +788,39 @@ busy table 查询信号：
 
 例如，在上面的波形图中，你会发现给这条加法指令的信号中，只有 `uopSelIQ_0_3`被拉高了。这表明这条加法指令将被填入到上图中下标为 3（即第 4 个）的队列中。数一下就能确定，就是那个叫做 `IssueQueueAluCsrFenceDiv`的队列：
 
-![figure-064-issue-waveform-add-signal](../../img/simple-analysis-process-of-an-add-instruction/figure-064-issue-waveform-add-signal.png)
+![1773976234716-b29c3156-9ab9-4b4b-a9da-7b1aba67cc34.png](../../img/simple-analysis-process-of-an-add-instruction/figure-064-issue-waveform-add-signal.png)
 
 此外，还需要明白一点：每一个发射队列都会有两个写端口。因此，如果我们的加法指令是被发射到下标为 3 的发射队列中，那么它只可能通过下标为 6 或 7 的写端口对该队列进行写入。明白这一点后，就可以拉出这部分的写信号，确认它具体使用的是哪一个端口：
 
-![figure-065-port-add-signal](../../img/simple-analysis-process-of-an-add-instruction/figure-065-port-add-signal.png)
+![1773976482752-0fe8601d-25f2-4a22-b2a4-fc2f0acff86b.png](../../img/simple-analysis-process-of-an-add-instruction/figure-065-port-add-signal.png)
+
+**发射队列选择信号：**
+
+| 信号名 | 波形数值 | 核心功能 |
+| --- | --- | --- |
+| `IQSelUop_6_valid` | `1` | 第 6 路发射队列选择出的微操作（uop）有效信号，`=1`<br/>表示选中了一条有效指令 |
+| `IQSelUop_6_bits_pc[49:0]` | `0000080000122` | 选中指令的 PC 值，确认是你跟踪的`add`<br/>指令 |
+| `IQSelUop_6_bits_instr[31:0]` | `006f0133` | 选中指令的机器码，对应`add`<br/>加法指令 |
+| `io_tolssueQueues_6_bits_pc[49:0]` | `0000080000122` | 发射队列输出给发射块的指令 PC，与选中指令一致 |
+| `io_tolssueQueues_6_valid` | `1` | 发射队列→发射块的握手有效信号，`=1`<br/>表示队列有指令要发射 |
+| `io_tolssueQueues_6_ready` | `1` | 发射块→发射队列的握手就绪信号，`=1`<br/>表示发射块可以接收指令 |
+
+发射块接收信号：
+
+| 信号名 | 波形数值 | 核心功能 |
+| --- | --- | --- |
+| `io_tolssueBlock_intUops_6_valid` | `1` | 整数发射块第 6 路输入有效信号，`=1`<br/>表示收到一条有效整数指令 |
+| `io_tolssueBlock_intUops_6_bits_pc[49:0]` | `0000080000122` | 指令 PC，全程透传，确认是目标指令 |
+| `io_tolssueBlock_intUops_6_bits_instr[31:0]` | `006f0133` | 指令机器码，用于调试 / 异常回溯 |
+| `io_tolssueBlock_intUops_6_bits_fuType[34:0]` | `000000040` | 功能单元类型，`0x40`<br/>对应**整数 ALU**，决定指令要送到哪个执行单元 |
+| `io_tolssueBlock_intUops_6_bits_fuOpType[8:0]` | `021` | 具体操作类型，`0x21`<br/>对应**ADD 加法**，告诉 ALU 要做什么运算 |
+| `io_tolssueBlock_intUops_6_bits_psrc_0[7:0]` | `10` | 第 0 个源操作数的**物理寄存器号**，对应逻辑寄存器`x30` |
+| `io_tolssueBlock_intUops_6_bits_psrc_1[7:0]` | `7` | 第 1 个源操作数的**物理寄存器号**，对应逻辑寄存器`x6` |
+| `io_tolssueBlock_intUops_6_bits_srcState_0` | `0` | 第 0 个源操作数的就绪状态，`=0`<br/>表示**已就绪**（数据已写回物理寄存器） |
+| `io_tolssueBlock_intUops_6_bits_srcState_1` | `0` | 第 1 个源操作数的就绪状态，`=0`<br/>表示**已就绪** |
+| `io_tolssueBlock_intUops_6_bits_pdest[7:0]` | `11` | 目标物理寄存器号，对应逻辑寄存器`x2`<br/>，ALU 结果要写回这里 |
+| `io_tolssueBlock_intUops_6_bits_rfWen` | `1` | 寄存器堆写使能，`=1`<br/>表示执行完成后要写回目标寄存器 |
+| `io_tolssueBlock_intUops_6_bits_commitType[2:0]` | `0` | 提交类型，`0`<br/>表示普通整数指令，无异常 / 特殊提交 |
 
 可以发现它是通过第 6 个端口进行写入的。写入的信号相信你已经可以自己总结了：
 
@@ -789,5 +844,290 @@ busy table 查询信号：
 * <code>**bits_rfWen**</code>: 寄存器写使能，为 `1`，表示指令执行完成后需要写回寄存器文件。
 * <code>**bits_commitType**</code>: 提交类型，为 `0`，表示标准的提交行为。
 
+## （4）发射队列
 
-> 更新: 2026-03-25 10:36:45  
+在前面的分析中，我们已经完全完成了ctrlBlock模块里面如何处理一条简单的ALU的大致流程，这三级流水都是顺序执行，指令一直到分发阶段都是有序的，进入IQ之后，也就将会变得无序了。所以现在要开始分析一条简单的ALU指令从分发阶段出去后到执行、到回写的全过程。
+
+![1782721372549-6f9a053b-2756-4429-8134-37d505e24e0f.png](../../img/simple-analysis-process-of-an-add-instruction/figure-067-simple-analysis-process-of-an-add-instruction.png)
+
+从下标为6的端口往外发射，所以会进入到6/2=3，进入到下标为3的那个IQ，在架构图的位置也就是：
+
+![1782717062030-69c53ba3-46f6-4a7e-8f45-a65a29125fbd.png](../../img/simple-analysis-process-of-an-add-instruction/figure-068-simple-analysis-process-of-an-add-instruction.png)
+
+直接去拉到这个IQ的入队信号核验。6号端口对应的是这个IQ的第一个端口，所以直接拉第一个端口就行：
+
+![1782801583292-1c6755c6-f72d-449b-b295-f57953f7b43a.png](../../img/simple-analysis-process-of-an-add-instruction/figure-069-simple-analysis-process-of-an-add-instruction.png)
+
+可以看到这个叫做“IssueQueueAluCsrFenceDiv”的这个IQ的第0个端口成功接收到了发来的请求入队信息。可以通过robIdx=0x35来判断出他是那条我们一直在追踪的加法指令；
+
+通过FuType和FuOpType判断出这是一条普通的加法；
+
+同时也可以看到，两个state信号例如srcState\_\*表明的意义就是，这条加法指令对应的两个源操作数是否已经就位；波形图已经是非常明确地告诉了我们，当前的这条加法指令的两个源操作数是来自第10号物理寄存器和第7号物理寄存器，并且这两个物理寄存器的值目前是还没有准备好的，还处于运算当中。
+
+当然也可以看到这条加法指令是需要回写寄存器的，回写的使能信号\*rfWen被拉高、并且看到当前的需要回写的物理寄存器是第11号物理寄存器。与前面的都能对应上。
+
+（好啰嗦~~因为笔者现在比较累，不太想动脑子了，就先写写这些啰里啰唆的东西磨磨时间~）
+
+![1782801558504-63b2ab63-9a25-41cd-9b47-c5d69b818463.png](../../img/simple-analysis-process-of-an-add-instruction/figure-070-simple-analysis-process-of-an-add-instruction.png)
+
+欸!继续看，前面看到了这个叫做“IssueQueueAluCsrFenceDiv”的IQ接收到之前的请求信息之后又有什么样的动作呢。所以就看上面的这个波形图吧。
+
+当这个IQ接收到请求之后，紧接着在下一个周期，可以看到相关的入队信息被填入了*enqEntries*中。在图中的结构大概是这样的：
+
+![1782805619712-3a61b3be-f278-49ac-ac65-dccd15a88dcf.png](../../img/simple-analysis-process-of-an-add-instruction/figure-071-simple-analysis-process-of-an-add-instruction.png)
+
+每一个IQ中，都会有两个enqEntries，其实就是对应着两个入队端口，当新的指令进入IQ的时候，都是先存到这个enqEntries中，如果不能够立马发射，那么就会转移到其他的表项中去，例如上图中的“ otherEntries\* ”相关的表项。（可能转移的条件等说法不是很准确，但大概就是这么个意思）
+
+所以说，再回头看看正在分析的这条加法。前面看到了他的两个源操作数，也就是state信号，都是被拉低的，所以说理应他怎么也是不能马上发射的，所以说，在上上图中，是可以看到在请求表项里的数据被转移到了otherEntriesComp中去了。并且转移到的是下标为2的那个复杂表项，可以看到表项里面被填上了对应的数据，我们可以通过robIdx的值来识别定位到这条指令。
+
+当然，这些存储在里面的信息，我们当然要重点去关注的信号当然是两个源操作数的就绪状态。也就是蓝色的那些信号。
+
+## （5）读寄存器、执行
+
+![1782801639281-213088c5-d2c0-475f-a6f9-b91b6395c3bb.png](../../img/simple-analysis-process-of-an-add-instruction/figure-072-simple-analysis-process-of-an-add-instruction.png)
+
+重点肯定是要关注一下两个源操作数的状态是怎么样的。可以看到有一个源操作数也就是“srcStatus\_1\_psrc”，其实也就是物理寄存器7号的值，大概过了两三个周期之后，可以看到state被拉高了，其实就是说明这个时候物理寄存器7号的值已经就绪了。但是再看看另一个操作数呢，也就是“srcStatus\_0\_psrc”的值，也就是物理寄存器0x0a的值，这个时候还没有准备好呢。但是又过了若干个周期之后，可以看到“srcStatus\_0\_srcState”被拉高了。也就是说，这个时候两个源操作数都是已经就绪的状态了，这条操作本身就已经具备的发射的条件。
+
+这不，你瞧，在上面那个图开始一个框一个框开始往下看。
+
+第二个框就是在datapath里的信号。可以看到在这条加法具备发射条件的这个周期，datapath就已经接收到了来自IQ的发射信号。从robIdx可以定位出来是我们一直在看的这条加法。这条加法正要进入datapath准备去读物理寄存器了。于是，在下一个周期，可以看到datapath传出了数据，不仅仅携带着常规的控制信号，并且还携带着两个源操作数的值。也就是是*src\_0和*src\_1两个值，这个值也正是在datapath阶段读出来的数据。仔细一看，其实会发现这两个值都是0，为什么呢？这完全不对呢。为什么这两个值都是错误的呢。
+
+因为这个值是用的bypass路径来进行获取的，虽然在datapath阶段我们看到的源数据还不是正确的，但是在过一个周期，等他真正进入执行阶段之后，有没有发现，这个时候的值就已经正确了，其实也就是在说明，这个时候他成功地接收到了前推数据并正确设置了。
+
+所以可以看到在倒数第二个小框框里面，可以看到各种数据被投入了执行模块中。
+
+然后在最后一个框框中可以完美看到执行结果，可以看到最后的加法结果被算出了。而且是正确的~
+
+## （6）回写阶段
+
+### （6.1）回写阶段的输入信号
+
+先看一看在回写阶段是怎么处理来自于不同执行板块的回写端口的
+
+在回写阶段，大概的数据流是这样的，回写阶段是先会接收来自于执行模块的数据结果。如图：
+
+![1782874830997-d3d1f75f-bad9-4fc3-acfc-501d31ee03e9.png](../../img/simple-analysis-process-of-an-add-instruction/figure-073-simple-analysis-process-of-an-add-instruction.png)
+
+这些信号是直接与执行模块的信号连接起来的，一一对应的，例如我们先只着眼int类型的执行单元。一共有8个执行单元，那么其实也就是\*fromIntExu\_0\_0 这个信号到 \*fromIntExu\_3\_1这8组信号是一一对应着8个执行单元的。
+
+例如我们刚刚看的加法执行通过这组信号传入回写阶段的情况是：
+
+![1782875389233-2329bba1-ec43-454c-abbc-e190b8a7c10b.png](../../img/simple-analysis-process-of-an-add-instruction/figure-074-simple-analysis-process-of-an-add-instruction.png)
+
+这个时候也只有下标为6的那个执行单元在发出我们的加法指令的结果。
+
+输入这些信号后会有两个输出。
+
+### （6.2）回写阶段往Rob的输出信号
+
+其中一个是往ctrlBlock的输出，其实也就是往Rob传去的信息。如图：
+
+![1782875069594-b391e902-3995-4eec-babc-5b1a7f5cd930.png](../../img/simple-analysis-process-of-an-add-instruction/figure-075-simple-analysis-process-of-an-add-instruction.png)
+
+但这组信号是没有区分执行单元的，所有的执行单元（包括整数、浮点、向量、访存）的所有回写信号都是通过这组信号依次往Rob传去的，并且每组信号都会随着执行单元的不同而有不同的回写数据类型。
+
+这些信号应该也是跟从执行板块传来的数据是一一对齐的，只是综合了所有执行板块的数据，例如我们的一直在观察的这个加法指令：
+
+![1782875608886-43c2e31c-3162-4970-b6e3-aa8eaa5f4f92.png](../../img/simple-analysis-process-of-an-add-instruction/figure-076-simple-analysis-process-of-an-add-instruction.png)
+
+就是以下标为6的这个端口在往Rob传去。
+
+### （6.3）回写阶段往物理寄存器的输出信号
+
+还有一组向外传的信号就是往物理寄存器堆传去的回写信号，比如整型执行单元往整数寄存器堆，浮点就往浮点。所以说我们再看看这个时候往整数寄存器堆传去的回写信号：
+
+![1782875840758-e2c81ebb-55ad-43aa-9eee-4dc84740b59a.png](../../img/simple-analysis-process-of-an-add-instruction/figure-077-simple-analysis-process-of-an-add-instruction.png)
+
+这个时候会发现，虽然往整数寄存器堆发去的回写数据端口也是八个，这个数量上是与执行模块的数量是相同的。但是会发现在位置上已经是对应不上了。例如上图中，我们一直在看的那条加法就是这样的情况。加法从执行模块来的时候是从下标为6的那个端口来的。但是经过回写板块的一顿”洗礼“之后，再传去回写物理寄存器板块的时候，就已经是用的下标为3的那个端口了。
+
+所以说，现在问题就是，为什么会有这种不对齐的情况发生？又是怎么样进行不对齐的？为什么要有这样的机制？于是现在可以让我们重点分析这个机制：
+
+其实这个问题的答案很简单。整型的执行单元确实是会有八个回写端口，他们也确实全都要回写物理寄存器堆。从波形图也能看到，回写物理寄存器堆的端口确实也是只有八个。
+
+但是还有一件特别重要的事情是，不仅仅只有整型执行单元会回写整型物理寄存器，访存执行单元也可能会回写整型物理寄存器堆吧。就算是一些浮点、向量相关的操作，也是可能会回写整型的物理寄存器堆的。
+
+所以说：需要回写整型物理寄存器的端口是远大于8个的，因为不仅仅包含了整型执行单元的回写端口。
+
+需要回写的那么多，但是有的端口只有八个，所以必须是需要进行仲裁选择的，而进行仲裁选择的方法就是靠的一个仲裁器：
+
+![1782888909403-62021454-a2ea-4dc5-94d0-a3a86caa4aed.png](../../img/simple-analysis-process-of-an-add-instruction/figure-078-simple-analysis-process-of-an-add-instruction.png)
+
+靠的就是回写模块里面的这个部件。所以说我们需要拉出仲裁器的输入输出信号是怎么样的：
+
+![1782889002424-36b9b283-7451-4d67-bb07-d1bd7e424c48.png](../../img/simple-analysis-process-of-an-add-instruction/figure-079-simple-analysis-process-of-an-add-instruction.png)
+
+可以看到，这个仲裁器的输入端口是有15个的，这也就侧重说明了，每个周期的所有执行模块，需要往整型物理寄存器堆进行回写操作的端口，最多可能多达15个。
+
+再看他的输出：
+
+![1782889115708-a507dcbf-5600-421c-833a-80faca9c30eb.png](../../img/simple-analysis-process-of-an-add-instruction/figure-080-simple-analysis-process-of-an-add-instruction.png)
+
+这个器件的输入其实就是我们前面看到的往整型寄存器堆发去的八个回写端口。
+
+![1782889262693-e114efdb-1e60-41a8-9dcf-daf3f1719c1c.png](../../img/simple-analysis-process-of-an-add-instruction/figure-081-simple-analysis-process-of-an-add-instruction.png)
+
+所以这个部件的作用就是，将数量多的这些15个需要回写物理寄存器堆的请求，通过仲裁得到8个真正需要回写的端口去了。并且这个工作也还是在一个周期内完成的。
+
+所以说现在的探索目标又十分地明确了，也就是去探索这个仲裁机制到底是怎么样的就行，是如何把输入的15个端口最终输出只有8个的。
+
+把大仲裁器剖开看，就会发现其实大仲裁器内部包含着八个小仲裁器：
+
+![1782897278686-a97e5769-2539-4cd1-9cb9-2133b9401cc3.png](../../img/simple-analysis-process-of-an-add-instruction/figure-082-simple-analysis-process-of-an-add-instruction.png)
+
+再结合代码里面的内容，我们稍微再阅读一下这边的代码：
+
+src/main/scala/xiangshan/backend/datapath/WbArbiter.scala
+
+之后再看看每一个仲裁器的输入输出：
+
+![1782897719383-9e2c933a-56e5-4134-8a8b-e54c03625ea9.png](../../img/simple-analysis-process-of-an-add-instruction/figure-083-simple-analysis-process-of-an-add-instruction.png)
+
+第0个仲裁器，三输入一输出
+
+![1782897751026-df6b0293-9ed0-4b87-a211-e4c39c4289a8.png](../../img/simple-analysis-process-of-an-add-instruction/figure-084-simple-analysis-process-of-an-add-instruction.png)
+
+下标为1的这个仲裁器，四输入一输出
+
+依次类推……
+
+会发现其实就很明了了！原来这些小的仲裁器每一个都是对应着一个输出端口。所以说，之前我们的视角是把15个端口仲裁到8个端口，其实现在的视角就越来越明确了。而是把15个端口按照某种配置分成八组，然后每一组去竞争一个写端口。
+
+至少我们前面的这个加法指令，他使用的是下标为6的这个执行单元。综合到所有的要进行回写整型物理寄存器端口的组信号中时，他就是下标为6的那组信号。
+
+然后最后我们看他仲裁的结果是从下标为3的那组回写信号出来。至少可以推测出，下标为6的那个执行单元的回写端口是被投进了下标为3的那个仲裁器进行仲裁竞争的。
+
+![1782898101987-e4c4608c-43c3-4e85-a73a-485201820071.png](../../img/simple-analysis-process-of-an-add-instruction/figure-085-simple-analysis-process-of-an-add-instruction.png)
+
+拉出这个仲裁器就会发现：没人和他抢，需要仲裁的就他一个端口。也就是说下标为6的那个执行单元的回写端口会独占一个写物理寄存器的端口。
+
+现在需要去研究一下哪些端口是被分到了一组的：
+
+1.整型执行单元一共有8个需要回写Int的端口：
+
+![1782898653962-63eb16ad-8860-457c-bb4a-765838ae4b2e.png](../../img/simple-analysis-process-of-an-add-instruction/figure-086-simple-analysis-process-of-an-add-instruction.png)
+
+2.浮点单元有3个：
+
+![1782898948936-925ba456-ee78-40b9-bfee-2e0f2bf3613c.png](../../img/simple-analysis-process-of-an-add-instruction/figure-087-simple-analysis-process-of-an-add-instruction.png)
+
+3.向量单元只有1个：
+
+![1782898898980-4eed566d-9153-4fc5-83cd-e03a570121e4.png](../../img/simple-analysis-process-of-an-add-instruction/figure-088-simple-analysis-process-of-an-add-instruction.png)
+
+4.访存单元有3个
+
+![1782899009011-3e45148d-61f0-44d1-a0f4-7623aad90b5d.png](../../img/simple-analysis-process-of-an-add-instruction/figure-089-simple-analysis-process-of-an-add-instruction.png)
+
+sta的回写单元是“Fake”，大概能知道是什么意思吧！因为store确实是不需要回写寄存器的，但是却需要给Rob传信息表示这个已经做好了。所以他这里是“Fake”
+
+上面各个单元的数量：8+3+1+3=15正好是我们在波形里看到的那样。那怎么看端口的对应关系呢？那肯的是看后面的端口数据呢!
+
+首先要明确的是，一共就只要8个端口。
+
+例如IntWB(port = 3, 0)就表示，这个需要回写的端口将要竞争下标为3的那个回写物理寄存器的端口。并且他的优先级是0。
+
+所以你会发现，把那15个端口依次遍历看看，就会发现竞争下标为3的那个端口的执行单元只有“ALU3”这个执行单元。所以才会看到我们上面看到的那样，下标为3的那个仲裁器，他的输入只有一个，也就是只有ALU3单独“竞争”这个端口。
+
+同理，我们随便找个：
+
+![1782899530963-204e4b41-08c0-48e1-8ff4-f2ebb1930237.png](../../img/simple-analysis-process-of-an-add-instruction/figure-090-simple-analysis-process-of-an-add-instruction.png)
+
+这个下标为1的这个仲裁器会去仲裁4个执行单元！那是哪四个呢，就可以去代码里找了：看哪些执行单元要用下标为1的这个回写端口：
+
+![1782899677756-18999462-c75e-41a6-85a9-552cebb17ca1.png](../../img/simple-analysis-process-of-an-add-instruction/figure-091-simple-analysis-process-of-an-add-instruction.png)
+
+整型单元就有一个要用下标为1的这个回写端口了。
+
+![1782899741340-6fa8024a-3171-44ed-b09a-82cae23854a1.png](../../img/simple-analysis-process-of-an-add-instruction/figure-092-simple-analysis-process-of-an-add-instruction.png)
+
+浮点里有一个
+
+![1782899867064-e04b9a07-fdcf-4f21-82c9-d51cc543e3bd.png](../../img/simple-analysis-process-of-an-add-instruction/figure-093-simple-analysis-process-of-an-add-instruction.png)
+
+向量有一个
+
+大概就是这个意思。那第二个数字表示什么呢？
+
+查看：
+
+![1782900110150-3d590f6a-d47a-48c1-9f29-3444ea7353f0.png](../../img/simple-analysis-process-of-an-add-instruction/figure-094-simple-analysis-process-of-an-add-instruction.png)
+
+没错，第二个是优先级，因为仲裁肯定是得通过一定的优先级的。数字越小，优先级是越大的。
+
+总结一下整型的端口竞争情况和优先级就是：
+
+| **写端口** | **所属调度器** | **功能** | **优先级** | **冲突处理** |
+| --- | --- | :--- | :---: | --- |
+| **Port 0** | Int | ALU/Mul/Bku | **0** | 确定延迟，必胜 |
+| | Int | Brh/Jmp | 1 | 确定延迟，与ALU0不该同时写 |
+| | Fp | Falu/Fcvt/F2v/Fmac | 2 | 浮点转整数，低频 |
+| **Port 1** | Int | ALU/Mul/Bku | **0** | 确定延迟，必胜 |
+| | Int | Brh/Jmp | 1 | 确定延迟，与ALU1不该同时写 |
+| | Vec | Vfalu/Vfcvt/Vipu/VSetRvfWvf | 1 | 向量转整数 |
+| | Fp | Falu/Fmac | 2 | 浮点转整数 |
+| **Port 2** | Int | ALU | **0** | 确定延迟，必胜 |
+| | Fp | Falu/Fmac | 1 | 浮点转整数 |
+| **Port 3** | Int | ALU | **0** | 无竞争 |
+| **Port 4** | Int | Brh/Jmp/I2f/VSet/I2v | **0** | 确定延迟，必胜 |
+| | Int | CSR/Fence/Div | 1 | 确定延迟，与BJU2不该同时写 |
+| **Port 5** | Mem | Load | **0** | 不确定延迟，但无竞争者 |
+| **Port 6** | Mem | Load | **0** | 不确定延迟，但无竞争者 |
+| **Port 7** | Mem | Load | **0** | 不确定延迟，但无竞争者 |
+
+### （6.4）竞争冲突了会怎么样
+
+既然上面说到了会存在多个端口竞争一个端口的情况，那如果竞争冲突了会这么样呢？当然在这个加法这边是找不到冲突的情况的，额这个波形文件中的任何一个地方都没找到过冲突……
+
+## （7）提交阶段
+
+### （7.1）Rob接收回写信号
+
+在上一节中，我们已经分析到了在回写阶段已经往Rob发去了回写信号：
+
+![1782877127419-e2b70e4f-d8a6-41ba-a270-a844fddf43e1.png](../../img/simple-analysis-process-of-an-add-instruction/figure-095-simple-analysis-process-of-an-add-instruction.png)
+
+现在我们先研究在Rob接收到这个回写信号后进行的操作。
+
+查看Rob这个组件相关的输入信号：
+
+![1782877293869-a2923eb7-e14c-4ef3-9d13-50b2dadc3127.png](../../img/simple-analysis-process-of-an-add-instruction/figure-096-simple-analysis-process-of-an-add-instruction.png)
+
+Rob在下一个周期接收到了这个回写信号：
+
+![1782877445409-fe45b079-7a6b-4f83-8d76-f10aae162649.png](../../img/simple-analysis-process-of-an-add-instruction/figure-097-simple-analysis-process-of-an-add-instruction.png)
+
+接着就可以观察，在接收到这个提交信号之后，在Rob中，他的表项是什么样的呢，
+
+### （7.2）Rob表项变化与正式提交
+
+可以看到，第35个Rob表项，也就是存储着我们一直追踪的这条加法的这个表项，再接收到这个回写信号之后，他的\*\_uopNum已经从之前的0x01变成了0x00，这就说明，在收到了回写消息之后，这个35号表项已经具备提交条件了，现在也就只需要到他自己的提交窗口之后，就可以立马提交了。
+
+所以我们可以继续观察他的提交情况：
+
+![1782886924466-06aa353e-68b6-4667-bed9-d8b889f627e2.png](../../img/simple-analysis-process-of-an-add-instruction/figure-098-simple-analysis-process-of-an-add-instruction.png)
+
+可以看到当前正是处于他自己的提交窗口，再进行回写之后，因为这时也是在他的提交窗口里面，所以他就马上就提交了。所以还会看到，在提交之后，这个表项的valid相关的信号已经被清理了，说明这个表项已经被顺利提交了。
+
+## （8）回写寄存器
+
+虽然在上节的内容中我们已经瞧见这条加法已经被提交了。但接第6回的内容继续看，第6节的内容中我们也只看到了回写阶段往传去了8个端口的回写信号，~~但这些回写信号可都不是简单的写到物理寄存器那么简单，他们和物理寄存器中间还是会隔着一个RegCache的，~~现在就是需要去详细地探究这个的机制。
+
+![1782960733582-72436d86-3883-4cf2-a41f-463533000a95.png](../../img/simple-analysis-process-of-an-add-instruction/figure-099-simple-analysis-process-of-an-add-instruction.png)
+
+上图表明datapath接收到了这八个回写信号。
+
+![1782961254597-6d247453-e14b-4db9-9969-648ff346aea2.png](../../img/simple-analysis-process-of-an-add-instruction/figure-100-simple-analysis-process-of-an-add-instruction.png)
+
+到这里会发现个问题，好像这八个回写端口就是直连到真正的物理寄存器的。那那个RegCache是干什么用的呢？准确来说是干什么用的呢？
+
+准确来说，确实是这些回写信号会直接传入真正的物理寄存器，~~但同时也会经过bypass网络传去RegCache~~。
+
+最后更正！这里的回写寄存器信号其实就俩目标，一个是正在的物理寄存器，一个是发往调度器的唤醒信号。
+
+所以说这里应该跟regCache不是很强相关的。而和RegCache真正强相关的，其实是Bypass旁路网络。所以说，想要了解这部分的详细机制，尽请学习“一条乘除法指令的简单分析过程”。
+
+OVER~
+
+
+> 更新: 2026-07-13 10:39:53  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/capsgbv1y5wx2gpb>

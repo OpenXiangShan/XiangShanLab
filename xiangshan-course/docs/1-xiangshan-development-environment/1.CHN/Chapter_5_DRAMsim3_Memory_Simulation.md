@@ -1,4 +1,4 @@
-# 第五章 DRAMsim3内存仿真
+# 第五章：DRAMsim3内存仿真
 
 # 5 内存仿真
 
@@ -16,7 +16,7 @@
 
 :::
 
-![figure-001-dramsim3-memory-simulation](./img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
+![1771064569265-1b78e18a-2819-4be8-a46a-4519380fdc62.png](img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
 
 ## 5.1 关于内存仿真
 
@@ -337,3 +337,4 @@ DRAMsim3的配置文件通常位于`$DRAMSIM3_HOME/configs/`目录下，香山�
 
 
 > 更新: 2026-04-24 01:46:18  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/be2bg3grzyrgiqew>

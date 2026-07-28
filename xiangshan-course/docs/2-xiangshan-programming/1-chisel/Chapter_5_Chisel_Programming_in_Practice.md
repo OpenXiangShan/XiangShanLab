@@ -1167,3 +1167,4 @@ FakeCPU 的请求不是纯随机的——它刻意制造了三种典型场景：
 
 
 > 更新: 2026-05-26 18:33:31  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/qx1hvfi3p5w1h4gi>

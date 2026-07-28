@@ -14,7 +14,7 @@ By the end of this chapter, you should be able to:
 
 :::
 
-![figure-001-objectives-applications-overview](./img/chapter-3-applications/figure-001-objectives-applications-overview.webp)
+![1770715590089-0d4a497b-381c-47c2-aa33-15d939bf1ee2.png](../1.CHN/img/chapter-3-applications/figure-001-applications-overview.webp)
 
 本章讲解横向绿色板块
 
@@ -66,7 +66,7 @@ Source code: [GitHub - OpenXiangShan/nexus-am](https://github.com/OpenXiangShan/
 * Implements basic **system call interfaces and exception handling**
 * Supports multiple ISAs and configurations
 
-![figure-002-core-objectives-supports-multiple](./img/chapter-3-applications/figure-002-core-objectives-supports-multiple.png)
+![1770712564169-fa5f9058-3cf5-482e-99b7-8c896b076803.png](../1.CHN/img/chapter-3-applications/figure-002-isa-nexus-am-framework.png)
 
 Figure 1: Structure of the Nexus-AM framework
 
@@ -600,7 +600,7 @@ To solve the “too slow” problem mentioned above, XiangShan employed **SimPoi
 
 <font style="color:rgb(38, 38, 38);"></font>
 
-![figure-003-sim-point-checkpoint-triumph](./img/chapter-3-applications/figure-003-sim-point-checkpoint-triumph.png)
+![1770715819511-591a73d5-6a47-41da-803a-4298fba520f5.png](../1.CHN/img/chapter-3-applications/figure-003-sim-point-checkpoint.png)
 
 Figure 2: SimPoint Technology Principles
 
@@ -736,3 +736,4 @@ We wish you every success on your journey in processor testing!
 
 
 > 更新: 2026-04-16 05:07:50  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/ss7kmehbk5g0m92f>

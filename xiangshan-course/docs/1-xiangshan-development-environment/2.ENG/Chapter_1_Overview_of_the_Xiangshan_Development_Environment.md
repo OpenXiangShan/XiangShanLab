@@ -18,7 +18,7 @@ Welcome to the world of Xiangshan processor! If this is your first time explorin
 
 ## 1.1 Overall Structure of Xiangshan Environment
 
-![figure-001-overall-structure-xiangshan-environment](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-001-overall-structure-xiangshan-environment.webp)
+![1778742075650-5f81d957-9a5c-437e-98a5-53800d014b73.png](img/chapter-1-overview-of-the-xiangshan-development-environment/figure-001-overall-structure-xiangshan-environment.webp)
 
 Figure 1: Overall Framework of the Xiangshan Environment
 
@@ -87,7 +87,7 @@ Xiangshan Development is the complete process of **designing and testing RISC-V 
 
 ## 1.3 Xiangshan Development Environment Learning Path
 
-![figure-002-xiangshan-development-environment-learning](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-002-xiangshan-development-environment-learning.png)
+![1778739606966-f01495cf-6f2d-49ae-a203-5ec94a5d0b99.png](img/chapter-1-overview-of-the-xiangshan-development-environment/figure-002-xiangshan-development-environment-learning.png)
 
 Figure 2: Program Execution Flowchart
 
@@ -151,7 +151,7 @@ The Xiangshan development environment consists of multiple open-source projects,
 | **XiangShan Gem5** | <https://github.com/OpenXiangShan/GEM5.git> | Cycle-accurate system simulator adapted for Xiangshan | For architecture exploration and performance analysis |
 | **XiangShan Document** | <https://github.com/OpenXiangShan/XiangShan-doc.git> | Xiangshan Kunminghu V2 Microarchitecture Design Document | Understand the Xiangshan microarchitecture, including the processor front-end, back-end, memory access, and more |
 
-![figure-003-introduction-xiangshan-development-environment](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-003-introduction-xiangshan-development-environment.png)
+![1770806502366-0a0f3e4a-44da-4f48-b970-ce712305f090.png](../1.CHN/img/chapter-1-overview-of-the-xiangshan-development-environment/figure-003-development-environment-frontend-backend.png)
 
 Figure 3. Screenshot of the Xiangshan code repository
 
@@ -168,7 +168,7 @@ Figure 3. Screenshot of the Xiangshan code repository
 
 :::
 
-![figure-004-introduction-xiangshan-development-environment](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-004-introduction-xiangshan-development-environment.png)
+![1773385727542-b2b4cadc-241f-4ffa-89c3-4d414f10ae94.png](../1.CHN/img/chapter-1-overview-of-the-xiangshan-development-environment/figure-004-development-environment-info.png)
 
 :::info
 Ask questions of interest in the dialog box, and the large language model will provide an overview of the repository and explain the code.
@@ -177,7 +177,7 @@ Ask questions of interest in the dialog box, and the large language model will p
 
 :::
 
-![figure-005-introduction-xiangshan-development-environment](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-005-introduction-xiangshan-development-environment.png)
+![1773385957337-8626e146-ce86-4cc7-9231-ad62650a5a1c.png](../1.CHN/img/chapter-1-overview-of-the-xiangshan-development-environment/figure-005-development-environment-workload-cpu.png)
 
 ## 1.5 Workload Execution Process
 
@@ -304,7 +304,7 @@ If everything goes well, you should see the following output:
 Hello XiangShan!
 ```
 
-![figure-006-xiang-shan-without](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-006-xiang-shan-without.png)
+![1770882600453-461702bc-7d74-4357-924b-3677969832cd.png](../1.CHN/img/chapter-1-overview-of-the-xiangshan-development-environment/figure-006-xiang-shan-diff.png)
 
 Congratulations! You've successfully run your first program!
 
@@ -331,7 +331,7 @@ make emu CONFIG=MinimalConfig EMU_TRACE=1 -j32
 
 The current version of Xiangshan RTL contains errors that we manually introduced, so any program that includes addition instructions may produce errors. You should see the following output:
 
-![figure-007-verify-again-using-diff](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-007-verify-again-using-diff.png)
+![1772243408467-23ecd62d-4b4a-40e5-8e1c-73beddb5b59e.png](../1.CHN/img/chapter-1-overview-of-the-xiangshan-development-environment/figure-007-diff-rtl-add-pc.png)
 
 This indicates that DiffTest detected a discrepancy between the Device Under Test (DUT, i.e., the Xiangshan processor core) and the Reference Design (REF, i.e., the NEMU instruction set simulator) in the value of register `a0`at PC `0x0080000078`(since we consider REF to be the correct implementation, “right” denotes the value provided by REF, while “wrong” denotes the value provided by DUT). Because an error occurred, program execution was forced to stop. In the Xiangshan emulation, the emulator also lists the contents of all registers to assist with debugging. Finally, please remember to restore the file from which the error was introduced to its original state:
 
@@ -382,7 +382,7 @@ This command will update all submodules to the correct branch.
 
 ## 1.9 Learning Path Planning
 
-![figure-008-learning-planning-ask-question](./img/chapter-1-overview-of-the-xiangshan-development-environment/figure-008-learning-planning-ask-question.jpeg)
+![画板](img/chapter-1-overview-of-the-xiangshan-development-environment/figure-008-learning-planning-ask-question.jpeg)
 
 ## 1.10 Learning Outcomes and Recommendations
 
@@ -424,3 +424,4 @@ We wish you every success on your journey in processor design!
 
 
 > 更新: 2026-05-14 15:04:38  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/hdebt7v5vmmu04vb>

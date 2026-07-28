@@ -1,4 +1,4 @@
-# 第二章 使用工具准备与理解
+# 第二章：使用工具准备与理解
 
 1 使用工具准备
 
@@ -24,7 +24,7 @@
 
 ## 1.1 香山开发流程与对应工具
 
-![figure-001-flow](./img/chapter-2-preparing-and-understanding-the-tools/figure-001-flow.png)
+![1773819748645-b805e97d-7666-4274-9002-af3843b8ebcc.png](img/chapter-2-preparing-and-understanding-the-tools/figure-001-flow.png)
 
 图1：
 
@@ -228,7 +228,7 @@ Chisel 从 3.6.0 版本开始，通过集成 **CIRCT** 项目中的 `firtool` �
 
 ### 2.1.2 Chisel 编译流程
 
-![figure-002-chisel-flow-system-verilog](./img/chapter-2-preparing-and-understanding-the-tools/figure-002-chisel-flow-system-verilog.png)
+![1773819652623-385ededc-a41f-47c0-a591-4b6b43c4a541.png](img/chapter-2-preparing-and-understanding-the-tools/figure-002-chisel-flow-system-verilog.png)
 
 图2：Chisel编译处理流程
 
@@ -335,7 +335,7 @@ mill 工具在项目目录中的配置文件。在该文件中主要是添加一
 
 ### 2.2.3 build.sc 代码结构分析
 
-![figure-003-sc-analysis-mill-download](./img/chapter-2-preparing-and-understanding-the-tools/figure-003-sc-analysis-mill-download.png)
+![1770194988083-8d3cbcf9-064d-4d58-b700-3d9b5c04dea5.png](../2.ENG/img/chapter-2-preparing-and-understanding-the-tools/figure-003-sc-structure-mill.png)
 
 图2：build.sc代码主要结构分析
 
@@ -563,7 +563,7 @@ READELF   = $(CROSS_COMPILE)readelf
 ### 2.4.3 makefile 文件的命令是如何把 C 语言编译成 RISC-V 的可执行代码的？
 
 这里使用 makefile.compiler 的编译流程介绍如下：\
-![figure-004-makefile-c-risc-v](./img/chapter-2-preparing-and-understanding-the-tools/figure-004-makefile-c-risc-v.webp)
+![1770888738675-e81de847-0643-4330-b2f2-f29b9bfc9cf7.png](img/chapter-2-preparing-and-understanding-the-tools/figure-004-makefile-c-risc-v.webp)
 
 :::info
 make 编译流程理解
@@ -665,7 +665,7 @@ yourhome@open01:~/xs-env$ find . -name "*.ld" -o -name "*.lds"
 
 1. **下载安装插件**
 
-![figure-005-metals-vs-download-install](./img/chapter-2-preparing-and-understanding-the-tools/figure-005-metals-vs-download-install.png)
+![1770255916439-d21661f6-4838-489c-8be5-116341f16562.png](img/chapter-2-preparing-and-understanding-the-tools/figure-005-metals-vs-download-install.png)
 
 图3：Metals插件安装界面
 
@@ -827,3 +827,4 @@ build.sc 控制构建
 
 
 > 更新: 2026-04-24 01:44:55  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/mars7y2vte40egua>

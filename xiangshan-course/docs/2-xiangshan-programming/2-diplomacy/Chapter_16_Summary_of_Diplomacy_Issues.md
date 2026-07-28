@@ -4,7 +4,7 @@
 
 应用场景 1 个 Master 和 2 个 Slave
 
-![figure-001-diplomacy-master-slave](./img/chapter-16-summary-of-diplomacy-issues/figure-001-diplomacy-master-slave.jpeg)
+![画板](img/chapter-16-summary-of-diplomacy-issues/figure-001-diplomacy-master-slave.jpeg)
 
 
 
@@ -76,7 +76,7 @@ e. 当前改法是否有副作用，对整个SoC 的影响
 
 **实验： 分别生成 0 maxflight+65536 ID range 和 2 maxflight+2 ID range,rtl区别如下**
 
-![figure-002-diplomacy-maxflight-id-range](./img/chapter-16-summary-of-diplomacy-issues/figure-002-diplomacy-maxflight-id-range.png)
+![1768380173488-1b813c08-fd99-4854-923f-67510cb2537b.png](img/chapter-16-summary-of-diplomacy-issues/figure-002-diplomacy-maxflight-id-range.png)
 
 变化有AXI的5个通道的id位宽和Xbar的一些计数控制逻辑，实际的第二个图片的存储部分，仍然是2个深度。
 
@@ -87,12 +87,13 @@ e. 当前改法是否有副作用，对整个SoC 的影响
 + rocket-chip 的axi写的一般（性能），仅限于能用，后续应该减少使用。
     - 比如 maxflight 参数，rocket-chip认为与 id个数有关，并影响到了Xbar（其实没有任何关系）。
 
-![figure-003-diplomacy-maxflight-rocket-chip](./img/chapter-16-summary-of-diplomacy-issues/figure-003-diplomacy-maxflight-rocket-chip.png)
+![1768386572769-a2100187-79a4-448f-b578-ab27e924943b.png](img/chapter-16-summary-of-diplomacy-issues/figure-003-diplomacy-maxflight-rocket-chip.png)
 
-![figure-004-diplomacy-maxflight-rocket-chip](./img/chapter-16-summary-of-diplomacy-issues/figure-004-diplomacy-maxflight-rocket-chip.png)
+![1768386616090-a00251d6-0c66-4bd3-8c4c-eecd611f15df.png](img/chapter-16-summary-of-diplomacy-issues/figure-004-diplomacy-maxflight-rocket-chip.png)
 
 附 生成的rtl：[附件: build-TEE.tar.gz](./attachments/q-Dk3NGDymhXbNEK/build-TEE.tar.gz)
 
 
 
 > 更新: 2026-05-26 17:10:31  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/bc3zn5dan1qpt9s6>

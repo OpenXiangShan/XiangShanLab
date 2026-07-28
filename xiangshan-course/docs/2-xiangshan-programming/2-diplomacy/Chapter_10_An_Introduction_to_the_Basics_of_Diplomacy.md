@@ -337,3 +337,4 @@ Diplomacy官方论文：https://carrv.github.io/2017/papers/cook-diplomacy-carrv
 
 
 > 更新: 2026-05-21 19:00:02  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/sqgnoxq546wl0e5v>

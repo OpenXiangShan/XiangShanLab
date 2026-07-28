@@ -16,7 +16,7 @@ By the end of this chapter, you should be able to answer the following questions
 
 :::
 
-![figure-001-objectives-first-start-question](./img/chapter-5-dramsim3-memory-simulation/figure-001-objectives-first-start-question.png)
+![1771064569265-1b78e18a-2819-4be8-a46a-4519380fdc62.png](../1.CHN/img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
 
 ## 5.1 About Memory Simulation
 
@@ -339,3 +339,4 @@ Therefore: Without memory simulation, there can be no accurate performance evalu
 
 
 > 更新: 2026-04-23 11:01:07  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/swu3swgomyxe7df9>

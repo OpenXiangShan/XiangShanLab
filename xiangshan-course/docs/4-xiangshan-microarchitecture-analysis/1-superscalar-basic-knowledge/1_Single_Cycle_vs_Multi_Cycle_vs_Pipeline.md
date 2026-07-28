@@ -2,7 +2,7 @@
 
 ***
 
-[附件: Processor_Architecture_Evolution_From_Single_Cycle_to_Pipeline.pptx](./attachments/9YseBDj4QSwqiGJ6/Processor_Architecture_Evolution_From_Single_Cycle_to_Pipeline.pptx)
+[附件: 处理器架构的演进：从单周期到流水线.pptx](./attachments/9YseBDj4QSwqiGJ6/处理器架构的演进：从单周期到流水线.pptx)
 
 ## <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">💡</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> </font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">学习目标</font>**
 
@@ -58,7 +58,7 @@
 3. <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">指令执行完成时，结果直接写入通用寄存器，无中间状态缓存，控制逻辑极简</font>
 4. <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">单周期执行图：</font>
 
-![figure-001-execute-stage-ns](./img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-001-execute-stage-ns.png)
+![1778225946770-0e3107d4-6f64-456d-afba-3311d80cb58b.png](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-001-execute-stage-ns.png)
 
 ### <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">量化性能分析</font>
 
@@ -98,7 +98,7 @@
 2. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">硬件资源复用</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：同一硬件单元可在不同时钟周期为不同执行阶段服务，例如 ALU 可在 EX 阶段完成算术运算，在 IF 阶段完成下一条指令的地址计算，无需配置冗余硬件，大幅降低芯片面积与成本</font>
 3. 多周期执行图：
 
-![figure-002-execute-stage-ns](./img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-002-execute-stage-ns.png)
+![1778225769773-e4e55b5a-b6fb-44d4-90e5-564bb5695932.png](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-002-execute-stage-ns.png)
 
 ### <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">量化性能分析</font>
 
@@ -154,7 +154,7 @@
 2. <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">流水线填满后，</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">每个时钟周期都有一条指令完成执行并退出流水线</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">，理想情况下平均 CPI≈1，同时保持了多周期架构的短时钟周期与高主频上限</font>
 3. 流水线执行图
 
-![figure-003-execute-stage-ns-ghz](./img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-003-execute-stage-ns-ghz.png)
+![1778227536200-4ab59da8-6ea5-4d03-ab35-bfbbaa443820.png](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-003-execute-stage-ns-ghz.png)
 
 ### <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">量化性能分析</font>
 
@@ -197,7 +197,7 @@
 * <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">资源冗余设计：为冲突操作配置独立的硬件资源，例如采用哈佛架构，分离指令存储器与数据存储器，从根本上解决访存资源冲突</font>
 * <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">流水线停顿（插入气泡）：当资源冲突无法避免时，暂停后续指令的发射，等待资源释放后继续执行</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山工程实践</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：香山处理器采用分离式指令 Cache 与数据 Cache，同时为多发射流水线配置了多套 ALU、地址生成单元等功能单元，从硬件层面消除了核心路径的结构冒险，保证了流水线的持续吞吐。</font>
 
-![figure-004-issue-execute-cache-alu](./img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-004-issue-execute-cache-alu.png)
+![1778230448013-ec10b75f-dffa-492a-848b-6430dee99bac.png](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-004-issue-execute-cache-alu.png)
 
 | 周期 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -226,7 +226,7 @@
 
 * <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">数据转发（bypassing，Forwarding）：无需等待前序指令完成写回，直接将前序指令 EX 级的执行结果，通过专用旁路通路转发到后续指令的 EX 级，大幅减少流水线暂停周期。Forwarding/bypass是用来</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">解决RAW冲突</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">的</font>
 
-![figure-005-bypassing-forwarding-writeback-ex](./img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-005-bypassing-forwarding-writeback-ex.png)
+![1778230094506-2edc3c8f-5daa-44a4-a019-fe5306efe450.png](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-005-bypassing-forwarding-writeback-ex.png)
 
 核心思路：**抄近路**，即：在结果产生后第一时间送到需要它的功能部件里，而不是通过寄存器文件来传递。\*\*实现要点：\*\*数据要前送回去、多路输入要有一个选通器、要有一个冲突检测电路来控制选通器
 
@@ -274,3 +274,4 @@
 
 
 > 更新: 2026-05-11 18:28:42  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/hfysfscwr90mfbwr>

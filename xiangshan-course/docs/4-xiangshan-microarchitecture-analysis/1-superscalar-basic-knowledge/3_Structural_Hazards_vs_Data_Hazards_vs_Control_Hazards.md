@@ -1,6 +1,6 @@
 # 3. 结构冲突 vs. 数据冲突 vs. 控制冲突
 
-[附件: Pipeline_Hazards_Structural_Data_and_Control_Conflicts_Deep_Dive.pptx](./attachments/44Zo57oNQ1Ru96CJ/Pipeline_Hazards_Structural_Data_and_Control_Conflicts_Deep_Dive.pptx)
+[附件: 流水线冒险：结构、数据与控制三大冲突深度解析.pptx](./attachments/44Zo57oNQ1Ru96CJ/流水线冒险：结构、数据与控制三大冲突深度解析.pptx)
 
 ## <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">💡</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> </font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">学习目标</font>**
 
@@ -107,3 +107,4 @@
 
 
 > 更新: 2026-05-12 11:08:48  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/emmsmg4qt9kh258g>

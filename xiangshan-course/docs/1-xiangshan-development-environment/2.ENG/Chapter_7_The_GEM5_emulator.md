@@ -386,3 +386,4 @@ This document provides a detailed overview of how to use the XS-GEM5 emulator an
 
 
 > 更新: 2026-04-23 15:06:11  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/oe6pk1qblblvog1l>

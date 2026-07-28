@@ -93,7 +93,7 @@ https://www.bilibili.com/read/cv6205889/
 3. sbt 1.5+
 4. VSCode + metals 插件
 
-![figure-001-windows-vscode-metals-sbt](./img/chapter-2-the-chisel-environment-and-engineering-practices/figure-001-windows-vscode-metals-sbt.png)
+![1779416452867-539b66df-25a3-4bf5-a3e6-650cabd3d812.png](img/chapter-2-the-chisel-environment-and-engineering-practices/figure-001-windows-vscode-metals-sbt.png)
 
 build.sbt
 
@@ -160,4 +160,5 @@ sbt run
 ***
 
 
-> 更新: 2026-05-22 10:44:52  
+> 更新: 2026-07-13 16:09:53  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/lw7lrmz8pqbcp3s4>

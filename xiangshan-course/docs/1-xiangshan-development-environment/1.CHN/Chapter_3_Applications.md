@@ -1,4 +1,4 @@
-# 第三章 应用程序
+# 第三章：应用程序
 
 # 3 应用程序
 
@@ -14,7 +14,7 @@
 
 :::
 
-![figure-001-applications-overview](./img/chapter-3-applications/figure-001-applications-overview.webp)
+![1770715590089-0d4a497b-381c-47c2-aa33-15d939bf1ee2.png](img/chapter-3-applications/figure-001-applications-overview.webp)
 
 本章讲解横向绿色板块
 
@@ -66,7 +66,7 @@ CPU 不会直接运行你的 C 代码，它只运行经过 AM 包装、符合特
 * 实现了基本的**系统调用接口和异常处理**
 * 支持多种ISA和配置
 
-![figure-002-isa-nexus-am-framework](./img/chapter-3-applications/figure-002-isa-nexus-am-framework.png)
+![1770712564169-fa5f9058-3cf5-482e-99b7-8c896b076803.png](img/chapter-3-applications/figure-002-isa-nexus-am-framework.png)
 
 图1：nexus-am框架结构
 
@@ -599,7 +599,7 @@ ssh yourhome@open08 NOOP_HOME=/nfs/home/yourhome/xs-env/XiangShan numactl -m 1 -
 
 <font style="color:rgb(38, 38, 38);"></font>
 
-![figure-003-sim-point-checkpoint](./img/chapter-3-applications/figure-003-sim-point-checkpoint.png)
+![1770715819511-591a73d5-6a47-41da-803a-4298fba520f5.png](img/chapter-3-applications/figure-003-sim-point-checkpoint.png)
 
 图2：SimPoint技术原理
 
@@ -735,3 +735,4 @@ SimPoint是体系结构研究的重要工具，主要思想是：将程序执行
 
 
 > 更新: 2026-04-24 01:45:42  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/fuwntm9m4dakokve>

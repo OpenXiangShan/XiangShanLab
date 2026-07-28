@@ -1,6 +1,6 @@
 # 2. 为什么需要超标量
 
-[附件: Why_Superscalar_From_Performance_Bottlenecks_to_Architectural_Innovation.pptx](./attachments/kOzN-DCAcFxAkkWD/Why_Superscalar_From_Performance_Bottlenecks_to_Architectural_Innovation.pptx)
+[附件: 为什么需要超标量？——从性能瓶颈到架构革新.pptx](./attachments/kOzN-DCAcFxAkkWD/为什么需要超标量？——从性能瓶颈到架构革新.pptx)
 
 > 本文全面解析超标量架构如何突破单发射流水线的性能瓶颈，深入剖析高算力场景下的性能需求，并揭示香山处理器采用超标量设计的内在逻辑。
 
@@ -12,7 +12,7 @@
 
 根据计算机体系结构经典理论，程序执行时间由三个因素决定：
 
-![figure-001-cpi](./img/2-why-use-superscalar-architecture/figure-001-cpi.png)
+![1778228172505-8f10db01-5b5e-4a6d-85ad-6cf5e133d652.png](img/2-why-use-superscalar-architecture/figure-001-cpi.png)
 
 **执行时间 = 指令总数 × CPI × 时钟周期时间**
 
@@ -177,4 +177,5 @@ mul x7, x8, x9     ; 发射到乘法器（同一周期，若有独立乘法器�
 <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"></font>
 
 
-> 更新: 2026-05-12 10:42:50  
+> 更新: 2026-06-03 15:36:56  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/gszwug0p01w7f6ux>

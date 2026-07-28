@@ -229,4 +229,5 @@ object InstState extends Enumeration {
 * 所有指令状态均对应源码枚举定义，是硬件调度逻辑的核心依据
 
 
-> 更新: 2026-05-20 15:02:33  
+> 更新: 2026-06-26 17:44:49  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/vm64o6wq5agtckwp>

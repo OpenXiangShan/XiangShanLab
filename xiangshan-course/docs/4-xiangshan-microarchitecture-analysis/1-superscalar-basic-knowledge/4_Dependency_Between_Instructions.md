@@ -1,6 +1,6 @@
 # 4. 指令间的相关性
 
-[附件: Instruction_Dependency_Analysis_The_Hidden_Constraint_On_Pipeline_Efficiency.pptx](./attachments/gS6GTRPG5f3hdD5i/Instruction_Dependency_Analysis_The_Hidden_Constraint_On_Pipeline_Efficiency.pptx)
+[附件: 指令间的相关性分析：流水线效率的隐形枷锁.pptx](./attachments/gS6GTRPG5f3hdD5i/指令间的相关性分析：流水线效率的隐形枷锁.pptx)
 
  在处理器流水线执行、超标量执行或乱序执行架构中，指令并非完全独立 —— 后续指令可能依赖于前置指令的执行结果，或争夺相同的寄存器 / 存储单元资源，这种依赖关系被称为**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">指令间的相关性</font>**。其中，数据相关性是最核心的类型，主要表现为读后读（RAR）、写后读（RAW）、读后写（WAR）、写后写（WAW）四种形式，直接影响处理器的执行效率与正确性，也是流水线数据冒险的核心诱因。  
 
@@ -95,3 +95,4 @@ addi $t0, $zero, 20
 
 
 > 更新: 2026-05-12 11:33:01  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/wvhord4qmv9n611i>

@@ -45,12 +45,37 @@ CSR 并非只能被 CSR 指令修改——它有**多种更新来源**：
 Issue Queue 发射 CSR 指令
        │
        ▼
-  CSR 执行单元接收指令
+  CSR 执行单元接收指令（piped=false，独占执行）
        │
-       ├──→ ① 读取 CSR 当前值（用于 CSRRS/CSRRC 的读-改-写）
-       ├──→ ② 权限检查：当前特权级是否允许访问该 CSR？
+       ├──→ ① 权限检查：当前特权级是否允许访问该 CSR？
+       ├──→ ② 读取 CSR 当前值（用于 CSRRS/CSRRC 的读-改-写）
        ├──→ ③ 计算新值：根据操作码（RW/RS/RC）和源操作数计算
-       └──→ ④ 写入 CSR 并输出结果
+       ├──→ ④ 异常检查：权限不足、CSR 不存在、写只读区域等
+       └──→ ⑤ 写入 CSR 并输出结果 + 可能的重定向/异常信号
+```
+
+CSR 执行单元的配置：
+
+```scala
+// FuConfig.scala
+val CsrCfg = FuConfig(
+  name = "csr", fuType = FuType.csr,
+  srcData = Seq(Seq(IntData())),
+  piped = false,                        // ← 非流水化：独占执行
+  writeIntRf = true,
+  latency = UncertainLatency(),         // ← 延迟不确定
+  exceptionOut = Seq(illegalInstr, virtualInstr, breakPoint,
+                     ecallU, ecallS, ecallVS, ecallM),
+  flushPipe = true,                     // ← 执行后冲刷流水线
+)
+
+val FenceCfg = FuConfig(
+  name = "fence", fuType = FuType.fence,
+  srcData = Seq(Seq(IntData(), IntData())),
+  piped = false,                        // ← 非流水化
+  latency = UncertainLatency(),
+  flushPipe = true,                     // ← 执行后冲刷流水线
+)
 ```
 
 ### 12.2.3 读-改-写语义
@@ -92,10 +117,22 @@ CSR 指令的更新具有**原子性的读-改-写语义**：
 
 | **约束** | **机制** | **目的** |
 | --- | --- | --- |
-| **阻塞后续指令** | 设置 <code>**blockBackward**</code><br/> 标记 | 防止后续指令在 CSR 更新生效前执行 |
-| **阻塞前方指令** | 设置 <code>**blockForward**</code><br/> 标记 | 确保前面的指令都已提交 |
-| **独占 CSR 执行单元** | 同一时刻只有一条 CSR 指令在执行 | 避免多条 CSR 指令竞争写同一个寄存器 |
-| **可能触发流水线冲刷** | <code>**flushPipe**</code><br/> 信号 | 某些 CSR 写入后需要冲刷流水线（如切换页表） |
+| 独占 CSR 执行单元 | <code>**piped=false**</code> | 同一时刻只有一条 CSR 指令在执行，自然串行化 |
+| 执行后冲刷流水线 | <code>**flushPipe=true**</code> | 确保 CSR 写入后，后续指令从正确状态开始 |
+| 可能产生重定向 | <code>**hasRedirect=true**</code> | 某些 CSR 写入改变执行流（如 MRET） |
+| 可能产生异常 | <code>**exceptionOut=7种**</code> | 权限不足、非法 CSR 等触发异常 |
+| 不确定延迟唤醒 | <code>**UncertainLatency()**</code><br/> + needUncertainWakeup | CSR 执行时间不固定 |
+
+```scala
+// FuType.scala — CSR 属于不确定延迟的功能单元
+def isUncertain(fuType: UInt): Bool = FuTypeOrR(fuType, csr, div, fDivSqrt, vidiv, vfdiv)
+ 
+// FuConfig.scala — CSR 可能产生重定向
+def hasRedirect: Boolean = Seq(FuType.jmp, FuType.brh, FuType.csr).contains(fuType)
+ 
+// FuConfig.scala — CSR 需要不确定延迟唤醒
+def needUncertainWakeupFuConfigs = Seq(CsrCfg, DivCfg, FdivCfg, VfdivCfg, VidivCfg)
+```
 
 ### 12.3.3 提交与回滚
 
@@ -134,6 +171,21 @@ CSR 子系统的异常检查可以分为**三个层次**，按检查时机从早
 | **① 权限检查** | CSR 指令执行时 | 当前特权级是否有权访问 | 用户态读写 mstatus |
 | **② 编码检查** | CSR 指令执行时 | CSR 地址和操作是否合法 | 访问不存在的 CSR |
 | **③ 事件触发** | 异常/中断发生时 | 是否需要陷入处理 | 缺页、断点、外部中断 |
+
+CSR 执行单元声明的异常输出：
+
+```scala
+// FuConfig.scala 可产生的异常类型
+exceptionOut = Seq(
+  illegalInstr,    // 非法指令：权限不足、CSR 不存在、写只读区域
+  virtualInstr,    // 虚拟指令异常：VS 模式访问受限 CSR
+  breakPoint,      // 断点异常
+  ecallU,          // U 模式系统调用
+  ecallS,          // S 模式系统调用
+  ecallVS,         // VS 模式系统调用
+  ecallM,          // M 模式系统调用
+)
+```
 
 ### 12.4.2 权限检查详情
 
@@ -232,44 +284,7 @@ CSR 子系统按 RISC-V 特权架构的层级，用 Scala Trait 混入（Mixin�
 
 ## 12.6 CSR 与流水线的交互全景
 
-```plain
-CSR 指令进入流水线
-                            │
-                 ┌──────────▼─────────────┐
-                 │  Decode：识别 CSR 指令  │
-                 │  标记 fuType = csr    	│
-                 └──────────┬─────────────┘
-                            │
-                 ┌──────────▼─────────────┐
-                 │  Rename：分配物理寄存器	│
-                 │  设置 blockBackward   	│
-                 └──────────┬─────────────┘
-                            │
-                 ┌──────────▼─────────────┐
-                 │  Issue Queue：等待发射  │
-                 │  等待前面指令完成      	│
-                 └──────────┬─────────────┘
-                            │
-                 ┌──────────▼─────────────┐
-                 │  CSR 执行单元：         │
-                 │  ① 权限检查            	│
-                 │  ② 读-改-写 CSR        	│
-                 │  ③ 输出异常标志         │
-                 └──────────┬─────────────┘
-                            │
-                 ┌──────────▼─────────────┐
-                 │  ROB：按序提交          │
-                 │  确认 CSR 更新生效     	│
-                 │  如有异常 → 触发陷入   	│
-                 └──────────┬─────────────┘
-                            │
-                 ┌──────────▼─────────────┐
-                 │  CSR 正式生效：         │
-                 │  · 写回整数寄存器      	│
-                 │  · 可能冲刷流水线      	│
-                 │  · 可能触发重定向      	│
-                 └────────────────────────┘
-```
+![fefe94038d9fc5c7bdda7bdb474d39da.svg](img/12-csr/figure-001-12-csr-2.svg)
 
 ***
 
@@ -278,10 +293,11 @@ CSR 指令进入流水线
 ## <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">✅</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> 核心要点总结</font>
 
 * **CSR Update**：多种更新来源（CSR 指令、异常陷入、特权级返回、硬件事件）；CSR 指令具有原子性的读-改-写语义；严格的特权级保护，越权访问触发非法指令异常
-* **CSR Commit**：CSR 指令必须按程序顺序提交；通过 <code>**blockBackward/Forward**</code> 和独占执行单元保证顺序性；部分 CSR 写入需要冲刷流水线（如切换页表、切换特权级）；提交前可回滚
-* **CSR Exception Check**：三层检查——权限检查→编码检查→事件触发；异常触发时自动更新 epc/cause/tval/status；中断需要经过过滤和特权级仲裁后分发
+* **CSR Commit**：CSR 指令必须按程序顺序提交；通过 <code>**piped=false**</code>（串行化执行）和 <code>**flushPipe=true**</code>（冲刷流水线）保证顺序性；CSR 属于 needUncertainWakeup 列表；部分 CSR 写入需要冲刷流水线（如切换页表、切换特权级）；提交前可回滚
+* **CSR Exception Check**：三层检查——权限检查→编码检查→事件触发；CSR 可产生 7 种异常（illegalInstr、virtualInstr、breakPoint、ecallU/S/VS/M）；异常触发时自动更新 epc/cause/tval/status；中断需要经过过滤和特权级仲裁后分发
 
-**核心原则**：CSR 子系统的设计围绕\*\*"安全与顺序"\*\*展开——安全是指严格的特权级保护和异常检查，顺序是指 CSR 更新必须严格按程序顺序生效。这两点共同保证了处理器状态的一致性和可预测性。
+核心原则：CSR 子系统的设计围绕\*\*"安全与顺序"\*\*展开——安全是指严格的特权级保护和异常检查，顺序是指 CSR 更新必须严格按程序顺序生效（通过非流水化执行和流水线冲刷保证）。这两点共同保证了处理器状态的一致性和可预测性。
 
 
-> 更新: 2026-06-01 16:46:21  
+> 更新: 2026-07-02 10:21:04  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/hmz9bmnxwd86u488>

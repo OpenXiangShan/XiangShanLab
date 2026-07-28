@@ -17,7 +17,7 @@
 
 基于我们提供的代码，系统架构如下：
 
-![figure-001-system-architecture](./img/chapter-15-diplomacy-practical-exercise-2/figure-001-system-architecture.jpeg)
+![画板](img/chapter-14-diplomacy-practical-exercise-1/figure-001-system-architecture.jpeg)
 
 **代码中出现的模块及其功能**：
 
@@ -370,3 +370,4 @@ val dcache = AXI4MasterParameters(id = IdRange(256, 512))  // ID 256-511
 
 
 > 更新: 2026-05-25 16:14:35  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/gg2owl9na6mufrgt>

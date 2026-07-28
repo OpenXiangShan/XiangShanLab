@@ -1,4 +1,4 @@
-# 第四章 指令模拟器：CPU仿真与参考模型（NEMU + Spike）
+# 第四章：指令模拟器：CPU仿真与参考模型（NEMU + Spike）
 
 # 4 仿真器
 
@@ -16,7 +16,7 @@
 
 :::
 
-## ![figure-001-cpu-bug-run-debug](./img/chapter-4-instruction-emulator-cpu-simulation-and-reference-models-nemu-spike/figure-001-cpu-bug-run-debug.png)
+## ![1771038423705-5af4c1c3-eb5d-4346-8795-22067b4006ed.png](img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
 
 ## 4.1 模拟指令器的作用
 
@@ -590,7 +590,7 @@ export GCB_REF_SO=`realpath build/riscv64-nemu-interpreter-so`
 
 使用`menuconfig`命令，配置需要查看的对象，之后选中进行`debug`。
 
-![figure-002-debug-menuconfig-inspect-nemu](./img/chapter-4-instruction-emulator-cpu-simulation-and-reference-models-nemu-spike/figure-002-debug-menuconfig-inspect-nemu.png)
+![1768895022679-4182fabd-385d-43c9-b14e-ec8abfe9606a.png](img/chapter-4-instruction-emulator-cpu-simulation-and-reference-models-nemu-spike/figure-002-debug-menuconfig-inspect-nemu.png)
 
 图1：NEMU menuconfig调试配置界面
 
@@ -748,3 +748,4 @@ Spike是一个开源的RISC-V指令集架构（ISA）模拟器，主要用于模
 
 
 > 更新: 2026-04-24 01:47:37  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/dag29u0lx3ez4ewg>

@@ -1,6 +1,6 @@
 # 6.顺序 vs. 乱序
 
-## [附件: In_Order_vs_Out_of_Order_Xiangshan_Execution_Architecture_Deep_Dive.pptx](./attachments/eBC_LgF-_5-lFJZw/In_Order_vs_Out_of_Order_Xiangshan_Execution_Architecture_Deep_Dive.pptx)
+## [附件: 顺序执行 vs. 乱序执行——香山处理器执行架构深度解析.pptx](./attachments/eBC_LgF-_5-lFJZw/顺序执行 vs. 乱序执行——香山处理器执行架构深度解析.pptx)
 ## <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">6.1概述</font>
 <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山处理器是国产自主研发的高性能 RISC-V 架构处理器，其指令执行架构的核心设计围绕 “顺序执行保障正确性、乱序执行提升性能” 展开。本章节将详细解析香山处理器中顺序与乱序执行的实现逻辑、应用场景及核心价值，帮助开发者理解其执行架构的设计思路与底层原理。</font>
 
@@ -36,8 +36,8 @@
 
 <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">该机制既满足了架构对指令执行正确性的硬性要求，又通过乱序执行释放硬件算力，实现“正确性”与“高性能”的平衡。具体协同流程如下：</font>
 
-1. <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">前端保证指令解析的顺序性，为后续执行提供准确的指令语义与顺序标记；</font>
-2. <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">后端通过乱序调度提升执行效率，利用硬件资源并行处理无依赖的指令；</font>
+1. <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">前端保证指令解析的顺序性，为后续执行提供准确的指令语义与顺序标记。</font>
+2. <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">后端通过乱序调度提升执行效率，利用硬件资源并行处理无依赖的指令。</font>
 3. <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">重排序缓冲区（ROB）按程序顺序提交结果，将乱序执行的结果还原为符合架构要求的顺序输出，最终保障程序运行的正确性。</font>
 
 
@@ -46,4 +46,5 @@
 
 
 
-> 更新: 2026-05-12 14:34:41  
+> 更新: 2026-06-03 15:46:27  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/icmlznspik7sm7qu>

@@ -187,7 +187,8 @@ if (is_mmio_address(addr)) {
 
 ## 七、相关手册
 
-![figure-001-manual-difftest-mcause-access](./img/analysis-report-on-xiangshan-processor-and-nemu-mcause-exception-code-mismatch/figure-001-manual-difftest-mcause-access.png)
+![1777449877251-7c1ab98d-7ef6-484e-8313-31e328faa2e4.png](img/analysis-report-on-xiangshan-processor-and-nemu-mcause-exception-code-mismatch/figure-001-manual-difftest-mcause-access.png)
 
 
 > 更新: 2026-05-26 14:07:33  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/grcc3leilynxk6ky>

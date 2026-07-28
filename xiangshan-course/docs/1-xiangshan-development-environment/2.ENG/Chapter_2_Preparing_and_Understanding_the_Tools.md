@@ -27,7 +27,7 @@ If you can’t do this, it’s not a matter of your ability - it’s because you
 
 ## 1.1 XiangShan Development Process and Corresponding Tools
 
-![figure-001-xiang-shan-development-process](./img/chapter-2-preparing-and-understanding-the-tools/figure-001-xiang-shan-development-process.png)
+![1773819748645-b805e97d-7666-4274-9002-af3843b8ebcc.png](../1.CHN/img/chapter-2-preparing-and-understanding-the-tools/figure-001-flow.png)
 
 图1：
 
@@ -231,7 +231,7 @@ Yes, the latest version of Chisel supports SystemVerilog by default, offering mo
 
 ### 2.1.2 Chisel Compilation Process
 
-![figure-002-chisel-compilation-process-latest](./img/chapter-2-preparing-and-understanding-the-tools/figure-002-chisel-compilation-process-latest.png)
+![1773819652623-385ededc-a41f-47c0-a591-4b6b43c4a541.png](../1.CHN/img/chapter-2-preparing-and-understanding-the-tools/figure-002-chisel-flow-system-verilog.png)
 
 Figure 2: Chisel Compilation Process
 
@@ -338,7 +338,7 @@ The mill tool generates a configuration file in the project directory. This file
 
 ### 2.2.3 Analysis of the build.sc Code Structure
 
-![figure-003-sc-structure-mill](./img/chapter-2-preparing-and-understanding-the-tools/figure-003-sc-structure-mill.png)
+![1770194988083-8d3cbcf9-064d-4d58-b700-3d9b5c04dea5.png](img/chapter-2-preparing-and-understanding-the-tools/figure-003-sc-structure-mill.png)
 
 Figure 2: Analysis of the main structure of the build.sc code
 
@@ -484,7 +484,7 @@ This is a compilation under RISC-V, so the `gcc`command is prefixed. By default,
 ### 2.4.3 How do the commands in the Makefile compile C code into executable RISC-V code?
 
 The compilation process using `makefile.compiler`is described below:\
-![figure-004-do-commands-makefile-compile](./img/chapter-2-preparing-and-understanding-the-tools/figure-004-do-commands-makefile-compile.webp)
+![1770888738675-e81de847-0643-4330-b2f2-f29b9bfc9cf7.png](../1.CHN/img/chapter-2-preparing-and-understanding-the-tools/figure-004-makefile-c-risc-v.webp)
 
 :::info
 Understanding the make Compilation Process
@@ -586,7 +586,7 @@ Function: Provides code hints and navigation
 
 1. **Download and install the plugin**
 
-![figure-005-metals-vs-download-install](./img/chapter-2-preparing-and-understanding-the-tools/figure-005-metals-vs-download-install.png)
+![1770255916439-d21661f6-4838-489c-8be5-116341f16562.png](../1.CHN/img/chapter-2-preparing-and-understanding-the-tools/figure-005-metals-vs-download-install.png)
 
 Figure 3: Metals plugin installation interface
 
@@ -736,3 +736,4 @@ build.sc for build control
 
 
 > 更新: 2026-04-15 11:07:46  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/ciu5fugbpnl5a2he>

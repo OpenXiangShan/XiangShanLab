@@ -594,4 +594,5 @@ class Aaa extends Module with HasAaaParameters {
 3. Chisel: <https://www.chisel-lang.org/docs/developers/style>
 
 
-> 更新: 2026-05-22 14:11:55  
+> 更新: 2026-06-23 14:13:59  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/etidwiqvoguqfx5z>

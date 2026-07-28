@@ -21,15 +21,29 @@
 * **寄存器堆** = 公共仓库——所有人都要去仓库取货，但仓库有读端口数量限制，且读取有延迟
 * **旁路网络** = 直达快线——上一家工厂刚产出的零件，不经过仓库，直接送到下一家工厂
 
-如果不用旁路，一条加法指令的结果写回寄存器堆需要 1 拍，下一条依赖它的指令再从寄存器堆读出来又要 1 拍——白白浪费了 2 拍。旁路网络让结果**直接从执行单元的输出"飞"到下一个执行单元的输入**，省去了中间的寄存器堆读写延迟。
+如果不用旁路，一条加法指令的结果写回寄存器堆需要 1 拍，下一条依赖它的指令再从寄存器堆读出来又要 1 拍——白白浪费了 2 拍。旁路网络让结果直接从执行单元的输出"飞"到下一个执行单元的输入，省去了中间的寄存器堆读写延迟。
 
-**核心价值**：Bypass Network 是乱序处理器实现**低延迟数据传递**的关键基础设施，没有它，指令间的依赖将导致大量流水线气泡。
+> ***核心价值：Bypass Network 是乱序处理器实现低延迟数据传递的关键基础设施，没有它，指令间的依赖将导致大量流水线气泡。***
 
 ***
 
 ## 8.2 七种数据来源
 
-当 Issue Queue 发射一条 uop 到执行单元时，每个源操作数的数据从哪里来？香山定义了**七种可能的数据来源**，由 <code>**DataSource**</code> 模块编码：
+当 Issue Queue 发射一条 uop 到执行单元时，每个源操作数的数据从哪里来？香山定义了七种可能的数据来源，由 DataSource 模块编码：
+
+```scala
+// DataSource.scala
+object DataSource {
+  def reg: UInt      = "b1000".U   // 寄存器堆
+  def regcache: UInt = "b0110".U   // 寄存器缓存
+  def v0: UInt       = "b0101".U   // V0 寄存器
+  def imm: UInt      = "b0100".U   // 立即数
+  def bypass2: UInt  = "b0011".U   // 2 拍旁路
+  def bypass: UInt   = "b0010".U   // 1 拍旁路
+  def forward: UInt  = "b0001".U   // 当拍前递
+  def zero: UInt     = "b0000".U   // 零寄存器
+}
+```
 
 | **数据来源** | **编码** | **含义** | **比喻** |
 | --- | --- | --- | --- |
@@ -54,7 +68,29 @@
 
 ## 8.3 Forward / Bypass / Bypass2：三级旁路
 
-这是旁路网络最核心的设计。为什么需要三级？因为不同执行单元的**延迟不同**，数据就绪的时刻也不同。
+三级旁路的区别在于**数据从执行单元输出到消费端的延迟**
+
+```scala
+// BypassNetwork.scala# — 三级旁路数据生成
+// forward: 当拍数据，零延迟
+private val forwardDataVec: Vec[UInt] = VecInit(
+  fromExus.map(x => ZeroExt(x.bits.data, RegDataMaxWidth))
+)
+ 
+// bypass: 1 拍延迟，RegNext 寄存
+private val bypassDataVec = VecInit(
+  fromExus.map(x => {
+    if (x.bits.params.needDataFromI2F || x.bits.params.needDataFromF2I)
+      ZeroExt(RegNext(x.bits.data), RegDataMaxWidth)  // 跨域需额外处理
+    else ZeroExt(RegEnable(x.bits.data, x.valid), RegDataMaxWidth)
+  })
+)
+ 
+// bypass2: 2 拍延迟，RegNext(RegNext(...))
+private val bypass2DataVec = VecInit(
+  fromDPsHasBypass2Source.map(x => RegNext(bypassDataVec(x)))
+)
+```
 
 ### 8.3.1 时序关系
 
@@ -69,37 +105,75 @@
                                 （当拍前递） （1拍旁路）  （2拍旁路）
 ```
 
-| **旁路级别** | **延迟** | **适用场景** | **比喻** |
+| **旁路级别** | **延迟** | **数据来源** | **适用场景** |
 | --- | --- | --- | --- |
-| **Forward** | 0 拍 | 执行单元当拍出结果（如 ALU 延迟 1 拍，发射后下一拍结果可用） | 生产线下来的零件直接拿走 |
-| **Bypass** | 1 拍 | 执行单元 1 拍后才出结果，需要寄存 1 周期 | 零件在质检站放一晚，明天取 |
-| **Bypass2** | 2 拍 | 跨调度域的长延迟旁路（如 VF→Int/Mem） | 跨国调货，需要中转 |
+| forward | 0 拍 | 执行单元当拍输出 | 同调度域内，ALU 等低延迟单元 |
+| bypass | 1 拍 | 执行单元输出寄存一拍 | 同调度域内，延迟不确定的单元 |
+| bypass2 | 2 拍 | bypass 数据再寄存一拍 | 跨调度域（VF→VF/Mem） |
 
 ### 8.3.2 Forward：当拍前递
 
-Forward 是最快的旁路方式。当一条指令在**当前周期**写回结果，而另一条依赖它的指令恰好在**同一周期**发射时，数据可以通过 Forward 通路**当拍传递**，无需任何等待。
+Forward 是最快的旁路方式。当一条指令在当前周期写回结果，而另一条依赖它的指令恰好在同一周期发射时，数据可以通过 Forward 通路当拍传递，无需任何等待。
 
 Forward 数据直接取自执行单元的输出端口，不经过任何寄存器打拍：
 
-*\*\*从 \*\**<code>_**fromExus**_</code>***（执行单元的旁路输出）中，根据物理寄存器编号匹配，选中对应的写回数据。***
+```scala
+// BypassNetwork.scala
+private val forwardDataVec: Vec[UInt] = VecInit(
+  fromExus.map(x => ZeroExt(x.bits.data, RegDataMaxWidth))
+  // x.bits.data 是执行单元当拍输出的写回数据，零延迟
+)
+```
 
 ### 8.3.3 Bypass：1 拍旁路
 
-有些执行单元的结果需要 1 拍后才能稳定（比如跨时钟域同步、或者需要经历一级流水），此时用 Bypass。Bypass 数据是执行单元输出的**寄存 1 拍版本**：
+有些执行单元的结果需要 1 拍后才能稳定（比如跨时钟域同步、或者需要经历一级流水），此时用 Bypass。Bypass 数据是执行单元输出的寄存 1 拍版本：
 
-* 对于需要跨域数据转换的执行单元（如 I2F、F2I），使用 <code>**RegNext**</code> 打一拍
-* 对于普通执行单元，使用 <code>**RegEnable**</code>（带使能的寄存器），只有 valid 时才更新
+```scala
+// BypassNetwork.scala
+private val bypassDataVec = VecInit(
+  fromExus.map(x => {
+    if (x.bits.params.needDataFromI2F || x.bits.params.needDataFromF2I)
+      // 跨域数据转换（整数↔浮点）：用 RegNext 无条件打一拍
+      ZeroExt(RegNext(x.bits.data), RegDataMaxWidth)
+    else
+      // 同域数据：用 RegEnable 条件打一拍，只有 valid 时才更新
+      ZeroExt(RegEnable(x.bits.data, x.valid), RegDataMaxWidth)
+  })
+)
+```
+
+两种寄存策略的区别：
+
+* **RegNext**：无条件每拍更新，用于跨域数据（I2F/F2I），因为数据格式需要稳定
+* **RegEnable**：带使能的条件更新，只有 <code>**valid=1**</code> 时才锁存新数据，节省翻转功耗
 
 ### 8.3.4 Bypass2：2 拍旁路
 
 Bypass2 是**专为跨调度域旁路设计的**。当向量执行单元（VF Exu）产生结果，需要旁路到整数/访存执行单元时，由于时序对齐的差异，数据需要额外延迟 2 拍。
 
-只有特定的"源-汇"对需要 Bypass2：
+```scala
+// BypassNetwork.scala
+// bypass2 的 source 限定：写向量寄存器 + (VF执行单元 或 含Load)
+private val fromDPsHasBypass2Source = fromDPs.filter(x => 
+  x.bits.exuParams.isIQWakeUpSource && x.bits.exuParams.writeVfRf && 
+  (x.bits.exuParams.isVfExeUnit || x.bits.exuParams.hasLoadExu))
+ 
+// bypass2 的 sink 限定：读向量寄存器 + (VF执行单元 或 Mem执行单元)
+private val fromDPsHasBypass2Sink = fromDPs.filter(x => 
+  x.bits.exuParams.isIQWakeUpSink && x.bits.exuParams.readVfRf && 
+  (x.bits.exuParams.isVfExeUnit || x.bits.exuParams.isMemExeUnit))
+ 
+// bypass2 数据 = bypass 数据再打一拍
+private val bypass2DataVec = VecInit(
+  fromDPsHasBypass2Source.map(x => RegNext(bypassDataVec(x)))
+)
+```
 
 | **源** | **汇** | **原因** |
 | --- | --- | --- |
-| VF Exu（写向量寄存器堆） | VF Exu（读向量寄存器堆） | 向量域内部旁路 |
-| 带 Load 的 Exu | Mem Exu（读向量寄存器堆） | Load 数据延迟较长 |
+| VF Exu（写向量寄存器堆） | VF Exu（读向量寄存器堆） | 向量域内部跨 IQ 旁路 |
+| 带 Load 的 Exu | VF/Mem Exu（读向量寄存器堆） | Load 数据延迟较长 |
 
 ***
 
@@ -113,18 +187,26 @@ Bypass Network 只是一个**执行者**——根据 <code>**DataSource**</code>
 
 ### 8.4.2 选择优先级
 
-当多种数据来源同时有效时，Bypass Network 的处理逻辑可以概括为：
+BypassNetwork 中，每个源操作数通过 Mux1H 从多种数据来源中选择：
 
-```plain
-对于每个源操作数 src(i):
-  如果 DataSource = forward  → 从当拍写回数据中选择
-  如果 DataSource = bypass   → 从 1 拍延迟的写回数据中选择
-  如果 DataSource = bypass2  → 从 2 拍延迟的写回数据中选择
-  如果 DataSource = regcache → 从 RegCache 读取
-  如果 DataSource = imm      → 提取立即数
-  如果 DataSource = zero     → 填零
-  如果 DataSource = v0       → 读取 V0 寄存器
-  如果 DataSource = reg      → 从物理寄存器堆读取
+```scala
+// BypassNetwork.scala
+val originSrc = Mux1H(
+  Seq(
+    readForward    -> Mux1H(forwardOrBypassValidVec3(exuIdx)(srcIdx), forwardDataVec),
+    readBypass     -> Mux1H(forwardOrBypassValidVec3(exuIdx)(srcIdx), bypassDataVec),
+    readBypass2    -> (if (bypass2ExuIdx >= 0) 
+                       Mux1H(bypass2ValidVec3(bypass2ExuIdx)(srcIdx), bypass2DataVec) 
+                       else 0.U),
+    readZero       -> 0.U,
+    readV0         -> (if (srcIdx < 3 && isReadVfRf) exuInput.bits.src(3) else 0.U),
+    readRegOH      -> fromDPs(exuIdx).bits.src(srcIdx),    // ← 来自寄存器堆
+    readRegCache   -> fromDPsRCData(exuIdx)(srcIdx),       // ← 来自 RegCache
+    readImm        -> (if (exuParm.hasLoadExu && srcIdx == 0) immLoadSrc0.get 
+                       else if (exuParm.aluNeedPc) immALU else imm)
+  )
+)
+src := originSrc
 ```
 
 :::warning
@@ -135,9 +217,21 @@ Bypass Network 只是一个**执行者**——根据 <code>**DataSource**</code>
 
 ### 8.4.3 数据来源的匹配机制
 
-Forward 和 Bypass 的核心操作是**匹配物理寄存器编号**：执行单元写回时携带 <code>**pdest**</code>（目标物理寄存器号），Bypass Network 将其与每个源操作数的 <code>**psrc**</code> 进行比对。如果匹配且 DataSource 指示需要前递，就选中该写回数据。
+Forward 和 Bypass 的核心操作是匹配物理寄存器编号。匹配信息在 Issue Queue 的唤醒阶段就已经计算好了——以 <code>**exuSources**</code>（one-hot 编码的执行单元索引）的形式传递：
 
-匹配信息实际上在 Issue Queue 的唤醒阶段就已经计算好了——以 <code>**exuSources**</code>（one-hot 编码的执行单元索引）的形式传递，Bypass Network 只需做一次 <code>**Mux1H**</code> 选择即可。
+```scala
+// BypassNetwork.scala
+// exuSources 是 one-hot 编码：标记该源操作数由哪个执行单元产出
+private val forwardOrBypassValidVec3 = MixedVecInit(
+  fromDPs.map { x =>
+    VecInit(x.bits.exuSources.map(_.map(_.toExuOH(x.bits.exuParams))).getOrElse(
+      VecInit(Seq.fill(x.bits.exuParams.numRegSrc max 1)(VecInit(0.U(params.numExu.W).asBools)))
+    ))
+  }
+)
+```
+
+Bypass Network 只需做一次 <code>**Mux1H(forwardOrBypassValidVec3(exuIdx)(srcIdx), forwardDataVec)**</code> 即可选中对应的写回数据——无需在 Bypass Network 内部做物理寄存器号比较，所有匹配逻辑已在 IQ 唤醒阶段完成。
 
 ***
 
@@ -153,15 +247,64 @@ Forward 和 Bypass 的核心操作是**匹配物理寄存器编号**：执行单
 
 某些浮点指令需要整数操作数（如 <code>**FMV.X.W**</code> 的逆操作），某些整数指令需要浮点结果（如 <code>**FMV.W.X**</code> 的逆操作）。这些跨域数据需要额外的**数据类型转换**和**时钟门控处理**：
 
+```scala
+// BypassNetwork.scala
+if (x.bits.params.needDataFromI2F || x.bits.params.needDataFromF2I)
+  // 跨域：用 RegNext 无条件打一拍，因为数据格式需要稳定
+  ZeroExt(RegNext(x.bits.data), RegDataMaxWidth)
+else
+  // 同域：用 RegEnable 条件打一拍，省功耗
+  ZeroExt(RegEnable(x.bits.data, x.valid), RegDataMaxWidth)
+```
+
 * **I2F（Int to Float）**：整数结果旁路到浮点执行单元时，数据需要打 1 拍（<code>**RegNext**</code>），因为时序对齐不同
 * **F2I（Float to Int）**：浮点结果旁路到整数执行单元时，同样需要打 1 拍
 
 ### 8.5.3 VF 到 Int/Mem：最长的旁路路径
 
-向量执行单元到整数/访存域的旁路需要 **Bypass2（2 拍延迟）**，这是整个旁路网络中最长的路径。原因有二：
+向量执行单元到 VF/Mem 域的旁路需要 **Bypass2（2 拍延迟）**，这是整个旁路网络中最长的路径。
 
-1. **向量执行单元延迟更长**：最小延迟也有 1 拍，加上跨域同步需要额外 1 拍
-2. **时序裕量更紧张**：向量数据位宽更大（最高 256 bit），走线延迟更长
+```scala
+// BypassNetwork.scala
+// source: 写向量RF + (VF执行单元 或 含Load的执行单元)
+// sink:   读向量RF + (VF执行单元 或 Mem执行单元)
+private val bypass2DataVec = VecInit(
+  fromDPsHasBypass2Source.map(x => RegNext(bypassDataVec(x)))  // bypass 再打一拍 = 2拍
+)
+```
+
+原因有二：
+
+1. **向量执行单元延迟更长**：向量数据通路比整数宽得多（128-256 bit），走线延迟更长
+2. **跨 IQ 旁路**：source 和 sink 可能在不同的 Issue Queue 中，唤醒信号需要跨 IQ 传播，时序裕量更紧张
+
+### 8.5.4 BypassNetwork 的 RegCache 写回
+
+BypassNetwork 除了向执行单元提供旁路数据，还负责将 bypass 数据写回 RegCache：
+
+```scala
+// BypassNetwork.scala
+// forward 级别的 RegCache 写信息
+private val forwardIntWenVec = VecInit(
+  fromExus.filter(_.bits.params.needWriteRegCache).map(x => x.valid && x.bits.intWen))
+private val forwardTagVec = VecInit(
+  fromExus.filter(_.bits.params.needWriteRegCache).map(x => x.bits.pdest))
+ 
+// bypass 级别（打一拍后）的 RegCache 写信息
+private val bypassIntWenVec = VecInit(forwardIntWenVec.map(x => GatedValidRegNext(x)))
+private val bypassTagVec = VecInit(forwardTagVec.zip(forwardIntWenVec).map(x => RegEnable(x._1, x._2)))
+private val bypassRCDataVec = VecInit(
+  fromExus.zip(bypassDataVec).filter(_._1.bits.params.needWriteRegCache).map(_._2))
+ 
+// 写入 RegCache
+io.toDataPath.zipWithIndex.foreach{ case (x, i) => 
+  x.wen  := bypassIntWenVec(i)    // RegCache 写使能（bypass 级别）
+  x.data := bypassRCDataVec(i)    // RegCache 写数据（bypass 级别）
+  x.tag.foreach(_ := bypassTagVec(i))  // RegCache 写标签
+}
+```
+
+RegCache 的写入使用的是 **bypass 级别**（1 拍延迟）的数据，而不是 forward 级别的。这是因为 RegCache 的写入需要数据稳定后才能进行。
 
 ***
 
@@ -171,31 +314,52 @@ Bypass Network 并不是孤立工作的，它是 **DataPath** 模块的一部分
 
 | **组件** | **职责** | **比喻** |
 | --- | --- | --- |
-| **RFReadArbiter（×5）** | 仲裁多个执行单元对寄存器堆的并发读请求 | 仓库取货窗口调度员 |
-| **WBBusyArbiter（×5）** | 检查写回端口是否冲突，避免同一周期写回冲突 | 发货窗口排队检查 |
+| **RFReadArbiter（×5）** | 仲裁多个执行单元对 5 类物理寄存器堆（int/fp/vec/v0/vl）的并发读请求 | 仓库取货窗口调度员 |
+| **WBCollideChecker（×5）** | 检查写回端口是否冲突，避免同一周期多条指令竞争同一写回端口 | 发货窗口排队检查 |
 | **BypassNetwork** | 从多个数据来源中选出正确的操作数 | 快递分拣员——根据标签选择发货通道 |
 | **RegCache** | 为整数寄存器提供快速读取通道 | 就近便利店——不用跑总仓库 |
 
+从源码可以看到这些组件的实例化（DataPath.scala）：
+
+```scala
+// 5 类写回冲突检查器
+private val intWbBusyArbiter = Module(new IntRFWBCollideChecker(backendParams))
+private val fpWbBusyArbiter  = Module(new FpRFWBCollideChecker(backendParams))
+private val vfWbBusyArbiter  = Module(new VfRFWBCollideChecker(backendParams))
+private val v0WbBusyArbiter  = Module(new V0RFWBCollideChecker(backendParams))
+private val vlWbBusyArbiter  = Module(new VlRFWBCollideChecker(backendParams))
+ 
+// 5 类寄存器堆读仲裁器
+private val intRFReadArbiter = Module(new IntRFBankReadArbiter(backendParams))
+private val fpRFReadArbiter  = Module(new FpRFReadArbiter(backendParams))
+private val vfRFReadArbiter  = Module(new VfRFReadArbiter(backendParams))
+private val v0RFReadArbiter  = Module(new V0RFReadArbiter(backendParams))
+private val vlRFReadArbiter  = Module(new VlRFReadArbiter(backendParams))
+```
+
+RFReadArbiter 的工作方式——按数据类型过滤源端口，只对需要读该类型寄存器堆的源发起仲裁：
+
+```scala
+// DataPath.scala — 整数RF读仲裁
+intRFReadArbiter.io.in.zipWithIndex.foreach { case (arbInSeq2, iqIdx) =>
+  arbInSeq2.zipWithIndex.foreach { case (arbInSeq, exuIdx) =>
+    val srcIndices = fromIQ(iqIdx)(exuIdx).bits.exuParams.getRfReadSrcIdx(IntData())
+    for (srcIdx <- 0 until numRegSrc) {
+      if (srcIndices.contains(srcIdx)) {
+        arbInSeq(srcIdx).valid := intRFBankRen(iqIdx)(exuIdx).get(srcIdx).asUInt.orR
+        arbInSeq(srcIdx).bits.addr := fromIQDeqOg1Payload(iqIdx)(exuIdx).psrc(srcIdx)
+        // ...
+      } else {
+        arbInSeq(srcIdx).valid := false.B  // 该源不需要读整数RF
+      }
+    }
+  }
+}
+```
+
 **协作流程**：
 
-```plain
-Issue Queue 发射 uop
-       │
-       ▼
-  DataPath 接收
-       │
-       ├──→ RFReadArbiter：仲裁寄存器堆读请求
-       │         │
-       │         ▼
-       │    物理寄存器堆读取（reg 来源）
-       │
-       ├──→ RegCache 读取（regcache 来源）
-       │
-       └──→ BypassNetwork：选择 forward/bypass/bypass2/imm/zero/v0
-                 │
-                 ▼
-           拼装完整 ExuInput → 送入执行单元
-```
+![36d7a0f99d480735151f8ccdcdc5fbdb.svg](img/8-bypass-network/figure-001-8-bypass-network-2.svg)
 
 ***
 
@@ -205,10 +369,11 @@ Issue Queue 发射 uop
 
 | **路径** | **描述** | **严重程度** |
 | --- | --- | --- |
-| **Forward 数据选择** | N 个执行单元的写回数据做 Mux1H | 🔴 极高 |
-| **pdest 匹配** | 物理寄存器编号比对（在 IQ 阶段完成，结果以 exuSources 传递） | 🟡 已优化 |
-| **跨域旁路** | I2F/F2I/VF2Int 的多拍延迟 | 🟡 中等 |
-| **Imm 提取** | 立即数解码与符号扩展 | 🟢 较低 |
+| Forward 数据选择 | N 个执行单元的写回数据做 Mux1H | 🔴 极高 |
+| pdest 匹配 | 物理寄存器编号比对（在 IQ 阶段完成，结果以 exuSources 传递） | 🟡 已优化 |
+| 跨域旁路 | I2F/F2I/VF2VF 的多拍延迟 | 🟡 中等 |
+| Imm 提取 | 立即数解码与符号扩展 | 🟢 较低 |
+| RFReadArbiter 仲裁 | 多个执行单元竞争有限读端口 | 🟡 中等 |
 
 ### 8.7.2 优化策略
 
@@ -216,13 +381,43 @@ Issue Queue 发射 uop
 
 Forward/Bypass 的物理寄存器匹配逻辑（"哪个执行单元写了我的源操作数"）是 O(N×M) 的比较操作（N 个源 × M 个执行单元）。香山将这部分逻辑**前移到 Issue Queue 的唤醒阶段**完成，以 <code>**exuSources**</code>（one-hot 编码）的形式传递给 Bypass Network。这样 Bypass Network 只需做一次简单的 <code>**Mux1H**</code> 选择，而不需要做比对。
 
+```scala
+// BypassNetwork.scala — exuSources 在 IQ 阶段计算好
+private val forwardOrBypassValidVec3 = MixedVecInit(
+  fromDPs.map { x =>
+    VecInit(x.bits.exuSources.map(_.map(_.toExuOH(x.bits.exuParams))).getOrElse(...))
+  }
+)
+// BypassNetwork 只做 Mux1H，不做匹配
+Mux1H(forwardOrBypassValidVec3(exuIdx)(srcIdx), forwardDataVec)
+```
+
 **策略二：RegCache 减少寄存器堆读压力**
 
-对于整数操作数，香山引入了 **RegCache（寄存器缓存）**。当写回数据经过寄存器堆时，同时写入 RegCache。后续指令如果需要该数据，可以从 RegCache 快速读取，而不必竞争寄存器堆有限的读端口。这就像在仓库旁边开了一家便利店——常用货物就近取，不用每次都跑总仓。
+对于整数操作数，香山引入了 **RegCache（寄存器缓存）**。写回数据在经过 BypassNetwork 时同时写入 RegCache（bypass 级别，1 拍延迟），后续指令可以从 RegCache 快速读取，不必竞争寄存器堆有限的读端口：
+
+```scala
+// BypassNetwork.scala — bypass 数据写回 RegCache
+io.toDataPath.zipWithIndex.foreach{ case (x, i) => 
+  x.wen  := bypassIntWenVec(i)     // RegCache 写使能
+  x.data := bypassRCDataVec(i)     // RegCache 写数据
+  x.tag.foreach(_ := bypassTagVec(i))
+}
+```
+
+这就像在仓库旁边开了一家便利店——常用货物就近取，不用每次都跑总仓。
 
 **策略三：Bypass 数据门控**
 
-Bypass 数据使用 <code>**RegEnable**</code>（带使能的寄存器）而非简单的 <code>**RegNext**</code>，只有当写回有效时才锁存数据。对于 I2F/F2I 等跨域旁路，则使用 <code>**RegNext**</code> 确保时序。这种差异化处理避免了不必要的寄存器翻转，节省了动态功耗。
+Bypass 数据使用 RegEnable（带使能的寄存器）而非简单的 RegNext，只有当写回有效时才锁存数据。对于 I2F/F2I 等跨域旁路，则使用 RegNext 确保时序。这种差异化处理避免了不必要的寄存器翻转，节省了动态功耗：
+
+```scala
+// BypassNetwork.scala
+if (x.bits.params.needDataFromI2F || x.bits.params.needDataFromF2I)
+  ZeroExt(RegNext(x.bits.data), RegDataMaxWidth)          // 跨域：无条件打拍
+else
+  ZeroExt(RegEnable(x.bits.data, x.valid), RegDataMaxWidth) // 同域：条件打拍
+```
 
 ***
 
@@ -231,11 +426,13 @@ Bypass 数据使用 <code>**RegEnable**</code>（带使能的寄存器）而非�
 ## <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">✅</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> 核心要点总结</font>
 
 * **为什么需要旁路**：不经过寄存器堆，让执行单元的结果直达下游，消除数据依赖延迟
-* **七种数据来源**：zero / forward / bypass / bypass2 / imm / regcache / v0 / reg——根据数据何时就绪选择最合适的通道
-* **三级旁路**：Forward（当拍）→ Bypass（1 拍）→ Bypass2（2 拍），对应不同的时序场景；跨域旁路（I2F、F2I、VF2Int）需要额外延迟
-* **时序优化**：匹配前移到 IQ 阶段（以 exuSources 传递）、RegCache 减少读端口竞争、差异化门控节省功耗
+* **八种数据来源**：zero / forward / bypass / bypass2 / imm / v0 / regcache / reg——根据数据何时就绪选择最合适的通道，每个源操作数在任意时刻只有一种来源有效（DataSource one-hot 编码）
+* **三级旁路**：Forward（当拍）→ Bypass（1 拍）→ Bypass2（2 拍），对应不同的时序场景；跨域旁路（I2F、F2I 用 RegNext，VF→VF/Mem 用 Bypass2）需要额外延迟
+* **与 DataPath 协作**：5 类 RFReadArbiter 仲裁读端口、5 类 WBCollideChecker 检查写回冲突、RegCache 缓存整数数据减少读端口竞争
+* **时序优化**：匹配前移到 IQ 阶段（以 exuSources 传递）、RegCache 减少读端口竞争、差异化门控（RegEnable vs RegNext）节省功耗
 
-**核心原则**：Bypass Network 的设计哲学是\*\*"让数据走最短的路径"**——数据刚产生就送走，能不经过寄存器堆就不经过。而时序优化的核心是**"把计算前移、把选择简化"\*\*——复杂的匹配逻辑交给 IQ，Bypass Network 只做轻量的 Mux 选择。
+核心原则：Bypass Network 的设计哲学是\*\*"让数据走最短的路径"**——数据刚产生就送走，能不经过寄存器堆就不经过。而时序优化的核心是**"把计算前移、把选择简化"\*\*——复杂的匹配逻辑交给 IQ，Bypass Network 只做轻量的 Mux 选择。
 
 
-> 更新: 2026-06-01 16:06:14  
+> 更新: 2026-07-01 16:37:51  
+> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/ufmf4kq3vmz15du4>
