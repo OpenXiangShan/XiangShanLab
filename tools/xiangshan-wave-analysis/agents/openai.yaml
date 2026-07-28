@@ -1,0 +1,4 @@
+interface:
+  display_name: "XiangShan 波形分析"
+  short_description: "系统分析香山昆明湖前端后端访存Cache与MMU波形"
+  default_prompt: "使用 $xiangshan-wave-analysis 分析香山波形、反汇编、日志与 Chisel 源码，定位前端、后端、访存或 Cache bug。"

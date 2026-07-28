@@ -1,0 +1,4 @@
+interface:
+  display_name: "XiangShan Bug Analysis"
+  short_description: "Analyze XiangShan bug waveforms across frontend/backend/memory"
+  default_prompt: "Use $xiangshan-bug-analysis to trace a XiangShan bug from waveform, log, and disassembly to a source-backed root cause."
