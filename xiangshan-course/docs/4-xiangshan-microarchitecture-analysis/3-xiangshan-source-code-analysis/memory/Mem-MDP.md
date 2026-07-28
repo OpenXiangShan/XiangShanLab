@@ -1,506 +1,3 @@
-# XiangShan KunMingHu v3 MDP 代码分析
-
-## 1. Scope
-
-- 使用的 skill：`tools/analyze-xiangshan-kunminghu`
-- 分析对象：`/nfs/home/yanyusong/mdp-kmhv3/XiangShan`
-- 分析源码 commit：`055d8ad9e56b0b618f2d549a97f3a028986b4849`
-- 主要源码根：`src/main/scala/xiangshan`
-- 主要模块：`SSIT`、`LFST`、`WaitTable`、`MemCtrl`、`DispatchLFSTIO`、`LoadQueueRAW`、`VirtualStoreQueue`、`NewStoreQueue`、`NewLoadUnit`
-- 子系统上下文：backend decode/rename/dispatch、mem LSQ、load/store pipeline、CSR custom control
-- weekly sync 状态：已按 skill 执行 `tools/analyze-xiangshan-kunminghu/scripts/weekly_sync.py`。结果显示 `/nfs/home/yuanmiaomiao/XiangShanLab` 存在但不是 git 仓库，`XiangShan-Design-Doc` 缺失，课程深度解析目录存在但 git status 受 dubious ownership 限制。因此本文的设计文档上下文只使用 skill references，所有行为结论以 KunMingHu v3 本地源码为准。
-- paper context：源码在 `StoreSet.scala` 中直接引用 Chrysos/Emer 的 Store Sets 论文；`WaitTable.scala` 引用 Alpha 21264。当前环境未暴露 `paper-search-agent-mcp` 工具，因此没有额外 MCP 检索结果，本文明确区分“论文原则”和“源码实际行为”。
-
-结论先行：KunMingHu v3 的有效 MDP 路径是 Store Set 风格的 load violation predictor，由 `SSIT + LFST` 组成。`WaitTable` 源码仍存在，但 `MemCtrl` 中没有实例化，`waitTable2Rename` 被接成 `DontCare`，因此当前有效路径不是 Alpha 21264-like Load Wait Table。
-
-## 2. 关键源码证据
-
-| 主题 | 文件:行号 | 核心代码 | 证明 |
-| --- | --- | --- | --- |
-| MDP 参数 | `Parameters.scala:818-831` | `WaitTableSize = 1024`，`LFSTSize = 64`，`StoreSetEnable = true` | Store Set 表大小、SSID 宽度和启用状态 |
-| uop MDP 字段 | `Bundle.scala:105-113` | `storeSetHit`、`waitForRobIdx`、`loadWaitBit`、`loadWaitStrict`、`ssid` | MDP 预测结果随 uop 流动 |
-| MemCtrl 实例化 | `MemCtrl.scala:14-30` | `private val ssit = Module(new SSIT)`，`private val lfst = Module(new LFST)`，`waitTable2Rename := DontCare` | SSIT/LFST 有效，WaitTable 无效 |
-| Decode 到 SSIT | `CtrlBlock.scala:640-646`，`MemCtrl.scala:19-22` | `mdpFlodPcVec(i) := decode.io.out(i).bits.foldpc`，`ssit.io.raddr(i) := io.mdpFlodPcVec(i)` | folded PC 是 SSIT lookup index |
-| Rename 写入 uop | `Rename.scala:453-459` | `storeSetHit := io.ssit(i).valid`，`loadWaitStrict := io.ssit(i).strict`，`ssid := io.ssit(i).ssid` | SSIT 结果进入 uop |
-| Dispatch 查 LFST | `Dispatch.scala:759-769` | `io.lfst.req(i).valid := ... storeSetHit`，`loadWaitBit := io.lfst.resp(i).bits.shouldWait` | LFST 覆盖最终 wait 信息 |
-| LFST 查找规则 | `StoreSet.scala:383-412` | `shouldWait := (valid(ssid) || hitInDispatchBundle) ...` | store set 当前有未发射 store 时让 load 等待 |
-| SSIT 训练 | `StoreSet.scala:170-306` | 读取 load/store PC 的 SSIT 项，再按四种情况更新 | RAW violation 训练 Store Set |
-| RAW 违例训练源 | `LoadQueueRAW.scala:377-396` | `io.mdpTrain := Mux1H(oldestOH, allRedirect)` | 违例 redirect 同时训练 MDP |
-| PC 还原和 fold | `CtrlBlock.scala:217-238` | `XORFold((pcMem.io.rdata(...) + offset)(VAddrBits - 1, 1), MemPredPCWidth)` | 训练端 load/store PC 变成 SSIT index |
-| StoreUnit 释放 LFST | `NewStoreUnit.scala:415`，`NewStoreUnit.scala:515-518` | `updateLFST.valid`，`bits.robIdx/ssid/storeSetHit` | store 地址发射后清除 LFST 依赖 |
-| StoreQueue 消费 MDP | `VirtualStoreQueue.scala:229-245`，`NewStoreQueue.scala:509-543`，`NewStoreQueue.scala:620-621` | 非 strict 查 `waitForRobIdx`，strict 查所有更老 store 地址 | load 是否 replay/等待的直接条件 |
-| Load replay cause | `NewLoadUnit.scala:1077-1084` | `cause(C_MA) := troubleMaker && uop.storeSetHit && sqAddrInvalid` | MDP 等待未满足时触发 memory address replay |
-| CSR 控制 | `CSRCustom.scala:99-104`，`NewCSR.scala:1437-1441` | `LVPRED_DISABLE`、`NO_SPEC_LOAD`、`STORESET_WAIT_STORE`、`LVPRED_TIMEOUT` | CSR 控制 MDP 开关、保守模式和清空周期 |
-
-## 3. Theory-to-Code Mapping
-
-| 理论概念 | 课程/理论语义 | 代码实体 | 具体信号/状态 | KunMingHu v3 实现方式 | 与教科书模型差异 |
-| --- | --- | --- | --- | --- | --- |
-| RAW memory dependence | younger load 可能越过 older store 错误执行 | `LoadQueueRAW`、`SSIT`、`LFST` | `mdpTrain`、`storeSetHit`、`waitForRobIdx` | 先允许 load 推测执行，违例后训练 predictor，下次通过 LFST 等待相关 store | 不是静态阻塞所有 load，而是按 PC 历史学习 |
-| Scoreboard-like readiness | 动态调度需要判断依赖是否 ready | `NewStoreQueue` forward path | `addrInvalid.valid`、`loadWaitStrict` | load 查询 SQ 时，如果预测依赖 store 地址未 ready，则 replay | 依赖不是寄存器 ready bit，而是 store address readiness |
-| ROB precise recovery | 乱序执行需精确回滚 | `Redirect`、`RobPtr` | `rollbackLqWb.bits.robIdx`、`needFlush` | RAW 违例产生 redirect，flush 错误 load 及更年轻指令 | MDP training 绑定在 redirect 元数据上 |
-| Speculation | 为性能允许 load 越过 store | `loadWaitBit`、`no_spec_load` | `StoreSetEnable`、`LVPRED_DISABLE`、`NO_SPEC_LOAD` | 默认只对预测危险的 load 加等待；CSR 可关闭推测 load | 预测器是性能/正确性折中，不是架构可见状态 |
-| Superscalar multi-width | 多条指令并行 decode/rename/dispatch | `DecodeWidth`、`RenameWidth` | `Vec(RenameWidth, ...)` | SSIT 和 LFST 读请求都是按宽度向量化 | 同一 dispatch bundle 内的 store-load 也要处理 |
-
-## 4. 论文原则和有效代码
-
-`StoreSet.scala:19-22` 写明实现受 Store Sets 论文启发。Store Sets 的原则是：当某个 load 和 store 曾经发生 memory order violation，把它们归入同一个 store set；后续 load 只等待该 set 中最近的 store，而不是保守等待所有 store。
-
-KunMingHu v3 的对应实现：
-
-- `SSIT` 负责 PC 到 `ssid` 的映射和 strict 位。
-- `LFST` 负责 `ssid` 到当前 inflight store ROB index 的映射。
-- `LoadQueueRAW` 发现真实 RAW 违例后训练 `SSIT`。
-
-`WaitTable.scala:19-21` 引用 Alpha 21264，代码实现了 2-bit counter wait table。但由于 `MemCtrl.scala:28-30` 没有实例化并连接 WaitTable，本文把它归类为非有效路径。
-
-## 5. Microarchitecture Parameters
-
-| 参数 | 定义位置 | 值/表达式 | 影响 |
-| --- | --- | --- | --- |
-| `LoadDependencyWidth` | `Parameters.scala:181` | `2` | issue/wakeup 侧 load dependency metadata 宽度 |
-| `ResetTimeMax2Pow` | `Parameters.scala:819` | `20` | predictor reset counter 最大位宽 |
-| `ResetTimeMin2Pow` | `Parameters.scala:820` | `14` | CSR timeout 选择窗口低位 |
-| `WaitTableSize` | `Parameters.scala:822` | `1024` | WaitTable/SSIT index 空间 |
-| `MemPredPCWidth` | `Parameters.scala:823` | `log2Up(WaitTableSize)` | folded PC 宽度 |
-| `LWTUse2BitCounter` | `Parameters.scala:824` | `true` | WaitTable 读 counter 高位；当前非有效路径 |
-| `SSITSize` | `Parameters.scala:826` | `WaitTableSize` | SSIT 表项数 |
-| `LFSTSize` | `Parameters.scala:827` | `64` | store set 数量 |
-| `SSIDWidth` | `Parameters.scala:828` | `log2Up(LFSTSize)` | `ssid` 字段宽度 |
-| `LFSTWidth` | `Parameters.scala:829` | `2` | 每个 store set 可记录的 inflight store 数 |
-| `StoreSetEnable` | `Parameters.scala:830` | `true` | Dispatch 使用 LFST 覆盖 `loadWaitBit` |
-| `LFSTEnable` | `Parameters.scala:831` | `true` | LFST 路径保留参数 |
-
-## 6. 模块边界和接口
-
-### 6.1 `MemCtrl`
-
-`MemCtrl` 是 backend 控制块内的 MDP 容器。它拥有 `SSIT` 和 `LFST`，并把来自 decode/redirect/store issue/CSR/RAW training 的信号组织起来：
-
-```scala
-private val ssit = Module(new SSIT)
-private val lfst = Module(new LFST)
-ssit.io.update <> RegNext(io.memPredUpdate)
-...
-lfst.io.redirect <> RegNext(io.redirect)
-lfst.io.storeIssue <> RegNext(io.stIn)
-```
-
-证据：`MemCtrl.scala:14-25`。
-
-它没有实例化 WaitTable：
-
-```scala
-//  io.waitTable2Rename := waittable.io.rdata
-io.waitTable2Rename := DontCare
-io.ssit2Rename := ssit.io.rdata
-```
-
-证据：`MemCtrl.scala:28-30`。
-
-### 6.2 `SSIT`
-
-`SSIT` 的输入包括 decode 读端口、训练更新、CSR 控制；输出给 rename：
-
-```scala
-val ren = Vec(DecodeWidth, Input(Bool()))
-val raddr = Vec(DecodeWidth, Input(UInt(MemPredPCWidth.W)))
-val rdata = Vec(RenameWidth, Output(new SSITEntry))
-val update = Input(new MemPredUpdateReq)
-val csrCtrl = Input(new CustomCSRCtrlIO)
-```
-
-证据：`StoreSet.scala:54-63`。
-
-### 6.3 `LFST`
-
-`LFST` 接收 dispatch 查询、store issue 释放、redirect 恢复和 CSR 控制：
-
-```scala
-val redirect = Input(Valid(new Redirect))
-val dispatch = Flipped(new DispatchLFSTIO)
-val storeIssue = Vec(backendParams.StaExuCnt, Flipped(Valid(new StoreUnitToLFST)))
-val csrCtrl = Input(new CustomCSRCtrlIO)
-```
-
-证据：`StoreSet.scala:366-373`。
-
-### 6.4 Load/Store queue 侧接口
-
-Load pipeline 发出的 store forward request 携带 MDP 字段：
-
-```scala
-storeForwardReq.loadWaitBit := uop.loadWaitBit
-storeForwardReq.loadWaitStrict := uop.loadWaitStrict
-storeForwardReq.ssid := uop.ssid
-storeForwardReq.storeSetHit := uop.storeSetHit
-storeForwardReq.waitForRobIdx := uop.waitForRobIdx
-```
-
-证据：`NewLoadUnit.scala:355-363`。
-
-## 7. 为什么 MDP 存在
-
-没有 MDP 时，处理器有两个极端选择：
-
-1. 允许所有 load 越过更老 store：性能好，但一旦 store 地址后来证明与 load 地址冲突，就要 redirect/replay。
-2. 让所有 load 等待所有更老 store 地址：正确但过度保守，损害乱序执行吞吐。
-
-KunMingHu v3 的 MDP 走中间路线：默认推测，遇到 RAW 违例后通过 Store Set 记录“哪些 PC 组合曾经冲突”。后续只让相关 load 等待预测相关的 store；如果同一 set 反复冲突，则升级到 strict wait，等待所有更老 store 地址。
-
-## 8. 有效动态路径
-
-### 8.1 Lookup path
-
-1. Decode 输出 folded PC：`CtrlBlock.scala:640-646`。
-2. `MemCtrl` 使用 folded PC 读 SSIT：`MemCtrl.scala:19-22`。
-3. Rename 把 SSIT 的 `valid/ssid/strict` 写入 uop：`Rename.scala:453-456`。
-4. Dispatch 对 `storeSetHit` 的 uop 查询 LFST：`Dispatch.scala:759-762`。
-5. LFST 输出 `shouldWait` 和 `robIdx`：`StoreSet.scala:399-408`。
-6. Dispatch 覆盖 uop 的 `loadWaitBit/waitForRobIdx/loadWaitStrict`：`Dispatch.scala:764-769`。
-7. Backend 将 MDP 字段送入 memory exu：`Backend.scala:483-492`。
-8. LoadUnit 转发给 StoreQueue：`NewLoadUnit.scala:355-363`。
-9. StoreQueue 返回 `addrInvalid`，LoadUnit 生成 `C_MA` replay cause：`NewStoreQueue.scala:620-621`、`NewLoadUnit.scala:1083`。
-
-### 8.2 Training path
-
-1. `LoadQueueRAW` 发现 store-load RAW 违例，生成 redirect：`LoadQueueRAW.scala:377-391`。
-2. 最老 redirect 同时作为 `mdpTrain`：`LoadQueueRAW.scala:395-396`。
-3. `MemBlock` 和 `XSCore` 把 `mdpTrain` 接到 backend：`MemBlock.scala:1071`、`XSCore.scala:147-148`。
-4. `CtrlBlock` 读取 FTQ PC memory，加 offset 还原 load/store PC，再 XOR fold：`CtrlBlock.scala:217-238`。
-5. `MemCtrl` 将 `memPredUpdate` 打一拍后送入 SSIT：`MemCtrl.scala:16`。
-6. `SSIT` 根据 load/store 两端旧状态更新 `ssid` 和 strict 位：`StoreSet.scala:170-306`。
-
-### 8.3 Release/recovery path
-
-1. StoreUnit 地址发射成功后产生 `updateLFST`：`NewStoreUnit.scala:415`、`NewStoreUnit.scala:515-518`。
-2. `MemBlock` 传到 `backend.io.mem.stIn`：`MemBlock.scala:1016-1018`、`XSCore.scala:143-145`。
-3. LFST 清除匹配 `ssid/robIdx` 的有效项：`StoreSet.scala:414-422`。
-4. redirect 时 LFST 清除被 flush 的 store 项并恢复 `allocPtr`：`StoreSet.scala:439-459`。
-
-## 9. Index 和地址计算
-
-| index/address | 定义位置 | 输入 | 计算 | 宽度/范围 | 消费者 |
-| --- | --- | --- | --- | --- | --- |
-| SSIT lookup index | `CtrlBlock.scala:640-646`、`MemCtrl.scala:19-22` | `decode.io.out(i).bits.foldpc` | 前端/译码侧已形成的 folded PC | `MemPredPCWidth`，默认 10 bit | SSIT `raddr` |
-| SSIT train load PC | `CtrlBlock.scala:217-228` | load `ftqIdx` + `ftqOffset` | `(pcMem.rdata + offset)(VAddrBits-1,1)` 后 `XORFold(..., MemPredPCWidth)` | 默认 10 bit | `MemPredUpdateReq.ldpc/waddr` |
-| SSIT train store PC | `CtrlBlock.scala:230-236` | store `stFtqIdx` + `stFtqOffset` | 同 load 训练路径 | 默认 10 bit | `MemPredUpdateReq.stpc` |
-| SSID allocation | `StoreSet.scala:211-215` | `ldpc/stpc` | `XORFold(pc, SSIDWidth)` 后取较小者 | `SSIDWidth = log2Up(64)` | SSIT data entry |
-| LFST lookup index | `StoreSet.scala:399-404` | dispatch req `ssid` | 直接用 `ssid` 索引 `validVec/robIdxVec/allocPtr` | 0 到 63 | LFST response |
-| LFST alloc slot | `StoreSet.scala:424-437` | dispatch store `ssid` | `wptr = allocPtr(waddr)`，写后 `allocPtr(waddr) + 1.U` | `LFSTWidth = 2` 的环形槽 | `validVec(ssid)(wptr)` |
-| precise MDP store ptr | `VirtualStoreQueue.scala:234-245` | `waitForRobIdx` | 在 virtual SQ 中按 ROB index 匹配，再 `ParallelPriorityEncoder` | StoreQueue entry range | physical SQ forward |
-
-重要冲突点：
-
-- SSIT update 复用 decode read port。源码注释说明 `io.update.valid` 时会 redirect frontend，因此 decode 不需要同周期读 SSIT（`StoreSet.scala:69-77`、`StoreSet.scala:176-187`）。
-- SSIT 两个写端口若同地址，store write port 被关闭，避免同表项双写（`StoreSet.scala:308-315`）。
-- LFST 每个 `ssid` 只有 `LFSTWidth = 2` 个槽。新 store dispatch 覆盖仍有效槽时，`LFST_Overflow_Count` 累加（`StoreSet.scala:424-437`、`StoreSet.scala:461`）。
-
-## 10. 核心算法
-
-### 10.1 SSIT update algorithm
-
-Owner：`SSIT`
-
-源码：`StoreSet.scala:170-306`
-
-原则：当 RAW violation 发生，读取 load PC 和 store PC 的旧 SSIT 状态，再合并或分配 store set。
-
-核心伪代码：
-
-```text
-if !loadAssigned && !storeAssigned:
-  ssid = min(hash(ldpc), hash(stpc))
-  SSIT[ldpc] = {valid, ssid, strict=false}
-  SSIT[stpc] = {valid, ssid, strict=false}
-else if loadAssigned && !storeAssigned:
-  SSIT[stpc] = {valid, hash(ldpc), strict=false}
-else if !loadAssigned && storeAssigned:
-  SSIT[ldpc] = {valid, hash(stpc), strict=false}
-else:
-  winner = min(loadOldSSID, storeOldSSID)
-  SSIT[ldpc] = {valid, winner, strict=false}
-  SSIT[stpc] = {valid, winner, strict=false}
-  if loadOldSSID == storeOldSSID:
-    SSIT[ldpc].strict = true
-```
-
-注意：源码在 `b10` 和 `b01` 分支里使用 `s2_ldSsidAllocate` / `s2_stSsidAllocate`，而不是直接复用 `s2_loadOldSSID` / `s2_storeOldSSID`（`StoreSet.scala:264-283`）。因此本文只描述代码实际行为，不把它强行解释成论文原文的理想版本。
-
-同时请求场景：一次 update 同时需要读 load/store 两个 PC；SSIT 为此保留两个 read ports（`SSIT_UPDATE_LOAD_READ_PORT = 0`、`SSIT_UPDATE_STORE_READ_PORT = 1`）。若 load/store PC 折叠后同地址，后面的 store write 被 mask 掉，load 侧写入胜出（`StoreSet.scala:308-315`）。
-
-### 10.2 LFST lookup/update algorithm
-
-Owner：`LFST`
-
-源码：`StoreSet.scala:383-461`
-
-查找规则：
-
-```scala
-shouldWait :=
-  ((valid(ssid) || hitInDispatchBundle) &&
-   req.valid &&
-   (!isstore || csrCtrl.storeset_wait_store)) &&
-  !csrCtrl.lvpred_disable ||
-  csrCtrl.no_spec_load
-```
-
-行为：
-
-- 如果同一 `ssid` 已有未发射 store，后续 load 等待该 store。
-- 如果同一 dispatch bundle 内前面 slot 有相同 `ssid` 的 store，即使 LFST 还没写，也让后面的 load 等待。
-- 默认 store 本身不等待，除非 CSR `storeset_wait_store` 置位。
-- `no_spec_load` 强制保守等待。
-
-更新/释放：
-
-- store dispatch 时写入 `validVec(ssid)(allocPtr)` 和 `robIdxVec`，`allocPtr` 自增。
-- store 地址发射后，按 `ssid/robIdx` 清除对应 valid。
-- redirect 时，所有 `robIdx.needFlush(io.redirect)` 的项清除。
-
-### 10.3 StoreQueue MDP wait algorithm
-
-Owner：`VirtualStoreQueue` + `NewStoreQueue` forward module
-
-源码：`VirtualStoreQueue.scala:229-245`、`NewStoreQueue.scala:489-543`、`NewStoreQueue.scala:620-621`
-
-非 strict：
-
-- 用 `waitForRobIdx` 在 virtual store queue 中找对应 store。
-- 如果对应 physical SQ entry 地址仍 invalid，返回 `addrInvalid.valid`。
-- load replay，等待 store 地址产生。
-
-Strict：
-
-- `s1StrictMdpWait = s1LoadWaitStrict && (s1HasAddrInvalidVec.orR || s1LoadOutOfRange)`。
-- 只要任意更老 store 地址未 ready，load 就等待。
-
-这正是 Store Set 的二级保护：普通情况下只等一个预测 store；同一 set 反复违例后改为等待所有 older store 地址。
-
-## 11. 状态和存储结构
-
-| 结构 | owner | reset/初始值 | search/read | update | release/clear | 冲突行为 |
-| --- | --- | --- | --- | --- | --- | --- |
-| SSIT `valid_array` | `SSIT` | flush 状态逐项写 false | decode 读 folded PC；update 复用读端口 | RAW violation 后写 load/store PC 项 | timeout flush 清 valid | update 同地址时 store write port 被关闭 |
-| SSIT `data_array` | `SSIT` | data 默认 0，valid 决定有效性 | 同 valid array | 写 `ssid/strict` | valid false 后语义无效 | 同地址双写时 store write port 被关闭 |
-| SSIT reset FSM | `SSIT` | `state = s_flush` | 无 | `s_idle` 等 timeout | `s_flush` 逐项清 valid | flush 期间占用 misc write port |
-| LFST `validVec` | `LFST` | 全 false | dispatch 按 `ssid` 查询 | store dispatch set true | store issue 或 redirect clear | 同 `ssid` 超过 2 个 store 会覆盖并计 overflow |
-| LFST `robIdxVec` | `LFST` | 未显式 reset，valid 控制语义 | dispatch 返回 last store robIdx | store dispatch 写 robIdx | valid clear 后语义无效 | `allocPtr-1` 返回最近写入槽 |
-| LFST `allocPtr` | `LFST` | 全 0 | dispatch response 读取 `allocPtr-1` | store dispatch 自增 | redirect 后行为模型式恢复 | 多 dispatch store 同一 ssid 时按 loop 生成逻辑，需注意写冲突综合语义 |
-| Virtual SQ MDP hit vec | `VirtualStoreQueue` | 无持久状态，s1/s2 寄存 | 按 `waitForRobIdx` CAM | 无 | request valid 控制寄存 | 多 entry 命中时 `ParallelPriorityEncoder` 选一个 |
-
-## 12. Pipeline stage 分析
-
-| 阶段 | 主要代码 | 工作 | 关键 payload/control | stall/flush/replay 行为 | 输出 |
-| --- | --- | --- | --- | --- | --- |
-| Decode/SSIT read | `CtrlBlock.scala:640-646`、`MemCtrl.scala:19-22` | 发送 folded PC 到 SSIT | `mdpFlodPcVecVld`、`mdpFlodPcVec` | decode fire 才读 | SSIT rdata 下一阶段给 rename |
-| Rename | `Rename.scala:453-459` | 将 SSIT 结果写入 uop | `storeSetHit`、`ssid`、`loadWaitStrict` | redirect 由 rename/ctrl block 主路径处理 | uop 到 dispatch |
-| Dispatch/LFST read+update | `Dispatch.scala:759-769`、`StoreSet.scala:383-437` | 查当前 store set 是否有 older store；store dispatch 写 LFST | `LFSTReq`、`LFSTResp` | bundle 内 store-load 同 cycle 特判 | `loadWaitBit/waitForRobIdx` |
-| Issue to Mem | `Backend.scala:483-492` | 将 MDP 字段送入 mem exu | `EnableMdp` gate | 可用 Constantin 关 MDP | `ExuInput` |
-| Load s0 forward request | `NewLoadUnit.scala:355-363` | load 发 StoreQueue forward 请求时携带 MDP | `StoreForwardReqS0` | load pipeline kill/redirect 由 LoadUnit 控制 | SQ forward query |
-| StoreQueue s1/s2 | `NewStoreQueue.scala:390-543` | 计算 strict/non-strict MDP wait 和 forward 命中 | `s1LoadWaitStrict`、`s2MdpQueryResp` | 地址未 ready 形成 `addrInvalid` | forward resp |
-| Load replay decision | `NewLoadUnit.scala:1077-1084` | 根据 `sqAddrInvalid` 设置 replay cause | `cause(C_MA)` | replay/fast replay | replay queue / writeback control |
-| RAW train | `LoadQueueRAW.scala:377-396`、`CtrlBlock.scala:217-238` | 违例 redirect 训练 SSIT | `mdpTrain`、`MemPredUpdateReq` | redirect flush wrong-path load | SSIT update |
-
-## 13. Control path rationale
-
-| 控制信号 | producer | consumer | 为什么存在 | 场景 |
-| --- | --- | --- | --- | --- |
-| `storeSetHit` | Rename from SSIT | Dispatch、LoadUnit、StoreUnit | 标记 uop 是否属于已学习 store set | 某 load PC 曾违例，后续 rename 后需要查 LFST |
-| `loadWaitBit` | Dispatch from LFST | StoreQueue/NewLoadUnit | 表示当前 load 需要等待预测 store 地址 | LFST 中同 ssid 有 older store 未 issue |
-| `waitForRobIdx` | LFST | VirtualStoreQueue | 精确指出非 strict 要等哪个 store | younger load 只等历史相关 older store |
-| `loadWaitStrict` | SSIT + LFST | StoreQueue | 多次同 set 违例后保守等待所有 older stores | 同一 load/store set 再次违例，单点等待不够 |
-| `mdpTrain.valid` | LoadQueueRAW | CtrlBlock/SSIT | 真实 RAW 违例后训练预测器 | store 地址发现 younger load 已错误执行 |
-| `updateLFST.valid` | StoreUnit | LFST | store 地址已算出，可释放等待它的 load | store TLB hit 且合法 issue |
-| `lvpred_disable` | CSR | SSIT/LFST/WaitTable | 调试或性能实验时关闭 predictor | 怀疑 MDP 导致错误 replay 行为 |
-| `no_spec_load` | CSR | LFST/WaitTable | 强制无推测 load | 需要验证 memory ordering 正确性 |
-
-## 14. Data path
-
-MDP data path 可分为三个闭环：
-
-1. 预测信息随 uop 前进：`foldpc -> SSIT(valid, ssid, strict) -> uop.storeSetHit/ssid/loadWaitStrict -> LFST(waitForRobIdx/loadWaitBit) -> LoadUnit -> StoreQueue`。
-2. store 生命周期反馈：`dispatch store -> LFST validVec/robIdxVec set -> StoreUnit address issue -> updateLFST -> LFST clear`。
-3. 违例训练反馈：`LoadQueueRAW violation -> Redirect(ftq/offset + stFtq/offset) -> CtrlBlock PC restore and XORFold -> SSIT update`。
-
-这些 data path 都是微架构状态，不改变架构寄存器或内存可见结果；错误预测只导致 replay/redirect。
-
-## 15. 异常、debug、privilege
-
-MDP 本身不产生架构异常；它产生 replay/redirect 条件。真实 RAW violation 使用 `Redirect` 让 backend/frontend 回滚，而不是提交异常。LoadUnit 中 `cause(C_MA)` 是 replay cause，不是 page fault/access fault。TLB page fault/access fault/guest page fault 等异常仍由 LoadUnit/TLB 路径处理，优先级在 LoadUnit replay/exception 逻辑中统一决策；本文仅覆盖 MDP 相关 memory-address replay。
-
-## 16. CSR 控制
-
-`Slvpredctl` 地址为 `0x5C2`（`CSRConst.scala:22-27`）。新 CSR 框架字段：
-
-```scala
-val LVPRED_TIMEOUT          = SlvpredCtlTimeOut(8, 4)
-val STORESET_NO_FAST_WAKEUP = RW(3)
-val STORESET_WAIT_STORE     = RW(2)
-val NO_SPEC_LOAD            = RW(1)
-val LVPRED_DISABLE          = RW(0)
-```
-
-证据：`CSRCustom.scala:99-104`。
-
-CSR 输出连接到 custom control：
-
-```scala
-io.status.custom.lvpred_disable          := slvpredctl.regOut.LVPRED_DISABLE.asBool
-io.status.custom.no_spec_load            := slvpredctl.regOut.NO_SPEC_LOAD.asBool
-io.status.custom.storeset_wait_store     := slvpredctl.regOut.STORESET_WAIT_STORE.asBool
-io.status.custom.storeset_no_fast_wakeup := slvpredctl.regOut.STORESET_NO_FAST_WAKEUP.asBool
-io.status.custom.lvpred_timeout          := slvpredctl.regOut.LVPRED_TIMEOUT.asUInt
-```
-
-证据：`NewCSR.scala:1437-1441`。
-
-## 17. Diagrams
-
-### 17.1 Data-path diagram
-
-```mermaid
-flowchart LR
-  Decode["Decode: foldpc"] --> MemCtrl["MemCtrl"]
-  MemCtrl --> SSIT["SSIT valid/ssid/strict"]
-  SSIT --> Rename["Rename uop MDP fields"]
-  Rename --> Dispatch["Dispatch LFST req"]
-  Dispatch --> LFST["LFST ssid -> wait robIdx"]
-  LFST --> Dispatch
-  Dispatch --> Issue["Issue/Backend toMem"]
-  Issue --> LoadUnit["NewLoadUnit forward req"]
-  LoadUnit --> StoreQueue["NewStoreQueue / VirtualStoreQueue"]
-  StoreQueue --> LoadUnit
-  LoadUnit --> Replay["C_MA replay / fast replay"]
-  LoadQueueRAW["LoadQueueRAW RAW violation"] --> CtrlBlock["CtrlBlock PC restore + XORFold"]
-  CtrlBlock --> SSIT
-  StoreUnit["NewStoreUnit updateLFST"] --> LFST
-```
-
-### 17.2 Module-interface diagram
-
-```mermaid
-flowchart LR
-  CSR["CSR custom ctrl"] --> MemCtrl
-  Decode["Decode foldpc Vec(DecodeWidth)"] --> MemCtrl
-  MemTrain["MemBlock/LSQ mdpTrain"] --> MemCtrl
-  StoreIssue["StoreUnit updateLFST Vec(StaExuCnt)"] --> MemCtrl
-  Redirect["Backend redirect"] --> MemCtrl
-  MemCtrl --> Rename["ssit2Rename / waitTable2Rename"]
-  Dispatch <--> MemCtrl
-  MemCtrl --> Dispatch
-```
-
-### 17.3 SSIT reset FSM
-
-```mermaid
-stateDiagram-v2
-  [*] --> s_flush
-  s_flush --> s_flush: resetStepCounter != SSITSize-1
-  s_flush --> s_idle: resetStepCounter == SSITSize-1
-  s_idle --> s_flush: timeout selected by lvpred_timeout
-  s_idle --> s_idle: no timeout
-```
-
-### 17.4 Timing: SSIT lookup to LFST wait
-
-```waveform-draw
-{
-  "signal": [
-    { "name": "clk", "wave": "p......" },
-    { "name": "decode.fire", "wave": "010...." },
-    { "name": "ssit.ren", "wave": "010...." },
-    { "name": "ssit.raddr", "wave": "x=xxxxx", "data": ["foldpc"] },
-    { "name": "rename.ssit.valid", "wave": "0010..." },
-    { "name": "dispatch.lfst.req.valid", "wave": "00010.." },
-    { "name": "lfst.resp.shouldWait", "wave": "00010.." },
-    { "name": "uop.loadWaitBit", "wave": "00010.." }
-  ],
-  "config": { "hscale": 1 }
-}
-```
-
-### 17.5 Timing: RAW violation training
-
-```waveform-draw
-{
-  "signal": [
-    { "name": "clk", "wave": "p......." },
-    { "name": "raw.rollback.valid", "wave": "010....." },
-    { "name": "mdpTrain.valid", "wave": "010....." },
-    { "name": "pcMem.ren", "wave": "010....." },
-    { "name": "memPredUpdate.valid", "wave": "0010...." },
-    { "name": "ssit.update.valid", "wave": "00010..." },
-    { "name": "ssit.wen", "wave": "000010.." }
-  ],
-  "config": { "hscale": 1 }
-}
-```
-
-## 18. 有效行为和非有效代码的差异
-
-- 有效：`SSIT + LFST` Store Set 路径。
-- 非有效：`WaitTable`。它实现了 2-bit counter LWT，并有 timeout reset，但 `MemCtrl` 没有实例化。
-- 保留接口：`Rename` 仍有 `waittable` 输入，`MemCtrlIO` 仍有 `waitTable2Rename` 输出，但当前为 `DontCare`。
-- 风险点：`WaitTable` 相关性能计数或 debug 语义不能代表当前 MDP 行为；调试 v3 MDP 时应看 `ssit_pred_dependence`、`storeset_load_wait`、`LFST_Overflow_Count` 等 Store Set 相关路径。
-
-## 19. 动态场景示例
-
-### 正常无冲突 load
-
-load PC 未命中 SSIT，`storeSetHit=false`。Dispatch 不产生有效 LFST wait，LoadUnit 正常访问 StoreQueue/DCache。若没有 SQ forward miss、TLB miss、DCache miss等原因，load 正常写回。
-
-### 首次 RAW 违例
-
-store 地址晚于 younger load 产生，`LoadQueueRAW` 发现地址和 mask 冲突，选择最老错误 load 生成 redirect，同时 `mdpTrain` 送回 backend。`CtrlBlock` 还原 load/store PC 并折叠成 `ldpc/stpc`，SSIT 为这对 PC 分配 `ssid`。下一次相同 PC 模式出现时，load 会命中 SSIT。
-
-### 后续预测等待
-
-store dispatch 时写 LFST；同 `ssid` 的 younger load dispatch 时查 LFST，拿到 `waitForRobIdx` 并置 `loadWaitBit`。LoadUnit 查询 StoreQueue，如果目标 store 地址还 invalid，`NewStoreQueue` 返回 `addrInvalid`，LoadUnit 触发 `C_MA` replay，避免再次发生真实 RAW violation。
-
-### strict wait
-
-如果 load/store 已属于同一个 `ssid` 仍再次发生违例，SSIT 把 load 项标记 strict。后续该 load 不只等 `waitForRobIdx`，而是等待所有更老 store 地址准备好。性能更保守，但减少复杂别名或多 store 场景下的反复违例。
-
-## 20. 结论
-
-KunMingHu v3 的 MDP 是一个有效连接在 backend 和 mem 之间的 Store Set predictor：
-
-- `SSIT` 学习“PC -> store set”的历史依赖关系。
-- `LFST` 追踪“store set -> 当前最近 store ROB index”的动态窗口状态。
-- `LoadQueueRAW` 用真实 RAW violation 训练 `SSIT`。
-- `StoreQueue` 和 `LoadUnit` 把预测结果落实为 load replay/等待。
-- CSR 可关闭 predictor 或进入无 speculative load 的保守模式。
-
-从当前 commit 看，`WaitTable` 只是保留代码，不是 KunMingHu v3 MDP 的有效执行路径。
-
-## 验证特别注意
-
-> 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。每个期望必须以当前 `kunminghu-v2` 有效 Chisel 为准。
-
-| Verification ID | 风险 / 不变量 | 定向激励 | 期望观察 | Checker / Coverage |
-| --- | --- | --- | --- | --- |
-| `H_SAME_INDEX_DIFF_TAG` | 不同 PC 的 SSIT/hash alias 形成错误依赖 | 构造 load/store PC 映射同 index、不同 tag/上下文 | alias 行为只产生可恢复的保守等待，不能破坏表端口；证据 [mem/mdp/StoreSet.scala:280-320](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/mem/mdp/StoreSet.scala#L280-L320) | Index/hash checker；false-positive/negative cross |
-| `C_SAME_ENTRY_RW` | SSIT 查询与 violation 训练同拍同 entry | dispatch lookup 同拍提交 store-load violation update | 读旧/读新/更新优先级与源码一致；证据 [mem/mdp/StoreSet.scala:300-320](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/mem/mdp/StoreSet.scala#L300-L320) | Storage conflict checker；training scoreboard |
-| `MDP_SET_MERGE` | 两个 store set 合并丢失成员或产生环形依赖 | 让已属不同 set 的 load/store 重复违例 | SSIT 统一到合法 set id，后续 lookup 得到一致依赖 | Store-set scoreboard；merge coverage |
-| `RESOURCE_CONTENTION` | LFST 有效项/分配槽耗尽仍覆盖活跃 store | 填满 LFST 后持续 dispatch 新 store | 分配、valid、latest-store 指针和 full 行为一致；证据 [mem/mdp/StoreSet.scala:328-390](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/mem/mdp/StoreSet.scala#L328-L390) | Occupancy/pointer checker；full/almost-full cover |
-| `I_WRAP_PTR` | LFST 环形 store 指针回绕破坏新旧关系 | 推进 store SQ/ROB 标识跨最大值并查询依赖 | 回绕后只等待真实未完成的最新 store，无 stale dependency | Pointer-age checker；wrap cross |
-| `F_REQ_AND_FLUSH` | redirect 后 LFST/WaitTable 保留错误路径依赖 | 训练或 dispatch store/load 同拍 redirect，随后复用相同 PC | 错误路径状态被清除或不可见；WaitTable 更新与查询符合源码；证据 [mem/mdp/WaitTable.scala:25-71](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/mem/mdp/WaitTable.scala#L25-L71) | Flush/replay checker；stale-dependency scoreboard |
-| `P_LIVELOCK_REPLAY_LOOP` | 重复 violation/等待预测导致 replay 活锁 | 同一 load-store 对连续违例并周期性释放 store | 训练最终稳定且 load 可完成，不形成永久不必要串行化 | Forward-progress checker；violation/replay-rate cover |
-| `PB_RECOVERY_THROUGHPUT` | 过度保守预测长期降低内存并行度 | 训练热点后切换到无冲突访存阶段 | 陈旧依赖逐步消退，load 吞吐恢复并记录假阳性率 | Performance checker；serialization latency |
-
-### 通用判定原则
-
-- `valid && !ready` 期间 payload 必须稳定；只有 `fire` 才能推进指针、状态或训练一次。
-- flush/redirect/replay 的胜负关系必须按代码优先级检查；错误路径不得提交、写表、训练预测器或暴露异常/数据。
-- 资源填满后必须验证可排空；重复冲突、retry 或 redirect 不得形成 deadlock/livelock，并检查低优先级旧请求是否饥饿。
-- 环形指针必须覆盖最大值到零的 wrap；表索引必须构造 same-index/different-tag 和同拍 read/write 冲突组。
-- 性能覆盖至少记录占用率、反压周期、redirect 恢复延迟、重试次数和恢复后的持续吞吐。
-
-
-## 21. Frontend 文档补充：访存依赖检测与 Replay
-
 # 10. 访存依赖关系检测与 Replay 机制
 
 ## 概述
@@ -561,7 +58,7 @@ LoadQueueRAW 模块是香山昆明湖 V3 中, 负责实现内存依赖关系检�
   val loadQueueReplay = Module(new LoadQueueReplay)  //  enqueue if need replay
   val virtualLoadQueue = Module(new VirtualLoadQueue)  //  control state
   val uncacheBuffer = Module(new LoadQueueUncache) // uncache
-
+  
   // ...
 
   /**
@@ -875,7 +372,7 @@ val lqViolationSelVec = VecInit((0 until LoadQueueRAWSize).map(j => {
 
 #### 重放逻辑 - 重放 Load 微操作选取
 
-如果一个 Store 命中多个年轻的 Load 微操作, 我们不能随便挑一个 Load 微操作并从这个微操作开始重放. 必须选择 ROB 顺序最老的那个更年轻的 Load, 因为会滚到最老错误的 Load 之后可以覆盖它 (这条已经拿到错误的数据的指令) 及其后续执行的一切指令, 否则会出现状态跑飞的情况. 在 LoadQueueRAW 中, 使用 selectOldestByGroup 进行分组递归的选择 (出于时序的考量) 最老的出现问题的 Load 微操作, 并将其作为重放 redirect 的目标.
+如果一个 Store 命中多个年轻的 Load 微操作, 我们不能随便挑一个 Load 微操作并从这个微操作开始重放. 必须选择 ROB 顺序最老的那个更年轻的 Load, 因为回滚到最老错误的 Load 之后可以覆盖它 (这条已经拿到错误的数据的指令) 及其后续执行的一切指令, 否则会出现状态跑飞的情况. 在 LoadQueueRAW 中, 使用 selectOldestByGroup 进行分组递归的选择 (出于时序的考量) 最老的出现问题的 Load 微操作, 并将其作为重放 redirect 的目标.
 
 最后, 代码中的 `io.mdpTrain := Mux1H(oldestOH, allRedirect)`用来将 (新的) 违例信息告知内存依赖关系预测器, 预测器根据违例信息进行训练, 以后再遇到对应的指令就不允许 Load 再越过 Store 投机之行了.
 
@@ -883,15 +380,514 @@ val lqViolationSelVec = VecInit((0 until LoadQueueRAWSize).map(j => {
 
 SSIT 由 MenCtrl 实例化, 参数来自全局 Parameters. 通过 SSITSize 决定表项数, DecodeWidth / RenameWidth 决定读口数 (这两个参数必须是一样的), SSIDWidth (Store Set Identifier 的位宽) 由 LFST 决定. 考虑到乱序核心允许更年轻的 Load 在更年长的 Store 地址没有计算出来提前执行, 如果 LoadQueueRAW 模块后续发现出现了 RAW 违例, LoadQueueRAW 模块会发起重定向请求来冲刷掉错误执行的 Load 微操作, 这样的代价是非常大的, 所以我们需要在出现违例后即刻训练内存依赖关系预测器 (MDP). SSIT 用来记录某一对 Load-Store 指令属于同一个 Store Set (即这对指令的 Load 地址可能和 Store 有地址依赖), 下次再遇到这条 Load 指令执行的时候, 需要通过 LFST 查询是否还有可能有依赖关系的 Store 指令地址没有被计算出来, 从而减少反复因为内存依赖关系违例而造成的重定向冲刷.
 
+具体来说, SSIT 是两张同步的表: `valid_array`与 `data_array`, 两张表都有 SSITSize 个表项 (也就是 2^foldPCWidth, 因为我们使用 foldPC 来查阅这两张表). valid\_array 负责记录每一个表项是否有效, 也就是对应的 foldPC 是否已经被分配到了一个 Store Set. data\_array 负责保存对应 foldPC 的 Store Set ID 号和 strict 位. Decode 阶段用每条指令的 foldPC 查阅 valid\_array 和 data\_array, 查阅后的结果会在 Rename 阶段送出 `{valid, ssid, strict}`记录. 当 Load QueueRAW 违例检测模块检测到真实的内存 RAW 违例, CtrlBlock 从 redirect 数据中获取 load/store PC, 并生成对应的 foldPC, SSIT 读取旧 entry 并按照 Store Set 合并机制更新两张表.
+
+```scala
+// Store Set Identifier Table Entry
+class SSITEntry(implicit p: Parameters) extends XSBundle {
+  val valid = Bool()
+  val ssid = UInt(SSIDWidth.W) // store set identifier
+  val strict = Bool() // strict load wait is needed
+}
+
+// ...
+
+val io = IO(new Bundle {
+  // to decode
+  val ren = Vec(DecodeWidth, Input(Bool()))
+  val raddr = Vec(DecodeWidth, Input(UInt(MemPredPCWidth.W))) // xor hashed decode pc(VaddrBits-1, 1)
+  // to rename
+  val rdata = Vec(RenameWidth, Output(new SSITEntry))
+  // misc
+  val update = Input(new MemPredUpdateReq) // RegNext should be added outside
+  val csrCtrl = Input(new CustomCSRCtrlIO)
+})
+```
+
+上述代码是 SSIT 的输入输出端口定义. `ren`作为 Decode 阶段传来的 SSIT 读使能信号, `raddr`是 DecodeWidth 个 foldPC, 用来查询该指令是否被 StoreSet 记录在册, `rdata`作为 SSIT 的主要输出, 输出 DecodeWidth 个 SSITEntry, 每个 entry 记录了这个 entry 是否 valid, 如果 valid 就关注给出的 ssid 和 strict, 其中 strict 表示同一个 SSID 发生了多次违例, 执行这条指令需要格外小心.
+
+```scala
+  private def hasRen: Boolean = true
+  val valid_array = Module(new SyncDataModuleTemplate(
+    Bool(),
+    SSITSize,
+    SSIT_READ_PORT_NUM,
+    SSIT_WRITE_PORT_NUM,
+    hasRen = hasRen,
+  ))
+
+  val data_array = Module(new SyncDataModuleTemplate(
+    new SSITDataEntry,
+    SSITSize,
+    SSIT_READ_PORT_NUM,
+    SSIT_WRITE_PORT_NUM,
+    hasRen = hasRen,
+  ))
+
+for (i <- 0 until DecodeWidth) {
+    // read SSIT in decode stage
+    valid_array.io.ren.get(i) := io.ren(i)
+    data_array.io.ren.get(i) := io.ren(i)
+    valid_array.io.raddr(i) := io.raddr(i)
+    data_array.io.raddr(i) := io.raddr(i)
+
+    // gen result in rename stage
+    io.rdata(i).valid := valid_array.io.rdata(i)
+    io.rdata(i).ssid := data_array.io.rdata(i).ssid
+    io.rdata(i).strict := data_array.io.rdata(i).strict
+  }
+```
+
+上述代码是 SSIT 的 valid\_array 和 data\_array 的读取逻辑. 可以看出 SSIT 通过实例化带有读使能的 `SyncDataModuleTemplate` (在 `utility/src/main/scala/utility/DataModuleTemplate.scala`中定义) 来实现 valid 和 data array. 这个 SyncDataModule 会先把每个读口的 raddr 打一拍 (同地址读写具有 bypass 功能, 所以同一个周期写进去的数据, 下一拍会读到新值), 所以在 Decode 的时钟周期向 valid/data array 发送的读请求, 会在 Rename 对应的那个时钟周期拿到数据, 这也就是为什么 SSIT 的代码在没有创建寄存器的情况下实现译码阶段发起读请求, 重命名阶段拿到结果的效果.
+
+```scala
+  val resetCounter = RegInit(0.U(ResetTimeMax2Pow.W))
+  resetCounter := resetCounter + 1.U
+
+  // ...
+
+  // flush SSIT
+  // reset period: ResetTimeMax2Pow
+  val resetStepCounter = RegInit(0.U(log2Up(SSITSize + 1).W))
+  val s_idle :: s_flush :: Nil = Enum(2)
+  val state = RegInit(s_flush)
+
+  switch (state) {
+    is(s_idle) {
+      when(resetCounter(ResetTimeMax2Pow - 1, ResetTimeMin2Pow)(RegNext(io.csrCtrl.lvpred_timeout))) {
+        state := s_flush
+        resetCounter := 0.U
+      }
+    }
+    is(s_flush) {
+      when(resetStepCounter === (SSITSize - 1).U) {
+        state := s_idle // reset finished
+        resetStepCounter := 0.U
+      }.otherwise{
+        resetStepCounter := resetStepCounter + 1.U
+      }
+      valid_array.io.wen(SSIT_MISC_WRITE_PORT) := true.B
+      valid_array.io.waddr(SSIT_MISC_WRITE_PORT) := resetStepCounter
+      valid_array.io.wdata(SSIT_MISC_WRITE_PORT) := false.B
+      debug_valid(resetStepCounter) := false.B
+    }
+  }
+  XSPerfAccumulate("reset_timeout", state === s_flush && resetCounter === 0.U)
+```
+
+上述代码是 SSIT 的定期重置逻辑. 对于运行复杂的程序的时候 (例如运行操作系统), 往往会出现 PC/foldPC 碰撞的情况: 比如说操作系统在运行多个不一样的用户进程, 有多个进程在某个 PC 值有同样的内存 Load 指令, 但是只有一个 Load 指令是危险, 这时候如果一味的使用 SSIT 给出的需要等待的预测结果, 会降低其他用户进程 (那些 Load 其实乱序执行也不会造成违例的程序) 的执行效率. 因此 SSIT 支持定期的清空, 用来避免过时的预测数据带来的准确性干扰. 在昆明湖的 SSIT 中, 设有 resetCounter, 配合昆明湖自定义的 CSR 来配置重置 SSIT 记录的频率. resetCounter 是一个长度为 `ResetTimeMax2Pow`的寄存器, 在每个时钟周期会自动加一; resetStepCounter 是一个长度为 `log2Up(SSITSize + 1)`的寄存器, 用来追踪目前正在清空的 SSIT 记录编号. state 是一个状态寄存器, 控制 SSIT 的工作状态, 有 idle 和 flush 两个状态: idle 状态属于 SSIT 的常规状态, 可以正常的查询和更新记录, flush 状态表示 SSIT 处于刷新过程中, 这个状态会持续一段时间, 直到所有的 SSIT valid 位都被清空, 在 flush 模式下, 取决于重置的进度, 读取有违例风险的 Load 指令可能会读到 valid 或 invalid.
+
+上述代码展示了 SSIT 的有限状态机, 初始化为 idle 状态, 在处理器执行过程中, 如果 resetCounter 足够大 (取决于 CSR 中设置的 lvpred\_timeout 到底看 resetCounter 的第几位), 就会把 state 寄存器状态更新为 flush, 并吧 resetCounter 清零. 在 flush 状态, SSIT 会每个周期会通过将 SSIT 的 valid\_array 的第 resetStepCounter 个表项设置为 false 来清除该表项. 如果所有的表项都被清空了, 就把 resetStepCounter 恢复成 0, 并把 state 状态寄存器恢复成 idle 状态.
+
+接下来需要重点分析一下当 LoadQueueRAW 模块检测到发生 Store-Load 违例后, SSIT 如何根据或得到的 redirect 重定向信息, 来训练预测器的. 训练的过程也就是将出现问题的 Store 和 Load 指令分配到一个 Store Set 中, 并依此更新 SSIT. 更新的过程需要三个周期 (阶段) 分别是 S0, S1, 和 S2.
+
+```scala
+  // update stage 0: read ssit
+  val s1_mempred_update_req_valid = RegNext(io.update.valid)
+  val s1_mempred_update_req = RegEnable(io.update, io.update.valid)
+
+  // when io.update.valid, take over ssit read port
+  when (io.update.valid) {
+    valid_array.io.raddr(SSIT_UPDATE_LOAD_READ_PORT) := io.update.ldpc
+    valid_array.io.raddr(SSIT_UPDATE_STORE_READ_PORT) := io.update.stpc
+    data_array.io.raddr(SSIT_UPDATE_LOAD_READ_PORT) := io.update.ldpc
+    data_array.io.raddr(SSIT_UPDATE_STORE_READ_PORT) := io.update.stpc
+
+    valid_array.io.ren.get(SSIT_UPDATE_LOAD_READ_PORT)  := true.B
+    valid_array.io.ren.get(SSIT_UPDATE_STORE_READ_PORT) := true.B
+    data_array.io.ren.get(SSIT_UPDATE_LOAD_READ_PORT)   := true.B
+    data_array.io.ren.get(SSIT_UPDATE_STORE_READ_PORT)  := true.B
+  }
+```
+
+SSIT 更新的 S0 阶段任务是读取 SSIT, 可以看到上述代码中 SSIT 对 valid\_array 和 data\_array 对应的更新读端口发起了读请求, 送入 ldpc 和 stpc. 由于 SSIT 使用的是 `SyncDataModuleTemplate`读地址信息会在模块内打一拍, 所以读出数据是在下一拍会发生的事情. 在这一拍, 我们同时会通过使用 RegNext 和 RegEnable 寄存器将 MDP 的更新请求数据保存到下一个周期, 也就是 SSIT 更新的 S1 阶段.
+
+```scala
+  // update stage 1: get ssit read result
+
+  // Read result
+  // load has already been assigned with a store set
+  val s1_loadAssigned = valid_array.io.rdata(SSIT_UPDATE_LOAD_READ_PORT)
+  val s1_loadOldSSID = data_array.io.rdata(SSIT_UPDATE_LOAD_READ_PORT).ssid
+  val s1_loadStrict = data_array.io.rdata(SSIT_UPDATE_LOAD_READ_PORT).strict
+  // store has already been assigned with a store set
+  val s1_storeAssigned = valid_array.io.rdata(SSIT_UPDATE_STORE_READ_PORT)
+  val s1_storeOldSSID = data_array.io.rdata(SSIT_UPDATE_STORE_READ_PORT).ssid
+  val s1_storeStrict = data_array.io.rdata(SSIT_UPDATE_STORE_READ_PORT).strict
+  // val s1_ssidIsSame = s1_loadOldSSID === s1_storeOldSSID
+```
+
+SSIT 更新的 S1 阶段任务是获得 SSIT 的读数据, 这些数据会在 S2 的代码中通过 RegEnable (Enable 的条件是 S0 保留到 S1 的 update 请求 valid 信号) 保留到 S2 阶段所在的周期.
+
+```scala
+  // update stage 2, update ssit data_array
+  val s2_mempred_update_req_valid = RegNext(s1_mempred_update_req_valid)
+  val s2_mempred_update_req = RegEnable(s1_mempred_update_req, s1_mempred_update_req_valid)
+  val s2_loadAssigned = RegEnable(s1_loadAssigned, s1_mempred_update_req_valid)
+  val s2_storeAssigned = RegEnable(s1_storeAssigned, s1_mempred_update_req_valid)
+  val s2_loadOldSSID = RegEnable(s1_loadOldSSID, s1_mempred_update_req_valid)
+  val s2_storeOldSSID = RegEnable(s1_storeOldSSID, s1_mempred_update_req_valid)
+  val s2_loadStrict = RegEnable(s1_loadStrict, s1_mempred_update_req_valid)
+
+  val s2_ssidIsSame = s2_loadOldSSID === s2_storeOldSSID
+  // for now we just use lowest bits of ldpc as store set id
+  val s2_ldSsidAllocate = XORFold(s2_mempred_update_req.ldpc, SSIDWidth)
+  val s2_stSsidAllocate = XORFold(s2_mempred_update_req.stpc, SSIDWidth)
+  val s2_allocSsid = Mux(s2_ldSsidAllocate < s2_stSsidAllocate, s2_ldSsidAllocate, s2_stSsidAllocate)
+  // both the load and the store have already been assigned store sets
+  // but load's store set ID is smaller
+  val s2_winnerSSID = Mux(s2_loadOldSSID < s2_storeOldSSID, s2_loadOldSSID, s2_storeOldSSID)
+
+  def update_ld_ssit_entry(pc: UInt, valid: Bool, ssid: UInt, strict: Bool) = {
+    valid_array.io.wen(SSIT_UPDATE_LOAD_WRITE_PORT) := true.B
+    valid_array.io.waddr(SSIT_UPDATE_LOAD_WRITE_PORT) := pc
+    valid_array.io.wdata(SSIT_UPDATE_LOAD_WRITE_PORT) := valid
+    data_array.io.wen(SSIT_UPDATE_LOAD_WRITE_PORT) := true.B
+    data_array.io.waddr(SSIT_UPDATE_LOAD_WRITE_PORT) := pc
+    data_array.io.wdata(SSIT_UPDATE_LOAD_WRITE_PORT).ssid := ssid
+    data_array.io.wdata(SSIT_UPDATE_LOAD_WRITE_PORT).strict := strict
+    debug_valid(pc) := valid
+    debug_ssid(pc) := ssid
+    debug_strict(pc) := strict
+  }
+
+  def update_st_ssit_entry(pc: UInt, valid: Bool, ssid: UInt, strict: Bool) = {
+    valid_array.io.wen(SSIT_UPDATE_STORE_WRITE_PORT) := true.B
+    valid_array.io.waddr(SSIT_UPDATE_STORE_WRITE_PORT) := pc
+    valid_array.io.wdata(SSIT_UPDATE_STORE_WRITE_PORT):= valid
+    data_array.io.wen(SSIT_UPDATE_STORE_WRITE_PORT) := true.B
+    data_array.io.waddr(SSIT_UPDATE_STORE_WRITE_PORT) := pc
+    data_array.io.wdata(SSIT_UPDATE_STORE_WRITE_PORT).ssid := ssid
+    data_array.io.wdata(SSIT_UPDATE_STORE_WRITE_PORT).strict := strict
+    debug_valid(pc) := valid
+    debug_ssid(pc) := ssid
+    debug_strict(pc) := strict
+  }
+
+  when(s2_mempred_update_req_valid){
+    switch (Cat(s2_loadAssigned, s2_storeAssigned)) {
+      // 1. "If neither the load nor the store has been assigned a store set, two are allocated and assigned to each instruction."
+      is ("b00".U(2.W)) {
+        update_ld_ssit_entry(
+          pc = s2_mempred_update_req.ldpc, valid = true.B,
+          ssid = s2_allocSsid, strict = false.B
+        )
+        update_st_ssit_entry(
+          pc = s2_mempred_update_req.stpc, valid = true.B,
+          ssid = s2_allocSsid, strict = false.B
+        )
+      }
+      // 2. "If the load has been assigned a store set, but the store has not, one is allocated and assigned to the store instructions."
+      is ("b10".U(2.W)) {
+        update_st_ssit_entry(
+          pc = s2_mempred_update_req.stpc, valid = true.B,
+          ssid = s2_ldSsidAllocate, strict = false.B
+        )
+      }
+      // 3. "If the store has been assigned a store set, but the load has not, one is allocated and assigned to the load instructions."
+      is ("b01".U(2.W)) {
+        update_ld_ssit_entry(
+          pc = s2_mempred_update_req.ldpc, valid = true.B,
+          ssid = s2_stSsidAllocate, strict = false.B
+        )
+      }
+      // 4. "If both the load and the store have already been assigned store sets, one of the two store sets is declared the "winner". The instruction belonging to the loser’s store set is assigned the winner’s store set."
+      is ("b11".U(2.W)) {
+        update_ld_ssit_entry(
+          pc = s2_mempred_update_req.ldpc, valid = true.B,
+          ssid = s2_winnerSSID, strict = false.B
+        )
+        update_st_ssit_entry(
+          pc = s2_mempred_update_req.stpc, valid = true.B,
+          ssid = s2_winnerSSID, strict = false.B
+        )
+        when(s2_ssidIsSame){
+          data_array.io.wdata(SSIT_UPDATE_LOAD_READ_PORT).strict := true.B
+          debug_strict(s2_mempred_update_req.ldpc) := true.B
+        }
+      }
+    }
+  }
+```
+
+SSIT 更新的 S2 阶段是真正对 valid\_array 和 data\_array 作修改的阶段. 这个阶段会利用 S1 阶段保留下来的更新请求信息, `loadAssigned`,`loadOldSSID`,`loadStrict`,`storeAssigned`,`storeOldSSID`, 和`storeStrict`信息. 判断从 data\_array 中读到的指令的 loadSSID 和 storeSSID 是否一致 (可能出现读出无效值的情况, 如果对应的 valid\_array 值为 false), 并对 Load 和 Store 分别通过 对其 PC 进行 XORFold 获得新分配的 SSID 表项号, 取两个 XORFold 结果较小的一个作为 allocSsid. 还会对已经读出的 loadOldSSID 和 storeOldSSID 选取较小的一个座位 winnerSSID.
+
+代码中定义了两个辅助函数 `update_ld_ssit_entry`和 `update_st_ssit_entry`, 他们会分别使用 `SSIT_UPDATE_LOAD_WRITE_PORT`和 `SSIT_UPDATE_STORE_WRITE_PORT`对 valid\_array 和 data\_array 发起写请求. 对 valid\_array 来说, 会将对应 foldPC 的 valid 位置为 true; 对 data\_array 来说, 会写入传入的 SSID 和是否为 strict 信息 (还会更新 debug\_valid, debug\_ssid 和 debug\_strict, 这些都是用于调试的).
+
+接下来的代码就是 S2 SSIT 更新的核心部分, 如果 S2 当前周期的 `s2_mempred_update_req_valid`为真, 表示两个周期前收到了 update SSIT 的请求. SSIT 会根据 `Cat(s2_loadAssigned, s2_storeAssigned)`, 也就是违例的 Load 指令是否已经被分配 SSID 和违例的 Store 指令是否被分配 SSID, 所以一共有四种情况: Load 和 Store 都没有被分配 SSID; Load 有被分配 SSID, Store 没有被分配 SSID; Load 没有被分配 SSID, Store 有被分配 SSID; Load 和 Store 都有被分配 SSID.
+
+对于第一种情况, 如果 Load 和 Store 都没有被分配 SSID, 就会调用 `update_ld_ssit_entry`和 `update_ld_ssit_entry`, 将 Load 和 Store 组合到新分配的 Store Set 中.
+
+对于第二种情况, 如果 Load 已经被分配 SSID 但 Store 还没有, 就只会调用 `update_st_ssit_entry`, 将 Store 融入到 Load 已经被分配的 SSID 中.
+
+对于第三种情况, 如果 Store 已经被分配 SSID 但 Load 还没有, 就只会调用 `update_ld_ssit_entry`, 将 Load 融入到 Store 已经被分配的 SSID 中.
+
+对于第四种情况, 如果 Load 和 Store 都有被分配 SSID, 就会调用`update_ld_ssit_entry`和 `update_ld_ssit_entry`, 将 Load 和 Store 组合到 winnerSSID 对应的 Store Set 中. 这个 winnterSSID 是出现违例的 Store 和 Load 的 SSID 中较小的一个, 由于 SSID 最初是通过 XORFold 算法产生的, 所以 winnerSSID 总是能让 Load 绑定到之前那个出现问题的 Store 指令 (否则可能会有连续的 Load-Store-Load-Store 中 Load 被错误的绑定到后面的 Store 指令里, 造成低准确率的预测). 如果发现读到的 loadOldSSID 和 storeOldSSID 是一样的, 说明这是第二次发生违例了, 这时候会将 Load 对应的 SSIT 表项的 Strict 置位, 表示投机执行这条 Load 风险是相对较高的.
+
 ## 香山昆明湖 V3 - LFST 模块分析
 
-TODO 写点东西在这里
+LFST (Last Fetched Store Table) 是 Store Set 的动态部分, 它不用 PC (foldPC) 进行寻址, 只用来追踪当前这个 Store Set 里最近一次已经从分派模块 (Dispatch) 进入后端, 但还没有在 store unit S1 发射的 Store 指令是哪个. LFST 解决了 SSIT 只能告知某条 Load 指令属于哪个 Store Set, 但不知道这个 Store Set 发生了什么的问题, 也解决了同一个 Store Set 可能有多个进入窗口的 Store 指令, 不知道要等待哪一个的问题. 所以 LFST 以 SSID 为索引, 用 robIdx 位动态窗口值, 对进行查询的 Load 指令返回 shouldWait (LFST 是否建议这条 Load 指令先不要投机乱序执行) 以及 waitForRobIdx (LFST 告诉这条 Load 如果先不要投机乱序执行的话, 需要等待那个 Store 指令的地址就绪之后就可以执行了).
 
-## 波形图分析
+```scala
+class LFSTReq(implicit p: Parameters) extends XSBundle {
+  val isstore = Bool()
+  val ssid = UInt(SSIDWidth.W) // use ssid to lookup LFST
+  val robIdx = new RobPtr
+}
+
+class LFSTResp(implicit p: Parameters) extends XSBundle {
+  val shouldWait = Bool()
+  val robIdx = new RobPtr
+}
+
+class DispatchLFSTIO(implicit p: Parameters) extends XSBundle {
+  val req = Vec(RenameWidth, Valid(new LFSTReq))
+  val resp = Vec(RenameWidth, Flipped(Valid(new LFSTResp)))
+}
+
+// ...
+
+  val io = IO(new Bundle {
+    // when redirect, mark canceled store as invalid
+    val redirect = Input(Valid(new Redirect))
+    val dispatch = Flipped(new DispatchLFSTIO)
+    // when store issued, mark store as invalid
+    val storeIssue = Vec(backendParams.StaExuCnt, Flipped(Valid(new StoreUnitToLFST)))
+    val csrCtrl = Input(new CustomCSRCtrlIO)
+  })
+```
+
+上述代码是 LFST 的输入输出的定义. `redirect`负责采集重定向的信息 (主要包括重定向是否真的发生了, 以及发生重定向的 robIdx) 用来更新 LFST 中最近完成分派, 但还没有发射的 Store 指令信息. `dispatch`信号则更像一个 Bundle, 包括 RenameWidth 组`LFSTReq`和`LFSTResp`.`LFSTReq`是来自分派 Dispatch 阶段的 LFST 查询请求信号, 包括`isstore`这条查询的指令是否是 Store 类型的指令,`ssid`告知 LFST 这条指令所在的 Store Set ID 号,`robIdx`告知 LFST 这条指令对应的 ROB 表项号, 此外, 请求信号由 `Valid(new LFSTReq)`定义, 说明还隐含有 valid 信号, 告知 LFST 这个请求是否有意义. `LFSTResp`是返回给分派阶段的 LFST 查询结果信号, 包括布尔信号`shouldWait`, 告知分派模块这条指令是否建议等待流水线中其他的 Store 指令, 如果`shouldWait`为真, 那么`robIdx`就包含了这条指令建议等待哪条 Store 指令的地址就绪后再进行发射.
+
+```scala
+  val validVec = RegInit(VecInit(Seq.fill(LFSTSize)(VecInit(Seq.fill(LFSTWidth)(false.B)))))
+  val robIdxVec = Reg(Vec(LFSTSize, Vec(LFSTWidth, new RobPtr)))
+  val allocPtr = RegInit(VecInit(Seq.fill(LFSTSize)(0.U(log2Up(LFSTWidth).W))))
+  val valid = Wire(Vec(LFSTSize, Bool()))
+  (0 until LFSTSize).map(i => {
+    valid(i) := validVec(i).asUInt.orR
+  })
+```
+
+上述代码是 LFST 的存储器的定义. LFST 使用普通的 Reg 寄存器来保存其状态. validVec 寄存器可以被看作一个二维数组, validVec(i)(j) 表示第 i 个 SSID 的第 j 个记录是否是有效的. 目前 LFSTWidth 是 2. robIdxVec 寄存器也可以被看作一个二维数组, robIdxVec(i)(j) 表示第 i 个 SSID 的第 j 个记录的 Store 指令对应的 ROB 表项号. allocPtr 寄存器可以看作一个一位数组, allocPtr(i) 表示第 i 个 SSID 应该被分配第几个 robIdx 表项位.
+
+```scala
+  // read LFST in rename stage
+  for (i <- 0 until RenameWidth) {
+    io.dispatch.resp(i).valid := io.dispatch.req(i).valid
+
+    // If store-load pair is in the same dispatch bundle, loadWaitBit should also be set for load
+    val hitInDispatchBundleVec = if(i > 0){
+      WireInit(VecInit((0 until i).map(j =>
+        io.dispatch.req(j).valid &&
+        io.dispatch.req(j).bits.isstore &&
+        io.dispatch.req(j).bits.ssid === io.dispatch.req(i).bits.ssid
+      )))
+    } else {
+      WireInit(VecInit(Seq(false.B))) // DontCare
+    }
+    val hitInDispatchBundle = hitInDispatchBundleVec.asUInt.orR
+    // Check if store set is valid in LFST
+    io.dispatch.resp(i).bits.shouldWait := (
+        (valid(io.dispatch.req(i).bits.ssid) || hitInDispatchBundle) &&
+        io.dispatch.req(i).valid &&
+        (!io.dispatch.req(i).bits.isstore || io.csrCtrl.storeset_wait_store)
+      ) && !io.csrCtrl.lvpred_disable || io.csrCtrl.no_spec_load
+    io.dispatch.resp(i).bits.robIdx := robIdxVec(io.dispatch.req(i).bits.ssid)(allocPtr(io.dispatch.req(i).bits.ssid)-1.U)
+    if(i > 0){
+      (0 until i).map(j =>
+        when(hitInDispatchBundleVec(j)){
+          io.dispatch.resp(i).bits.robIdx := io.dispatch.req(j).bits.robIdx
+        }
+      )
+    }
+  }
+```
+
+上述代码是 LFST 的读取逻辑. LFST 模块在每个周期都有可能收到 RenameWidth 宽度的读取请求. LFST 会在当拍返回读取数据, 所以 response 的 valid 信号直接和 request 的 valid 信号连通 (这种情况下这个信号可能会直接被 Chisel 后端优化掉了). `hitInDispatchBundleVec`和`hitInDispatchBundle`用来计算同一个周期内, 相比于当前指令是否有更年老的 Store 指令和本条指令在同一个 SSID.
+
+LFST 模块判断是否需要等待的逻辑是: <code>[(valid(io.dispatch.req(i).bits.ssid) || hitInDispatchBundle) && io.dispatch.req(i).valid && (!io.dispatch.req(i).bits.isstore || io.csrCtrl.storeset_wait_store)] && !io.csrCtrl.lvpred_disable || io.csrCtrl.no_spec_load</code>. 首先来看第一个大条件 (方括号中的布尔表达式): 传送进来的请求所对应的 SSID 在 validVec 中有有效的记录, 发送来的请求不是 Store 指令或者我们在 CSR 中设置让 Store 指令也进行等待, 请求所携带的 SSID 必须是有效的或者在本周期内有更年长的指令传来相同的 SSID 请求. 如果该条件满足, 且预测器不处于关闭状态, 就需要等待. 如果我们在 CSR 中设置了 no\_spec\_load, 也就是不能够冒险的执行 Load 指令, 那样的话 shouldWait 就一直是高电平, 永远不会允许 Load 指令投机执行.
+
+有了 shouldWait, 还需要知道这条被 LFST 建议需要等待的指令到底要等谁, 所以接下来分析 LFST 计算需要等待的指令的 robIdx 逻辑: 对于一般情况, 我们会返回 `robIdxVec(io.dispatch.req(i).bits.ssid)(allocPtr(io.dispatch.req(i).bits.ssid)-1.U)`, 也就是读取对应 SSID 的最近一次被写入的 LFST ROB 表项号. 还有一种特殊情况, 那就是在当前周期内, 有更年老的 Store 指令发来了查询请求, 那我们就会把建议等待的 ROB 表项号更新成这个更年老的 Store 指令的 ROB 表项号. 借助循环的语义, 如果一个周期内有多个较为年长的 Store 指令共享 SSID, 会选取哪个稍微更年轻的 Store 指令作为等待的对象.
+
+```scala
+  // when store is issued, mark it as invalid
+  (0 until backendParams.StaExuCnt).map(i => {
+    // TODO: opt timing
+    (0 until LFSTWidth).map(j => {
+      when(io.storeIssue(i).valid && io.storeIssue(i).bits.storeSetHit && io.storeIssue(i).bits.robIdx.value === robIdxVec(io.storeIssue(i).bits.ssid)(j).value){
+        validVec(io.storeIssue(i).bits.ssid)(j) := false.B
+      }
+    })
+  })
+```
+
+上述代码是 LFST 在 Store 指令被发射的时候更新 LFST 的逻辑. 如果一条 Store 指令已经被发射了, 就可以在 LFST 中清除有关这条指令的记录. 可以从代码中看出, 当满足 `io.storeIssue(i).valid && io.storeIssue(i).bits.storeSetHit && io.storeIssue(i).bits.robIdx.value === robIdxVec(io.storeIssue(i).bits.ssid)(j).value`(也就是说, 某个 Store 指令已经被发射了, 并且这条 Store 指令命中了 Store Set, 而且在 LFST 中有关于这条指令的 ROB index 的记录) 的时候, 在 validVec 寄存器取消 valid 置位.
+
+```scala
+  val overflowVec = WireInit(VecInit(Seq.fill(RenameWidth)(false.B)))
+  // when store is dispatched, mark it as valid
+  (0 until RenameWidth).map(i => {
+    when(io.dispatch.req(i).valid && io.dispatch.req(i).bits.isstore){
+      val waddr = io.dispatch.req(i).bits.ssid
+      val wptr = allocPtr(waddr)
+      allocPtr(waddr) := allocPtr(waddr) + 1.U
+      validVec(waddr)(wptr) := true.B
+      robIdxVec(waddr)(wptr) := io.dispatch.req(i).bits.robIdx
+      when(validVec(waddr)(wptr)) {
+        overflowVec(i) := true.B
+      }
+    }
+  })
+```
+
+上述代码是 LFST 在 Store 指令离开分派阶段的时候更新 LFST 的逻辑. 如果一条 Store 指令离开了分派模块, 就需要把这条 Store 指令的 SSID 和 ROB 表项号等级在 LFST 中. 可以从代码中看出, 当分派模块发来有效的请求, 且这个请求的指令属于 Store 指令的时候, 会更新 LFST 的 allocPtr (自增 1), 置位对应的 validVec, 并把这条 Store 指令的 ROB 表项号写入 robIdxVec.
+
+```scala
+  // when redirect, cancel store influenced
+  (0 until LFSTSize).map(i => {
+    (0 until LFSTWidth).map(j => {
+      when(validVec(i)(j) && robIdxVec(i)(j).needFlush(io.redirect)){
+        validVec(i)(j) := false.B
+      }
+    })
+  })
+
+  // recover robIdx after squash
+  // behavior model, to be refactored later
+  when(RegNext(io.redirect.fire)) {
+    (0 until LFSTSize).map(i => {
+      (0 until LFSTWidth).map(j => {
+        val check_position = WireInit(allocPtr(i) + (j+1).U)
+        when(!validVec(i)(check_position)){
+          allocPtr(i) := check_position
+        }
+      })
+    })
+  }
+```
+
+上述代码是 LFST 在出现重定向时的更新逻辑. 当重定向发生后, 某些 LFST 中记录的 Store 指令会被取消掉. 在代码中, 每个周期都会对 LFST 的每一个 SSID 的每一个有效的 (validVec 为真的) ROB 表项记录 (共 LFSTWidth 个) 逐一进行 needFlush 检查, 如果发现某条指令已经因为重定向被冲刷掉了, 就会将对应的 validVec 位置低. LFST 模块还需要在重定向发生的下一个周期 (这个周期已经完成了对 validVec 的修改) 根据最新的 validVec 更新每个 SSID 对应的 LFST 分配指针 allocPtr.
+
+## 香山昆明湖 V3 - MDP 模块间的交互
+
+### MemCtrl - 后端内存控制模块
+
+```scala
+class MemCtrl(params: BackendParams)(implicit p: Parameters) extends XSModule {
+  val io = IO(new MemCtrlIO(params))
+
+  private val ssit = Module(new SSIT)
+  private val lfst = Module(new LFST)
+  ssit.io.update <> RegNext(io.memPredUpdate)
+  ssit.io.csrCtrl := RegNext(io.csrCtrl)
+
+  for (i <- 0 until RenameWidth) {
+    ssit.io.ren(i) := io.mdpFoldPcVecVld(i)
+    ssit.io.raddr(i) := io.mdpFlodPcVec(i)
+  }
+  lfst.io.redirect <> RegNext(io.redirect)
+  lfst.io.storeIssue <> RegNext(io.stIn)
+  lfst.io.csrCtrl <> RegNext(io.csrCtrl)
+  lfst.io.dispatch <> io.dispatchLFSTio
+
+  //  io.waitTable2Rename := waittable.io.rdata
+  io.waitTable2Rename := DontCare
+  io.ssit2Rename := ssit.io.rdata
+}
+
+class MemCtrlIO(params: BackendParams)(implicit p: Parameters) extends XSBundle {
+  val redirect = Flipped(ValidIO(new Redirect))
+  val csrCtrl = Input(new CustomCSRCtrlIO)
+  val stIn = Vec(params.StaExuCnt, Flipped(ValidIO(new StoreUnitToLFST))) // use storeSetHit, ssid, robIdx
+  val memPredUpdate = Input(new MemPredUpdateReq)
+  val mdpFoldPcVecVld = Input(Vec(DecodeWidth, Bool()))
+  val mdpFlodPcVec = Input(Vec(DecodeWidth, UInt(MemPredPCWidth.W)))
+  val dispatchLFSTio = Flipped(new DispatchLFSTIO)
+  val waitTable2Rename = Vec(DecodeWidth, Output(Bool()))   // loadWaitBit
+  val ssit2Rename = Vec(RenameWidth, Output(new SSITEntry)) // ssit read result
+}
+```
+
+上述代码是后端的 MenCtrl 部分, 也就是后端负责内存控制的模块. Store Set 的两张表 SSIT 和 LFST 都在 MemCtrl 中初始化. 如果收到了访存单元发来的重定向 (也就是预测器更新), 就回吧更新内容打一拍之后发到 SSIT 中. 由于我们可以通过 CSR 配置内存预测的工作参数 (比如说, 多久重置一次 SSIT), 所以也把这些数据打一拍后送到 SSIT 中. 在代码中也有每个周期给对应的指令查询 SSIT / LFST 并返回查询数据的代码.
+
+### MemCtrl 和后端 CtrlBlock 的交互
+
+```scala
+  private val memViolation = io.fromMem.violation
+  val loadReplay = Wire(ValidIO(new Redirect))
+  loadReplay.valid := GatedValidRegNext(memViolation.valid)
+  loadReplay.bits := RegEnable(memViolation.bits, memViolation.valid)
+  loadReplay.bits.debugIsCtrl := false.B
+  loadReplay.bits.debugIsMemVio := true.B
+
+  pcMem.io.ren.get(pcMemRdIndexes("redirect").head) := memViolation.valid
+  pcMem.io.raddr(pcMemRdIndexes("redirect").head) := memViolation.bits.ftqIdx.value
+  val mdpTrainValid = io.fromMem.mdpTrain.valid
+  for ((pcMemIdx, i) <- pcMemRdIndexes("memPredLoad").zipWithIndex) {
+    val ren   = mdpTrainValid
+    val raddr = io.fromMem.mdpTrain.bits.ftqIdx.value
+    val offset = RegEnable(io.fromMem.mdpTrain.bits.getPcOffset, mdpTrainValid)
+    pcMem.io.ren.get(pcMemIdx) := ren
+    pcMem.io.raddr(pcMemIdx) := raddr
+    memCtrl.io.memPredUpdate.ldpc := XORFold((pcMem.io.rdata(pcMemIdx).toUInt + offset)(VAddrBits - 1, 1), MemPredPCWidth)
+
+    // update wait table, will be remove in the future
+    memCtrl.io.memPredUpdate.waddr := XORFold((pcMem.io.rdata(pcMemIdx).toUInt + offset)(VAddrBits - 1, 1), MemPredPCWidth)
+    memCtrl.io.memPredUpdate.wdata := true.B
+  }
+  for ((pcMemIdx, i) <- pcMemRdIndexes("memPredStore").zipWithIndex) {
+    val ren   = mdpTrainValid
+    val raddr = io.fromMem.mdpTrain.bits.stFtqIdx.value
+    val offset = RegEnable(io.fromMem.mdpTrain.bits.getStPcOffset, mdpTrainValid)
+    pcMem.io.ren.get(pcMemIdx) := ren
+    pcMem.io.raddr(pcMemIdx) := raddr
+    memCtrl.io.memPredUpdate.stpc := XORFold((pcMem.io.rdata(pcMemIdx).toUInt + offset)(VAddrBits - 1, 1), MemPredPCWidth)
+  }
+  memCtrl.io.memPredUpdate.valid := RegNext(mdpTrainValid) // pc is ready, 1 cycle later
+
+  // ...
+
+  // memory dependency predict
+  // when decode, send fold pc to mdp
+  private val mdpFlodPcVecVld = Wire(Vec(DecodeWidth, Bool()))
+  private val mdpFlodPcVec = Wire(Vec(DecodeWidth, UInt(MemPredPCWidth.W)))
+  for (i <- 0 until DecodeWidth) {
+    mdpFlodPcVecVld(i) := decode.io.out(i).fire
+    mdpFlodPcVec(i) := decode.io.out(i).bits.foldpc
+  }
+
+  // currently, we only update mdp info when isReplay
+  memCtrl.io.redirect := s1_s3_redirect
+  memCtrl.io.csrCtrl := io.csrCtrl                          // RegNext in memCtrl
+  memCtrl.io.stIn := io.fromMem.stIn                        // RegNext in memCtrl
+  memCtrl.io.mdpFoldPcVecVld := mdpFlodPcVecVld
+  memCtrl.io.mdpFlodPcVec := mdpFlodPcVec
+  memCtrl.io.dispatchLFSTio <> dispatch.io.lfst
+
+  rename.io.hartId := io.fromTop.hartId
+  rename.io.ratDiffCommits.foreach(_ := rob.io.diffCommits.get)
+  rename.io.ratDiffVlCommits.foreach(_ := rob.io.diffVlCommits.get)
+
+  rename.io.redirect := s1_s3_redirect
+  rename.io.rabCommits := rob.io.rabCommits
+  rename.io.vlCommits := rob.io.vlCommits
+  rename.io.singleStep := GatedValidRegNext(io.csrCtrl.singlestep)
+  rename.io.waittable := (memCtrl.io.waitTable2Rename zip decode.io.out).map{ case(waittable2rename, decodeOut) =>
+    RegEnable(waittable2rename, decodeOut.fire)
+  }
+  rename.io.ssit := memCtrl.io.ssit2Rename
+```
+
+上述代码是后端控制块, 后端内存控制块, 和内存模块发来的违例信息进行交互的逻辑. `io.fromMem.violation`是 MemBlock 报给后端的内存回滚请求, 来源包括 load replay, RAW/RAR 违例, uncache/nuke rollback 等, CtrlBlock 把它包装成 loadReplay. pcMem 保存的是前端 FTQ 每个 entry 的 startPC, 内存侧 redirect 里只有 ftqIdx + ftqOffset + isRVC, 所以 CtrlBlock 要通过`pcMem[ftqIdx] + getPcOffset()`还原出真实指令 PC. `io.fromMem.mdpTrain` 也是一个 `Valid[Redirect]`, 但语义不是 “发起恢复”，而是“拿这次真实 store-load 违例训练内存依赖预测器”. 它来自 LoadQueueRAW：store 写回时查 LoadQueue, 发现更年轻 load 已经错误取数, 就生成 redirect, 并把 load 的 ftqIdx/ftqOffset 和 store 的 stFtqIdx/stFtqOffset 都填进去.
+
+下面一半的代码是在 CtrlBlock 里把 “取指/译码阶段看到的内存指令 PC 信息” 送进内存依赖预测器，并把预测结果接回 rename/dispatch 使用: 每个 decode lane 在 decode.io.out(i).fire 时, 把该指令已经由前端算好的 foldpc 作为 mdpFlodPcVec(i) 送给 memCtrl, memCtrl 内部用它去读 SSIT, 判断这条 load/store 是否属于某个 store set; 同时 memCtrl 还接收 redirect; CSR 控制; 和 store issue 信息, 用于清理 LFST; 响应 CSR 开关; 以及当 store 真正发射后释放对应依赖. dispatch.io.lfst 和 memCtrl.io.dispatchLFSTio 相连, 表示 dispatch 阶段会把 store/load 的 store set 请求送到 LFST: store 会登记为最近未完成 store, load 会查询自己是否应该等待某个更老 store. 后面这些 rename.io.\* 是把 ROB 提交; redirect; 单步调试等正常控制信息接给 rename, 其中 rename.io.ssit := memCtrl.io.ssit2Rename 是关键, 表示 rename 阶段拿到 SSIT 的预测结果, 给指令打上 store set 依赖信息.
+
+## 简单情况下的波形图分析
 
 ### 演示程序与解析
 
-为了演示
+为了演示违例检测, Replay 过程, MDP (Store Set) 训练的行为, 和后续同一个 PC 的 Store-Load 执行情况, 我们编写一个简易的演示程序, 这个程序通过插入 `DEP`宏 (其实就是给一个寄存器值加一之后减一) 制造较长的依赖链. 那我们就可以把某个内存地址写入到两个寄存器中, 第一个寄存器直接可以使用 (所以分配给想要投机乱序执行的 Load), 第二个寄存器通过 DEP 宏拉出较长的依赖链, 所以需要等很多个周期之后才能就绪 (所以分配给想要稍微晚些就绪的 Store):
 
 ```c
 #include <klib.h>
@@ -928,6 +924,45 @@ int main(void) {
     return 0;
 }
 ```
+
+将其编译, 在香山昆明湖 V3 的 EMU 中执行该程序, 保存 FST 波形图 ([附件: demoMDP.zip](./attachments/kivYo6g6dphb9DiV/demoMDP.zip)), 可以得到反汇编代码:
+
+```plain
+000000008000012a <main>:
+    8000012a:   1141                    addi    sp,sp,-16
+    8000012c:   e406                    sd      ra,8(sp)
+    8000012e:   00001797                auipc   a5,0x1
+    80000132:   51278793                addi    a5,a5,1298 # 80001640 <x>
+    80000136:   4329                    li      t1,10
+    80000138:   4e05                    li      t3,1
+    8000013a:   4601                    li      a2,0
+    8000013c:   82be                    mv      t0,a5
+    8000013e:   0285                    addi    t0,t0,1
+    80000140:   12fd                    addi    t0,t0,-1
+    // ... 重复的 addi 1 和 addi -1
+    800001ba:   0285                    addi    t0,t0,1
+    800001bc:   12fd                    addi    t0,t0,-1
+    800001be:   01c2b023                sd      t3,0(t0)
+    800001c2:   0007be83                ld      t4,0(a5)
+    800001c6:   9676                    add     a2,a2,t4
+    800001c8:   0e05                    addi    t3,t3,1
+    800001ca:   137d                    addi    t1,t1,-1
+    800001cc:   f60318e3                bnez    t1,8000013c <main+0x12>
+    800001d0:   638c                    ld      a1,0(a5)
+    800001d2:   00001517                auipc   a0,0x1
+    800001d6:   17e50513                addi    a0,a0,382 # 80001350 <printf_+0x32>
+    800001da:   144010ef                jal     8000131e <printf_>
+    800001de:   60a2                    ld      ra,8(sp)
+    800001e0:   4501                    li      a0,0
+    800001e2:   0141                    addi    sp,sp,16
+    800001e4:   8082                    ret
+```
+
+从上面的汇编代码中可以看出 a5 的值只想了某个内存地址, t0 复制了这个值, 并植入了很长的 DEP 依赖链. 最后的 sd 和 ld 指令操作同一个地址. 这个程序是一个有循环的程序, 所以也方便观察在发现违例后, 后续的循环中 MDP 预测器的行为.
+
+### LoadQueueRAW 违例检测分析
+
+TODO
 
 ### Replay 机制分析
 
@@ -966,5 +1001,5 @@ TODO
 TODO
 
 
-> 更新: 2026-07-23 15:32:14
+> 更新: 2026-07-28 09:32:32  
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/huxv0oxbmiv2svqa>
