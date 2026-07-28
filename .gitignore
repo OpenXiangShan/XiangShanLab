@@ -26,7 +26,7 @@ decrypted_results.txt
 my_submission.txt
 2026-CIE-RISC-V-Contest-Application-Track/*.txt
 xiangshan-course/docs/remove_last_line.py
-
+myworkspace
 # Scala / Java / Chisel build products
 **/target/
 **/out/
