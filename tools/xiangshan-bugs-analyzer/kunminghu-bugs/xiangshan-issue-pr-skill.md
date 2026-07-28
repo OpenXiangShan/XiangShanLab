@@ -9,8 +9,11 @@ base for `OpenXiangShan/XiangShan`, especially the `kunminghu-v2` and `kunminghu
 - `pulls.jsonl`: raw pull request records from GitHub.
 - `issue-index.md`: compact issue table for quick lookup.
 - `pr-index.md`: compact pull request table for quick lookup.
+- `base` and commit SHA should be checked before drawing conclusions on Kunminghu bugs.
 - `biweekly-bug-notes.json`: bug/fix notes parsed from XiangShan Biweekly posts.
 - `bug-summarys/*.md`: module-oriented summaries.
+
+Local issue/PR indexes currently track the 2026-07-12 snapshot; use the module summaries and biweekly notes to bridge newer upstream context.
 
 Prefer local files before network access. Use `rg` for text search and inspect the
 raw JSONL entries when index rows do not contain enough evidence.
@@ -102,7 +105,7 @@ When extracting PR evidence:
 1. Treat `merged_at != null` as stronger evidence that the change landed.
 2. Treat `closed_at != null` and `merged_at == null` as closed without merge
    unless local evidence says otherwise.
-3. Use `base` to distinguish `kunminghu-v2`, `kunminghu-v3`, and unrelated branch PRs.
+3. Use `base` and any commit SHA mentioned in the record or body to distinguish `kunminghu-v2`, `kunminghu-v3`, and unrelated branch PRs.
 4. Prefer PR title/body and linked issue references over heuristic cause buckets
    when summarizing the actual fix.
 5. Preserve validation commands from the PR body when they help assess fix

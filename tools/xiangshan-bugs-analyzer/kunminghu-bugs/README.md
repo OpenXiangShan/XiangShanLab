@@ -9,6 +9,7 @@ Generated at `2026-07-12T11:13:08.966471+00:00`.
 - Issues collected: `786`
 - PRs collected: `196`
 - Comments included: `False`
+- Latest confirmed upstream biweekly: `107` (`2026-07-20`).
 
 ## Files
 

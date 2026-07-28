@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 
-MODULE_ORDER = ("frontend", "backend", "mem", "cache", "chiselAIA", "chiselIOPMP")
+MODULE_ORDER = ("backend", "cache", "chiselAIA", "chiselIOPMP", "frontend", "mem")
 
 TRIGGER_RULES: dict[str, tuple[str, ...]] = {
     "exception": (
@@ -289,6 +289,29 @@ def trigger_text(row: dict[str, Any]) -> str:
     return ", ".join(classify_triggers(row))
 
 
+def branch_text(row: dict[str, Any]) -> str:
+    text = "\n".join([row.get("title") or "", row.get("body") or "", row.get("base") or "", row.get("head") or ""]).lower()
+    if "kunminghu-v3" in text:
+        return "kunminghu-v3"
+    if "kunminghu-v2" in text:
+        return "kunminghu-v2"
+    return row.get("base") or row.get("head") or ""
+
+
+def commit_text(row: dict[str, Any]) -> str:
+    text = "\n".join([row.get("body") or "", row.get("title") or "", row.get("head") or "", row.get("base") or ""])
+    patterns = (
+        r"\b[0-9a-f]{40}\b",
+        r"\b[0-9a-f]{12,16}\b",
+        r"\bcommit(?:\s+id|\s+sha)?[:=\s]+([0-9a-f]{7,40})\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return match.group(1) if match.lastindex else match.group(0)
+    return ""
+
+
 def write_module_file(
     path: Path,
     module: str,
@@ -309,14 +332,14 @@ def write_module_file(
         "- Rule: classified from labels, title, body, branch names, and referenced directory/component names.",
         "- Trigger: `exception` and `interrupt` are highlighted from title/body/labels keywords.",
         "",
-        "| Number | Type | State | Updated | Trigger | Labels | Title |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| Number | Type | State | Updated | Branch | Commit | Trigger | Labels | Title |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in sorted(rows, key=lambda item: item.get("updated_at") or "", reverse=True)[:limit] if limit else sorted(rows, key=lambda item: item.get("updated_at") or "", reverse=True):
         labels = ", ".join(row.get("labels") or [])
         lines.append(
             f"| {item_link(row)} | {item_kind(row)} | {markdown_escape(row.get('state'))} | "
-            f"{markdown_escape(row.get('updated_at'))} | {markdown_escape(trigger_text(row))} | "
+            f"{markdown_escape(row.get('updated_at'))} | {markdown_escape(branch_text(row))} | {markdown_escape(commit_text(row))} | {markdown_escape(trigger_text(row))} | "
             f"{markdown_escape(labels)} | {markdown_escape(row.get('title'))} |"
         )
     if limit and len(rows) > limit:
@@ -355,7 +378,7 @@ def write_index(
         "# Bug summaries by modified module",
         "",
         "Modules are based on the XiangShan directory/component split: "
-        "`frontend`, `backend`, `mem`, `cache`, `chiselAIA`, `chiselIOPMP`.",
+        "`backend`, `cache`, `chiselAIA`, `chiselIOPMP`, `frontend`, `mem`.",
         "",
         f"- Input rows: `{total_rows}`",
         "- Items may appear in multiple modules when the issue/PR spans multiple areas.",

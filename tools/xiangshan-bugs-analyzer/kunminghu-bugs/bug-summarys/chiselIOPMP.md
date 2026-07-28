@@ -7,5 +7,5 @@
 - Rule: classified from labels, title, body, branch names, and referenced directory/component names.
 - Trigger: `exception` and `interrupt` are highlighted from title/body/labels keywords.
 
-| Number | Type | State | Updated | Trigger | Labels | Title |
-| --- | --- | --- | --- | --- | --- | --- |
+| Number | Type | State | Updated | Branch | Commit | Trigger | Labels | Title |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
