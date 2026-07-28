@@ -1,7 +1,7 @@
 # XiangShanLab 仓库索引
 
 > 以当前目录结构为准，按一级目录组织。
-
+- 官方网站/Official Website：[openxiangshan.cc](https://openxiangshan.cc/)
 ## 顶层目录
 
 - `2026-CIE-RISC-V-Contest-Application-Track/` - 2026 CIE RISC-V 大赛应用方向赛题提交区
