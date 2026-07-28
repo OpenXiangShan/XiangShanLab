@@ -19,9 +19,9 @@
   - `assets/` - 图片与资源文件
 
 - `xiangshan-programming-practice/` - 香山编程实践与实验工程
-  - `ChiselIOPMP/` - IOPMP 相关实验
-  - `ChiselIOPMP_1/` - IOPMP 基础实验
-  - `ChiselMyTop/` - 自定义顶层设计实验
+  - `ChiselIOPMP/` - IOPMP 核心实现与 DMA-IOPMP-Memory 示例
+  - `IopmpSystem/` - DCache-IOPMP-Memory 系统级实验
+  - `TwoToOneXbarSystem/` - 2-to-1 AXI4 XBar 系统实验
   - `NonBlockingCache/` - 非阻塞缓存实验
   - `mmu-smmpt/` - MMU / SMMPT 相关实验
   - [`README.md`](./xiangshan-programming-practice/README.md) - 目录说明

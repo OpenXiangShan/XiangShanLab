@@ -20,9 +20,9 @@
   - `assets/` - Images and resource files
 
 - `xiangshan-programming-practice/` - XiangShan programming practice and lab projects
-  - `ChiselIOPMP/` - IOPMP-related labs
-  - `ChiselIOPMP_1/` - Basic IOPMP lab
-  - `ChiselMyTop/` - Custom top-level design lab
+  - `ChiselIOPMP/` - Standalone IOPMP implementation
+  - `IopmpSystem/` - DCache -> IOPMP -> Memory system lab
+  - `TwoToOneXbarSystem/` - 2-to-1 AXI4 XBar system lab
   - `NonBlockingCache/` - Non-blocking cache lab
   - `mmu-smmpt/` - MMU / SMMPT-related labs
   - [`README.md`](./xiangshan-programming-practice/README.md) - Directory guide

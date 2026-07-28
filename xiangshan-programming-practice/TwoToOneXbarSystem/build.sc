@@ -107,7 +107,7 @@ object utility extends HasChisel {
   }
 }
 
-trait ChiselIOPMPModule extends ScalaModule {
+trait TwoToOneXbarSystemProject extends ScalaModule {
 
   def rocketModule: ScalaModule
 
@@ -121,7 +121,7 @@ trait ChiselIOPMPModule extends ScalaModule {
   override def forkEnv = Map("PATH" -> envPATH)
 }
 
-object ChiselIOPMP extends ChiselIOPMPModule with HasChisel with ScalafmtModule {
+object TwoToOneXbarSystem extends TwoToOneXbarSystemProject with HasChisel with ScalafmtModule {
 
   override def millSourcePath = pwd
 

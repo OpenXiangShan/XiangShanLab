@@ -45,7 +45,7 @@
 搭建步骤非常简单，只需克隆项目仓库，并执行以下命令来初始化项目环境并同步所需的子模块（如 rocket-chip 等）即可。
 
 ```plain
-cd ChiselIOPMP/
+cd IopmpSystem/
 make init
 ```
 
@@ -73,31 +73,31 @@ ls ./build/rtl/
 
 ```plain
 cd ..
-# 清理 IOPMP 的构建输出和源代码
-rm -rf ./ChiselIOPMP/out/
-rm -rf ./ChiselIOPMP/build/
-rm -rf ./ChiselIOPMP/README.md
-rm -rf ./ChiselIOPMP/src/main/scala/*
+# 清理原始项目的构建输出和源代码
+rm -rf ./IopmpSystem/out/
+rm -rf ./IopmpSystem/build/
+rm -rf ./IopmpSystem/README.md
+rm -rf ./IopmpSystem/src/main/scala/*
 # 当然，有强迫症的我也想顺便把各种项目名也改一下
-sed -i '37s/$(TIME_CMD) mill -i $(TOP).runMain iopmp.IOPMP /$(TIME_CMD) mill -i $(TOP).runMain mytop.TOP /' ./ChiselIOPMP/Makefile
-sed -i '6s/TOP = ChiselIOPMP/TOP = ChiselMyTop/' ./ChiselIOPMP/Makefile
-sed -i '15s/@echo "ChiselIOPMP Makefile Commands:"/@echo "ChiselMyTop Makefile Commands:"/' ./ChiselIOPMP/Makefile
-sed -i 's/ChiselIOPMP/ChiselMyTop/g' ./ChiselIOPMP/build.sc
+sed -i '37s/$(TIME_CMD) mill -i $(TOP).runMain iopmp.IOPMP /$(TIME_CMD) mill -i $(TOP).runMain mytop.TOP /' ./IopmpSystem/Makefile
+sed -i '6s/TOP = IopmpSystem/TOP = TwoToOneXbarSystem/' ./IopmpSystem/Makefile
+sed -i '15s/@echo "IopmpSystem Makefile Commands:"/@echo "TwoToOneXbarSystem Makefile Commands:"/' ./IopmpSystem/Makefile
+sed -i 's/IopmpSystem/TwoToOneXbarSystem/g' ./IopmpSystem/build.sc
 # 重命名项目目录
-mv ChiselIOPMP/ ChiselMyTop/
+mv IopmpSystem/ TwoToOneXbarSystem/
 ```
 
-现在，项目已经完全转变为一个名为 `ChiselMyTop`的、属于我们自己的简易的学习项目了。
+现在，项目已经完全转变为一个名为 `TwoToOneXbarSystem` 的、属于我们自己的简易学习项目了。
 
 接下来，在相应的位置创建我们自己的 Scala 源文件：
 
 ```plain
-touch ChiselMyTop/src/main/scala/mytop.scala
+touch TwoToOneXbarSystem/src/main/scala/mytop.scala
 ```
 
 现在，我们只需要在这个文件中编写自己的简单项目代码，就可以开始体验 Diplomacy 框架了。
 
-编辑ChiselMyTop/src/main/scala/mytop.scala的代码为：
+编辑 `TwoToOneXbarSystem/src/main/scala/mytop.scala` 的代码为：
 
 ```plain
 package mytop
@@ -133,7 +133,7 @@ object TOP extends App {
 ```
 
 ```plain
-cd ChiselMyTop/
+cd TwoToOneXbarSystem/
 make verilog
 ```
 
