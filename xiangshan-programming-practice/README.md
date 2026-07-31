@@ -7,7 +7,7 @@
 - IOPMP 配置为旁路模式，APB 配置接口悬空
 - 实现内存访问的基本保护与验证
 
-**对应目录**: `./ChiselIOPMP_1` 
+**对应目录**: `./IopmpSystem`
 - 核心模块: `Iopmp.scala`, `IopmpChecker.scala`, `IopmpBridge.scala`
 - 特点: 实现 IOPMP 的基本功能，包括多种检查器实现
 
@@ -41,6 +41,6 @@
 - 实现基本的总线仲裁和地址解码
 - 适用于中等复杂度的片上系统
 
-**对应目录**: `ChiselMyTop/`
+**对应目录**: `TwoToOneXbarSystem/`
 - 核心模块: `mytop.scala`, `AXI4DCache.scala`, `AXI4DMAC.scala`, `AXI4Memory.scala`
-- 特点: 自定义顶层设计，灵活配置各模块接口
+- 特点: 顶层核心是 `TwoToOneXbarSystem`，实现两个 AXI4 Master 共享一个 Memory Slave 的 2-to-1 XBar 系统

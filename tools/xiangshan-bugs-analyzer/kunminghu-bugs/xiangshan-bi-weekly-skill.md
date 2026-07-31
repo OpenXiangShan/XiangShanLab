@@ -11,6 +11,8 @@ bug/fix item extraction.
 - `bug-summarys/*.md`: module-oriented summaries that may need updates after a
   Biweekly refresh.
 
+Current upstream reference point: XiangShan Biweekly 107 (`2026-07-20`).
+
 Prefer local files before network access. Use `rg` for text search and inspect
 the raw JSONL entries when local metadata is available.
 

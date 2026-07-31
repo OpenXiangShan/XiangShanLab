@@ -3,7 +3,7 @@
 BUILD_DIR = ./build
 RTL_DIR = $(BUILD_DIR)/rtl
 
-TOP = ChiselIOPMP
+TOP = TwoToOneXbarSystem
 TOP_V = $(RTL_DIR)/$(TOP).sv
 
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
@@ -12,7 +12,7 @@ TIMELOG = $(BUILD_DIR)/time.log
 TIME_CMD = time -avp -o $(TIMELOG)
 
 help: ## Display this help message
-	@echo "ChiselIOPMP Makefile Commands:"
+	@echo "TwoToOneXbarSystem Makefile Commands:"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
@@ -34,7 +34,7 @@ init: ## initialize git submodules
 $(TOP_V): $(SCALA_FILE)
 	@printf "Generate SystemVerilog ...\n"
 	mkdir -p $(BUILD_DIR)
-	$(TIME_CMD) mill -i $(TOP).runMain iopmp.IOPMP \
+	$(TIME_CMD) mill -i $(TOP).runMain mytop.TOP \
 		-td $(RTL_DIR)/
 	@printf "Generate SystemVerilog is ok\n"
 

@@ -36,6 +36,8 @@ CAUSE_RULES: list[tuple[str, tuple[str, ...]]] = [
     ("bug fix/general", ("bug", "fix", "wrong", "error", "crash", "panic", "deadlock")),
 ]
 
+SHA_RE = re.compile(r"\b[0-9a-f]{7,40}\b", re.IGNORECASE)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -182,12 +184,15 @@ def compact_issue(item: dict[str, Any]) -> dict[str, Any]:
         "closed_at": item.get("closed_at"),
         "html_url": item.get("html_url"),
         "body": item.get("body") or "",
+        "branch": extract_branch(text, item.get("base") or "", item.get("head") or ""),
+        "commit": extract_commit(text),
         "heuristic_causes": classify_causes(text),
     }
 
 
 def compact_pull(item: dict[str, Any]) -> dict[str, Any]:
     labels = [label["name"] for label in item.get("labels", [])]
+    head = item.get("head") or {}
     text = "\n".join([item.get("title") or "", item.get("body") or "", " ".join(labels)])
     return {
         "number": item["number"],
@@ -202,9 +207,13 @@ def compact_pull(item: dict[str, Any]) -> dict[str, Any]:
         "merged_at": item.get("merged_at"),
         "draft": item.get("draft"),
         "base": ((item.get("base") or {}).get("ref")),
-        "head": ((item.get("head") or {}).get("ref")),
+        "head": head.get("ref"),
+        "head_sha": head.get("sha"),
+        "merge_commit_sha": item.get("merge_commit_sha") or "",
         "html_url": item.get("html_url"),
         "body": item.get("body") or "",
+        "branch": extract_branch(text, ((item.get("base") or {}).get("ref")) or "", head.get("ref") or ""),
+        "commit": extract_commit(text, head.get("sha") or "", item.get("merge_commit_sha") or ""),
         "heuristic_causes": classify_causes(text),
     }
 
@@ -218,6 +227,30 @@ def classify_causes(text: str) -> list[str]:
     return causes or ["uncategorized"]
 
 
+
+def extract_branch(text: str, base: str = "", head: str = "") -> str:
+    normalized = text.lower()
+    if re.search(r"\bkunminghu[-_ ]?v3\b|\bkunminghuv3\b", normalized):
+        return "kunminghu-v3"
+    if re.search(r"\bkunminghu[-_ ]?v2\b|\bkunminghuv2\b", normalized):
+        return "kunminghu-v2"
+    return base or head or ""
+
+
+def extract_commit(*texts: str) -> str:
+    patterns = (
+        r"\b(?:xiangshan|nemu)?\s*commit(?:\s+id|\s+sha)?\s*[:=\-]?\s*`?([0-9a-f]{7,40})`?\b",
+        r"\bcommit(?:\s+id|\s+sha)?\s*[:=\-]?\s*`?([0-9a-f]{7,40})`?\b",
+        r"\bsha\s*[:=\-]?\s*`?([0-9a-f]{7,40})`?\b",
+    )
+    for text in texts:
+        text = text or ""
+        for pattern in patterns:
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if match:
+                return match.group(1)
+    return ""
+
 def write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as file:
         for row in rows:
@@ -230,27 +263,18 @@ def markdown_escape(text: str) -> str:
 
 def write_index(path: Path, title: str, rows: list[dict[str, Any]], is_pr: bool) -> None:
     lines = [f"# {title}", ""]
-    if is_pr:
-        lines.append("| Number | State | Base | Updated | Labels | Heuristic causes | Title |")
-        lines.append("| --- | --- | --- | --- | --- | --- | --- |")
-    else:
-        lines.append("| Number | State | Updated | Labels | Heuristic causes | Title |")
-        lines.append("| --- | --- | --- | --- | --- | --- |")
+    lines.append("| Number | State | Branch | Commit | Updated | Labels | Heuristic causes | Title |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for row in sorted(rows, key=lambda item: item.get("updated_at") or "", reverse=True):
         number = f"[#{row['number']}]({row['html_url']})"
         labels = ", ".join(row.get("labels") or [])
         causes = ", ".join(row.get("heuristic_causes") or [])
         title_cell = markdown_escape(row.get("title") or "")
-        if is_pr:
-            lines.append(
-                f"| {number} | {row.get('state')} | {markdown_escape(row.get('base') or '')} | "
-                f"{row.get('updated_at') or ''} | {markdown_escape(labels)} | {markdown_escape(causes)} | {title_cell} |"
-            )
-        else:
-            lines.append(
-                f"| {number} | {row.get('state')} | {row.get('updated_at') or ''} | "
-                f"{markdown_escape(labels)} | {markdown_escape(causes)} | {title_cell} |"
-            )
+        lines.append(
+            f"| {number} | {row.get('state')} | {markdown_escape(row.get('branch') or '')} | "
+            f"{markdown_escape(row.get('commit') or '')} | {row.get('updated_at') or ''} | "
+            f"{markdown_escape(labels)} | {markdown_escape(causes)} | {title_cell} |"
+        )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -291,8 +315,8 @@ def write_readme(path: Path, args: argparse.Namespace, default_branch: str, issu
         "- `issues.jsonl`: raw non-PR issue records.",
         "- `pulls.jsonl`: raw pull request records.",
         "- `comments.jsonl`: comments, only when comment collection is enabled.",
-        "- `issue-index.md`: issue triage table.",
-        "- `pr-index.md`: PR triage table.",
+        "- `issue-index.md`: issue triage table with branch/commit columns.",
+        "- `pr-index.md`: PR triage table with branch/commit columns.",
         "- `bug-cause-summary.md`: heuristic cause buckets and examples.",
         "",
         "## Next Analysis Step",
