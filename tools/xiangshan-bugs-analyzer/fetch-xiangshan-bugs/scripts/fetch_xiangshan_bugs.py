@@ -10,6 +10,7 @@ import socket
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import urllib.error
@@ -52,6 +53,7 @@ def parse_args() -> argparse.Namespace:
 class GitHubClient:
     def __init__(self) -> None:
         self.token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        self.socks5_proxy = os.environ.get("SOCKS5_PROXY")
 
     def get(self, path_or_url: str, params: dict[str, Any] | None = None) -> tuple[Any, dict[str, str]]:
         if path_or_url.startswith("https://"):
@@ -69,6 +71,9 @@ class GitHubClient:
         }
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
+
+        if self.socks5_proxy:
+            return self.get_via_socks5(url, headers)
 
         request = urllib.request.Request(url, headers=headers)
         for attempt in range(4):
@@ -88,6 +93,44 @@ class GitHubClient:
                     continue
                 raise RuntimeError(f"Failed to reach GitHub API for {url}: {exc}") from exc
         raise RuntimeError(f"Failed to fetch {url}")
+
+    def get_via_socks5(self, url: str, headers: dict[str, str]) -> tuple[Any, dict[str, str]]:
+        command = [
+            "curl",
+            "--fail-with-body",
+            "--silent",
+            "--show-error",
+            "--socks5-hostname",
+            self.socks5_proxy,
+            "--connect-timeout",
+            "20",
+            "--max-time",
+            "90",
+            "--dump-header",
+            "-",
+        ]
+        for name, value in headers.items():
+            command.extend(("--header", f"{name}: {value}"))
+        command.append(url)
+
+        try:
+            result = subprocess.run(command, check=True, capture_output=True, text=True)
+        except (OSError, subprocess.CalledProcessError) as exc:
+            detail = exc.stderr if isinstance(exc, subprocess.CalledProcessError) else str(exc)
+            raise RuntimeError(f"Failed to reach GitHub API through SOCKS5 proxy for {url}: {detail}") from exc
+
+        header_block, separator, body = result.stdout.rpartition("\r\n\r\n")
+        if not separator:
+            header_block, separator, body = result.stdout.rpartition("\n\n")
+        if not separator:
+            raise RuntimeError(f"Invalid HTTP response through SOCKS5 proxy for {url}")
+
+        response_headers: dict[str, str] = {}
+        for line in header_block.splitlines():
+            if ":" in line:
+                name, value = line.split(":", 1)
+                response_headers[name.title()] = value.strip()
+        return json.loads(body), response_headers
 
     def paginate(self, path: str, params: dict[str, Any], limit: int | None = None) -> Iterable[dict[str, Any]]:
         next_url: str | None = None

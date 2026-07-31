@@ -1,0 +1,21 @@
+=== NEMU ref-trace excerpt: id_60_1210 amoxor.w store page fault @0x2b5c ===
+[NEMU][0] paddr read addr:0x0000000080020008, data: 0000000091139f0d, len:4, type:1, mode:3
+[NEMU][0] pc = 0x2b52 inst 1d497
+[NEMU][0] paddr read addr:0x0000000080005000, data: 0000000020001801, len:[7167] commit pc 0000000000002b5a inst fe848493 wen 1 dst 09 data 0000000000020008 idx 078
+[NEMU][0] pc = 0x2b56 inst 4ce48493
+[NEMU][0] pc = 0x2b5a inst 14a1
+[NEMU][0] pc = 0x2b5c inst 20d4a4af
+[NEMU][0] ptw: level 2, vaddr 0x20008, pg_base 0x80005000, p_pte 0x80005000, pte.val 0x20001801
+[NEMU][0] ptw: level 1, vaddr 0x20008, pg_base 0x80006000, p_pte 0x80006000, pte.val 0x20002001
+[NEMU][0] ptw: level 0, vaddr 0x20008, pg_base 0x80008000, p_pte 0x80008100, pte.val 0x0
+[NEMU][0] mmu_write: vaddr 0xffffffffffe6512a, paddr 0x8006512a, len 8, data 0x20008
+[NEMU][0] paddr write addr:0x000000008006512a, data:0000000000020008, len:8, mode:1
+[7206] commit pc ffffffffffe004ce inst 143022f3 wen 1 dst 05 data 0000000000020008 idx 09e
+[7207] commit pc ffffffffffe004d2 inst 10513823 wen 0 dst 16 data 0000000000020008 idx 09f (2b)
+[NEMU][0] mmu_write: vaddr 0xffffffffffe651f2, paddr 0x800651f2, len 8, data 0x20008
+[NEMU][0] paddr write addr:0x00000000800651f2, data:0000000000020008, len:8, mode:1
+[NEMU][0] mmu_write: vaddr 0xffffffffffe650ca, paddr 0x800650ca, len 8, data 0x20008
+[NEMU][0] paddr write addr:0x00000000800650ca, data:0000000000020008, len:8, mode:1
+[7229] commit pc ffffffffffe02498 inst 110b3503 wen 1 dst 10 data 0000000000020008 idx 0b5 (0c)
+[NEMU][0] paddr read addr:0x00000000800650ca, data: 0000000000020008, len:8, type:1, mode:1
+[NEMU][0] mmu_read: vaddr 0xffffffffffe650ca, paddr 0x800650ca, rdata 0x20008
