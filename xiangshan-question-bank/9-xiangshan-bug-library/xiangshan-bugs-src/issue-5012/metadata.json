@@ -1,0 +1,30 @@
+{
+  "number": 5012,
+  "title": "fix(ifu): rewrite instruction boundary calculation and offset",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5012",
+  "state": "closed",
+  "labels": [
+    "topic: code quality",
+    "note: do not squash",
+    "module: frontend",
+    "topic: functionality"
+  ],
+  "author": "Yan-Muzi",
+  "created_at": "2025-09-08T02:28:42Z",
+  "updated_at": "2025-09-22T02:32:40Z",
+  "submitted_at": "2025-09-08",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5012/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

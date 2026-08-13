@@ -1,0 +1,10 @@
+readResp at 19152:
+  table=0 way=0 tag=6 takenCtr=3 usefulCtr=0
+  tag_matches_entry_commit=true
+  useful_matches_expected=false
+
+to_ftq metadata at 19178:
+  providerTableIdx=0 providerWayIdx=0 providerTakenCtr=3 providerUsefulCtr=0 useProvider=1
+
+train metadata at 19204:
+  providerTableIdx=0 providerWayIdx=0 providerTakenCtr=3 providerUsefulCtr=0 useProvider=1

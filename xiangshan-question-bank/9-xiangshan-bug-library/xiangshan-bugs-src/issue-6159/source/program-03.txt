@@ -1,0 +1,5 @@
+predicate_result      = reproduced
+event_count           = 16
+missing_core_signals  = []
+tables_found          = [0, 1]
+bank_groups_found     = 8

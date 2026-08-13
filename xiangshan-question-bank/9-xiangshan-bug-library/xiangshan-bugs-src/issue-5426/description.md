@@ -1,0 +1,215 @@
+### Before start
+
+- [x] I have read the [RISC-V ISA Manual](https://github.com/riscv/riscv-isa-manual) and this is not a RISC-V ISA question. 我已经阅读过 RISC-V 指令集手册，这不是一个指令集本身的问题。
+- [x] I have read the [XiangShan Documents](https://xiangshan-doc.readthedocs.io/zh_CN/latest). 我已经阅读过香山文档。
+- [x] I have searched the previous issues and did not find anything relevant. 我已经搜索过之前的 issue，并没有找到相关的。
+- [x] I have reviewed the commit messages from the relevant commit history. 我已经浏览过相关的提交历史和提交信息。
+- [x] I have reproduced the incorrect behaviors using the latest commit on the master branch. 我已经使用 master 分支最新的 commit 复现了不正确的行为。
+
+### Describe the bug
+
+XiangShan DUT mismatch with REF model on vfredusum.vs instruction.
+
+Simulation report:
+```
+==============  In the last commit group  ==============
+the first commit instr pc of DUT is 0x000000008000268a
+the first commit instr pc of REF is 0x000000008000268a
+
+============== Commit Group Trace (Core 0) ==============
+commit group [00]: pc 00800025ea cmtcnt 3
+commit group [01]: pc 00800025f2 cmtcnt 6
+commit group [02]: pc 0080002606 cmtcnt 2
+commit group [03]: pc 008000260c cmtcnt 1
+commit group [04]: pc 0080002610 cmtcnt 3
+commit group [05]: pc 008000261a cmtcnt 6
+commit group [06]: pc 008000262c cmtcnt 6
+commit group [07]: pc 0080002640 cmtcnt 6
+commit group [08]: pc 0080002654 cmtcnt 6
+commit group [09]: pc 0080002668 cmtcnt 2
+commit group [10]: pc 008000266e cmtcnt 1
+commit group [11]: pc 0080002672 cmtcnt 3
+commit group [12]: pc 008000267a cmtcnt 3
+commit group [13]: pc 0080002682 cmtcnt 1
+commit group [14]: pc 0080002686 cmtcnt 1
+commit group [15]: pc 008000268a cmtcnt 1 <--
+
+============== Commit Instr Trace ==============
+[00] commit pc 00000000800025a4 inst 65fb8b93 wen 1 dst 23 data fffeffb99799a65f idx 030
+[01] commit pc 00000000800025ae inst fc9e2c37 wen 1 dst 24 data fffffffffc9e18ff idx 031
+[02] commit pc 00000000800025b6 inst 00cc1c13 wen 1 dst 24 data ffffffc9e18ff000 idx 032
+[03] commit pc 00000000800025b8 inst 3e5c0c13 wen 1 dst 24 data ffffffc9e18ff3e5 idx 033
+[04] commit pc 00000000800025cc inst 11dc8c9b wen 1 dst 25 data ffffffffffcc711d idx 034
+[05] commit pc 00000000800025d0 inst 00dc9c93 wen 1 dst 25 data fffffff98e23a000 idx 035
+[06] commit pc 00000000800025de inst ce2c8c93 wen 1 dst 25 data f31c47399e2b5ce2 idx 036
+[07] commit pc 00000000800025e2 inst ff83dd37 wen 1 dst 26 data ffffffffff83cde9 idx 037
+[08] commit pc 00000000800025ea inst 00cd1d13 wen 1 dst 26 data fffffff83cde9000 idx 038
+[09] commit pc 00000000800025ec inst adfd0d13 wen 1 dst 26 data fffffff83cde8adf idx 039
+[10] commit pc 00000000800025f0 inst 00ed1d13 wen 1 dst 26 data fffe0f37a2b7c000 idx 03a
+[11] commit pc 00000000800025f2 inst 15dd0d13 wen 1 dst 26 data fffe0f37a2b7c15d idx 03b
+[12] commit pc 00000000800025fc inst 02916db7 wen 1 dst 27 data 00000000029166e7 idx 03c
+[13] commit pc 0000000080002604 inst 00dd9d93 wen 1 dst 27 data 000000522cdce000 idx 03d
+[14] commit pc 0000000080002606 inst 235d8d93 wen 1 dst 27 data 000000522cdce235 idx 03e
+[15] commit pc 000000008000260c inst 8b5d8d93 wen 1 dst 27 data 000522cdce2348b5 idx 03f
+[16] commit pc 0000000080002610 inst 00cd9d93 wen 1 dst 27 data 522cdce2348b5000 idx 040
+[17] commit pc 000000008000261a inst c2de0e1b wen 1 dst 28 data 0000000001015c2d idx 041
+[18] commit pc 000000008000262c inst 020e0e13 wen 1 dst 28 data 40570b45eba1a020 idx 042
+[19] commit pc 0000000080002630 inst 00dcbeb7 wen 1 dst 29 data 0000000000dcadd5 idx 043
+[20] commit pc 0000000080002638 inst 00de9e93 wen 1 dst 29 data 0000001b95baa000 idx 044
+[21] commit pc 0000000080002640 inst 85fe8e93 wen 1 dst 29 data 0001b95ba9fb485f idx 045
+[22] commit pc 000000008000264a inst fa7dbf37 wen 1 dst 30 data fffffffffa7daf75 idx 046
+[23] commit pc 0000000080002652 inst 00cf1f13 wen 1 dst 30 data ffffffa7daf75000 idx 047
+[24] commit pc 0000000080002654 inst 027f0f13 wen 1 dst 30 data ffffffa7daf75027 idx 048
+[25] commit pc 0000000080002668 inst 8fff8f9b wen 1 dst 31 data ffffffffff2338ff idx 049
+[26] commit pc 000000008000266e inst 425f8f93 wen 1 dst 31 data fffffff2338ff425 idx 04a
+[27] commit pc 0000000080002672 inst 00ef9f93 wen 1 dst 31 data fffc8ce3fd094000 idx 04b
+[28] commit pc 000000008000267a inst 86ff8f93 wen 1 dst 31 data c8ce3fd09417086f idx 04c
+[29] commit pc 0000000080002682 inst 813efb57 wen 0 dst 00 data ffffffffffdff733 idx 04d
+[30] commit pc 0000000080002686 inst 7e002057 wen 0 dst 00 data ffffffffffffffff idx 04e
+[31] commit pc 000000008000268a inst 07289fd7 wen 1 dst 32 data 0000000000000000 idx 04f <--
+
+==============  REF Regs  ==============
+---------------- Intger Registers ----------------
+  $0: 0x0000000000000000   ra: 0x2636262f1a54e702   sp: 0x00000000bffffe40   gp: 0xb9acc9ab4822908d 
+  tp: 0x95214c7e08e094cb   t0: 0x29ef38efe653069b   t1: 0x250685d25f438cf6   t2: 0x82c3d23d8e0bfe64 
+  s0: 0x400e96eda26f9b50   s1: 0xa7b73a7114c6e12b   a0: 0xf6e66f5897a4be3f   a1: 0x1a2206e4c1d36c71 
+  a2: 0xa9b4ba30631f362b   a3: 0xa10a1b4b68293d81   a4: 0x6ed003fca807d071   a5: 0x4396c82d99afb187 
+  a6: 0xd24ae6823cedc02d   a7: 0x3897038b86a94503   s2: 0x1abf2d52feeae514   s3: 0x0000000000000018 
+  s4: 0xee8119fda7208b1c   s5: 0x6f2bffd7e3c4ec45   s6: 0x0000000000000001   s7: 0xdff732f334cbddb7 
+  s8: 0x93c31fe7ca9f269f   s9: 0xf31c47399e2b5ce2  s10: 0xe0f37a2b7c15d69e  s11: 0x522cdce2348b50a9 
+  t3: 0x40570b45eba1a020   t4: 0x0000000000000001   t5: 0xa7daf75026da9406   t6: 0xc8ce3fd09417086f 
+---------------- Float Registers ----------------
+ ft0: 0x2b56d4ed1839024f  ft1: 0x0770f417f3666fe3  ft2: 0x8e352b15ba4b262c  ft3: 0x9c32c88fbaaa39be 
+ ft4: 0x07817894f4f1e0c8  ft5: 0x8ac26fe213be55e1  ft6: 0xf96561bfada68a0b  ft7: 0xeb25c0def97a2794 
+ fs0: 0x84303641cd99be61  fs1: 0x4eb0d35c658fb78e  fa0: 0x9d05bf53a7419df4  fa1: 0x1689a647cf1783b7 
+ fa2: 0xcc43865e72920f6a  fa3: 0xdf20af0b5ac5f3d5  fa4: 0x851a74ac3d08276a  fa5: 0x4f6c17479c104c9d 
+ fa6: 0xe63b0a66dbe6561f  fa7: 0x888dd57b9914c571  fs2: 0xb1b6bfd9431b7567  fs3: 0x9ab22e39b98a09e9 
+ fs4: 0xce329ffad3f8a55a  fs5: 0xc360a70af4ea2e44  fs6: 0x27b8b4688ee8b6ec  fs7: 0xf13931dfc7e0fa8a 
+ fs8: 0x4bef6935112bc40a  fs9: 0x4a25798056e00512 fs10: 0x79955970dc2dcee3 fs11: 0x7e3955ee6b2e631f 
+ ft8: 0x35529357b8aa6115  ft9: 0x4cbc161238fb97c8 ft10: 0x1ef9a8ddef3459f5 ft11: 0x1608684cc22451c2 
+ fcsr: 0x000000000000004f fflags: 0x000000000000000f frm: 0x0000000000000002
+---------------- Privileged CSRs ----------------
+pc: 0x000000008000268e  privilege mode: M (mode: 3  v: 0  debug: 0)
+   mstatus: 0x8000000a00006600   sstatus: 0x8000000200006600  vsstatus: 0x0000000200000000
+   hstatus: 0x0000000200000000  mnstatus: 0x0000000000000008
+    mcause: 0x0000000000000002      mepc: 0x0000000000000000     mtval: 0x00000000be102573
+    scause: 0x0000000000000000      sepc: 0x0000000000000000     stval: 0x0000000000000000
+   vscause: 0x0000000000000000     vsepc: 0x0000000000000000    vstval: 0x0000000000000000
+   mncause: 0x0000000000000000     mnepc: 0x0000000000000000 mnscratch: 0x0000000000000000
+    mtval2: 0x0000000000000000     htval: 0x0000000000000000
+    mtinst: 0x0000000000000000    htinst: 0x0000000000000000
+  mscratch: 0x00000000c0000000  sscratch: 0x76bf89f259b562dc vsscratch: 0x880c7b71e5a44687
+     mtvec: 0x0000000080000500     stvec: 0x0000000000000000    vstvec: 0x0000000000000000
+       mip: 0x0000000000000000       mie: 0x0000000000000000
+   mideleg: 0x0000000000001444   medeleg: 0x0000000000000000
+   hideleg: 0x0000000000000000   hedeleg: 0x0000000000000000
+      satp: 0x0000000000000000     hgatp: 0x0000000000000000     vsatp: 0x0000000000000000
+ mcounteren: 0x0000000000000000 scounteren: 0x0000000000000000 hcounteren: 0x0000000000000000
+  miselect: 0x0000000000000000  siselect: 0x0000000000000000 vsiselect: 0x0000000000000000
+     mireg: 0x0000000000000000     sireg: 0x0000000000000000    vsireg: 0x0000000000000000
+     mtopi: 0x0000000000000000     stopi: 0x0000000000000000    vstopi: 0x0000000000000000
+     mvien: 0x0000000000000000     hvien: 0x0000000000000000      mvip: 0x0000000000000000
+    mtopei: 0x0000000000000000    stopei: 0x0000000000000000   vstopei: 0x0000000000000000
+    hvictl: 0x0000000000000000  hviprio1: 0x0000000000000000  hviprio2: 0x0000000000000000
+---------------- PMP CSRs ----------------
+pmp: 32 entries active, details:
+ 0: cfg:0x1b addr:0x0000000010180001| 1: cfg:0x1b addr:0x000000000e001fff
+ 2: cfg:0x1f addr:0x0000000027ffffff| 3: cfg:0x00 addr:0x0000000000000000
+ 4: cfg:0x00 addr:0x0000000000000000| 5: cfg:0x00 addr:0x0000000000000000
+ 6: cfg:0x00 addr:0x0000000000000000| 7: cfg:0x00 addr:0x0000000000000000
+ 8: cfg:0x00 addr:0x0000000000000000| 9: cfg:0x00 addr:0x0000000000000000
+10: cfg:0x00 addr:0x0000000000000000|11: cfg:0x00 addr:0x0000000000000000
+12: cfg:0x00 addr:0x0000000000000000|13: cfg:0x00 addr:0x0000000000000000
+14: cfg:0x00 addr:0x0000000000000000|15: cfg:0x00 addr:0x0000000000000000
+16: cfg:0x00 addr:0x0000000000000000|17: cfg:0x00 addr:0x0000000000000000
+18: cfg:0x00 addr:0x0000000000000000|19: cfg:0x00 addr:0x0000000000000000
+20: cfg:0x00 addr:0x0000000000000000|21: cfg:0x00 addr:0x0000000000000000
+22: cfg:0x00 addr:0x0000000000000000|23: cfg:0x00 addr:0x0000000000000000
+24: cfg:0x00 addr:0x0000000000000000|25: cfg:0x00 addr:0x0000000000000000
+26: cfg:0x00 addr:0x0000000000000000|27: cfg:0x00 addr:0x0000000000000000
+28: cfg:0x00 addr:0x0000000000000000|29: cfg:0x00 addr:0x0000000000000000
+30: cfg:0x00 addr:0x0000000000000000|31: cfg:0x00 addr:0x0000000000000000
+32: cfg:0x00 addr:0x0000000000000000|33: cfg:0x00 addr:0x0000000000000000
+34: cfg:0x00 addr:0x0000000000000000|35: cfg:0x00 addr:0x0000000000000000
+36: cfg:0x00 addr:0x0000000000000000|37: cfg:0x00 addr:0x0000000000000000
+38: cfg:0x00 addr:0x0000000000000000|39: cfg:0x00 addr:0x0000000000000000
+40: cfg:0x00 addr:0x0000000000000000|41: cfg:0x00 addr:0x0000000000000000
+42: cfg:0x00 addr:0x0000000000000000|43: cfg:0x00 addr:0x0000000000000000
+44: cfg:0x00 addr:0x0000000000000000|45: cfg:0x00 addr:0x0000000000000000
+46: cfg:0x00 addr:0x0000000000000000|47: cfg:0x00 addr:0x0000000000000000
+48: cfg:0x00 addr:0x0000000000000000|49: cfg:0x00 addr:0x0000000000000000
+50: cfg:0x00 addr:0x0000000000000000|51: cfg:0x00 addr:0x0000000000000000
+52: cfg:0x00 addr:0x0000000000000000|53: cfg:0x00 addr:0x0000000000000000
+54: cfg:0x00 addr:0x0000000000000000|55: cfg:0x00 addr:0x0000000000000000
+56: cfg:0x00 addr:0x0000000000000000|57: cfg:0x00 addr:0x0000000000000000
+58: cfg:0x00 addr:0x0000000000000000|59: cfg:0x00 addr:0x0000000000000000
+60: cfg:0x00 addr:0x0000000000000000|61: cfg:0x00 addr:0x0000000000000000
+62: cfg:0x00 addr:0x0000000000000000|63: cfg:0x00 addr:0x0000000000000000
+---------------- PMA CSRs ----------------
+pma: 32 entries active, details:
+ 0: cfg:0x00 addr:0x0000000000000000| 1: cfg:0x00 addr:0x0000000000000000
+ 2: cfg:0x00 addr:0x0000000000000000| 3: cfg:0x00 addr:0x0000000000000000
+ 4: cfg:0x00 addr:0x0000000000000000| 5: cfg:0x00 addr:0x0000000000000000
+ 6: cfg:0x00 addr:0x0000000000000000| 7: cfg:0x00 addr:0x0000000000000000
+ 8: cfg:0x00 addr:0x0000000000000000| 9: cfg:0x00 addr:0x0000000000000000
+10: cfg:0x00 addr:0x0000000000000000|11: cfg:0x00 addr:0x0000000000000000
+12: cfg:0x00 addr:0x0000000000000000|13: cfg:0x00 addr:0x0000000000000000
+14: cfg:0x00 addr:0x0000000000000000|15: cfg:0x00 addr:0x0000000000000000
+16: cfg:0x00 addr:0x0000000000000000|17: cfg:0x00 addr:0x0000000000000000
+18: cfg:0x00 addr:0x0000000000000000|19: cfg:0x0b addr:0x0000000004000000
+20: cfg:0x0f addr:0x0000000008000000|21: cfg:0x0b addr:0x000000000c004000
+22: cfg:0x0b addr:0x000000000c014000|23: cfg:0x0b addr:0x000000000e008000
+24: cfg:0x0f addr:0x000000000e008400|25: cfg:0x0b addr:0x000000000e008800
+26: cfg:0x0b addr:0x000000000e400000|27: cfg:0x0b addr:0x000000000e400800
+28: cfg:0x08 addr:0x000000000e800000|29: cfg:0x0b addr:0x0000000020000000
+30: cfg:0x6f addr:0x0000020000000000|31: cfg:0x18 addr:0x00001fffffffffff
+---------------- Vector Registers ----------------
+v0 : 0xffffffffffffffff_ffffffffffffffff  v1 : 0x0000000000000000_0000000000000000  
+v2 : 0x0000000000000000_0000000000000000  v3 : 0x0000000000000000_0000000000000000  
+v4 : 0x0000000000000000_0000000000000000  v5 : 0x0000000000000000_0000000000000000  
+v6 : 0x0000000000000000_0000000000000000  v7 : 0x0000000000000000_0000000000000000  
+v8 : 0x0000000000000000_0000000000000000  v9 : 0x0000000000000000_0000000000000000  
+v10: 0x0000000000000000_0000000000000000  v11: 0x0000000000000000_0000000000000000  
+v12: 0x0000000000000000_0000000000000000  v13: 0x0000000000000000_0000000000000000  
+v14: 0x0000000000000000_0000000000000000  v15: 0x0000000000000000_0000000000000000  
+v16: 0x0000000000000000_0000000000000000  v17: 0x0000000000000000_0000000000000000  
+v18: 0x0000000000000000_0000000000000000  v19: 0x0000000000000000_0000000000000000  
+v20: 0x0000000000000000_0000000000000000  v21: 0x0000000000000000_0000000000000000  
+v22: 0x0000000000000000_0000000000000000  v23: 0x0000000000000000_0000000000000000  
+v24: 0x0000000000000000_0000000000000000  v25: 0x0000000000000000_0000000000000000  
+v26: 0x0000000000000000_0000000000000000  v27: 0x0000000000000000_0000000000000000  
+v28: 0x0000000000000000_0000000000000000  v29: 0x0000000000000000_0000000000000000  
+v30: 0x0000000000000000_0000000000000000  v31: 0x0000000000000000_8000000000000000  
+  vtype: 0x0000000000000018 vstart: 0x0000000000000000  vxsat: 0x0000000000000000
+   vxrm: 0x0000000000000003     vl: 0x0000000000000001   vcsr: 0x0000000000000006
+---------------- Triggers ----------------
+ tselect: 0x0000000000000000
+ 0: tdata1: 0xf000000000000000 tdata2: 0x0000000000000000
+ 1: tdata1: 0xf000000000000000 tdata2: 0x0000000080002a88
+ 2: tdata1: 0xf000000000000000 tdata2: 0x0000774e63c87a90
+ 3: tdata1: 0xf000000000000000 tdata2: 0x0000000000000034
+ 4: tdata1: 0x0000000080002ac4 tdata2: 0x0000000000000000
+privilegeMode: 3
+v31_low different at pc = 0x008000268a, right= 0x8000000000000000, wrong = 0x0000000000000000
+```
+
+### Expected behavior
+
+Normal instruction execution according to RISC-V Vector Specification.
+
+### To Reproduce
+
+```
+$NOOP_HOME/build/emu -b 0 -e 0 -i snippy-rvv-test-23-vfredsum.elf --diff $NOOP_HOME/ready-to-run/riscv64-nemu-interpreter-debug-so
+```
+Binary file: [snippy-rvv-test-23-vfredsum.zip](https://github.com/user-attachments/files/24330943/snippy-rvv-test-23-vfredsum.zip).
+
+### Environment
+
+- XiangShan commit: `98e6aff91363332d7e45fa89c934d710aff662b9`
+- ready-to-run commit: `c4e0350c0f686cfa206d5b47d80cfd730f39675a`
+
+### Additional context
+
+This test was generated using the LLVM Snippy random snippet generator and linked with a simple bare-metal boot code.
+For more information about the generator, see: https://llvm-snippy.github.io/llvm-snippy/.

@@ -1,0 +1,9 @@
+Assertion failed at .../LoadQueueReplay.sv:22765.
+The simulation stopped. There might be some assertion failed.
+Core 0: ABORT at pc = 0x80000258
+Core-0 instrCnt = 5361, cycleCnt = 7468, IPC = 0.717863
+Seed=241027 Guest cycle spent: 7473
+Assertion failed
+at LogUtils.scala:132 assert(false.B)
+[ERROR][time=7472] SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner.lsq.loadQueue.loadQueueReplay:
+vector load, should not have replay entry 8 when commit or flush.

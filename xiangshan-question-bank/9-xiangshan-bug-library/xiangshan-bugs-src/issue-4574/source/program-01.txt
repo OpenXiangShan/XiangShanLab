@@ -1,0 +1,4 @@
+csrw tdata1, zero
+li t0, 0x600ff000012ff01e
+csrw tdata1, t0 
+csrr t1, tdata1

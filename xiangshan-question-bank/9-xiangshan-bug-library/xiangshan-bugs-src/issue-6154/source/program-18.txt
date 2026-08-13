@@ -1,0 +1,7 @@
+If S3 sees redirect kill for a load uop, then the same uop must not assert:
+- ldout.toRob.valid
+- ldout.toIntRf.valid
+- backend RF write enable
+- LQ write side effects
+- exception side effects
+- fastReplay side effects

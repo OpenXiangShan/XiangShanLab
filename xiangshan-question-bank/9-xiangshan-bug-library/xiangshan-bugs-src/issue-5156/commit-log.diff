@@ -1,0 +1,1161 @@
+diff --git a/src/main/scala/top/Configs.scala b/src/main/scala/top/Configs.scala
+index 369ff9a48cd..9979cf4c15f 100644
+--- a/src/main/scala/top/Configs.scala
++++ b/src/main/scala/top/Configs.scala
+@@ -111,9 +111,10 @@ class MinimalConfig(n: Int = 1) extends Config(
+             ),
+             tageParameters = TageParameters(
+               TableInfos = Seq(
+-                new TageTableInfo(512, 4),
++                new TageTableInfo(512, 6),
+                 new TageTableInfo(512, 9),
+-                new TageTableInfo(512, 17)
++                new TageTableInfo(512, 17),
++                new TageTableInfo(512, 31)
+               ),
+             ),
+             // FIXME: these are from V2 SC, we don't have equivalent parameters now
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+index 70938d7fea6..96684404e78 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+@@ -201,7 +201,7 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+   ras.io.specIn.bits.cfiPosition := s3_prediction.cfiPosition
+ 
+   // tage
+-  tage.io.mbtbResult             := mbtb.io.result
++  tage.io.branchesFromMainBtb    := mbtb.io.result
+   tage.io.foldedPathHist         := phr.io.s0_foldedPhr
+   tage.io.foldedPathHistForTrain := phr.io.trainFoldedPhr
+ 
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/Helpers.scala
+index d4836f7c787..9c0c04908bc 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Helpers.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Helpers.scala
+@@ -37,6 +37,11 @@ trait HalfAlignHelper extends HasBpuParameters {
+     PrunedAddrInit(Cat(nextAlignedVAddrUpperBits, 0.U(FetchBlockAlignWidth.W)))
+   }
+ 
++  def getBranchVAddr(startVAddr: PrunedAddr, position: UInt): PrunedAddr = {
++    val branchVAddrUpperBits = startVAddr(VAddrBits - 1, FetchBlockAlignWidth) + position(CfiPositionWidth - 1)
++    PrunedAddrInit(Cat(branchVAddrUpperBits, position(CfiPositionWidth - 2, 0), 0.U))
++  }
++
+   def getAlignedInstOffset(addr: PrunedAddr): UInt =
+     // given an instruction address, return the offset of the instruction in the fetch block
+     // example:
+diff --git a/src/main/scala/xiangshan/frontend/bpu/SaturateCounter.scala b/src/main/scala/xiangshan/frontend/bpu/SaturateCounter.scala
+index ee4d3ef73f9..c7a20a99aea 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/SaturateCounter.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/SaturateCounter.scala
+@@ -62,11 +62,10 @@ class SaturateCounter(width: Int) extends Bundle {
+     value := ((1 << width) - 1).U
+ 
+   // for TAGE taken ctr
+-  def isConfident: Bool = {
++  def isWeak: Bool = {
+     require(width >= 2)
+     val weakNotTaken = !value(width - 1) && value(width - 2, 0).andR
+     val weakTaken    = value(width - 1) && !value(width - 2, 0).orR
+-    val isWeak       = weakNotTaken || weakTaken // for 3 bit ctr: 011 || 100
+-    !isWeak
++    weakNotTaken || weakTaken // for 3 bit ctr: 011 || 100
+   }
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Types.scala b/src/main/scala/xiangshan/frontend/bpu/Types.scala
+index eb057ea0b29..e95c5322103 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Types.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Types.scala
+@@ -56,6 +56,19 @@ class TageTableInfo(
+     else
+       Set[FoldedHistoryInfo]()
+   }
++
++  def getTageFoldedHistoryInfo(numBanks: Int, tagWidth: Int): List[FoldedHistoryInfo] = {
++    require(numBanks > 0, "numBanks must be > 0")
++    require(tagWidth > 0, "tagWidth must be > 0")
++    if (HistoryLength > 0)
++      List( // FoldedHistoryInfo(unfolded history length, folded history length)
++        new FoldedHistoryInfo(HistoryLength, min(HistoryLength, log2Ceil(NumSets / numBanks))),
++        new FoldedHistoryInfo(HistoryLength, min(HistoryLength, tagWidth)),
++        new FoldedHistoryInfo(HistoryLength, min(HistoryLength, tagWidth - 1))
++      )
++    else
++      List[FoldedHistoryInfo]()
++  }
+ }
+ 
+ class IttageTableInfo(
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Bundles.scala
+index 4b372dac6ae..c2cc412d8fb 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Bundles.scala
+@@ -22,10 +22,9 @@ import xiangshan.frontend.bpu.SaturateCounter
+ import xiangshan.frontend.bpu.WriteReqBundle
+ 
+ class TageEntry(implicit p: Parameters) extends TageBundle {
+-  val valid:     Bool            = Bool()
+-  val tag:       UInt            = UInt(TagWidth.W)
+-  val takenCtr:  SaturateCounter = new SaturateCounter(TakenCtrWidth)
+-  val usefulCtr: SaturateCounter = new SaturateCounter(UsefulCtrWidth)
++  val valid:    Bool            = Bool()
++  val tag:      UInt            = UInt(TagWidth.W)
++  val takenCtr: SaturateCounter = new SaturateCounter(TakenCtrWidth)
+ }
+ 
+ class BaseTableSramWriteReq(implicit p: Parameters) extends TageBundle {
+@@ -40,29 +39,59 @@ class TableReadReq(numSets: Int)(implicit p: Parameters) extends TageBundle {
+ }
+ 
+ class TableReadResp(implicit p: Parameters) extends TageBundle {
+-  val entries:      Vec[TageEntry]  = Vec(NumWays, new TageEntry)
+-  val allocFailCtr: SaturateCounter = new SaturateCounter(AllocFailCtrWidth)
++  val entries:    Vec[TageEntry]       = Vec(NumWays, new TageEntry)
++  val usefulCtrs: Vec[SaturateCounter] = Vec(NumWays, new SaturateCounter(UsefulCtrWidth))
+ }
+ 
+ class EntrySramWriteReq(numSets: Int)(implicit p: Parameters) extends WriteReqBundle
+     with HasTageParameters {
+   val setIdx:         UInt                    = UInt(log2Ceil(numSets / NumBanks).W)
+   val entry:          TageEntry               = new TageEntry
++  val usefulCtr:      SaturateCounter         = new SaturateCounter(UsefulCtrWidth)
+   override def tag:   Option[UInt]            = Some(entry.tag)
+   override def cnt:   Option[SaturateCounter] = Some(entry.takenCtr)
+-  override def taken: Option[Bool]            = Some(entry.takenCtr.isPositive)
+-}
+-class AllocFailCtrSramWriteReq(numSets: Int)(implicit p: Parameters) extends WriteReqBundle
+-    with HasTageParameters {
+-  val setIdx:       UInt            = UInt(log2Ceil(numSets / NumBanks).W)
+-  val allocFailCtr: SaturateCounter = new SaturateCounter(AllocFailCtrWidth)
++  override def taken: Option[Bool]            = Some(entry.takenCtr.isPositive) // FIXME: use actualTaken
+ }
+ 
+-class TableUpdateEntriesReq(implicit p: Parameters) extends TageBundle {
+-  val wayMask: UInt           = UInt(NumWays.W)
+-  val entries: Vec[TageEntry] = Vec(NumWays, new TageEntry)
++class TableWriteReq(numSets: Int)(implicit p: Parameters) extends TageBundle {
++  val setIdx:     UInt                 = UInt(log2Ceil(numSets / NumBanks).W)
++  val bankMask:   UInt                 = UInt(NumBanks.W)
++  val wayMask:    UInt                 = UInt(NumWays.W)
++  val entries:    Vec[TageEntry]       = Vec(NumWays, new TageEntry)
++  val usefulCtrs: Vec[SaturateCounter] = Vec(NumWays, new SaturateCounter(UsefulCtrWidth))
+ }
+ 
+ class TageMeta(implicit p: Parameters) extends TageBundle {
+   val baseTableCtrs: Vec[SaturateCounter] = Vec(FetchBlockInstNum, new SaturateCounter(BaseTableTakenCtrWidth))
++  val debug_setIdx:  Vec[UInt]            = Vec(NumTables, UInt(8.W))        // TODO: remove it
++  val debug_tempTag: Vec[UInt]            = Vec(NumTables, UInt(TagWidth.W)) // TODO: remove it
++}
++
++class TageFoldedHist(numSets: Int)(implicit p: Parameters) extends TageBundle {
++  val forIdx: UInt = UInt(log2Ceil(numSets / NumBanks).W)
++  val forTag: UInt = UInt(TagWidth.W)
++}
++
++class TagMatchResult(implicit p: Parameters) extends TageBundle {
++  val hit:          Bool            = Bool()
++  val hitWayMaskOH: UInt            = UInt(NumWays.W)
++  val entry:        TageEntry       = new TageEntry
++  val usefulCtr:    SaturateCounter = new SaturateCounter(UsefulCtrWidth)
++}
++
++class UpdateInfo(implicit p: Parameters) extends TageBundle {
++  val providerTableOH:      UInt            = UInt(NumTables.W)
++  val providerWayOH:        UInt            = UInt(NumWays.W)
++  val providerEntry:        TageEntry       = new TageEntry
++  val providerNewUsefulCtr: SaturateCounter = new SaturateCounter(UsefulCtrWidth)
++
++  val altTableOH:      UInt            = UInt(NumTables.W)
++  val altWayOH:        UInt            = UInt(NumWays.W)
++  val altEntry:        TageEntry       = new TageEntry
++  val altOldUsefulCtr: SaturateCounter = new SaturateCounter(UsefulCtrWidth)
++
++  val increaseUseAlt: Bool = Bool()
++  val decreaseUseAlt: Bool = Bool()
++
++  val needAllocate: Bool = Bool()
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Helpers.scala
+index ea4a491e353..5c1a980236d 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Helpers.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Helpers.scala
+@@ -21,6 +21,7 @@ import xiangshan.HasXSParameter
+ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.bpu.HalfAlignHelper
+ import xiangshan.frontend.bpu.RotateHelper
++import xiangshan.frontend.bpu.history.phr.PhrAllFoldedHistories
+ 
+ trait Helpers extends HasTageParameters with HasXSParameter with RotateHelper with HalfAlignHelper {
+   def getBaseTableSetIndex(pc: PrunedAddr): UInt =
+@@ -32,14 +33,33 @@ trait Helpers extends HasTageParameters with HasXSParameter with RotateHelper wi
+   def getBaseTableAlignBankIndex(pc: PrunedAddr): UInt =
+     pc(FetchBlockSizeWidth - 1, FetchBlockAlignWidth)
+ 
++  def getFoldedHist(allFoldedPathHist: PhrAllFoldedHistories): Vec[TageFoldedHist] =
++    VecInit(TableInfos.map { tableInfo =>
++      val tageFoldedHist = tableInfo.getTageFoldedHistoryInfo(NumBanks, TagWidth).map { histInfo =>
++        allFoldedPathHist.getHistWithInfo(histInfo).foldedHist
++      }
++      val foldedHist = Wire(new TageFoldedHist(tableInfo.NumSets))
++      foldedHist.forIdx := tageFoldedHist.head
++      foldedHist.forTag := tageFoldedHist(1) ^ Cat(tageFoldedHist(2), 0.U(1.W))
++      foldedHist
++    })
++
+   def getSetIndex(pc: PrunedAddr, hist: UInt, numSets: Int): UInt = {
+     val setIdxWidth = log2Ceil(numSets / NumBanks)
+     pc(setIdxWidth - 1 + BankIdxWidth + FetchBlockSizeWidth, BankIdxWidth + FetchBlockSizeWidth) ^ hist
+   }
+ 
+-  def getTag(pc: PrunedAddr, hist1: UInt, hist2: UInt): UInt =
+-    pc(TagWidth - 1 + FetchBlockSizeWidth, FetchBlockSizeWidth) ^ hist1 ^ hist2
++  def getTag(pc: PrunedAddr, hist: UInt): UInt =
++    pc(TagWidth, 1) ^ hist
+ 
+   def getBankIndex(pc: PrunedAddr): UInt =
+     pc(BankIdxWidth - 1 + FetchBlockSizeWidth, FetchBlockSizeWidth)
++
++  def getLongestHistTableOH(hitTableMask: Seq[Bool]): Seq[Bool] =
++    PriorityEncoderOH(hitTableMask.reverse).reverse
++
++  def getUseAltIndex(pc: PrunedAddr): UInt = {
++    val useAltIdxWidth = log2Ceil(NumUseAltCtrs)
++    pc(useAltIdxWidth - 1 + instOffsetBits, instOffsetBits)
++  }
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Parameters.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Parameters.scala
+index 708a4f59a0d..611479c5f80 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Parameters.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Parameters.scala
+@@ -25,7 +25,7 @@ case class TageParameters(
+     BaseTableTakenCtrWidth: Int = 2,
+     TableInfos: Seq[TageTableInfo] = Seq(
+       // TageTableInfo(NumSets, HistoryLength)
+-      new TageTableInfo(1024, 4),
++      new TageTableInfo(1024, 6),
+       new TageTableInfo(1024, 9),
+       new TageTableInfo(1024, 17),
+       new TageTableInfo(1024, 31),
+@@ -34,14 +34,16 @@ case class TageParameters(
+       new TageTableInfo(1024, 211),
+       new TageTableInfo(1024, 407)
+     ),
+-    NumWays:            Int = 3,
+-    NumBanks:           Int = 4, // to alleviate read-write conflicts in single-port SRAM
+-    TagWidth:           Int = 13,
+-    TakenCtrWidth:      Int = 3,
+-    UsefulCtrWidth:     Int = 2,
+-    UsefulCtrInitValue: Int = 0,
+-    WriteBufferSize:    Int = 4,
+-    AllocFailCtrWidth:  Int = 6  // TODO
++    NumWays:             Int = 2,
++    NumBanks:            Int = 4, // to alleviate read-write conflicts in single-port SRAM
++    TagWidth:            Int = 13,
++    TakenCtrWidth:       Int = 3,
++    UsefulCtrWidth:      Int = 2,
++    UsefulCtrInitValue:  Int = 0,
++    WriteBufferSize:     Int = 4,
++    UsefulResetCtrWidth: Int = 6,
++    UseAltCtrWidth:      Int = 4,
++    NumUseAltCtrs:       Int = 128
+ ) {}
+ 
+ trait HasTageParameters extends HasBpuParameters {
+@@ -60,10 +62,11 @@ trait HasTageParameters extends HasBpuParameters {
+   def UsefulCtrWidth:     Int = tageParameters.UsefulCtrWidth
+   def UsefulCtrInitValue: Int = tageParameters.UsefulCtrInitValue
+   def WriteBufferSize:    Int = tageParameters.WriteBufferSize
+-  def AllocFailCtrWidth:  Int = tageParameters.AllocFailCtrWidth
++
++  def UsefulResetCtrWidth: Int = tageParameters.UsefulResetCtrWidth
++  def UseAltCtrWidth:      Int = tageParameters.UseAltCtrWidth
++  def NumUseAltCtrs:       Int = tageParameters.NumUseAltCtrs
+ 
+   def TableInfos: Seq[TageTableInfo] = tageParameters.TableInfos
+   def NumTables:  Int                = TableInfos.length
+-
+-  def TageEntryWidth: Int = (new TageEntry).getWidth
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+index 90d91d1dba2..c49e939e9a6 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+@@ -19,12 +19,11 @@ import chisel3._
+ import chisel3.util._
+ import freechips.rocketchip.util.SeqToAugmentedSeq
+ import org.chipsalliance.cde.config.Parameters
+-import scala.math.min
++import utility.DataHoldBypass
+ import utility.XSPerfAccumulate
+ import xiangshan.frontend.bpu.BasePredictor
+ import xiangshan.frontend.bpu.BasePredictorIO
+ import xiangshan.frontend.bpu.BtbInfo
+-import xiangshan.frontend.bpu.FoldedHistoryInfo
+ import xiangshan.frontend.bpu.SaturateCounter
+ import xiangshan.frontend.bpu.history.phr.PhrAllFoldedHistories
+ 
+@@ -33,12 +32,13 @@ import xiangshan.frontend.bpu.history.phr.PhrAllFoldedHistories
+  */
+ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters with Helpers {
+   class TageIO(implicit p: Parameters) extends BasePredictorIO {
+-    val mbtbResult:             Vec[Valid[BtbInfo]]   = Input(Vec(NumBtbResultEntries, Valid(new BtbInfo)))
+     val foldedPathHist:         PhrAllFoldedHistories = Input(new PhrAllFoldedHistories(AllFoldedHistoryInfo))
+     val foldedPathHistForTrain: PhrAllFoldedHistories = Input(new PhrAllFoldedHistories(AllFoldedHistoryInfo))
++    val branchesFromMainBtb:    Vec[Valid[BtbInfo]]   = Input(Vec(NumBtbResultEntries, Valid(new BtbInfo)))
+     val condTakenMask:          Vec[Bool]             = Output(Vec(NumBtbResultEntries, Bool()))
+-    val readBankIdx:            UInt                  = Output(UInt(log2Ceil(NumBanks).W)) // to resolveQueue
+     val meta:                   TageMeta              = Output(new TageMeta)
++    val providerTakenCtrVec: Vec[Valid[SaturateCounter]] =
++      Output(Vec(NumBtbResultEntries, Valid(new SaturateCounter(TakenCtrWidth))))
+   }
+   val io: TageIO = IO(new TageIO)
+ 
+@@ -46,16 +46,11 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+   private val baseTable = Module(new TageBaseTable)
+   private val tables    = TableInfos.map(tableInfo => Module(new TageTable(tableInfo.NumSets)))
+ 
+-  /* *** history information *** */
+-  private val histInfoForIdx = TableInfos.map { tableInfo =>
+-    new FoldedHistoryInfo(tableInfo.HistoryLength, min(tableInfo.HistoryLength, log2Ceil(tableInfo.NumSets / NumBanks)))
+-  }
+-  private val histInfoForTag = TableInfos.map { tableInfo =>
+-    new FoldedHistoryInfo(tableInfo.HistoryLength, min(tableInfo.HistoryLength, TagWidth))
+-  }
+-  private val anotherHistInfoForTag = TableInfos.map { tableInfo =>
+-    new FoldedHistoryInfo(tableInfo.HistoryLength, min(tableInfo.HistoryLength, TagWidth - 1))
+-  }
++  // reset usefulCtr of all entries when usefulResetCtr saturated
++  private val usefulResetCtr = RegInit(0.U.asTypeOf(new SaturateCounter(UsefulResetCtrWidth)))
++
++  // use altPred when useAltCtr is positive
++  private val useAltCtrVec = RegInit(VecInit.fill(NumUseAltCtrs)(0.U.asTypeOf(new SaturateCounter(UseAltCtrWidth))))
+ 
+   /* *** reset *** */
+   private val resetDone = RegInit(false.B)
+@@ -72,14 +67,10 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+   private val s0_fire       = io.stageCtrl.s0_fire && io.enable
+   private val s0_startVAddr = io.startVAddr
+ 
+-  private val s0_foldedHistForIdx        = histInfoForIdx.map(io.foldedPathHist.getHistWithInfo(_).foldedHist)
+-  private val s0_foldedHistForTag        = histInfoForTag.map(io.foldedPathHist.getHistWithInfo(_).foldedHist)
+-  private val s0_anotherFoldedHistForTag = anotherHistInfoForTag.map(io.foldedPathHist.getHistWithInfo(_).foldedHist)
+-
+-  private val s0_setIdx = TableInfos.zip(s0_foldedHistForIdx).map {
+-    case (tableInfo, hist) =>
+-      getSetIndex(s0_startVAddr, hist, tableInfo.NumSets)
+-  }
++  private val s0_foldedHist = getFoldedHist(io.foldedPathHist)
++  private val s0_setIdx = VecInit(TableInfos.zip(s0_foldedHist).map { case (tableInfo, hist) =>
++    getSetIndex(s0_startVAddr, hist.forIdx, tableInfo.NumSets)
++  })
+ 
+   private val s0_bankIdx  = getBankIndex(s0_startVAddr)
+   private val s0_bankMask = UIntToOH(s0_bankIdx, NumBanks)
+@@ -87,8 +78,11 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+   baseTable.io.readReqValid := s0_fire
+   baseTable.io.startVAddr   := s0_startVAddr
+ 
+-  // to stall resolveQueue when bank conflict
+-  io.readBankIdx := s0_bankIdx
++  tables.zipWithIndex.foreach { case (table, tableIdx) =>
++    table.io.predictReadReq.valid         := s0_fire
++    table.io.predictReadReq.bits.setIdx   := s0_setIdx(tableIdx)
++    table.io.predictReadReq.bits.bankMask := s0_bankMask
++  }
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+      predict pipeline stage 1
+@@ -99,64 +93,96 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+   private val s1_fire       = io.stageCtrl.s1_fire && io.enable
+   private val s1_startVAddr = RegEnable(s0_startVAddr, s0_fire)
+ 
+-  private val s1_baseTableCtrs   = baseTable.io.takenCtrs
+-  private val s1_allTableEntries = tables.map(_.io.readResp.entries)
++  // TODO: remove it
++  private val s1_setIdx = RegEnable(s0_setIdx, s0_fire)
+ 
+-  private val s1_foldedHistForTag        = s0_foldedHistForTag.map(RegEnable(_, s0_fire))
+-  private val s1_anotherFoldedHistForTag = s0_anotherFoldedHistForTag.map(RegEnable(_, s0_fire))
++  private val s1_baseTableCtrs   = baseTable.io.takenCtrs
++  private val s1_allTableEntries = DataHoldBypass(VecInit(tables.map(_.io.predictReadResp.entries)), RegNext(s0_fire))
++  private val s1_allTableUsefulCtrs =
++    DataHoldBypass(VecInit(tables.map(_.io.predictReadResp.usefulCtrs)), RegNext(s0_fire))
+ 
+-  private val s1_tempTag = (0 until NumTables).map { tableIdx =>
+-    getTag(s1_startVAddr, s1_foldedHistForTag(tableIdx), s1_anotherFoldedHistForTag(tableIdx))
+-  }
++  private val s1_foldedHist = RegEnable(s0_foldedHist, s0_fire)
++  private val s1_tempTag    = VecInit(s1_foldedHist.map(hist => getTag(s1_startVAddr, hist.forTag)))
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+      predict pipeline stage 2
+      - get results from mbtb
+-     - get hcPred for each btb entry
+-     - get takenMask
++     - get prediction for each branch
+      -------------------------------------------------------------------------------------------------------------- */
+ 
+-  private val s2_baseTableCtrs   = RegEnable(s1_baseTableCtrs, s1_fire)
+-  private val s2_allTableEntries = s1_allTableEntries.map(RegEnable(_, s1_fire))
+-
+-  private val s2_tempTag = s1_tempTag.map(RegEnable(_, s1_fire))
+-
+-  private val s2_mbtbHitMask    = VecInit(io.mbtbResult.map(_.valid))
+-  private val s2_mbtbPositions  = VecInit(io.mbtbResult.map(_.bits.cfiPosition))
+-  private val s2_mbtbAttributes = VecInit(io.mbtbResult.map(_.bits.attribute))
+-
+-  private val s2_mbtbHitCondMask = s2_mbtbHitMask.zip(s2_mbtbAttributes).map {
+-    case (hit, attribute) => hit && attribute.isConditional
+-  }
+-
+-  private val s2_tableResult = s2_mbtbHitCondMask.zip(s2_mbtbPositions).map {
+-    case (mbtbHit, position) => // for each btb entry
+-      val result = s2_allTableEntries.zipWithIndex.map {
+-        case (entries, tableIdx) => // for each table
+-          val tag        = s2_tempTag(tableIdx) ^ position // use position to distinguish different branches
+-          val hitWayMask = entries.map(entry => entry.valid && entry.tag === tag)
+-          val hit        = mbtbHit && hitWayMask.reduce(_ || _)
+-          val takenCtr   = Mux1H(PriorityEncoderOH(hitWayMask), entries.map(_.takenCtr))
+-          (hit, takenCtr)
++  private val s2_baseTableCtrs      = RegEnable(s1_baseTableCtrs, s1_fire)
++  private val s2_allTableEntries    = RegEnable(s1_allTableEntries, s1_fire)
++  private val s2_allTableUsefulCtrs = RegEnable(s1_allTableUsefulCtrs, s1_fire)
++
++  private val s2_startVAddr = RegEnable(s1_startVAddr, s1_fire)
++  dontTouch(s2_startVAddr)
++
++  private val s2_setIdx  = RegEnable(s1_setIdx, s1_fire)
++  private val s2_tempTag = RegEnable(s1_tempTag, s1_fire)
++
++  private val s2_branches  = io.branchesFromMainBtb
++  private val s2_positions = VecInit(s2_branches.map(_.bits.cfiPosition))
++  private val s2_condMask  = VecInit(s2_branches.map(branch => branch.valid && branch.bits.attribute.isConditional))
++  dontTouch(s2_condMask)
++
++  private val s2_branchesVAddr     = VecInit(s2_positions.map(getBranchVAddr(s2_startVAddr, _)))
++  private val s2_branchesUseAltIdx = VecInit(s2_branchesVAddr.map(getUseAltIndex))
++  dontTouch(s2_branchesVAddr)
++
++  // to sc
++  private val s2_providerTakenCtrVec = Wire(Vec(NumBtbResultEntries, Valid(new SaturateCounter(TakenCtrWidth))))
++
++  private val s2_condTakenMask = s2_condMask.zip(s2_positions).zipWithIndex.map {
++    case ((isCond, position), brIdx) =>
++      // compare tags of each branch with all tables
++      val allTableTagMatchResults = s2_allTableEntries.zip(s2_allTableUsefulCtrs).zipWithIndex.map {
++        case ((entriesPerTable, usefulCtrsPerTable), tableIdx) =>
++          val tag          = s2_tempTag(tableIdx) ^ position
++          val hitWayMask   = entriesPerTable.map(entry => entry.valid && entry.tag === tag)
++          val hitWayMaskOH = PriorityEncoderOH(hitWayMask)
++
++          val result = Wire(new TagMatchResult).suggestName(s"branch_${brIdx}_table_${tableIdx}_result")
++          result.hit          := isCond && hitWayMask.reduce(_ || _)
++          result.entry        := Mux1H(hitWayMaskOH, entriesPerTable)
++          result.usefulCtr    := Mux1H(hitWayMaskOH, usefulCtrsPerTable)
++          result.hitWayMaskOH := DontCare
++          result
+       }
+-      val hitTableMask = result.map(_._1)
+-      val hasProvider  = hitTableMask.reduce(_ || _)
+-      val pred         = Mux1H(PriorityEncoderOH(hitTableMask.reverse), result.map(_._2)).isPositive
+-      (hasProvider, pred)
++      // find the provider, the table with the longest history among the hit tables
++      val hitTableMask     = allTableTagMatchResults.map(_.hit)
++      val hasProvider      = hitTableMask.reduce(_ || _)
++      val providerTableOH  = getLongestHistTableOH(hitTableMask)
++      val providerTakenCtr = Mux1H(providerTableOH, allTableTagMatchResults.map(_.entry.takenCtr))
++
++      s2_providerTakenCtrVec(brIdx).valid      := hasProvider
++      s2_providerTakenCtrVec(brIdx).bits.value := providerTakenCtr.value
++
++      // find the alt, the table with the second longest history among the hit tables
++      val hitTableMaskNoProvider = hitTableMask.zip(providerTableOH).map { case (a, b) => a && !b }
++      val hasAlt                 = hasProvider && hitTableMaskNoProvider.reduce(_ || _)
++      val altTableOH             = getLongestHistTableOH(hitTableMaskNoProvider)
++      val altTakenCtr            = Mux1H(altTableOH, allTableTagMatchResults.map(_.entry.takenCtr))
++
++      val providerIsWeak = providerTakenCtr.isWeak
++      val pred           = providerTakenCtr.isPositive
++      val altPred        = altTakenCtr.isPositive
++      val basePred       = s2_baseTableCtrs(position).isPositive
++      val useAlt         = providerIsWeak && hasAlt && useAltCtrVec(s2_branchesUseAltIdx(brIdx)).isPositive
++
++      // get prediction for each branch
++      isCond && Mux(
++        useAlt,
++        altPred,
++        Mux(hasProvider, pred, basePred)
++      )
+   }
+ 
+-  private val s2_condTakenMask = s2_mbtbHitCondMask.zip(s2_mbtbPositions).zip(s2_tableResult).map {
+-    case ((hit, position), result) =>
+-      val hasProvider = result._1
+-      val pred        = result._2
+-      val altPred     = s2_baseTableCtrs(position).isPositive
+-//      hit && Mux(hasProvider, pred, altPred)
+-      hit && altPred // temporarily only use base table prediction
+-  }
+-
+-  io.condTakenMask := s2_condTakenMask
++  io.condTakenMask       := s2_condTakenMask
++  io.providerTakenCtrVec := s2_providerTakenCtrVec
+ 
+   io.meta.baseTableCtrs := s2_baseTableCtrs
++  io.meta.debug_setIdx  := s2_setIdx
++  io.meta.debug_tempTag := s2_tempTag
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+      train pipeline stage 0
+@@ -164,41 +190,44 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+      - send read request to tables
+      -------------------------------------------------------------------------------------------------------------- */
+ 
+-  private val t0_hasConditionalBranch = io.train.bits.branches.map { branch =>
+-    branch.valid && branch.bits.attribute.isConditional
+-  }.reduce(_ || _)
+-
+-  private val t0_trainValid       = io.train.valid && t0_hasConditionalBranch
+-  private val t0_startVAddr       = io.train.bits.startVAddr
+-  private val t0_branches         = io.train.bits.branches
+-  private val t0_mispredictBranch = io.train.bits.mispredictBranch
++  private val t0_startVAddr = io.train.bits.startVAddr
++  private val t0_branches   = io.train.bits.branches
+ 
+   private val t0_bankIdx  = getBankIndex(t0_startVAddr)
+   private val t0_bankMask = UIntToOH(t0_bankIdx, NumBanks)
+ 
+-  private val t0_readBankConflict = t0_trainValid && s0_fire && t0_bankMask === s0_bankMask
++  private val t0_condMask = VecInit(t0_branches.map(branch => branch.valid && branch.bits.attribute.isConditional))
++  private val t0_hasCond  = t0_condMask.reduce(_ || _)
++
++  private val t0_readBankConflict = io.train.valid && t0_hasCond && s0_fire && t0_bankIdx === s0_bankIdx
+   io.train.ready := !t0_readBankConflict
+ 
+-  private val t0_valid = io.train.fire && t0_hasConditionalBranch && io.enable
++  private val t0_valid = io.train.fire && t0_hasCond && io.enable
+ 
+-  private val t0_foldedHistForIdx = histInfoForIdx.map(io.foldedPathHistForTrain.getHistWithInfo(_).foldedHist)
+-  private val t0_foldedHistForTag = histInfoForTag.map(io.foldedPathHistForTrain.getHistWithInfo(_).foldedHist)
+-  private val t0_anotherFoldedHistForTag =
+-    anotherHistInfoForTag.map(io.foldedPathHistForTrain.getHistWithInfo(_).foldedHist)
++  // TODO: dont save base table meta
++  private val t0_baseTableCtrs = io.train.bits.meta.tage.baseTableCtrs
+ 
+-  private val t0_setIdx = TableInfos.zip(t0_foldedHistForIdx).map {
+-    case (tableInfo, hist) =>
+-      getSetIndex(t0_startVAddr, hist, tableInfo.NumSets)
+-  }
++  private val t0_foldedHist = getFoldedHist(io.foldedPathHistForTrain)
++  private val t0_setIdx = VecInit(TableInfos.zip(t0_foldedHist).map { case (tableInfo, hist) =>
++    getSetIndex(t0_startVAddr, hist.forIdx, tableInfo.NumSets)
++  })
++  dontTouch(t0_setIdx)
++
++//  when(t0_valid) {
++//    assert(t0_setIdx === io.train.bits.meta.tage.debug_setIdx, "predict setIdx != train setIdx")
++//  }
+ 
+-  baseTable.io.train.valid := t0_trainValid
++  baseTable.io.train.valid := t0_valid
+   baseTable.io.train.bits  := io.train.bits
+ 
+-  tables.zipWithIndex.foreach {
+-    case (table, tableIdx) =>
+-      table.io.readReq.valid         := s0_fire || t0_valid
+-      table.io.readReq.bits.setIdx   := Mux(t0_valid, t0_setIdx(tableIdx), s0_setIdx(tableIdx))
+-      table.io.readReq.bits.bankMask := Mux(t0_valid, t0_bankMask, s0_bankMask)
++  tables.zipWithIndex.foreach { case (table, tableIdx) =>
++    table.io.trainReadReq.valid         := t0_valid
++    table.io.trainReadReq.bits.setIdx   := t0_setIdx(tableIdx)
++    table.io.trainReadReq.bits.bankMask := t0_bankMask
++  }
++
++  when(t0_valid) {
++    assert(!(s0_fire && s0_bankIdx === t0_bankIdx), "TageTable: predictReadReq and trainReadReq conflict")
+   }
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+@@ -207,25 +236,30 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+      - compute temp tag
+      -------------------------------------------------------------------------------------------------------------- */
+ 
+-  private val t1_valid            = RegNext(t0_valid) && io.enable
+-  private val t1_startVAddr       = RegEnable(t0_startVAddr, t0_valid)
+-  private val t1_branches         = RegEnable(t0_branches, t0_valid)
+-  private val t1_mispredictBranch = RegEnable(t0_mispredictBranch, t0_valid)
++  private val t1_valid      = RegNext(t0_valid) && io.enable
++  private val t1_startVAddr = RegEnable(t0_startVAddr, t0_valid)
++  private val t1_branches   = RegEnable(t0_branches, t0_valid)
++  private val t1_condMask   = RegEnable(t0_condMask, t0_valid)
+ 
+-  private val t1_setIdx   = t0_setIdx.map(RegEnable(_, t0_valid))
++  private val t1_setIdx   = RegEnable(t0_setIdx, t0_valid)
+   private val t1_bankMask = RegEnable(t0_bankMask, t0_valid)
+ 
+-  private val t1_foldedHistForTag        = t0_foldedHistForTag.map(RegEnable(_, t0_valid))
+-  private val t1_anotherFoldedHistForTag = t0_anotherFoldedHistForTag.map(RegEnable(_, t0_valid))
++  private val t1_allTableEntries    = VecInit(tables.map(_.io.trainReadResp.entries))
++  private val t1_allTableUsefulCtrs = VecInit(tables.map(_.io.trainReadResp.usefulCtrs))
+ 
+-  private val t1_allTableEntries = tables.map(_.io.readResp.entries)
+-  private val t1_allocFailCtr    = tables.map(_.io.readResp.allocFailCtr)
++  private val t1_baseTableCtrs = RegEnable(t0_baseTableCtrs, t0_valid)
+ 
+-  private val t1_tempTag = (0 until NumTables).map { tableIdx =>
+-    getTag(t1_startVAddr, t1_foldedHistForTag(tableIdx), t1_anotherFoldedHistForTag(tableIdx))
+-  }
++  private val t1_foldedHist = RegEnable(t0_foldedHist, t0_valid)
++  private val t1_tempTag    = VecInit(t1_foldedHist.map(hist => getTag(t1_startVAddr, hist.forTag)))
+ 
+-  private val t1_hasMispredictBranch = t1_mispredictBranch.valid && t1_mispredictBranch.bits.attribute.isConditional
++  private val t1_debugTempTag = RegEnable(io.train.bits.meta.tage.debug_tempTag, t0_valid)
++//  when(t1_valid) {
++//    assert(t1_tempTag === t1_debugTempTag, "predict tag != train tag")
++//  }
++
++  private val t1_branchesVAddr =
++    VecInit(t1_branches.map(branch => getBranchVAddr(s2_startVAddr, branch.bits.cfiPosition)))
++  private val t1_branchesUseAltIdx = VecInit(t1_branchesVAddr.map(getUseAltIndex))
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+      train pipeline stage 2
+@@ -235,140 +269,228 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+ 
+   private val t2_valid    = RegNext(t1_valid) && io.enable
+   private val t2_branches = RegEnable(t1_branches, t1_valid)
++  private val t2_condMask = RegEnable(t1_condMask, t1_valid)
++
++  private val t2_startVAddr = RegEnable(t1_startVAddr, t1_valid)
++  dontTouch(t2_startVAddr)
+ 
+-  private val t2_setIdx   = t1_setIdx.map(RegEnable(_, t1_valid))
++  private val t2_setIdx   = RegEnable(t1_setIdx, t1_valid)
+   private val t2_bankMask = RegEnable(t1_bankMask, t1_valid)
+ 
+-  private val t2_allTableEntries = t1_allTableEntries.map(RegEnable(_, t1_valid))
+-  private val t2_allocFailCtr    = t1_allocFailCtr.map(RegEnable(_, t1_valid))
+-  private val t2_tempTag         = t1_tempTag.map(RegEnable(_, t1_valid))
+-
+-  private val t2_hasMispredictBranch = RegEnable(t1_hasMispredictBranch, t1_valid)
+-  private val t2_mispredictBranch    = RegEnable(t1_mispredictBranch, t1_valid)
+-
+-  private val t2_newTakenCtr  = Wire(Vec(NumTables, Vec(NumWays, new SaturateCounter(TakenCtrWidth))))
+-  private val t2_newUsefulCtr = Wire(Vec(NumTables, Vec(NumWays, new SaturateCounter(UsefulCtrWidth))))
+-  private val t2_hitTag       = Wire(Vec(NumTables, Vec(NumWays, UInt(TagWidth.W))))
+-
+-  // Seq[NumTables][NumWays]
+-  private val t2_updateMask = t2_allTableEntries.zipWithIndex.map {
+-    case (entries, tableIdx) => // for each table
+-      val hitWayMask = entries.zipWithIndex.map {
+-        case (entry, wayIdx) => // for each way
+-          val result = t2_branches.map {
+-            branch => // for each branch
+-              val taken        = branch.bits.taken
+-              val mispredict   = branch.bits.mispredict
+-              val attribute    = branch.bits.attribute
+-              val position     = branch.bits.cfiPosition
+-              val tag          = t2_tempTag(tableIdx) ^ position
+-              val hit          = entry.valid && branch.valid && entry.tag === tag && attribute.isConditional
+-              val newTakenCtr  = entry.takenCtr.getUpdate(taken)
+-              val newUsefulCtr = entry.usefulCtr.getUpdate(!mispredict)
+-              (hit, newTakenCtr, newUsefulCtr, tag)
+-          }
+-          val hitBranchMask = result.map(_._1)
+-          t2_newTakenCtr(tableIdx)(wayIdx).value  := Mux1H(PriorityEncoderOH(hitBranchMask), result.map(_._2))
+-          t2_newUsefulCtr(tableIdx)(wayIdx).value := Mux1H(PriorityEncoderOH(hitBranchMask), result.map(_._3))
+-          t2_hitTag(tableIdx)(wayIdx)             := Mux1H(PriorityEncoderOH(hitBranchMask), result.map(_._4))
+-          hitBranchMask.reduce(_ || _)
+-      }
+-      hitWayMask
+-  }
++  private val t2_allTableEntries    = RegEnable(t1_allTableEntries, t1_valid)
++  private val t2_allTableUsefulCtrs = RegEnable(t1_allTableUsefulCtrs, t1_valid)
++
++  private val t2_tempTag = RegEnable(t1_tempTag, t1_valid)
++
++  private val t2_baseTableCtrs = RegEnable(t1_baseTableCtrs, t1_valid)
++
++  private val t2_branchesVAddr     = RegEnable(t1_branchesVAddr, t1_valid)
++  private val t2_branchesUseAltIdx = RegEnable(t1_branchesUseAltIdx, t1_valid)
++  dontTouch(t2_branchesVAddr)
++
++  private val t2_allBranchUpdateInfo = t2_branches.zipWithIndex.map { case (branch, brIdx) =>
++    val isCond = t2_condMask(brIdx)
++    val allTableTagMatchResults = t2_allTableEntries.zip(t2_allTableUsefulCtrs).zipWithIndex.map {
++      case ((entriesPerTable, usefulCtrsPerTable), tableIdx) =>
++        val tag          = t2_tempTag(tableIdx) ^ branch.bits.cfiPosition
++        val hitWayMask   = entriesPerTable.map(entry => entry.valid && entry.tag === tag)
++        val hitWayMaskOH = PriorityEncoderOH(hitWayMask)
++
++        val result = Wire(new TagMatchResult).suggestName(s"branch_${brIdx}_table_${tableIdx}_result")
++        result.hit          := isCond && hitWayMask.reduce(_ || _)
++        result.entry        := Mux1H(hitWayMaskOH, entriesPerTable)
++        result.usefulCtr    := Mux1H(hitWayMaskOH, usefulCtrsPerTable)
++        result.hitWayMaskOH := hitWayMaskOH.asUInt
++        result
++    }
++    val hitTableMask    = allTableTagMatchResults.map(_.hit)
++    val hasProvider     = hitTableMask.reduce(_ || _)
++    val providerTableOH = getLongestHistTableOH(hitTableMask)
++    val providerInfo    = Mux1H(providerTableOH, allTableTagMatchResults)
++
++    val hitTableMaskNoProvider = hitTableMask.zip(providerTableOH).map { case (a, b) => a && !b }
++    val hasAlt                 = hasProvider && hitTableMaskNoProvider.reduce(_ || _)
++    val altTableOH             = getLongestHistTableOH(hitTableMaskNoProvider)
++    val altInfo                = Mux1H(altTableOH, allTableTagMatchResults)
++
++    val pred           = providerInfo.entry.takenCtr.isPositive
++    val providerIsWeak = providerInfo.entry.takenCtr.isWeak
++    val altPred        = altInfo.entry.takenCtr.isPositive
++    val basePred       = t2_baseTableCtrs(branch.bits.cfiPosition).isPositive
++    val actualTaken    = branch.bits.taken
++
++    val providerNewTakenCtr = providerInfo.entry.takenCtr.getUpdate(actualTaken)
++    val providerNewUsefulCtr = Mux(
++      hasProvider && pred === actualTaken && pred =/= Mux(hasAlt, altPred, basePred),
++      providerInfo.usefulCtr.getIncrease,
++      providerInfo.usefulCtr.value
++    )
+ 
+-  private val t2_mispredictBranchHitTableMask = t2_allTableEntries.zipWithIndex.map {
+-    case (entries, tableIdx) => // for each table
+-      val tag        = t2_tempTag(tableIdx) ^ t2_mispredictBranch.bits.cfiPosition
+-      val hitWayMask = entries.map(entry => entry.valid && entry.tag === tag)
+-      hitWayMask.reduce(_ || _)
+-  }
+-  private val t2_hasProvider = t2_mispredictBranchHitTableMask.reduce(_ || _)
++    val updateAlt      = providerIsWeak && hasAlt && useAltCtrVec(t2_branchesUseAltIdx(brIdx)).isPositive
++    val altNewTakenCtr = altInfo.entry.takenCtr.getUpdate(actualTaken)
++
++    val increaseUseAlt = hasProvider && providerIsWeak && Mux(hasAlt, altPred, basePred) === actualTaken
++    val decreaseUseAlt = hasProvider && providerIsWeak && Mux(hasAlt, altPred, basePred) =/= actualTaken
++
++    val updateInfo = Wire(new UpdateInfo).suggestName(s"branch_${brIdx}_updateInfo")
++    updateInfo.providerTableOH              := providerTableOH.asUInt & Fill(NumTables, hasProvider)
++    updateInfo.providerWayOH                := providerInfo.hitWayMaskOH
++    updateInfo.providerEntry.valid          := true.B
++    updateInfo.providerEntry.tag            := providerInfo.entry.tag
++    updateInfo.providerEntry.takenCtr.value := providerNewTakenCtr
++    updateInfo.providerNewUsefulCtr.value   := providerNewUsefulCtr
+ 
+-  // only allocate new entry to tables with longer history
+-  private val t2_providerIdxOH = PriorityEncoderOH(t2_mispredictBranchHitTableMask.reverse).reverse.asUInt
++    updateInfo.altTableOH              := altTableOH.asUInt & Fill(NumTables, updateAlt)
++    updateInfo.altWayOH                := altInfo.hitWayMaskOH
++    updateInfo.altEntry.valid          := true.B
++    updateInfo.altEntry.tag            := altInfo.entry.tag
++    updateInfo.altEntry.takenCtr.value := altNewTakenCtr
++    updateInfo.altOldUsefulCtr         := altInfo.usefulCtr
+ 
+-  private val t2_longerHistoryTableMask = (~((t2_providerIdxOH - 1.U) | t2_providerIdxOH)).asUInt
++    updateInfo.needAllocate := isCond && branch.bits.mispredict && !(hasProvider && providerTableOH(NumTables - 1))
+ 
+-  // only allocate new entry to tables that have not useful entry
+-  private val t2_allTableNotUsefulWayMask = t2_allTableEntries.map { entries =>
+-    entries.map(entry => entry.usefulCtr.value === 0.U).asUInt
++    updateInfo.increaseUseAlt := increaseUseAlt
++    updateInfo.decreaseUseAlt := decreaseUseAlt
++    updateInfo
+   }
+-  private val t2_hasNotUsefulTableMask = t2_allTableNotUsefulWayMask.map(_.orR).asUInt
+ 
+-  private val t2_canAllocateTableMask =
+-    Mux(
+-      t2_hasProvider,
+-      t2_longerHistoryTableMask & t2_hasNotUsefulTableMask,
+-      t2_hasNotUsefulTableMask
+-    )
++  useAltCtrVec.zipWithIndex.map { case (ctr, i) =>
++    val idxMatchMask = t2_branchesUseAltIdx.map(_ === i.U)
++    val increase = idxMatchMask.zip(t2_allBranchUpdateInfo).map { case (idxMatch, updateInfo) =>
++      idxMatch && updateInfo.increaseUseAlt
++    }.reduce(_ || _)
++    val decrease = idxMatchMask.zip(t2_allBranchUpdateInfo).map { case (idxMatch, updateInfo) =>
++      idxMatch && updateInfo.decreaseUseAlt
++    }.reduce(_ || _)
++
++    when(t2_valid && increase) {
++      ctr.increase()
++    }.elsewhen(t2_valid && decrease) {
++      ctr.decrease()
++    }
++  }
+ 
+-  // FIXME: currently only allocate one table, maybe a dynamic number of allocation
+-  private val t2_needAllocate        = t2_hasMispredictBranch && t2_canAllocateTableMask.orR
+-  private val t2_allocateTableMaskOH = PriorityEncoderOH(t2_canAllocateTableMask) & Fill(NumTables, t2_needAllocate)
+-  private val t2_allocateWayMask     = Mux1H(t2_allocateTableMaskOH, t2_allTableNotUsefulWayMask)
+-  private val t2_allocateWayMaskOH   = PriorityEncoderOH(t2_allocateWayMask) & Fill(NumWays, t2_needAllocate)
+-
+-  private val t2_allocFailTableMask =
+-    Mux(
+-      t2_hasProvider,
+-      t2_longerHistoryTableMask & (~t2_hasNotUsefulTableMask).asUInt,
+-      (~t2_hasNotUsefulTableMask).asUInt
+-    )
++  private val t2_updateMask       = Wire(Vec(NumTables, Vec(NumWays, Bool())))
++  private val t2_updateEntries    = Wire(Vec(NumTables, Vec(NumWays, new TageEntry)))
++  private val t2_updateUsefulCtrs = Wire(Vec(NumTables, Vec(NumWays, new SaturateCounter(UsefulCtrWidth))))
++  dontTouch(t2_updateEntries)
++  dontTouch(t2_updateUsefulCtrs)
++
++  t2_updateMask.zip(t2_updateEntries).zip(t2_updateUsefulCtrs).zipWithIndex.map {
++    case (((updateEnPerTable, entriesPerTable), usefulCtrsPerTable), tableIdx) =>
++      updateEnPerTable.zip(entriesPerTable).zip(usefulCtrsPerTable).zipWithIndex.map {
++        case (((updateEn, entry), usefulCtr), wayIdx) =>
++          val hitBranchProviderMask = t2_allBranchUpdateInfo.map { branch =>
++            branch.providerTableOH(tableIdx) && branch.providerWayOH(wayIdx)
++          }
++          val hitBranchAltMask = t2_allBranchUpdateInfo.map { branch =>
++            branch.altTableOH(tableIdx) && branch.altWayOH(wayIdx)
++          }
++          val hitBranchProvider  = hitBranchProviderMask.reduce(_ || _)
++          val hitBranchAlt       = hitBranchAltMask.reduce(_ || _)
++          val providerUpdateInfo = Mux1H(hitBranchProviderMask, t2_allBranchUpdateInfo)
++          val altUpdateInfo      = Mux1H(hitBranchAltMask, t2_allBranchUpdateInfo)
++          updateEn  := hitBranchProvider || hitBranchAlt
++          entry     := Mux(hitBranchProvider, providerUpdateInfo.providerEntry, altUpdateInfo.altEntry)
++          usefulCtr := Mux(hitBranchProvider, providerUpdateInfo.providerNewUsefulCtr, altUpdateInfo.altOldUsefulCtr)
++      }
++  }
+ 
+-  private val t2_needResetUsefulCtr = t2_allocFailTableMask.asBools.zip(t2_allocFailCtr).map {
+-    case (allocFail, ctr) =>
+-      allocFail && ctr.isSaturatePositive
++  private val t2_needAllocateBranchMask = t2_allBranchUpdateInfo.map(_.needAllocate)
++  when(t2_valid) {
++    assert(PopCount(t2_needAllocateBranchMask) <= 1.U)
++  }
++  private val t2_needAllocate   = t2_needAllocateBranchMask.reduce(_ || _)
++  private val t2_allocateBranch = Mux1H(t2_needAllocateBranchMask, t2_branches)
++  private val t2_allocateBranchProviderTableOH =
++    Mux1H(t2_needAllocateBranchMask, t2_allBranchUpdateInfo.map(_.providerTableOH))
++
++  // allocate new entry to the table with a longer history
++  private val t2_longerHistoryTableMask = Mux(
++    t2_allocateBranchProviderTableOH.orR, // has provider
++    (~((t2_allocateBranchProviderTableOH - 1.U) | t2_allocateBranchProviderTableOH)).asUInt,
++    Fill(NumTables, true.B)
++  )
++  dontTouch(t2_longerHistoryTableMask)
++
++  private val t2_allTableNotUsefulWayMask = t2_allTableUsefulCtrs.map { ctrsPerTable =>
++    ctrsPerTable.map(_.value === 0.U).asUInt
+   }
+-  private val t2_needIncreaseAllocFailCtr = t2_allocFailTableMask.asBools.zip(t2_allocFailCtr).map {
+-    case (allocFail, ctr) =>
+-      allocFail && !ctr.isSaturatePositive
++  private val t2_hasNotUsefulEntryTableMask = t2_allTableNotUsefulWayMask.map(_.orR).asUInt
++  private val t2_canAllocateTableMask       = t2_longerHistoryTableMask & t2_hasNotUsefulEntryTableMask
++  private val t2_canAllocate                = t2_canAllocateTableMask.orR
++
++  private val t2_allocateTableMaskOH =
++    PriorityEncoderOH(t2_canAllocateTableMask) & Fill(NumTables, t2_needAllocate && t2_canAllocate)
++  private val t2_allocateWayMaskOH = PriorityEncoderOH(Mux1H(t2_allocateTableMaskOH, t2_allTableNotUsefulWayMask))
++  dontTouch(t2_allocateTableMaskOH)
++  dontTouch(t2_allocateWayMaskOH)
++
++  private val t2_allocateEntry = Wire(new TageEntry)
++  t2_allocateEntry.valid := true.B
++  t2_allocateEntry.tag   := Mux1H(t2_allocateTableMaskOH, t2_tempTag) ^ t2_allocateBranch.bits.cfiPosition
++  t2_allocateEntry.takenCtr.value := Mux(
++    t2_allocateBranch.bits.taken,
++    (1 << (TakenCtrWidth - 1)).U,    // weak taken
++    (1 << (TakenCtrWidth - 1) - 1).U // weak not taken
++  )
++
++  tables.zipWithIndex.foreach { case (table, tableIdx) =>
++    val thisTableNeedUpdate   = t2_updateMask(tableIdx).reduce(_ || _)
++    val thisTableNeedAllocate = t2_allocateTableMaskOH(tableIdx)
++    table.io.writeReq.valid         := t2_valid && (thisTableNeedUpdate || thisTableNeedAllocate)
++    table.io.writeReq.bits.setIdx   := t2_setIdx(tableIdx)
++    table.io.writeReq.bits.bankMask := t2_bankMask
++
++    val writeEntries    = Wire(Vec(NumWays, new TageEntry))
++    val writeUsefulCtrs = Wire(Vec(NumWays, new SaturateCounter(UsefulCtrWidth)))
++    val writeWayMask    = Wire(Vec(NumWays, Bool()))
++
++    writeEntries.zip(writeUsefulCtrs).zipWithIndex.foreach { case ((entry, usefulCtr), wayIdx) =>
++      val thisWayNeedUpdate   = t2_updateMask(tableIdx)(wayIdx)
++      val thisWayNeedAllocate = thisTableNeedAllocate && t2_allocateWayMaskOH(wayIdx)
++      entry           := Mux(thisWayNeedAllocate, t2_allocateEntry, t2_updateEntries(tableIdx)(wayIdx))
++      usefulCtr.value := Mux(thisWayNeedAllocate, UsefulCtrInitValue.U, t2_updateUsefulCtrs(tableIdx)(wayIdx).value)
++      writeWayMask(wayIdx) := thisWayNeedUpdate || thisWayNeedAllocate
++    }
++
++    table.io.writeReq.bits.wayMask    := writeWayMask.asUInt
++    table.io.writeReq.bits.entries    := writeEntries
++    table.io.writeReq.bits.usefulCtrs := writeUsefulCtrs
++
++    table.io.resetUseful := t2_valid && usefulResetCtr.isSaturatePositive
+   }
+ 
+-  tables.zipWithIndex.foreach {
+-    case (table, tableIdx) =>
+-      table.io.writeSetIdx   := t2_setIdx(tableIdx)
+-      table.io.writeBankMask := t2_bankMask
+-
+-      table.io.updateReq.valid := t2_valid && (t2_updateMask(tableIdx).reduce(_ || _)
+-        || t2_allocateTableMaskOH(tableIdx))
+-
+-      val writeEntries    = Wire(Vec(NumWays, new TageEntry))
+-      val writeWayMask    = Wire(Vec(NumWays, Bool()))
+-      val allocateWayMask = t2_allocateWayMaskOH & Fill(NumWays, t2_allocateTableMaskOH(tableIdx))
+-      writeEntries.zip(t2_updateMask(tableIdx)).zip(allocateWayMask.asBools)
+-        .zip(writeWayMask).zipWithIndex.foreach {
+-          case ((((entry, update), allocate), writeWayEnable), wayIdx) =>
+-            entry.valid := update || allocate
+-            entry.tag := Mux(
+-              allocate,
+-              t2_tempTag(tableIdx) ^ t2_mispredictBranch.bits.cfiPosition,
+-              t2_hitTag(tableIdx)(wayIdx)
+-            )
+-            entry.takenCtr.value := Mux(
+-              allocate,
+-              Mux(t2_mispredictBranch.bits.taken, (1 << (TakenCtrWidth - 1)).U, (1 << (TakenCtrWidth - 1) - 1).U),
+-              t2_newTakenCtr(tableIdx)(wayIdx).value
+-            )
+-            entry.usefulCtr.value := Mux(
+-              allocate,
+-              Mux(t2_needResetUsefulCtr(tableIdx), 0.U, UsefulCtrInitValue.U),
+-              t2_newUsefulCtr(tableIdx)(wayIdx).value
+-            )
+-            writeWayEnable := update || allocate
+-        }
+-      table.io.updateReq.bits.wayMask := writeWayMask.asUInt
+-      table.io.updateReq.bits.entries := writeEntries
+-
+-      table.io.needResetUsefulCtr       := t2_valid && t2_needAllocate && t2_needResetUsefulCtr(tableIdx)
+-      table.io.needIncreaseAllocFailCtr := t2_valid && t2_needAllocate && t2_needIncreaseAllocFailCtr(tableIdx)
+-      table.io.oldAllocFailCtr          := t2_allocFailCtr(tableIdx)
++  when(t2_valid && usefulResetCtr.isSaturatePositive) {
++    usefulResetCtr.resetZero()
++  }.elsewhen(t2_valid && t2_needAllocate && !t2_canAllocate) {
++    usefulResetCtr.increase()
+   }
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+      performance counter
+      -------------------------------------------------------------------------------------------------------------- */
+ 
+-  XSPerfAccumulate("total_train", t0_valid)
++  XSPerfAccumulate("predict_cond", Mux(io.stageCtrl.s2_fire, PopCount(s2_condMask), 0.U))
++
++  XSPerfAccumulate("total_train", io.train.fire)
++  XSPerfAccumulate("train_has_cond", t0_valid)
++
++  XSPerfAccumulate("mispredict_branch_has_provider", t2_valid && t2_allocateBranchProviderTableOH.orR)
++  for (i <- 0 until NumTables) {
++    XSPerfAccumulate(
++      s"mispredict_branch_provider_is_table_${i}",
++      t2_valid && t2_allocateBranchProviderTableOH.orR && t2_allocateBranchProviderTableOH(i)
++    )
++  }
++
+   XSPerfAccumulate("read_conflict", t0_readBankConflict)
++  XSPerfAccumulate("reset_useful", t2_valid && usefulResetCtr.isSaturatePositive)
++  XSPerfAccumulate("need_allocate", t2_valid && t2_needAllocate)
++  XSPerfAccumulate("allocate_success", t2_valid && t2_needAllocate && t2_canAllocate)
++  XSPerfAccumulate("allocate_failure", t2_valid && t2_needAllocate && !t2_canAllocate)
++  for (i <- 0 until NumTables) {
++    XSPerfAccumulate(s"table_${i}_allocate", t2_valid && t2_allocateTableMaskOH(i))
++  }
+   // TODO: add more
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala b/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala
+index d236607ce99..252a37bd6be 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala
+@@ -24,15 +24,13 @@ import xiangshan.frontend.bpu.WriteBuffer
+ 
+ class TageTable(val numSets: Int)(implicit p: Parameters) extends TageModule with Helpers {
+   class TageTableIO extends TageBundle {
+-    val readReq:                  Valid[TableReadReq]          = Flipped(Valid(new TableReadReq(numSets)))
+-    val readResp:                 TableReadResp                = Output(new TableReadResp)
+-    val writeSetIdx:              UInt                         = Input(UInt(log2Ceil(numSets / NumBanks).W))
+-    val writeBankMask:            UInt                         = Input(UInt(NumBanks.W))
+-    val updateReq:                Valid[TableUpdateEntriesReq] = Flipped(Valid(new TableUpdateEntriesReq))
+-    val needResetUsefulCtr:       Bool                         = Input(Bool())
+-    val needIncreaseAllocFailCtr: Bool                         = Input(Bool())
+-    val oldAllocFailCtr:          SaturateCounter              = Input(new SaturateCounter(AllocFailCtrWidth))
+-    val resetDone:                Bool                         = Output(Bool())
++    val predictReadReq:  Valid[TableReadReq]  = Flipped(Valid(new TableReadReq(numSets)))
++    val trainReadReq:    Valid[TableReadReq]  = Flipped(Valid(new TableReadReq(numSets)))
++    val predictReadResp: TableReadResp        = Output(new TableReadResp)
++    val trainReadResp:   TableReadResp        = Output(new TableReadResp)
++    val writeReq:        Valid[TableWriteReq] = Flipped(Valid(new TableWriteReq(numSets)))
++    val resetUseful:     Bool                 = Input(Bool())
++    val resetDone:       Bool                 = Output(Bool())
+   }
+   val io: TageTableIO = IO(new TageTableIO)
+ 
+@@ -50,20 +48,16 @@ class TageTable(val numSets: Int)(implicit p: Parameters) extends TageModule wit
+       )).suggestName(s"tage_entry_sram_bank${bankIdx}_way${wayIdx}")
+     }
+ 
+-  // count allocation failure times for each set
+-  private val allocFailCtrSram =
+-    Seq.fill(NumBanks)(
+-      Module(new SRAMTemplate(
+-        new SaturateCounter(AllocFailCtrWidth),
+-        set = numSets / NumBanks,
+-        way = 1,
+-        singlePort = true,
+-        shouldReset = true,
+-        withClockGate = true,
+-        hasMbist = hasMbist,
+-        hasSramCtl = hasSramCtl
+-      ))
++  // TODO: use SRAM to implement it
++  private val usefulCtrs = RegInit(
++    VecInit.fill(NumBanks)(
++      VecInit.fill(NumWays)(
++        VecInit.fill(numSets / NumBanks)(
++          0.U.asTypeOf(new SaturateCounter(UsefulCtrWidth))
++        )
++      )
+     )
++  )
+ 
+   // use a write buffer to store a entrySram write request
+   // TODO: add writeBuffer multi port simultaneous writing
+@@ -73,83 +67,72 @@ class TageTable(val numSets: Int)(implicit p: Parameters) extends TageModule wit
+         new EntrySramWriteReq(numSets),
+         WriteBufferSize,
+         numPorts = NumWays,
+-        hasCnt = true
++        hasCnt = false // FIXME: set to true when bug fixed
+       )).suggestName(s"tage_entry_write_buffer_bank${bankIdx}")
+     }
+-  private val allocFailCtrWriteBuffers =
+-    Seq.fill(NumBanks)(
+-      Module(new WriteBuffer(
+-        new AllocFailCtrSramWriteReq(numSets),
+-        WriteBufferSize,
+-        numPorts = 1
+-      ))
+-    )
+ 
+-  // read and write srams
+-  entrySram.zip(allocFailCtrSram).zipWithIndex.foreach {
+-    case ((bank, allocFailCtr), bankIdx) =>
+-      bank.foreach { way =>
+-        way.io.r.req.valid       := io.readReq.valid && io.readReq.bits.bankMask(bankIdx)
+-        way.io.r.req.bits.setIdx := io.readReq.bits.setIdx
+-      }
+-      allocFailCtr.io.r.req.valid       := io.readReq.valid && io.readReq.bits.bankMask(bankIdx)
+-      allocFailCtr.io.r.req.bits.setIdx := io.readReq.bits.setIdx
+-  }
+-
+-  entrySram.zip(entryWriteBuffers).foreach {
+-    case (ways, buffer) =>
+-      ways zip buffer.io.read foreach {
+-        case (way, readPort) =>
+-          val valid  = readPort.valid && !way.io.r.req.valid
+-          val setIdx = readPort.bits.setIdx
+-          val entry  = readPort.bits.entry
+-          way.io.w.apply(valid, entry, setIdx, 1.U(1.W))
+-          readPort.ready := way.io.w.req.ready && !way.io.r.req.valid
+-      }
++  // read sram
++  entrySram.zipWithIndex.foreach { case (bank, bankIdx) =>
++    val predictReadValid = io.predictReadReq.valid && io.predictReadReq.bits.bankMask(bankIdx)
++    val trainReadValid   = io.trainReadReq.valid && io.trainReadReq.bits.bankMask(bankIdx)
++    bank.foreach { way =>
++      way.io.r.req.valid       := predictReadValid || trainReadValid
++      way.io.r.req.bits.setIdx := Mux(predictReadValid, io.predictReadReq.bits.setIdx, io.trainReadReq.bits.setIdx)
++    }
+   }
+ 
+-  allocFailCtrSram.zip(allocFailCtrWriteBuffers).foreach {
+-    case (allocFailCtr, buffer) =>
+-      val valid  = buffer.io.read.head.valid && !allocFailCtr.io.r.req.valid
+-      val setIdx = buffer.io.read.head.bits.setIdx
+-      val data   = buffer.io.read.head.bits.allocFailCtr
+-      allocFailCtr.io.w.apply(valid, data, setIdx, 1.U(1.W))
+-      buffer.io.read.head.ready := allocFailCtr.io.w.req.ready && !allocFailCtr.io.r.req.valid
++  // write to write buffer
++  entryWriteBuffers.zipWithIndex.foreach { case (buffer, bankIdx) =>
++    buffer.io.write.zipWithIndex.foreach { case (writePort, wayIdx) =>
++      writePort.valid := io.writeReq.valid && io.writeReq.bits.bankMask(bankIdx) && io.writeReq.bits.wayMask(wayIdx)
++      writePort.bits.setIdx    := io.writeReq.bits.setIdx
++      writePort.bits.entry     := io.writeReq.bits.entries(wayIdx)
++      writePort.bits.usefulCtr := io.writeReq.bits.usefulCtrs(wayIdx)
++    }
+   }
+ 
+-  // write to write buffer
+-  private val wayMask:      Vec[Bool]      = WireInit(VecInit(Seq.fill(NumWays)(false.B)))
+-  private val writeEntries: Vec[TageEntry] = WireInit(VecInit(Seq.fill(NumWays)(0.U.asTypeOf(new TageEntry))))
+-  writeEntries := io.updateReq.bits.entries
+-  wayMask      := io.updateReq.bits.wayMask.asBools
++  // write to sram from write buffer
++  entrySram.zip(usefulCtrs).zip(entryWriteBuffers) foreach { case ((bank, ctrsPerBank), buffer) =>
++    bank.zip(ctrsPerBank).zip(buffer.io.read).foreach { case ((way, ctrsPerWay), readPort) =>
++      val valid  = readPort.valid && !way.io.r.req.valid
++      val setIdx = readPort.bits.setIdx
++      val entry  = readPort.bits.entry
++      way.io.w.apply(valid, entry, setIdx, 1.U(1.W))
++      readPort.ready := way.io.w.req.ready && !way.io.r.req.valid
+ 
+-  entryWriteBuffers.zip(allocFailCtrWriteBuffers).zip(io.writeBankMask.asBools).foreach {
+-    case ((wayBuffers, allocFailCtrBuffer), bankEnable) =>
+-      val writeValid = (io.updateReq.valid) && bankEnable
+-      // write to allocFailCtrBuffer
+-      allocFailCtrBuffer.io.write.head.valid       := writeValid
+-      allocFailCtrBuffer.io.write.head.bits.setIdx := io.writeSetIdx
+-      allocFailCtrBuffer.io.write.head.bits.allocFailCtr.value := Mux(
+-        io.needResetUsefulCtr,
+-        0.U,
+-        io.oldAllocFailCtr.getIncrease
+-      )
+-      wayBuffers.io.write.zip(wayMask).zip(writeEntries).foreach {
+-        case ((writePort, mask), entry) =>
+-          writePort.valid       := writeValid && mask
+-          writePort.bits.setIdx := io.writeSetIdx
+-          writePort.bits.entry  := entry
++      when(io.resetUseful) {
++        ctrsPerWay.foreach(_.resetZero())
++      }.elsewhen(readPort.fire) {
++        ctrsPerWay(setIdx).value := readPort.bits.usefulCtr.value
+       }
++    }
+   }
+ 
+-  io.resetDone :=
+-    entrySram.flatten.map(_.io.r.req.ready).reduce(_ && _) && allocFailCtrSram.map(_.io.r.req.ready).reduce(_ && _)
++  private val predictReadSetIdxNext   = RegEnable(io.predictReadReq.bits.setIdx, io.predictReadReq.valid)
++  private val predictReadBankMaskNext = RegEnable(io.predictReadReq.bits.bankMask, io.predictReadReq.valid)
++  io.predictReadResp.entries := Mux1H(
++    predictReadBankMaskNext,
++    entrySram.map(bank => VecInit(bank.map(way => way.io.r.resp.data.head)))
++  )
++  io.predictReadResp.usefulCtrs := Mux1H(
++    predictReadBankMaskNext,
++    usefulCtrs.map(ctrsPerBank =>
++      VecInit(ctrsPerBank.map(ctrsPerWay => ctrsPerWay(predictReadSetIdxNext)))
++    )
++  )
+ 
+-  private val readBankMaskNext = RegEnable(io.readReq.bits.bankMask, io.readReq.valid)
+-  io.readResp.entries :=
+-    Mux1H(
+-      readBankMaskNext,
+-      entrySram.map(bank => VecInit(bank.map(way => way.io.r.resp.data.head)))
++  private val trainReadSetIdxNext   = RegEnable(io.trainReadReq.bits.setIdx, io.trainReadReq.valid)
++  private val trainReadBankMaskNext = RegEnable(io.trainReadReq.bits.bankMask, io.trainReadReq.valid)
++  io.trainReadResp.entries := Mux1H(
++    trainReadBankMaskNext,
++    entrySram.map(bank => VecInit(bank.map(way => way.io.r.resp.data.head)))
++  )
++  io.trainReadResp.usefulCtrs := Mux1H(
++    trainReadBankMaskNext,
++    usefulCtrs.map(ctrsPerBank =>
++      VecInit(ctrsPerBank.map(ctrsPerWay => ctrsPerWay(trainReadSetIdxNext)))
+     )
+-  io.readResp.allocFailCtr := Mux1H(readBankMaskNext, allocFailCtrSram.map(_.io.r.resp.data.head))
++  )
++
++  io.resetDone := entrySram.flatten.map(_.io.r.req.ready).reduce(_ && _)
+ }

@@ -1,0 +1,51 @@
+# Commit Log
+- Issue: #3308
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3308
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3308
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3308
+- Changed files: 1
+- Additions: 4
+- Deletions: 3
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/PageTableCache.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+index a86e4bd4943..dba71719c7e 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+@@ -479,9 +479,11 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+   val isAllStage = stageResp.bits.req_info.s2xlate === allStage
+   val isOnlyStage2 = stageResp.bits.req_info.s2xlate === onlyStage2
+   val stage1Hit = (resp_res.l3.hit || resp_res.sp.hit) && isAllStage
++  val idx = stageResp.bits.req_info.vpn(2, 0)
++  val stage1Pf = !Mux(resp_res.l3.hit, resp_res.l3.v(idx), resp_res.sp.v)
+   io.resp.bits.req_info   := stageResp.bits.req_info
+   io.resp.bits.isFirst  := stageResp.bits.isFirst
+-  io.resp.bits.hit      := (resp_res.l3.hit || resp_res.sp.hit) && !isAllStage
++  io.resp.bits.hit      := (resp_res.l3.hit || resp_res.sp.hit) && (!isAllStage || isAllStage && stage1Pf)
+   io.resp.bits.bypassed := (bypassed(2) || (bypassed(1) && !resp_res.l2.hit) || (bypassed(0) && !resp_res.l1.hit)) && !isAllStage
+   io.resp.bits.prefetch := resp_res.l3.pre && resp_res.l3.hit || resp_res.sp.pre && resp_res.sp.hit
+   io.resp.bits.toFsm.l1Hit := resp_res.l1.hit && !stage1Hit && !isOnlyStage2 && !stageResp.bits.isHptwReq 
+@@ -495,7 +497,6 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+   io.resp.bits.toHptw.l1Hit := resp_res.l1.hit && stageResp.bits.isHptwReq 
+   io.resp.bits.toHptw.l2Hit := resp_res.l2.hit && stageResp.bits.isHptwReq 
+   io.resp.bits.toHptw.ppn := Mux(resp_res.l2.hit, resp_res.l2.ppn, resp_res.l1.ppn)(ppnLen - 1, 0)
+-  val idx = stageResp.bits.req_info.vpn(2, 0)
+   io.resp.bits.toHptw.resp.entry.tag := stageResp.bits.req_info.vpn
+   io.resp.bits.toHptw.resp.entry.asid := DontCare
+   io.resp.bits.toHptw.resp.entry.vmid.map(_ := io.csr_dup(0).hgatp.asid)
+@@ -520,7 +521,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     io.resp.bits.stage1.entry(i).pf := !io.resp.bits.stage1.entry(i).v
+     io.resp.bits.stage1.entry(i).af := false.B
+   }
+-  io.resp.bits.stage1.pteidx := UIntToOH(stageResp.bits.req_info.vpn(2, 0)).asBools
++  io.resp.bits.stage1.pteidx := UIntToOH(idx).asBools
+   io.resp.bits.stage1.not_super := Mux(resp_res.l3.hit, true.B, false.B)
+   io.resp.valid := stageResp.valid
+   XSError(stageResp.valid && resp_res.l3.hit && resp_res.sp.hit, "normal page and super page both hit")
+```

@@ -1,0 +1,2 @@
+   SECRET_VALUE=0 -> secret-window useful writes are 1
+   SECRET_VALUE=1 -> secret-window useful writes are 0

@@ -1,0 +1,31 @@
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
+index f685d40f87a..690187e4257 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
+@@ -479,6 +479,11 @@ class LoadMisalignBuffer(implicit p: Parameters) extends XSModule
+ 
+   io.splitLoadReq.valid := req_valid && (bufferState === s_req)
+   io.splitLoadReq.bits  := splitLoadReqs(curPtr)
++  // Restore the information of H extension load
++  // bit encoding: | hlv 1 | hlvx 1 | is unsigned(1bit) | size(2bit) |
++  val reqIsHlv  = LSUOpType.isHlv(req.uop.fuOpType)
++  val reqIsHlvx = LSUOpType.isHlvx(req.uop.fuOpType)
++  io.splitLoadReq.bits.uop.fuOpType := Cat(reqIsHlv, reqIsHlvx, 0.U(1.W), splitLoadReqs(curPtr).uop.fuOpType(1, 0))
+ 
+   when (io.splitLoadResp.valid) {
+     splitLoadResp(curPtr) := io.splitLoadResp.bits
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+index 53742fbcaff..fa1031e3f8a 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+@@ -443,6 +443,10 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+ 
+   io.splitStoreReq.valid := req_valid && (bufferState === s_req)
+   io.splitStoreReq.bits  := splitStoreReqs(curPtr)
++  // Restore the information of H extension store
++  // bit encoding: | hsv 1 | store 00 | size(2bit) |
++  val reqIsHsv  = LSUOpType.isHsv(req.uop.fuOpType)
++  io.splitStoreReq.bits.uop.fuOpType := Cat(reqIsHsv, 0.U(2.W), splitStoreReqs(curPtr).uop.fuOpType(1, 0))
+ 
+   when (io.splitStoreResp.valid) {
+     splitStoreResp(curPtr) := io.splitStoreResp.bits

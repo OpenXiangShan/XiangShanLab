@@ -1,0 +1,59 @@
+diff --git a/src/main/scala/xiangshan/frontend/FTB.scala b/src/main/scala/xiangshan/frontend/FTB.scala
+index b9ed5f54863..5abf6662447 100644
+--- a/src/main/scala/xiangshan/frontend/FTB.scala
++++ b/src/main/scala/xiangshan/frontend/FTB.scala
+@@ -18,6 +18,7 @@ package xiangshan.frontend
+ 
+ import chisel3._
+ import chisel3.util._
++import coupledL2.utils.SplittedSRAM
+ import org.chipsalliance.cde.config.Parameters
+ import scala.{Tuple2 => &}
+ import utility._
+@@ -493,14 +494,15 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
+     })
+ 
+     // Extract holdRead logic to fix bug that update read override predict read result
+-    val ftb = Module(new SRAMTemplate(
++    val ftb = Module(new SplittedSRAM(
+       new FTBEntryWithTag,
+       set = numSets,
+       way = numWays,
++      dataSplit = 8,
+       shouldReset = true,
+       holdRead = false,
+       singlePort = true,
+-      withClockGate = true,
++      clockGated = true,
+       hasMbist = hasMbist
+     ))
+     private val mbistPl = MbistPipeline.PlaceMbistPipeline(1, "MbistPipeFtb", hasMbist)
+diff --git a/src/main/scala/xiangshan/frontend/NewFtq.scala b/src/main/scala/xiangshan/frontend/NewFtq.scala
+index 797c3f341c3..e61e7f32016 100644
+--- a/src/main/scala/xiangshan/frontend/NewFtq.scala
++++ b/src/main/scala/xiangshan/frontend/NewFtq.scala
+@@ -26,6 +26,7 @@ package xiangshan.frontend
+ 
+ import chisel3._
+ import chisel3.util._
++import coupledL2.utils.SplittedSRAM
+ import org.chipsalliance.cde.config.Parameters
+ import utility._
+ import utility.ChiselDB
+@@ -77,7 +78,15 @@ class FtqNRSRAM[T <: Data](gen: T, numRead: Int)(implicit p: Parameters) extends
+   })
+ 
+   for (i <- 0 until numRead) {
+-    val sram = Module(new SRAMTemplate(gen, FtqSize, withClockGate = true, hasMbist = hasMbist))
++    val sram = Module(new SplittedSRAM(
++      gen,
++      set = FtqSize,
++      way = 1,
++      dataSplit = 2,
++      singlePort = false,
++      clockGated = true,
++      hasMbist = hasMbist
++    ))
+     sram.io.r.req.valid       := io.ren(i)
+     sram.io.r.req.bits.setIdx := io.raddr(i)
+     io.rdata(i)               := sram.io.r.resp.data(0)

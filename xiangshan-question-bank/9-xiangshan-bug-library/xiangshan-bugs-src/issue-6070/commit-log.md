@@ -1,0 +1,33 @@
+# Commit Log
+- Issue: #6070
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6070
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6070
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6070
+- Changed files: 1
+- Additions: 3
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index bf5351b81c9..6feaa9eb6fe 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -579,8 +579,9 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   val deqHitExceptionGenState = exceptionDataRead.valid && exceptionDataRead.bits.robIdx === deqPtr
+   val deqNeedFlushAndHitExceptionGenState = deqNeedFlush && deqHitExceptionGenState
+   val exceptionGenStateIsException = exceptionDataRead.bits.exceptionVec.asUInt.orR || exceptionDataRead.bits.singleStep || TriggerAction.isDmode(exceptionDataRead.bits.trigger)
+-  val deqHasException = deqNeedFlushAndHitExceptionGenState && exceptionGenStateIsException && RegNext(RegNext(deqPtrEntry.commit_w))
+-  val deqHasFlushPipe = deqNeedFlushAndHitExceptionGenState && exceptionDataRead.bits.flushPipe && !deqHasException && RegNext(RegNext(deqPtrEntry.commit_w))
++  val commit_w_delay = RegNext(deqPtrEntry.commit_w)
++  val deqHasException = deqNeedFlushAndHitExceptionGenState && exceptionGenStateIsException && commit_w_delay
++  val deqHasFlushPipe = deqNeedFlushAndHitExceptionGenState && exceptionDataRead.bits.flushPipe && !deqHasException && commit_w_delay
+   val deqHasReplayInst = deqNeedFlushAndHitExceptionGenState && exceptionDataRead.bits.replayInst
+   val deqIsVlsException = deqHasException && deqPtrEntry.isVls && !exceptionDataRead.bits.isEnqExcp
+   // delay 2 cycle wait exceptionGen out
+```

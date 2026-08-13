@@ -1,0 +1,5 @@
+[test] back in M, ecall mcause = 9
+[test] trap = 0, mcause = 0, mtval = 0x0, mepc = 0x0, alias flag = 0xfa
+BUG REPRODUCED: fetch crossed canonical boundary without
+  fault and executed aliased code at PA 0x81200000
+Core 0: HIT BAD TRAP at pc = 0x800004e4

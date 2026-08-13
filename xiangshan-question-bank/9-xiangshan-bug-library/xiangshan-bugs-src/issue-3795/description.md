@@ -1,0 +1,1 @@
+We found that the CSR mtval2 truncates the high bits of gpaddr when GPF occurs in instruction fetching. Actually, there is an GPAMem which storages the whole 64-bit gpaddr, but it does not pass to CSR correctly, due to incorrect width of trapPCGPA in module NewCSR and bundle TrapEntryEventInput. This patch fixes this.

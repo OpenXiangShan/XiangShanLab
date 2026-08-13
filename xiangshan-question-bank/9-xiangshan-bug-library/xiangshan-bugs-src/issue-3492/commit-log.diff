@@ -1,0 +1,117 @@
+diff --git a/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala b/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala
+index fc4e43764ce..23d325a0bec 100644
+--- a/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala
++++ b/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala
+@@ -244,17 +244,36 @@ class IPrefetchPipe(implicit p: Parameters) extends  IPrefetchModule
+     waymasks
+   }
+ 
+-  val s1_SRAM_waymasks = VecInit((0 until PortNumber).map(i =>
+-                            Mux(tlb_valid_pulse(i), get_waymask(s1_req_paddr_wire)(i), get_waymask(s1_req_paddr_reg)(i))))
++  val s1_SRAM_waymasks = VecInit((0 until PortNumber).map { port =>
++    Mux(tlb_valid_pulse(port), get_waymask(s1_req_paddr_wire)(port), get_waymask(s1_req_paddr_reg)(port))
++  })
++
++  // select ecc code
++  /* NOTE:
++   * When ECC check fails, s1_waymasks may be corrupted, so this selected meta_codes may be wrong.
++   * However, we can guarantee that the request sent to the l2 cache and the response to the IFU are both correct,
++   * considering the probability of bit flipping abnormally is very small, consider there's up to 1 bit being wrong:
++   * 1. miss -> fake hit: The wrong bit in s1_waymasks was set to true.B, thus selects the wrong meta_codes,
++   *                      but we can detect this by checking whether `encodeMetaECC(req_ptags) === meta_codes`.
++   * 2. hit -> fake multi-hit: In normal situation, multi-hit never happens, so multi-hit indicates ECC failure,
++   *                           we can detect this by checking whether `PopCount(waymasks) <= 1.U`,
++   *                           and meta_codes is not important in this situation.
++   * 3. hit -> fake miss: We can't detect this, but we can (pre)fetch the correct data from L2 cache, so it's not a problem.
++   * 4. hit -> hit / miss -> miss: ECC failure happens in a irrelevant way, so we don't care about it this time.
++   */
++  val s1_SRAM_meta_codes = VecInit((0 until PortNumber).map { port =>
++    Mux1H(s1_SRAM_waymasks(port), fromMeta.codes(port))
++  })
+ 
+   /**
+     ******************************************************************************
+-    * update waymask according to MSHR update data
++    * update waymasks and meta_codes according to MSHR update data
+     ******************************************************************************
+     */
+-  def update_waymask(mask: UInt, vSetIdx: UInt, ptag: UInt): UInt = {
++  def update_meta_info(mask: UInt, vSetIdx: UInt, ptag: UInt, code: UInt): Tuple2[UInt, UInt] = {
+     require(mask.getWidth == nWays)
+     val new_mask  = WireInit(mask)
++    val new_code  = WireInit(code)
+     val valid = fromMSHR.valid && !fromMSHR.bits.corrupt
+     val vset_same = fromMSHR.bits.vSetIdx === vSetIdx
+     val ptag_same = getPhyTagFromBlk(fromMSHR.bits.blkPaddr) === ptag
+@@ -262,39 +281,33 @@ class IPrefetchPipe(implicit p: Parameters) extends  IPrefetchModule
+     when(valid && vset_same) {
+       when(ptag_same) {
+         new_mask := fromMSHR.bits.waymask
++        // also update meta_codes
++        // we have getPhyTagFromBlk(fromMSHR.bits.blkPaddr) === ptag, so we can use ptag directly for better timing
++        new_code := encodeMetaECC(ptag)
+       }.elsewhen(way_same) {
+         new_mask := 0.U
++        // we dont care about new_code, since it's not used for a missed request
+       }
+     }
+-    new_mask
++    (new_mask, new_code)
+   }
+ 
+   val s1_SRAM_valid = s0_fire_r || RegNext(s1_need_meta && toMeta.ready)
+   val s1_MSHR_valid = fromMSHR.valid && !fromMSHR.bits.corrupt
+   val s1_waymasks   = WireInit(VecInit(Seq.fill(PortNumber)(0.U(nWays.W))))
+   val s1_waymasks_r = RegEnable(s1_waymasks, 0.U.asTypeOf(s1_waymasks), s1_SRAM_valid || s1_MSHR_valid)
++  val s1_meta_codes   = WireInit(VecInit(Seq.fill(PortNumber)(0.U(ICacheMetaCodeBits.W))))
++  val s1_meta_codes_r = RegEnable(s1_meta_codes, 0.U.asTypeOf(s1_meta_codes), s1_SRAM_valid || s1_MSHR_valid)
++
++  // update waymasks and meta_codes
+   (0 until PortNumber).foreach{i =>
+-    val old_waymask = Mux(s1_SRAM_valid, s1_SRAM_waymasks(i), s1_waymasks_r(i))
+-    s1_waymasks(i) := update_waymask(old_waymask, s1_req_vSetIdx(i), s1_req_ptags(i))
++    val old_waymask    = Mux(s1_SRAM_valid, s1_SRAM_waymasks(i),   s1_waymasks_r(i))
++    val old_meta_codes = Mux(s1_SRAM_valid, s1_SRAM_meta_codes(i), s1_meta_codes_r(i))
++    val new_info = update_meta_info(old_waymask, s1_req_vSetIdx(i), s1_req_ptags(i), old_meta_codes)
++    s1_waymasks(i)   := new_info._1
++    s1_meta_codes(i) := new_info._2
+   }
+ 
+-  // select ecc code
+-  /* NOTE:
+-   * When ECC check fails, s1_waymasks may be corrupted, so this selected meta_codes may be wrong.
+-   * However, we can guarantee that the request sent to the l2 cache and the response to the IFU are both correct,
+-   * considering the probability of bit flipping abnormally is very small, consider there's up to 1 bit being wrong:
+-   * 1. miss -> fake hit: The wrong bit in s1_waymasks was set to true.B, thus selects the wrong meta_codes,
+-   *                      but we can detect this by checking whether `encodeMetaECC(req_ptags) === meta_codes`.
+-   * 2. hit -> fake multi-hit: In normal situation, multi-hit never happens, so multi-hit indicates ECC failure,
+-   *                           we can detect this by checking whether `PopCount(waymasks) <= 1.U`,
+-   *                           and meta_codes is not important in this situation.
+-   * 3. hit -> fake miss: We can't detect this, but we can (pre)fetch the correct data from L2 cache, so it's not a problem.
+-   * 4. hit -> hit / miss -> miss: ECC failure happens in a irrelevant way, so we don't care about it this time.
+-   */
+-  val s1_meta_codes = VecInit((0 until PortNumber).map { port =>
+-    Mux1H(s1_waymasks(port), fromMeta.codes(port))
+-  })
+-
+   /**
+     ******************************************************************************
+     * send enqueu req to WayLookup
+diff --git a/src/main/scala/xiangshan/frontend/icache/WayLookup.scala b/src/main/scala/xiangshan/frontend/icache/WayLookup.scala
+index 0bf5812be6e..3583c8b7a5b 100644
+--- a/src/main/scala/xiangshan/frontend/icache/WayLookup.scala
++++ b/src/main/scala/xiangshan/frontend/icache/WayLookup.scala
+@@ -123,10 +123,12 @@ class WayLookup(implicit p: Parameters) extends ICacheModule {
+           // miss -> hit
+           entry.waymask(i) := io.update.bits.waymask
+           // also update meta_codes
+-          entry.meta_codes(i) := encodeMetaECC(getPhyTagFromBlk(io.update.bits.blkPaddr))
++          // we have getPhyTagFromBlk(io.update.bits.blkPaddr) === entry.ptag(i), so we can use entry.ptag(i) for better timing
++          entry.meta_codes(i) := encodeMetaECC(entry.ptag(i))
+         }.elsewhen(way_same) {
+           // data is overwritten: hit -> miss
+           entry.waymask(i) := 0.U
++          // dont care meta_codes, since it's not used for a missed request
+         }
+       }
+       hit_vec(i) := vset_same && (ptag_same || way_same)

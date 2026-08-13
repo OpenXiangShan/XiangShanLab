@@ -1,0 +1,83 @@
+diff --git a/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtbBank.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtbBank.scala
+index 192553f9449..2d2ff98049c 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtbBank.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtbBank.scala
+@@ -43,7 +43,8 @@ class AheadBtbBank(implicit p: Parameters) extends AheadBtbModule {
+     holdRead = true,
+     withClockGate = true,
+     hasMbist = hasMbist,
+-    hasSramCtl = hasSramCtl
++    hasSramCtl = hasSramCtl,
++    suffix = Option("bpu_abtb")
+   ))
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ittage/IttageTable.scala b/src/main/scala/xiangshan/frontend/bpu/ittage/IttageTable.scala
+index 2d582051172..36f145db0f4 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/ittage/IttageTable.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/ittage/IttageTable.scala
+@@ -128,7 +128,8 @@ class IttageTable(
+     useBitmask = true,
+     withClockGate = true,
+     hasMbist = hasMbist,
+-    hasSramCtl = hasSramCtl
++    hasSramCtl = hasSramCtl,
++    suffix = Option("bpu_ittage")
+   ))
+   private val mbistPl = MbistPipeline.PlaceMbistPipeline(1, "MbistPipeIttage", hasMbist)
+   table.io.r.req.valid       := io.req.fire
+diff --git a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtbInternalBank.scala b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtbInternalBank.scala
+index 2bf597126b9..c2e191131ce 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtbInternalBank.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtbInternalBank.scala
+@@ -84,7 +84,8 @@ class MainBtbInternalBank(
+         holdRead = true,
+         withClockGate = true,
+         hasMbist = hasMbist,
+-        hasSramCtl = hasSramCtl
++        hasSramCtl = hasSramCtl,
++        suffix = Option("bpu_mbtb")
+       )
+     ).suggestName(s"mbtb_sram_align${alignIdx}_bank${bankIdx}_way${wayIdx}")
+   }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/sc/ScTable.scala b/src/main/scala/xiangshan/frontend/bpu/sc/ScTable.scala
+index 8d554e6a945..a8095bfc727 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/sc/ScTable.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/sc/ScTable.scala
+@@ -47,7 +47,8 @@ class ScTable(val numSets: Int, val histLen: Int)(implicit p: Parameters)
+       holdRead = true,
+       withClockGate = true,
+       hasMbist = hasMbist,
+-      hasSramCtl = hasSramCtl
++      hasSramCtl = hasSramCtl,
++      suffix = Option("bpu_sc")
+     ))
+   )
+ 
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTableAlignBank.scala b/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTableAlignBank.scala
+index 77f87093b55..b3becc23f89 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTableAlignBank.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTableAlignBank.scala
+@@ -75,7 +75,8 @@ class TageBaseTableAlignBank(
+       holdRead = true,
+       withClockGate = true,
+       hasMbist = hasMbist,
+-      hasSramCtl = hasSramCtl
++      hasSramCtl = hasSramCtl,
++      suffix = Option("bpu_tage_base")
+     )).suggestName(s"tage_sram_align${alignIdx}_bank${i}")
+   }
+ 
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala b/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala
+index 252a37bd6be..7f9fdaf46d9 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala
+@@ -44,7 +44,8 @@ class TageTable(val numSets: Int)(implicit p: Parameters) extends TageModule wit
+         shouldReset = true,
+         withClockGate = true,
+         hasMbist = hasMbist,
+-        hasSramCtl = hasSramCtl
++        hasSramCtl = hasSramCtl,
++        suffix = Option("bpu_tage")
+       )).suggestName(s"tage_entry_sram_bank${bankIdx}_way${wayIdx}")
+     }

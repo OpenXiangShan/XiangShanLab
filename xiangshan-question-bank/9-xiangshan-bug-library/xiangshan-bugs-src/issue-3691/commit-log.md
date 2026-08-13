@@ -1,0 +1,297 @@
+# Commit Log
+- Issue: #3691
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3691
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3691
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3691
+- Changed files: 13
+- Additions: 44
+- Deletions: 17
+
+## Files
+- `src/main/scala/top/Top.scala`
+- `src/main/scala/top/XSNoCTop.scala`
+- `src/main/scala/xiangshan/Bundle.scala`
+- `src/main/scala/xiangshan/L2Top.scala`
+- `src/main/scala/xiangshan/XSDts.scala`
+- `src/main/scala/xiangshan/XSTile.scala`
+- `src/main/scala/xiangshan/XSTileWrap.scala`
+- `src/main/scala/xiangshan/backend/MemBlock.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/InterruptBundle.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala`
+- `src/test/scala/top/SimTop.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/top/Top.scala b/src/main/scala/top/Top.scala
+index 8b0b3e0e729..3a9ef601880 100644
+--- a/src/main/scala/top/Top.scala
++++ b/src/main/scala/top/Top.scala
+@@ -34,6 +34,7 @@ import org.chipsalliance.cde.config._
+ import freechips.rocketchip.diplomacy._
+ import freechips.rocketchip.tile._
+ import freechips.rocketchip.tilelink._
++import freechips.rocketchip.interrupts._
+ import freechips.rocketchip.amba.axi4._
+ import freechips.rocketchip.jtag.JTAGIO
+ import chisel3.experimental.{annotate, ChiselAnnotation}
+@@ -106,11 +107,14 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc() with HasSoCParameter
+     case Some(pf) => Some(BundleBridgeSource(() => new PrefetchRecv))
+     case None => None
+   }
++  val nmiIntNode = IntSourceNode(IntSourcePortSimple(1, NumCores, (new NonmaskableInterruptIO).elements.size))
++  val nmi = InModuleBody(nmiIntNode.makeIOs())
+ 
+   for (i <- 0 until NumCores) {
+     core_with_l2(i).clint_int_node := misc.clint.intnode
+     core_with_l2(i).plic_int_node :*= misc.plic.intnode
+     core_with_l2(i).debug_int_node := misc.debugModule.debug.dmOuter.dmOuter.intnode
++    core_with_l2(i).nmi_int_node := nmiIntNode
+     misc.plic.intnode := IntBuffer() := core_with_l2(i).beu_int_source
+     if (!enableCHI) {
+       misc.peripheral_ports.get(i) := core_with_l2(i).tl_uncache
+diff --git a/src/main/scala/top/XSNoCTop.scala b/src/main/scala/top/XSNoCTop.scala
+index 80040fc41e2..d995608d8a3 100644
+--- a/src/main/scala/top/XSNoCTop.scala
++++ b/src/main/scala/top/XSNoCTop.scala
+@@ -72,14 +72,17 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
+   val clintIntNode = IntSourceNode(IntSourcePortSimple(1, 1, 2))
+   val debugIntNode = IntSourceNode(IntSourcePortSimple(1, 1, 1))
+   val plicIntNode = IntSourceNode(IntSourcePortSimple(1, 2, 1))
++  val nmiIntNode = IntSourceNode(IntSourcePortSimple(1, 1, (new NonmaskableInterruptIO).elements.size))
+   val beuIntNode = IntSinkNode(IntSinkPortSimple(1, 1))
+   core_with_l2.clintIntNode := clintIntNode
+   core_with_l2.debugIntNode := debugIntNode
+   core_with_l2.plicIntNode :*= plicIntNode
++  core_with_l2.nmiIntNode := nmiIntNode
+   beuIntNode := core_with_l2.beuIntNode
+   val clint = InModuleBody(clintIntNode.makeIOs())
+   val debug = InModuleBody(debugIntNode.makeIOs())
+   val plic = InModuleBody(plicIntNode.makeIOs())
++  val nmi = InModuleBody(nmiIntNode.makeIOs())
+   val beu = InModuleBody(beuIntNode.makeIOs())
+ 
+   // reset nodes
+diff --git a/src/main/scala/xiangshan/Bundle.scala b/src/main/scala/xiangshan/Bundle.scala
+index eba54274f74..74ae74eb160 100644
+--- a/src/main/scala/xiangshan/Bundle.scala
++++ b/src/main/scala/xiangshan/Bundle.scala
+@@ -371,8 +371,9 @@ class ExternalInterruptIO(implicit p: Parameters) extends XSBundle {
+   val nmi = new NonmaskableInterruptIO()
+ }
+ 
+-class NonmaskableInterruptIO(implicit p: Parameters) extends XSBundle {
+-  val nmi = Input(Bool())
++class NonmaskableInterruptIO() extends Bundle {
++  val nmi_31 = Input(Bool())
++  val nmi_43 = Input(Bool())
+   // reserve for other nmi type
+ }
+ 
+diff --git a/src/main/scala/xiangshan/L2Top.scala b/src/main/scala/xiangshan/L2Top.scala
+index 741222be352..9bc18184869 100644
+--- a/src/main/scala/xiangshan/L2Top.scala
++++ b/src/main/scala/xiangshan/L2Top.scala
+@@ -95,6 +95,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+   val clint_int_node = IntIdentityNode()
+   val debug_int_node = IntIdentityNode()
+   val plic_int_node = IntIdentityNode()
++  val nmi_int_node = IntIdentityNode()
+ 
+   println(s"enableCHI: ${enableCHI}")
+   val l2cache = if (enableL2) {
+diff --git a/src/main/scala/xiangshan/XSDts.scala b/src/main/scala/xiangshan/XSDts.scala
+index 59c3494eb85..fabe18b2ad1 100644
+--- a/src/main/scala/xiangshan/XSDts.scala
++++ b/src/main/scala/xiangshan/XSDts.scala
+@@ -100,7 +100,8 @@ trait HasXSDts {
+     val int_resources = (
+       memBlock.inner.clint_int_sink.edges.in.flatMap(_.source.sources) ++
+       memBlock.inner.plic_int_sink.edges.in.flatMap(_.source.sources) ++
+-      memBlock.inner.debug_int_sink.edges.in.flatMap(_.source.sources)
++      memBlock.inner.debug_int_sink.edges.in.flatMap(_.source.sources) ++
++      memBlock.inner.nmi_int_sink.edges.in.flatMap(_.source.sources)
+       ).flatMap {
+       s =>
+         println(s.resources.map(_.key), s.range)
+@@ -111,7 +112,9 @@ trait HasXSDts {
+       7,    // mtip  [clint]
+       11,   // meip  [plic]
+       9,    // seip  [plic]
+-      65535 // debug [debug]
++      65535, // debug [debug]
++      31,   // nmi_31 [nmi]
++      43    // nmi_43 [nmi]
+     )
+     assert(int_resources.size == int_ids.size)
+     for((resources, id) <- int_resources.zip(int_ids)){
+diff --git a/src/main/scala/xiangshan/XSTile.scala b/src/main/scala/xiangshan/XSTile.scala
+index dcd7c0a23e3..8382b263eaa 100644
+--- a/src/main/scala/xiangshan/XSTile.scala
++++ b/src/main/scala/xiangshan/XSTile.scala
+@@ -51,9 +51,11 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+   val clint_int_node = l2top.inner.clint_int_node
+   val plic_int_node = l2top.inner.plic_int_node
+   val debug_int_node = l2top.inner.debug_int_node
++  val nmi_int_node = l2top.inner.nmi_int_node
+   memBlock.clint_int_sink := clint_int_node
+   memBlock.plic_int_sink :*= plic_int_node
+   memBlock.debug_int_sink := debug_int_node
++  memBlock.nmi_int_sink := nmi_int_node
+ 
+   // =========== Components' Connection ============
+   // L1 to l1_xbar
+diff --git a/src/main/scala/xiangshan/XSTileWrap.scala b/src/main/scala/xiangshan/XSTileWrap.scala
+index 87ed2f0e675..f76c07b1953 100644
+--- a/src/main/scala/xiangshan/XSTileWrap.scala
++++ b/src/main/scala/xiangshan/XSTileWrap.scala
+@@ -43,9 +43,11 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+   val debugIntNode = IntIdentityNode()
+   val plicIntNode = IntIdentityNode()
+   val beuIntNode = IntIdentityNode()
++  val nmiIntNode = IntIdentityNode()
+   tile.clint_int_node := IntBuffer(3, cdc = true) := clintIntNode
+   tile.debug_int_node := IntBuffer(3, cdc = true) := debugIntNode
+   tile.plic_int_node :*= IntBuffer(3, cdc = true) :*= plicIntNode
++  tile.nmi_int_node := IntBuffer(3, cdc = true) := nmiIntNode
+   beuIntNode := IntBuffer() := tile.beu_int_source
+   class XSTileWrapImp(wrapper: LazyModule) extends LazyRawModuleImp(wrapper) {
+     val clock = IO(Input(Clock()))
+diff --git a/src/main/scala/xiangshan/backend/MemBlock.scala b/src/main/scala/xiangshan/backend/MemBlock.scala
+index 7b315d25ca1..4b4c381e691 100644
+--- a/src/main/scala/xiangshan/backend/MemBlock.scala
++++ b/src/main/scala/xiangshan/backend/MemBlock.scala
+@@ -245,6 +245,7 @@ class MemBlockInlined()(implicit p: Parameters) extends LazyModule
+   val clint_int_sink = IntSinkNode(IntSinkPortSimple(1, 2))
+   val debug_int_sink = IntSinkNode(IntSinkPortSimple(1, 1))
+   val plic_int_sink = IntSinkNode(IntSinkPortSimple(2, 1))
++  val nmi_int_sink = IntSinkNode(IntSinkPortSimple(1, (new NonmaskableInterruptIO).elements.size))
+ 
+   if (!coreParams.softPTW) {
+     ptw_to_l2_buffer.node := ptw.node
+@@ -1780,7 +1781,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     x.externalInterrupt.meip  := outer.plic_int_sink.in.head._1(0)
+     x.externalInterrupt.seip  := outer.plic_int_sink.in.last._1(0)
+     x.externalInterrupt.debug := outer.debug_int_sink.in.head._1(0)
+-    x.externalInterrupt.nmi.nmi := false.B
++    x.externalInterrupt.nmi.nmi_31 := outer.nmi_int_sink.in.head._1(0)
++    x.externalInterrupt.nmi.nmi_43 := outer.nmi_int_sink.in.head._1(1)
+     x.msiInfo           := DelayNWithValid(io.fromTopToBackend.msiInfo, 1)
+     x.clintTime         := DelayNWithValid(io.fromTopToBackend.clintTime, 1)
+   }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptBundle.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptBundle.scala
+index a688446995b..71f6b8ac964 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptBundle.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptBundle.scala
+@@ -289,15 +289,17 @@ class InterruptEnableBundle extends CSRBundle {
+ }
+ 
+ class NonMaskableIRPendingBundle extends CSRBundle {
+-  val NMI = RW(1).withReset(0.U)
++  val NMI_31 = RW(31).withReset(0.U)
++  val NMI_43 = RW(43).withReset(0.U)
+   // reserve for more NMI type
+ }
+ object NonMaskableIRNO{
+-  final val NMI = 1
++  final val NMI_43 = 43
++  final val NMI_31 = 31
+   // reserve for more NMI type
+ 
+   val interruptDefaultPrio = Seq(
+-    NMI
++    NMI_43, NMI_31
+   )
+   def getIRQHigherThan(irq: Int): Seq[Int] = {
+     val idx = this.interruptDefaultPrio.indexOf(irq, 0)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+index 555c2664ed6..11d4fdf6b51 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+@@ -687,7 +687,8 @@ trait HasExternalInterruptBundle {
+ }
+ trait HasNonMaskableIRPBundle {
+   val nonMaskableIRP = IO(new Bundle {
+-    val NMI = Input(Bool())
++    val NMI_43 = Input(Bool())
++    val NMI_31 = Input(Bool())
+   })
+ }
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index e09586d0767..cb32ddd14cb 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -295,6 +295,14 @@ class NewCSR(implicit val p: Parameters) extends Module
+     pmpCSROutMap
+ 
+   // interrupt
++  val nmip = RegInit(new NonMaskableIRPendingBundle, (new NonMaskableIRPendingBundle).init)
++  when(nonMaskableIRP.NMI_43) {
++    nmip.NMI_43 := true.B
++  }
++  when(nonMaskableIRP.NMI_31) {
++    nmip.NMI_31 := true.B
++  }
++
+   val intrMod = Module(new InterruptFilter)
+   intrMod.io.in.privState := privState
+   intrMod.io.in.mstatusMIE := mstatus.regOut.MIE.asBool
+@@ -320,17 +328,12 @@ class NewCSR(implicit val p: Parameters) extends Module
+   intrMod.io.in.miprios := Cat(miregiprios.map(_.rdata).reverse)
+   intrMod.io.in.hsiprios := Cat(siregiprios.map(_.rdata).reverse)
+   intrMod.io.in.mnstatusNMIE := mnstatus.regOut.NMIE.asBool
+-
+-  val nmip = RegInit(new NonMaskableIRPendingBundle, (new NonMaskableIRPendingBundle).init)
+-  when(nonMaskableIRP.NMI) {
+-    nmip.NMI := true.B
+-  }
+-
+   intrMod.io.in.nmi := nmip.asUInt.orR
+   intrMod.io.in.nmiVec := nmip.asUInt
+ 
+   when(intrMod.io.out.nmi && intrMod.io.out.interruptVec.valid) {
+-    nmip.NMI := false.B
++    nmip.NMI_31 := nmip.NMI_31 & !intrMod.io.out.interruptVec.bits(NonMaskableIRNO.NMI_31).asBool
++    nmip.NMI_43 := nmip.NMI_43 & !intrMod.io.out.interruptVec.bits(NonMaskableIRNO.NMI_43).asBool
+   }
+   val intrVec = RegEnable(intrMod.io.out.interruptVec.bits, 0.U, intrMod.io.out.interruptVec.valid)
+   val nmi = RegEnable(intrMod.io.out.nmi, false.B, intrMod.io.out.interruptVec.valid)
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index 756c8181d6a..df10decc00b 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -154,7 +154,8 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   csrMod.platformIRP.VSEIP := false.B // Todo
+   csrMod.platformIRP.VSTIP := false.B // Todo
+   csrMod.platformIRP.debugIP := csrIn.externalInterrupt.debug
+-  csrMod.nonMaskableIRP.NMI := csrIn.externalInterrupt.nmi.nmi
++  csrMod.nonMaskableIRP.NMI_43 := csrIn.externalInterrupt.nmi.nmi_43
++  csrMod.nonMaskableIRP.NMI_31 := csrIn.externalInterrupt.nmi.nmi_31
+ 
+   csrMod.io.fromTop.hartId := io.csrin.get.hartId
+   csrMod.io.fromTop.clintTime := io.csrin.get.clintTime
+diff --git a/src/test/scala/top/SimTop.scala b/src/test/scala/top/SimTop.scala
+index cfe0701c70a..3692facf46c 100644
+--- a/src/test/scala/top/SimTop.scala
++++ b/src/test/scala/top/SimTop.scala
+@@ -25,6 +25,7 @@ import device.{AXI4MemorySlave, SimJTAG}
+ import difftest._
+ import freechips.rocketchip.amba.axi4.AXI4Bundle
+ import freechips.rocketchip.diplomacy.{DisableMonitors, LazyModule}
++import freechips.rocketchip.util.HeterogeneousBag
+ import utility.{ChiselDB, Constantin, FileRegisters, GTimer}
+ import xiangshan.DebugOptionsKey
+ 
+@@ -61,6 +62,7 @@ class SimTop(implicit p: Parameters) extends Module {
+   soc.io.pll0_lock := true.B
+   soc.io.cacheable_check := DontCare
+   soc.io.riscv_rst_vec.foreach(_ := 0x10000000L.U)
++  l_soc.nmi.foreach(_.foreach(intr => { intr := false.B; dontTouch(intr) }))
+ 
+   // soc.io.rtc_clock is a div100 of soc.io.clock
+   val rtcClockDiv = 100
+```

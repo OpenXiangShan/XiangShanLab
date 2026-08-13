@@ -1,0 +1,75 @@
+# Commit Log
+- Issue: #3471
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3471
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3471
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3471
+- Changed files: 2
+- Additions: 10
+- Deletions: 10
+
+## Files
+- `src/main/scala/xiangshan/Parameters.scala`
+- `src/main/scala/xiangshan/backend/issue/IssueQueue.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 316c56c3c79..216b7c0d6ee 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -457,31 +457,31 @@ case class XSCoreParameters
+     SchdBlockParams(Seq(
+       IssueBlockParams(Seq(
+         ExeUnitParams("STA0", Seq(StaCfg, MouCfg), Seq(FakeIntWB()), Seq(Seq(IntRD(7, 2)))),
+-      ), numEntries = 16, numEnq = 2, numComp = 14),
++      ), numEntries = 16, numEnq = 1, numComp = 15),
+       IssueBlockParams(Seq(
+         ExeUnitParams("STA1", Seq(StaCfg, MouCfg), Seq(FakeIntWB()), Seq(Seq(IntRD(6, 2)))),
+-      ), numEntries = 16, numEnq = 2, numComp = 14),
++      ), numEntries = 16, numEnq = 1, numComp = 15),
+       IssueBlockParams(Seq(
+         ExeUnitParams("LDU0", Seq(LduCfg), Seq(IntWB(5, 0), FpWB(5, 0)), Seq(Seq(IntRD(8, 0))), true, 2),
+-      ), numEntries = 16, numEnq = 2, numComp = 14),
++      ), numEntries = 16, numEnq = 1, numComp = 15),
+       IssueBlockParams(Seq(
+         ExeUnitParams("LDU1", Seq(LduCfg), Seq(IntWB(6, 0), FpWB(6, 0)), Seq(Seq(IntRD(9, 0))), true, 2),
+-      ), numEntries = 16, numEnq = 2, numComp = 14),
++      ), numEntries = 16, numEnq = 1, numComp = 15),
+       IssueBlockParams(Seq(
+         ExeUnitParams("LDU2", Seq(LduCfg), Seq(IntWB(7, 0), FpWB(7, 0)), Seq(Seq(IntRD(10, 0))), true, 2),
+-      ), numEntries = 16, numEnq = 2, numComp = 14),
++      ), numEntries = 16, numEnq = 1, numComp = 15),
+       IssueBlockParams(Seq(
+         ExeUnitParams("VLSU0", Seq(VlduCfg, VstuCfg, VseglduSeg, VsegstuCfg), Seq(VfWB(4, 0), V0WB(4, 0)), Seq(Seq(VfRD(6, 0)), Seq(VfRD(7, 0)), Seq(VfRD(8, 0)), Seq(V0RD(2, 0)), Seq(VlRD(2, 0)))),
+-      ), numEntries = 16, numEnq = 2, numComp = 14),
++      ), numEntries = 16, numEnq = 1, numComp = 15),
+       IssueBlockParams(Seq(
+         ExeUnitParams("VLSU1", Seq(VlduCfg, VstuCfg), Seq(VfWB(5, 0), V0WB(5, 0)), Seq(Seq(VfRD(9, 0)), Seq(VfRD(10, 0)), Seq(VfRD(11, 0)), Seq(V0RD(3, 0)), Seq(VlRD(3, 0)))),
+-      ), numEntries = 16, numEnq = 2, numComp = 14),
++      ), numEntries = 16, numEnq = 1, numComp = 15),
+       IssueBlockParams(Seq(
+         ExeUnitParams("STD0", Seq(StdCfg, MoudCfg), Seq(), Seq(Seq(IntRD(5, 2), FpRD(12, 0)))),
+-      ), numEntries = 16, numEnq = 2, numComp = 14),
++      ), numEntries = 16, numEnq = 1, numComp = 15),
+       IssueBlockParams(Seq(
+         ExeUnitParams("STD1", Seq(StdCfg, MoudCfg), Seq(), Seq(Seq(IntRD(3, 2), FpRD(13, 0)))),
+-      ), numEntries = 16, numEnq = 2, numComp = 14),
++      ), numEntries = 16, numEnq = 1, numComp = 15),
+     ),
+       numPregs = intPreg.numEntries max vfPreg.numEntries,
+       numDeqOutside = 0,
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+index ccff6ac2547..5c3cb456c9f 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+@@ -36,7 +36,7 @@ class IssueQueue(params: IssueBlockParams)(implicit p: Parameters) extends LazyM
+ class IssueQueueStatusBundle(numEnq: Int, numEntries: Int) extends Bundle {
+   val empty = Output(Bool())
+   val full = Output(Bool())
+-  val validCnt = Output(UInt(log2Ceil(numEntries).W))
++  val validCnt = Output(UInt(log2Ceil(numEntries + 1).W))
+   val leftVec = Output(Vec(numEnq + 1, Bool()))
+ }
+```

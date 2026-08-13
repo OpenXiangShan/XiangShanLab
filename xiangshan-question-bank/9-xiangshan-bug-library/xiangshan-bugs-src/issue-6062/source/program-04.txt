@@ -1,0 +1,5 @@
+riscv64-unknown-elf-gcc \
+  -march=rv64ima_zicsr_zifencei -mabi=lp64 -static -mcmodel=medany \
+  -fvisibility=hidden -nostdlib -nostartfiles \
+  program.S -T link_xiangshan.ld \
+  -o program.elf

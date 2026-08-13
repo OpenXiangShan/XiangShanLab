@@ -1,0 +1,326 @@
+# Commit Log
+- Issue: #3847
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3847
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3847
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3847
+- Changed files: 8
+- Additions: 119
+- Deletions: 12
+
+## Files
+- `src/main/scala/xiangshan/Parameters.scala`
+- `src/main/scala/xiangshan/backend/Bundles.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnit.scala`
+- `src/main/scala/xiangshan/backend/decode/FPDecoder.scala`
+- `src/main/scala/xiangshan/backend/issue/Dispatch2Iq.scala`
+- `src/main/scala/xiangshan/backend/issue/EntryBundles.scala`
+- `src/main/scala/xiangshan/backend/issue/Scheduler.scala`
+- `src/main/scala/xiangshan/backend/rename/BusyTable.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 01686003206..2c156250be9 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -213,6 +213,8 @@ case class XSCoreParameters
+   ),
+   IntRegCacheSize: Int = 16,
+   MemRegCacheSize: Int = 12,
++  intSchdVlWbPort: Int = 0,
++  vfSchdVlWbPort: Int = 1,
+   prefetcher: Option[PrefetcherParams] = Some(SMSParams()),
+   IfuRedirectNum: Int = 1,
+   LoadPipelineWidth: Int = 3,
+@@ -386,7 +388,7 @@ case class XSCoreParameters
+       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
+       IssueBlockParams(Seq(
+         ExeUnitParams("ALU2", Seq(AluCfg), Seq(IntWB(port = 2, 0)), Seq(Seq(IntRD(4, 0)), Seq(IntRD(5, 0))), true, 2),
+-        ExeUnitParams("BJU2", Seq(BrhCfg, JmpCfg, I2fCfg, VSetRiWiCfg, VSetRiWvfCfg, I2vCfg), Seq(IntWB(port = 4, 0), VfWB(2, 0), V0WB(port = 2, 0), VlWB(port = 0, 0), FpWB(port = 4, 0)), Seq(Seq(IntRD(2, 1)), Seq(IntRD(3, 1)))),
++        ExeUnitParams("BJU2", Seq(BrhCfg, JmpCfg, I2fCfg, VSetRiWiCfg, VSetRiWvfCfg, I2vCfg), Seq(IntWB(port = 4, 0), VfWB(2, 0), V0WB(port = 2, 0), VlWB(port = intSchdVlWbPort, 0), FpWB(port = 4, 0)), Seq(Seq(IntRD(2, 1)), Seq(IntRD(3, 1)))),
+       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
+       IssueBlockParams(Seq(
+         ExeUnitParams("ALU3", Seq(AluCfg), Seq(IntWB(port = 3, 0)), Seq(Seq(IntRD(6, 0)), Seq(IntRD(7, 0))), true, 2),
+@@ -434,7 +436,7 @@ case class XSCoreParameters
+     SchdBlockParams(Seq(
+       IssueBlockParams(Seq(
+         ExeUnitParams("VFEX0", Seq(VfmaCfg, VialuCfg, VimacCfg, VppuCfg), Seq(VfWB(port = 0, 0), V0WB(port = 0, 0)), Seq(Seq(VfRD(0, 0)), Seq(VfRD(1, 0)), Seq(VfRD(2, 0)), Seq(V0RD(0, 0)), Seq(VlRD(0, 0)))),
+-        ExeUnitParams("VFEX1", Seq(VfaluCfg, VfcvtCfg, VipuCfg, VSetRvfWvfCfg), Seq(VfWB(port = 0, 1), V0WB(port = 0, 1), VlWB(port = 1, 0), IntWB(port = 1, 1), FpWB(port = 0, 1)), Seq(Seq(VfRD(0, 1)), Seq(VfRD(1, 1)), Seq(VfRD(2, 1)), Seq(V0RD(0, 1)), Seq(VlRD(0, 1)))),
++        ExeUnitParams("VFEX1", Seq(VfaluCfg, VfcvtCfg, VipuCfg, VSetRvfWvfCfg), Seq(VfWB(port = 0, 1), V0WB(port = 0, 1), VlWB(port = vfSchdVlWbPort, 0), IntWB(port = 1, 1), FpWB(port = 0, 1)), Seq(Seq(VfRD(0, 1)), Seq(VfRD(1, 1)), Seq(VfRD(2, 1)), Seq(V0RD(0, 1)), Seq(VlRD(0, 1)))),
+       ), numEntries = 16, numEnq = 2, numComp = 14),
+       IssueBlockParams(Seq(
+         ExeUnitParams("VFEX2", Seq(VfmaCfg, VialuCfg), Seq(VfWB(port = 1, 0), V0WB(port = 1, 0)), Seq(Seq(VfRD(3, 0)), Seq(VfRD(4, 0)), Seq(VfRD(5, 0)), Seq(V0RD(1, 0)), Seq(VlRD(1, 0)))),
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index 14c33b423a3..4b4d635734c 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -442,7 +442,7 @@ object Bundles {
+     val isOpMask  = Bool() // vmand, vmnand
+     val isMove    = Bool() // vmv.s.x, vmv.v.v, vmv.v.x, vmv.v.i
+ 
+-    val isDependOldvd = Bool() // some instruction's computation depends on oldvd
++    val isDependOldVd = Bool() // some instruction's computation depends on oldvd
+     val isWritePartVd = Bool() // some instruction's computation writes part of vd, such as vredsum
+ 
+     val isVleff = Bool() // vleff
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index cc5670e60db..390a70090b5 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -1034,7 +1034,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+     decodedInst.vpu.isNarrow := isNarrow
+     decodedInst.vpu.isDstMask := isDstMask
+     decodedInst.vpu.isOpMask := isOpMask
+-    decodedInst.vpu.isDependOldvd := isVppu || isVecOPF || isVStore || (isDstMask && !isOpMask) || isNarrow || isVlx || isVma
++    decodedInst.vpu.isDependOldVd := isVppu || isVecOPF || isVStore || (isDstMask && !isOpMask) || isNarrow || isVlx || isVma
+     decodedInst.vpu.isWritePartVd := isWritePartVd || isVlm || isVle && emulIsFrac
+     decodedInst.vpu.vstart := io.enq.vstart
+     decodedInst.vpu.isVleff := decodedInst.fuOpType === VlduType.vleff && inst.NF === 0.U
+diff --git a/src/main/scala/xiangshan/backend/decode/FPDecoder.scala b/src/main/scala/xiangshan/backend/decode/FPDecoder.scala
+index 8bf87101ac7..4ff4af2e298 100644
+--- a/src/main/scala/xiangshan/backend/decode/FPDecoder.scala
++++ b/src/main/scala/xiangshan/backend/decode/FPDecoder.scala
+@@ -130,7 +130,7 @@ class FPToVecDecoder(implicit p: Parameters) extends XSModule {
+   io.vpuCtrl.isNarrow  := false.B
+   io.vpuCtrl.isDstMask := false.B
+   io.vpuCtrl.isOpMask  := false.B
+-  io.vpuCtrl.isDependOldvd := false.B
++  io.vpuCtrl.isDependOldVd := false.B
+   io.vpuCtrl.isWritePartVd := false.B
+ }
+ 
+diff --git a/src/main/scala/xiangshan/backend/issue/Dispatch2Iq.scala b/src/main/scala/xiangshan/backend/issue/Dispatch2Iq.scala
+index 726f3b93935..40f711aa2f5 100644
+--- a/src/main/scala/xiangshan/backend/issue/Dispatch2Iq.scala
++++ b/src/main/scala/xiangshan/backend/issue/Dispatch2Iq.scala
+@@ -8,7 +8,7 @@ import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+ import utility._
+ import xiangshan._
+ import xiangshan.backend.fu.{FuConfig, FuType}
+-import xiangshan.backend.rename.BusyTableReadIO
++import xiangshan.backend.rename.{BusyTableReadIO,VlBusyTableReadIO}
+ import xiangshan.mem._
+ import xiangshan.backend.Bundles.{DynInst, ExuOH}
+ import xiangshan.backend.datapath.DataSource
+@@ -112,6 +112,7 @@ abstract class Dispatch2IqImp(override val wrapper: Dispatch2Iq)(implicit p: Par
+     val readVfState = if (numVfStateRead > 0) Some(Vec(numVfStateRead, Flipped(new BusyTableReadIO))) else None
+     val readV0State = if (numV0StateRead > 0) Some(Vec(numV0StateRead, Flipped(new BusyTableReadIO))) else None
+     val readVlState = if (numVlStateRead > 0) Some(Vec(numVlStateRead, Flipped(new BusyTableReadIO))) else None
++    val readVlInfo  = if (numVlStateRead > 0) Some(Vec(numVlStateRead, Flipped(new VlBusyTableReadIO))) else None
+     val readRCTagTableState = Option.when(numRCTagTableStateRead > 0)(Vec(numRCTagTableStateRead, Flipped(new RCTagTableReadPort(RegCacheIdxWidth, params.pregIdxWidth))))
+     val out = MixedVec(params.issueBlockParams.filter(iq => iq.StdCnt == 0).map(x => Vec(x.numEnq, DecoupledIO(new DynInst))))
+     val enqLsqIO = if (wrapper.isMem) Some(Flipped(new LsqEnqIO)) else None
+@@ -139,6 +140,8 @@ abstract class Dispatch2IqImp(override val wrapper: Dispatch2Iq)(implicit p: Par
+   private val vfSrcStateVec  = Option.when(io.readVfState.isDefined )(Wire(Vec(numVfStateRead, SrcState()))) 
+   private val v0SrcStateVec  = Option.when(io.readV0State.isDefined )(Wire(Vec(numV0StateRead, SrcState())))
+   private val vlSrcStateVec  = Option.when(io.readVlState.isDefined )(Wire(Vec(numVlStateRead, SrcState())))
++  private val vlSrcIsZeroVec  = Option.when(io.readVlInfo.isDefined )(Wire(Vec(numVlStateRead, Bool())))
++  private val vlSrcIsVlMaxVec  = Option.when(io.readVlInfo.isDefined )(Wire(Vec(numVlStateRead, Bool())))
+   private val intAllSrcStateVec = Option.when(io.readIntState.isDefined)(Wire(Vec(numIn * numRegSrc, SrcState())))
+   private val fpAllSrcStateVec  = Option.when(io.readFpState.isDefined )(Wire(Vec(numIn * numRegSrc, SrcState())))
+   private val vecAllSrcStateVec = Option.when(io.readVfState.isDefined )(Wire(Vec(numIn * numRegSrc, SrcState())))
+@@ -204,6 +207,8 @@ abstract class Dispatch2IqImp(override val wrapper: Dispatch2Iq)(implicit p: Par
+ 
+     io.readVlState.get.map(_.req).zip(vlReqPsrcVec).foreach(x => x._1 := x._2)
+     io.readVlState.get.map(_.resp).zip(vlSrcStateVec.get).foreach(x => x._2 := x._1)
++    io.readVlInfo.get.map(_.is_zero).zip(vlSrcIsZeroVec.get).foreach(x => x._2 := x._1)
++    io.readVlInfo.get.map(_.is_vlmax).zip(vlSrcIsVlMaxVec.get).foreach(x => x._2 := x._1)
+     io.readVlState.get.map(_.loadDependency).zip(vlSrcLoadDependency.get).foreach(x => x._2 := x._1)
+ 
+     for (i <- 0 until numIn) {
+@@ -215,6 +220,31 @@ abstract class Dispatch2IqImp(override val wrapper: Dispatch2Iq)(implicit p: Par
+       vecAllSrcStateVec.get(i * numRegSrc + numRegSrc - 1)       := vlSrcStateVec.get(i);
+       vecAllSrcLoadDependency.get(i * numRegSrc + numRegSrc - 2) := v0SrcLoadDependency.get(i);
+       vecAllSrcLoadDependency.get(i * numRegSrc + numRegSrc - 1) := vlSrcLoadDependency.get(i);
++
++      // same as eliminate the old vd dependency in issue queue when wake up by wakeup
++      val isDependOldVd = io.in(i).bits.vpu.isDependOldVd
++      val isWritePartVd = io.in(i).bits.vpu.isWritePartVd
++      val vta = io.in(i).bits.vpu.vta
++      val vma = io.in(i).bits.vpu.vma
++      val vm = io.in(i).bits.vpu.vm
++      val vlIsVlmax = vlSrcIsVlMaxVec.get(i)
++      val vlIsZero = vlSrcIsZeroVec.get(i)
++      val vlIsNonZero = !vlSrcIsZeroVec.get(i)
++      val ignoreTail = vlIsVlmax && (vm =/= 0.U || vma) && !isWritePartVd
++      val ignoreWhole = (vm =/= 0.U || vma) && vta
++      val isFof = VlduType.isFof(io.in(i).bits.fuOpType)
++      for (j <- 0 until numRegSrcVf) {
++        val ignoreOldVd = Wire(Bool())
++        if (j == numRegSrcVf - 1) {
++          // check whether can ignore the old vd dependency
++          ignoreOldVd := SrcState.isReady(vlSrcStateVec.get(i)) && !isFof && vlIsNonZero && !isDependOldVd && (ignoreTail || ignoreWhole)
++        } else {
++          // check whether can ignore the src
++          ignoreOldVd := false.B
++        }
++        uopsIn(i).bits.srcType(j) := Mux(ignoreOldVd, SrcType.no, io.in(i).bits.srcType(j))
++        vecAllSrcStateVec.get(i * numRegSrc + j) := Mux(ignoreOldVd, SrcState.rdy, vfSrcStateVec.get(i * numRegSrcVf + j))
++      }
+     }
+   }
+   if (io.readRCTagTableState.isDefined) {
+diff --git a/src/main/scala/xiangshan/backend/issue/EntryBundles.scala b/src/main/scala/xiangshan/backend/issue/EntryBundles.scala
+index ab21e0063d2..39c2212bd1c 100644
+--- a/src/main/scala/xiangshan/backend/issue/EntryBundles.scala
++++ b/src/main/scala/xiangshan/backend/issue/EntryBundles.scala
+@@ -208,10 +208,12 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+       })
+       var numVecWb = params.backendParam.getVfWBExeGroup.size
+       var numV0Wb = params.backendParam.getV0WBExeGroup.size
++      var intSchdVlWbPort = p(XSCoreParamsKey).intSchdVlWbPort
++      var vfSchdVlWbPort = p(XSCoreParamsKey).vfSchdVlWbPort
+       // int wb is first bit of vlwb, which is after vfwb and v0wb
+-      common.vlWakeupByIntWb  := wakeUpFromVl(numVecWb + numV0Wb)
++      common.vlWakeupByIntWb  := wakeUpFromVl(numVecWb + numV0Wb + intSchdVlWbPort)
+       // vf wb is second bit of wb
+-      common.vlWakeupByVfWb   := wakeUpFromVl(numVecWb + numV0Wb + 1)
++      common.vlWakeupByVfWb   := wakeUpFromVl(numVecWb + numV0Wb + vfSchdVlWbPort)
+     } else {
+       common.vlWakeupByIntWb  := false.B
+       common.vlWakeupByVfWb   := false.B
+@@ -298,7 +300,7 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+       val ignoreOldVd = Wire(Bool())
+       val vlWakeUpByIntWb = common.vlWakeupByIntWb
+       val vlWakeUpByVfWb = common.vlWakeupByVfWb
+-      val isDependOldvd = entryReg.payload.vpu.isDependOldvd
++      val isDependOldVd = entryReg.payload.vpu.isDependOldVd
+       val isWritePartVd = entryReg.payload.vpu.isWritePartVd
+       val vta = entryReg.payload.vpu.vta
+       val vma = entryReg.payload.vpu.vma
+@@ -319,7 +321,7 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+           * 2. when vl = 0, we cannot set the srctype to imm because the vd keep the old value
+           * 3. when vl = vlmax, we can set srctype to imm when vta is not set
+           */
+-        ignoreOldVd := !VlduType.isFof(entryReg.payload.fuOpType) && srcIsVec && vlIsNonZero && !isDependOldvd && (ignoreTail || ignoreWhole)
++        ignoreOldVd := !VlduType.isFof(entryReg.payload.fuOpType) && srcIsVec && vlIsNonZero && !isDependOldVd && (ignoreTail || ignoreWhole)
+       } else {
+         ignoreOldVd := false.B
+       }
+diff --git a/src/main/scala/xiangshan/backend/issue/Scheduler.scala b/src/main/scala/xiangshan/backend/issue/Scheduler.scala
+index 9a73acf7c6d..a94453f4cbf 100644
+--- a/src/main/scala/xiangshan/backend/issue/Scheduler.scala
++++ b/src/main/scala/xiangshan/backend/issue/Scheduler.scala
+@@ -12,7 +12,7 @@ import xiangshan.backend.datapath.DataConfig._
+ import xiangshan.backend.datapath.WbConfig._
+ import xiangshan.backend.fu.FuType
+ import xiangshan.backend.regfile.RfWritePortWithConfig
+-import xiangshan.backend.rename.BusyTable
++import xiangshan.backend.rename.{BusyTable, VlBusyTable}
+ import xiangshan.mem.{LsqEnqCtrl, LsqEnqIO, MemWaitUpdateReq, SqPtr, LqPtr}
+ import xiangshan.backend.datapath.WbConfig.V0WB
+ import xiangshan.backend.regfile.VlPregParams
+@@ -185,7 +185,7 @@ abstract class SchedulerImpBase(wrapper: Scheduler)(implicit params: SchdBlockPa
+     case _ => None
+   }
+   val vlBusyTable = schdType match {
+-    case VfScheduler() | MemScheduler() => Some(Module(new BusyTable(dispatch2Iq.numVlStateRead, wrapper.numVlStateWrite, VlPhyRegs, VlWB())))
++    case VfScheduler() | MemScheduler() => Some(Module(new VlBusyTable(dispatch2Iq.numVlStateRead, wrapper.numVlStateWrite, VlPhyRegs, VlWB())))
+     case _ => None
+   }
+ 
+@@ -203,6 +203,7 @@ abstract class SchedulerImpBase(wrapper: Scheduler)(implicit params: SchdBlockPa
+     dp2iq.readVfState.foreach(_ <> vfBusyTable.get.io.read)
+     dp2iq.readV0State.foreach(_ <> v0BusyTable.get.io.read)
+     dp2iq.readVlState.foreach(_ <> vlBusyTable.get.io.read)
++    dp2iq.readVlInfo.foreach(_ <> vlBusyTable.get.io_vl_read.vlReadInfo)
+     dp2iq.readRCTagTableState.foreach(_ <> rcTagTable.get.io.readPorts)
+   }
+ 
+@@ -283,6 +284,8 @@ abstract class SchedulerImpBase(wrapper: Scheduler)(implicit params: SchdBlockPa
+       bt.io.wakeUp := io.fromSchedulers.wakeupVec
+       bt.io.og0Cancel := io.fromDataPath.og0Cancel
+       bt.io.ldCancel := io.ldCancel
++
++      bt.io_vl_Wb.vlWriteBackInfo := io.vlWriteBackInfo
+     case None =>
+   }
+ 
+diff --git a/src/main/scala/xiangshan/backend/rename/BusyTable.scala b/src/main/scala/xiangshan/backend/rename/BusyTable.scala
+index 2de99d4b070..040f3c8729b 100644
+--- a/src/main/scala/xiangshan/backend/rename/BusyTable.scala
++++ b/src/main/scala/xiangshan/backend/rename/BusyTable.scala
+@@ -33,6 +33,11 @@ class BusyTableReadIO(implicit p: Parameters) extends XSBundle {
+   val loadDependency = Vec(LoadPipelineWidth, Output(UInt(LoadDependencyWidth.W)))
+ }
+ 
++class VlBusyTableReadIO(implicit p: Parameters) extends XSBundle {
++  val is_zero = Output(Bool())
++  val is_vlmax = Output(Bool())
++}
++
+ class BusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB: PregWB)(implicit p: Parameters, params: SchdBlockParams) extends XSModule with HasPerfEvents {
+   val io = IO(new Bundle() {
+     // set preg state to busy
+@@ -179,3 +184,68 @@ class BusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB:
+   )
+   generatePerfEvent()
+ }
++
++class VlBusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB: PregWB)(implicit p: Parameters, params: SchdBlockParams) extends BusyTable(numReadPorts, numWritePorts, numPhyPregs, pregWB) {
++
++  val io_vl_Wb = IO(new Bundle() {
++    val vlWriteBackInfo = new Bundle {
++      val vlFromIntIsZero  = Input(Bool())
++      val vlFromIntIsVlmax = Input(Bool())
++      val vlFromVfIsZero   = Input(Bool())
++      val vlFromVfIsVlmax  = Input(Bool())
++    }
++  })
++  val io_vl_read = IO(new Bundle() {
++    val vlReadInfo = Vec(numReadPorts, new VlBusyTableReadIO)
++  })
++
++  var intSchdVlWbPort = p(XSCoreParamsKey).intSchdVlWbPort
++  var vfSchdVlWbPort = p(XSCoreParamsKey).vfSchdVlWbPort
++
++  val zeroTableUpdate = Wire(Vec(numPhyPregs, Bool()))
++  val vlmaxTableUpdate = Wire(Vec(numPhyPregs, Bool()))
++
++  val wb0Mask = Mux(io.wbPregs(intSchdVlWbPort).valid, UIntToOH(io.wbPregs(intSchdVlWbPort).bits), 0.U)
++  val wb1Mask = Mux(io.wbPregs(vfSchdVlWbPort).valid, UIntToOH(io.wbPregs(vfSchdVlWbPort).bits), 0.U)
++
++  val zeroTable = VecInit((0 until numPhyPregs).zip(zeroTableUpdate).map{ case (idx, update) =>
++    RegEnable(update, 0.U(1.W), allocMask(idx) || ldCancelMask(idx) || wb0Mask(idx) || wb1Mask(idx))
++  }).asUInt
++  val vlmaxTable = VecInit((0 until numPhyPregs).zip(vlmaxTableUpdate).map{ case (idx, update) =>
++    RegEnable(update, 0.U(1.W), allocMask(idx) || ldCancelMask(idx) || wb0Mask(idx) || wb1Mask(idx))
++  }).asUInt
++
++
++  zeroTableUpdate.zipWithIndex.foreach{ case (update, idx) =>
++    when(wb0Mask(idx)) {
++      // int schd vl write back, check whether the vl is zero
++      update := !io_vl_Wb.vlWriteBackInfo.vlFromIntIsZero
++    }.elsewhen(wb1Mask(idx)) {
++      // vf schd vl write back, check whether the vl is zero
++      update := !io_vl_Wb.vlWriteBackInfo.vlFromVfIsZero
++    }.elsewhen(allocMask(idx) || ldCancelMask(idx)) {
++      update := true.B
++    }.otherwise {
++      update := zeroTable(idx)
++    }
++  }
++
++  vlmaxTableUpdate.zipWithIndex.foreach{ case (update, idx) =>
++    when(wb1Mask(idx)) {
++      // int schd vl write back, check whether the vl is vlmax
++      update := !io_vl_Wb.vlWriteBackInfo.vlFromIntIsVlmax
++    }.elsewhen(wb1Mask(idx)) {
++      // vf schd vl write back, check whether the vl is vlmax
++      update := !io_vl_Wb.vlWriteBackInfo.vlFromVfIsVlmax
++    }.elsewhen(allocMask(idx) || ldCancelMask(idx)) {
++      update := true.B
++    }.otherwise {
++      update := vlmaxTable(idx)
++    }
++  }
++
++  io_vl_read.vlReadInfo.zip(io.read).foreach{ case (vlRes, res) =>
++    vlRes.is_zero := !zeroTable(res.req)
++    vlRes.is_vlmax := !vlmaxTable(res.req)
++  }
++}
+```

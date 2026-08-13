@@ -1,0 +1,25 @@
+{
+  "number": 4829,
+  "title": "fix(LLPTW): fix bug in handling both virtualized & non-virtualized cases",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4829",
+  "state": "closed",
+  "labels": [],
+  "author": "good-circle",
+  "created_at": "2025-06-23T13:02:43Z",
+  "updated_at": "2025-06-24T04:47:17Z",
+  "submitted_at": "2025-06-23",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4829/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

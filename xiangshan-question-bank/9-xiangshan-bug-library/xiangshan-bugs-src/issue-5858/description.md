@@ -1,0 +1,1 @@
+As describe in https://github.com/OpenXiangShan/XiangShan/issues/5854 , in L2TLB(function contiguous_pte_to_merge_ptwResp), when assigning the bitmap check result (cf) to each of the 8 PTEs packed into the same TLB entry, the code uses the wrong bits to index into the cfs vector.

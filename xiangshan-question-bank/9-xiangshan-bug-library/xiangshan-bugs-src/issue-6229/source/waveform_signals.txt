@@ -1,0 +1,35 @@
+XiangShan misaligned split-load stale-byte — LoadUnit waveform readout
+======================================================================
+Reproduce (build the difftest emu with waveform support, then):
+
+  ./build/verilator-vcd/emu -i repro_misaligned_split_load.elf -C 8000 \
+      --diff ./ready-to-run/riscv64-nemu-interpreter-so \
+      -b 7600 -e 7888 --dump-wave-full --wave-path=id_4_2007.vcd
+
+Divergence: instrCnt 3613, a1 = 0x0c (XiangShan) vs 0x0f (NEMU).
+
+Failing store/load (from the commit trace; same effective address):
+  0x...e00518  csrr t0, scause        # t0 = 0x0f
+  0x...e0051c  sd   t0, 280(sp)        # store 0x0f
+  0x...e00520  mv   a0, sp             # a0 = 0xffffffffffe610e7
+  0x...e024bc  ld   a1, 280(a0)        # enc 0x11853583; EA = 0xffffffffffe611ff (PA 0x800611ff)
+(the only write to sp in the trace is the addi after the load, so sp is unchanged
+ between the store and the load -> both use EA 0x...e611ff, PA 0x800611ff)
+
+Waveform at the load's LoadUnit S2 stage, lower-VWord sub-access (PA 0x800611ff,
+byte offset 15 = addr ...1ff, the byte the store wrote 0x0f to):
+
+  io_pipeOut_bits_paddr                  = 0x800611ff
+  io_pipeOut_valid                       = 1
+  io_sqForwardResp_bits_forwardMask_15   = 1
+  io_s2SqForwardResp_bits_forwardData_15 = 0x0f
+  fullForward                            = 1
+  io_dcacheResp_bits_miss                = 0
+  io_pipeOut_bits_cause_4  (C_FF)        = 0
+  io_pipeOut_bits_cause_6  (C_DM)        = 0
+  io_pipeOut_bits_cause_11 (C_NK)        = 0
+  io_s2DCacheResp_bits_data[byte15]      = 0x00
+
+=> store-to-load forwarding for the boundary byte is present and correct
+   (mask set, data 0x0f, fullForward=1), no dcache miss, no replay; yet the
+   committed byte is stale 0x0c (matching neither the forward 0x0f nor cache 0x00).

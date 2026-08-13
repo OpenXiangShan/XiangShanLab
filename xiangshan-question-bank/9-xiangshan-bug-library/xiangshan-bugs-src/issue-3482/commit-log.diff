@@ -1,0 +1,422 @@
+diff --git a/src/main/scala/xiangshan/backend/Backend.scala b/src/main/scala/xiangshan/backend/Backend.scala
+index 3821487d1e8..076c05ca531 100644
+--- a/src/main/scala/xiangshan/backend/Backend.scala
++++ b/src/main/scala/xiangshan/backend/Backend.scala
+@@ -307,6 +307,7 @@ class BackendImp(override val wrapper: Backend)(implicit p: Parameters) extends
+   memScheduler.io.fromDataPath.replaceRCIdx.get := dataPath.io.toWakeupQueueRCIdx.takeRight(params.getMemExuRCWriteSize)
+   memScheduler.io.vlWriteBackInfo.vlIsZero := vlIsZero
+   memScheduler.io.vlWriteBackInfo.vlIsVlmax := vlIsVlmax
++  memScheduler.io.fromOg2Resp.get := og2ForVector.io.toMemIQOg2Resp
+ 
+   vfScheduler.io.fromTop.hartId := io.fromTop.hartId
+   vfScheduler.io.fromCtrlBlock.flush := ctrlBlock.io.toIssueBlock.flush
+@@ -324,7 +325,7 @@ class BackendImp(override val wrapper: Backend)(implicit p: Parameters) extends
+   vfScheduler.io.ldCancel := io.mem.ldCancel
+   vfScheduler.io.vlWriteBackInfo.vlIsZero := vlIsZero
+   vfScheduler.io.vlWriteBackInfo.vlIsVlmax := vlIsVlmax
+-  vfScheduler.io.fromOg2.get := og2ForVector.io.toVfIQ
++  vfScheduler.io.fromOg2Resp.get := og2ForVector.io.toVfIQOg2Resp
+ 
+   dataPath.io.hartId := io.fromTop.hartId
+   dataPath.io.flush := ctrlBlock.io.toDataPath.flush
+@@ -352,17 +353,32 @@ class BackendImp(override val wrapper: Backend)(implicit p: Parameters) extends
+ 
+   og2ForVector.io.flush := ctrlBlock.io.toDataPath.flush
+   og2ForVector.io.ldCancel := io.mem.ldCancel
+-  og2ForVector.io.fromOg1NoReg <> dataPath.io.toVecExu
+-  og2ForVector.io.fromOg1ImmInfo := dataPath.io.og1ImmInfo.zip(params.allExuParams).filter(_._2.isVfExeUnit).map(_._1)
++  og2ForVector.io.fromOg1VfArith <> dataPath.io.toVecExu
++  og2ForVector.io.fromOg1VecMem.zip(dataPath.io.toMemExu.zip(params.memSchdParams.get.issueBlockParams).filter(_._2.needOg2Resp).map(_._1))
++    .foreach {
++      case (og1Mem, datapathMem) => og1Mem <> datapathMem
++    }
++  og2ForVector.io.fromOg1ImmInfo := dataPath.io.og1ImmInfo.zip(params.allExuParams).filter(_._2.needOg2).map(_._1)
+ 
++  println(s"[Backend] BypassNetwork OG1 Mem Size: ${bypassNetwork.io.fromDataPath.mem.zip(params.memSchdParams.get.issueBlockParams).filterNot(_._2.needOg2Resp).size}")
++  println(s"[Backend] BypassNetwork OG2 Mem Size: ${bypassNetwork.io.fromDataPath.mem.zip(params.memSchdParams.get.issueBlockParams).filter(_._2.needOg2Resp).size}")
++  println(s"[Backend] bypassNetwork.io.fromDataPath.mem: ${bypassNetwork.io.fromDataPath.mem.size}, dataPath.io.toMemExu: ${dataPath.io.toMemExu.size}")
+   bypassNetwork.io.fromDataPath.int <> dataPath.io.toIntExu
+   bypassNetwork.io.fromDataPath.fp <> dataPath.io.toFpExu
+-  bypassNetwork.io.fromDataPath.vf <> og2ForVector.io.toVfExu
+-  bypassNetwork.io.fromDataPath.mem <> dataPath.io.toMemExu
++  bypassNetwork.io.fromDataPath.vf <> og2ForVector.io.toVfArithExu
++  bypassNetwork.io.fromDataPath.mem.lazyZip(params.memSchdParams.get.issueBlockParams).lazyZip(dataPath.io.toMemExu).filterNot(_._2.needOg2Resp)
++    .map(x => (x._1, x._3)).foreach {
++      case (bypassMem, datapathMem) => bypassMem <> datapathMem
++    }
++  bypassNetwork.io.fromDataPath.mem.zip(params.memSchdParams.get.issueBlockParams).filter(_._2.needOg2Resp).map(_._1)
++    .zip(og2ForVector.io.toVecMemExu).foreach {
++      case (bypassMem, og2Mem) => bypassMem <> og2Mem
++    }
+   bypassNetwork.io.fromDataPath.immInfo := dataPath.io.og1ImmInfo
+-  bypassNetwork.io.fromDataPath.immInfo.zip(params.allExuParams).filter(_._2.isVfExeUnit).map(_._1).zip(og2ForVector.io.toVfImmInfo).map{
+-    case (vfImmInfo, og2ImmInfo) => vfImmInfo := og2ImmInfo
+-  }
++  bypassNetwork.io.fromDataPath.immInfo.zip(params.allExuParams).filter(_._2.needOg2).map(_._1)
++    .zip(og2ForVector.io.toBypassNetworkImmInfo).foreach {
++      case (immInfo, og2ImmInfo) => immInfo := og2ImmInfo
++    }
+   bypassNetwork.io.fromDataPath.rcData := dataPath.io.toBypassNetworkRCData
+   bypassNetwork.io.fromExus.connectExuOutput(_.int)(intExuBlock.io.out)
+   bypassNetwork.io.fromExus.connectExuOutput(_.fp)(fpExuBlock.io.out)
+diff --git a/src/main/scala/xiangshan/backend/datapath/DataPath.scala b/src/main/scala/xiangshan/backend/datapath/DataPath.scala
+index 8697d5e92a7..56ecc35046a 100644
+--- a/src/main/scala/xiangshan/backend/datapath/DataPath.scala
++++ b/src/main/scala/xiangshan/backend/datapath/DataPath.scala
+@@ -567,8 +567,8 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
+         }.reduce(_ || _) && s0.valid
+       } else s0_cancel := false.B
+       val s0_ldCancel = LoadShouldCancel(s0.bits.common.loadDependency, io.ldCancel)
+-      when (s0.fire && !s1_flush && notBlock && !s1_cancel && !s0_ldCancel && !s0_cancel) {
+-        s1_valid := s0.valid
++      when (s0.fire && !s1_flush && !s0_ldCancel) {
++        s1_valid := true.B
+       }.otherwise {
+         s1_valid := false.B
+       }
+@@ -576,7 +576,7 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
+         s1_data.fromIssueBundle(s0.bits) // no src data here
+         s1_addrOH := s0.bits.addrOH
+       }
+-      s0.ready := (s1_ready || !s1_valid) && notBlock && !s0_cancel
++      s0.ready := notBlock && !s0_cancel
+       // IQ(s0) --[Ctrl]--> s1Reg ---------- end
+     }
+   }
+@@ -589,7 +589,7 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
+         case (toIU, iuIdx) =>
+           // IU: issue unit
+           val og0resp = toIU.og0resp
+-          og0FailedVec2(iqIdx)(iuIdx) := fromIQ(iqIdx)(iuIdx).valid && (!fromIQFire(iqIdx)(iuIdx))
++          og0FailedVec2(iqIdx)(iuIdx)   := fromIQ(iqIdx)(iuIdx).valid && !fromIQ(iqIdx)(iuIdx).ready
+           og0resp.valid                 := og0FailedVec2(iqIdx)(iuIdx)
+           og0resp.bits.robIdx           := fromIQ(iqIdx)(iuIdx).bits.common.robIdx
+           og0resp.bits.uopIdx.foreach(_ := fromIQ(iqIdx)(iuIdx).bits.common.vpu.get.vuopIdx)
+@@ -599,16 +599,16 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
+           og0resp.bits.fuType           := fromIQ(iqIdx)(iuIdx).bits.common.fuType
+ 
+           val og1resp = toIU.og1resp
+-          og1FailedVec2(iqIdx)(iuIdx)   := s1_toExuValid(iqIdx)(iuIdx) && !toExuFire(iqIdx)(iuIdx)
++          og1FailedVec2(iqIdx)(iuIdx)   := s1_toExuValid(iqIdx)(iuIdx) && !s1_toExuReady(iqIdx)(iuIdx)
+           og1resp.valid                 := s1_toExuValid(iqIdx)(iuIdx)
+           og1resp.bits.robIdx           := s1_toExuData(iqIdx)(iuIdx).robIdx
+           og1resp.bits.uopIdx.foreach(_ := s1_toExuData(iqIdx)(iuIdx).vpu.get.vuopIdx)
+           og1resp.bits.sqIdx.foreach(_ :=  0.U.asTypeOf(new SqPtr))
+           og1resp.bits.lqIdx.foreach(_ :=  0.U.asTypeOf(new LqPtr))
+-          // respType:  fuIdle      ->IQ entry clear
+-          //            fuUncertain ->IQ entry no action
+-          //            fuBusy      ->IQ entry issued set false, then re-issue
+-          // hyu, lda and sta are fuUncertain at OG1 stage
++          // respType:  success    -> IQ entry clear
++          //            uncertain  -> IQ entry no action
++          //            block      -> IQ entry issued set false, then re-issue
++          // hyu, lda and sta are uncertain at OG1 stage
+           // and all vector arith exu should check success in og2 stage
+           og1resp.bits.resp             := Mux(og1FailedVec2(iqIdx)(iuIdx),
+             RespType.block,
+diff --git a/src/main/scala/xiangshan/backend/datapath/Og2ForVector.scala b/src/main/scala/xiangshan/backend/datapath/Og2ForVector.scala
+index 11970a7ff81..f9a85f25e82 100644
+--- a/src/main/scala/xiangshan/backend/datapath/Og2ForVector.scala
++++ b/src/main/scala/xiangshan/backend/datapath/Og2ForVector.scala
+@@ -8,69 +8,86 @@ import xiangshan._
+ import xiangshan.backend.BackendParams
+ import xiangshan.backend.Bundles._
+ import xiangshan.backend.issue.EntryBundles.{EntryDeqRespBundle, RespType}
+-import xiangshan.backend.issue.VfScheduler
++import xiangshan.backend.issue.{MemScheduler, VfScheduler}
++import xiangshan.mem.{SqPtr, LqPtr}
+ 
+ 
+ class Og2ForVector(params: BackendParams)(implicit p: Parameters) extends XSModule {
+   val io = IO(new Og2ForVectorIO(params))
+ 
+-  private val s1_validVec2        = io.fromOg1NoReg.map(_.map(_.valid))
+-  private val s1_dataVec2         = io.fromOg1NoReg.map(_.map(_.bits))
+-  private val s1_readyVec2        = io.fromOg1NoReg.map(_.map(_.ready))
+-  private val toVfExuFire         = io.toVfExu.map(_.map(_.fire))
+-  private val toVfExuReady        = io.toVfExu.map(_.map(_.ready))
+-  private val vfIQNum: Int        = io.fromOg1NoReg.size
+-  private val vfIQPerExuNum       = io.fromOg1NoReg.map(_.size).toSeq
++  private val fromOg1             = io.fromOg1VfArith ++ io.fromOg1VecMem
++  private val toExu               = io.toVfArithExu ++ io.toVecMemExu
++  private val toIQOg2Resp         = io.toVfIQOg2Resp ++ io.toMemIQOg2Resp
+ 
+-  val s2_toVfExuValid             = Reg(MixedVec(
++  private val s1_validVec2        = fromOg1.map(_.map(_.valid))
++  private val s1_dataVec2         = fromOg1.map(_.map(_.bits))
++  private val s1_readyVec2        = fromOg1.map(_.map(_.ready))
++  private val toExuFire           = toExu.map(_.map(_.fire))
++  private val toExuReady          = toExu.map(_.map(_.ready))
++  private val og2IQNum: Int       = fromOg1.size
++  private val og2IQPerExuNum      = fromOg1.map(_.size).toSeq
++
++  val s2_toExuValid               = Reg(MixedVec(
+     s1_validVec2.map(x => MixedVec(x.map(_.cloneType).toSeq)).toSeq
+   ))
+-  val s2_toVfExuData              = Reg(MixedVec(
++  val s2_toExuData                = Reg(MixedVec(
+     s1_dataVec2.map(x => MixedVec(x.map(_.cloneType).toSeq)).toSeq
+   ))
+ 
+-  for(i <- 0 until vfIQNum) {
+-    for (j <- 0 until vfIQPerExuNum(i)) {
++  for(i <- 0 until og2IQNum) {
++    for (j <- 0 until og2IQPerExuNum(i)) {
+       val s2_flush = s1_dataVec2(i)(j).robIdx.needFlush(Seq(io.flush, RegNextWithEnable(io.flush)))
+-      val og2Failed = s2_toVfExuValid(i)(j) && !toVfExuFire(i)(j)
+       val s1_ldCancel = LoadShouldCancel(s1_dataVec2(i)(j).loadDependency, io.ldCancel)
+-      when(s1_validVec2(i)(j) && s1_readyVec2(i)(j) && !s2_flush && !og2Failed && !s1_ldCancel) {
+-        s2_toVfExuValid(i)(j) := s1_validVec2(i)(j)
+-        s2_toVfExuData(i)(j) := s1_dataVec2(i)(j)
+-        s2_toVfExuData(i)(j).loadDependency.foreach(_ := s1_dataVec2(i)(j).loadDependency.get.map(_ << 1))
++      when(s1_validVec2(i)(j) && s1_readyVec2(i)(j) && !s2_flush && !s1_ldCancel) {
++        s2_toExuValid(i)(j) := true.B
++        s2_toExuData(i)(j) := s1_dataVec2(i)(j)
++        s2_toExuData(i)(j).loadDependency.foreach(_ := s1_dataVec2(i)(j).loadDependency.get.map(_ << 1))
+       }.otherwise {
+-        s2_toVfExuValid(i)(j) := false.B
++        s2_toExuValid(i)(j) := false.B
+       }
+-      s1_readyVec2(i)(j) := (toVfExuReady(i)(j) || !s1_validVec2(i)(j)) && !og2Failed && !s1_ldCancel
+-      io.toVfExu(i)(j).valid := s2_toVfExuValid(i)(j)
+-      io.toVfExu(i)(j).bits := s2_toVfExuData(i)(j)
++      s1_readyVec2(i)(j) := true.B
++      toExu(i)(j).valid := s2_toExuValid(i)(j)
++      toExu(i)(j).bits := s2_toExuData(i)(j)
+     }
+   }
+-  io.toVfIQ.zipWithIndex.foreach {
+-    case (toVfExu, iqId) =>
+-      toVfExu.zipWithIndex.foreach {
++  toIQOg2Resp.zipWithIndex.foreach {
++    case (toIQ, iqId) =>
++      toIQ.zipWithIndex.foreach {
+         case (og2Resp, exuId) =>
+-          val og2Failed = s2_toVfExuValid(iqId)(exuId) && !toVfExuFire(iqId)(exuId)
+-          og2Resp.valid := s2_toVfExuValid(iqId)(exuId)
+-          og2Resp.bits.robIdx := s2_toVfExuData(iqId)(exuId).robIdx
+-          og2Resp.bits.uopIdx.foreach(_ := s2_toVfExuData(iqId)(exuId).vpu.get.vuopIdx)
+-          og2Resp.bits.resp := Mux(og2Failed, RespType.block, RespType.success)
+-          og2Resp.bits.fuType := s2_toVfExuData(iqId)(exuId).fuType
++          val og2Failed = s2_toExuValid(iqId)(exuId) && !toExuReady(iqId)(exuId)
++          og2Resp.valid := s2_toExuValid(iqId)(exuId)
++          og2Resp.bits.robIdx := s2_toExuData(iqId)(exuId).robIdx
++          og2Resp.bits.uopIdx.foreach(_ := s2_toExuData(iqId)(exuId).vpu.get.vuopIdx)
++          og2Resp.bits.resp := Mux(og2Failed, RespType.block, 
++            if (og2Resp.bits.params match { case x => x.isVecMemIQ })
++              RespType.uncertain
++            else
++              RespType.success
++          )
++          og2Resp.bits.fuType := s2_toExuData(iqId)(exuId).fuType
++          og2Resp.bits.sqIdx.foreach(_ := 0.U.asTypeOf(new SqPtr))
++          og2Resp.bits.lqIdx.foreach(_ := 0.U.asTypeOf(new LqPtr))
+       }
+   }
+-  io.toVfImmInfo := io.fromOg1ImmInfo.zip(s1_validVec2.flatten).map{
++  io.toBypassNetworkImmInfo := io.fromOg1ImmInfo.zip(s1_validVec2.flatten).map{
+     case (imm, valid) => RegEnable(imm, valid)
+   }
+ }
+ 
+ class Og2ForVectorIO(params: BackendParams)(implicit p: Parameters) extends XSBundle {
+   private val vfSchdParams = params.schdParams(VfScheduler())
++  private val memSchdParams = params.schdParams(MemScheduler())
+ 
+   val flush: ValidIO[Redirect]                                    = Flipped(ValidIO(new Redirect))
+   val ldCancel                                                    = Vec(backendParams.LduCnt + backendParams.HyuCnt, Flipped(new LoadCancelIO))
+-  val fromOg1NoReg: MixedVec[MixedVec[DecoupledIO[ExuInput]]]     = Flipped(vfSchdParams.genExuInputBundle)
+-  val fromOg1ImmInfo: Vec[ImmInfo]                                = Input(Vec(params.allExuParams.filter(_.isVfExeUnit).size, new ImmInfo))
+-  val toVfExu                                                     = MixedVec(vfSchdParams.genExuInputBundle)
+-  val toVfIQ                                                      = MixedVec(vfSchdParams.issueBlockParams.map(_.genOG2RespBundle))
+-  val toVfImmInfo: Vec[ImmInfo]                                   = Output(Vec(params.allExuParams.filter(_.isVfExeUnit).size, new ImmInfo))
++
++  val fromOg1VfArith: MixedVec[MixedVec[DecoupledIO[ExuInput]]]   = Flipped(vfSchdParams.genExuInputBundle)
++  val fromOg1VecMem: MixedVec[MixedVec[DecoupledIO[ExuInput]]]    = Flipped(MixedVec(memSchdParams.issueBlockParams.filter(_.needOg2Resp).map(_.genExuInputDecoupledBundle)))
++  val fromOg1ImmInfo: Vec[ImmInfo]                                = Input(Vec(params.allIssueParams.filter(_.needOg2Resp).flatMap(_.exuBlockParams).size, new ImmInfo))
++
++  val toVfArithExu                                                = MixedVec(vfSchdParams.genExuInputBundle)
++  val toVecMemExu                                                 = MixedVec(memSchdParams.issueBlockParams.filter(_.needOg2Resp).map(_.genExuInputDecoupledBundle))
++  val toVfIQOg2Resp                                               = MixedVec(vfSchdParams.issueBlockParams.map(_.genOG2RespBundle))
++  val toMemIQOg2Resp                                              = MixedVec(memSchdParams.issueBlockParams.filter(_.needOg2Resp).map(_.genOG2RespBundle))
++  val toBypassNetworkImmInfo: Vec[ImmInfo]                        = Output(Vec(params.allIssueParams.filter(_.needOg2Resp).flatMap(_.exuBlockParams).size, new ImmInfo))
+ }
+\ No newline at end of file
+diff --git a/src/main/scala/xiangshan/backend/fu/FuConfig.scala b/src/main/scala/xiangshan/backend/fu/FuConfig.scala
+index 25d69eddd60..3613c359081 100644
+--- a/src/main/scala/xiangshan/backend/fu/FuConfig.scala
++++ b/src/main/scala/xiangshan/backend/fu/FuConfig.scala
+@@ -178,7 +178,10 @@ case class FuConfig (
+                             fuType == FuType.vfdiv || fuType == FuType.vfcvt ||
+                             fuType == FuType.vidiv
+ 
+-  def needOg2: Boolean = isVecArith || fuType == FuType.vsetfwf
++  def isVecMem: Boolean = fuType == FuType.vldu || fuType == FuType.vstu ||
++                          fuType == FuType.vsegldu || fuType == FuType.vsegstu
++
++  def needOg2: Boolean = isVecArith || fuType == FuType.vsetfwf || isVecMem
+ 
+   def isSta: Boolean = name.contains("sta")
+ 
+diff --git a/src/main/scala/xiangshan/backend/issue/Entries.scala b/src/main/scala/xiangshan/backend/issue/Entries.scala
+index 0f8335ce7a2..3fee5781ba4 100644
+--- a/src/main/scala/xiangshan/backend/issue/Entries.scala
++++ b/src/main/scala/xiangshan/backend/issue/Entries.scala
+@@ -60,7 +60,7 @@ class Entries(implicit p: Parameters, params: IssueBlockParams) extends XSModule
+ 
+   val resps: Vec[Vec[ValidIO[EntryDeqRespBundle]]] = Wire(Vec(4, chiselTypeOf(io.og0Resp)))
+ 
+-  if (params.inVfSchd)
++  if (params.needOg2Resp)
+     resps := Seq(io.og0Resp, io.og1Resp, io.og2Resp.get, WireDefault(0.U.asTypeOf(io.og0Resp)))
+   else
+     resps := Seq(io.og0Resp, io.og1Resp, WireDefault(0.U.asTypeOf(io.og0Resp)), WireDefault(0.U.asTypeOf(io.og0Resp)))
+@@ -273,7 +273,8 @@ class Entries(implicit p: Parameters, params: IssueBlockParams) extends XSModule
+   //issueRespVec
+   if (params.needFeedBackSqIdx || params.needFeedBackLqIdx) {
+     issueRespVec.lazyZip(sqIdxVec.get.zip(lqIdxVec.get)).lazyZip(issueTimerVec.lazyZip(deqPortIdxReadVec)).foreach { case (issueResp, (sqIdx, lqIdx), (issueTimer, deqPortIdx)) =>
+-      val respInDatapath = resps(issueTimer(0))(deqPortIdx)
++      val respInDatapath = if (!params.isVecMemIQ) resps(issueTimer(0))(deqPortIdx)
++                           else resps(issueTimer)(deqPortIdx)
+       val respAfterDatapath = Wire(chiselTypeOf(respInDatapath))
+       val hitRespsVec = VecInit(memEtyResps.map(x =>
+         x.valid &&
+@@ -283,7 +284,8 @@ class Entries(implicit p: Parameters, params: IssueBlockParams) extends XSModule
+       respAfterDatapath.valid := hitRespsVec.reduce(_ | _)
+       respAfterDatapath.bits  := (if (memEtyResps.size == 1) memEtyResps.head.bits
+                                   else Mux1H(hitRespsVec, memEtyResps.map(_.bits).toSeq))
+-      issueResp := Mux(issueTimer(1), respAfterDatapath, respInDatapath)
++      issueResp := (if (!params.isVecMemIQ) Mux(issueTimer(1), respAfterDatapath, respInDatapath)
++                    else Mux(issueTimer === "b11".U, respAfterDatapath, respInDatapath))
+     }
+   }
+   else {
+@@ -522,7 +524,7 @@ class EntriesIO(implicit p: Parameters, params: IssueBlockParams) extends XSBund
+   val enq                 = Vec(params.numEnq, Flipped(ValidIO(new EntryBundle)))
+   val og0Resp             = Vec(params.numDeq, Flipped(ValidIO(new EntryDeqRespBundle)))
+   val og1Resp             = Vec(params.numDeq, Flipped(ValidIO(new EntryDeqRespBundle)))
+-  val og2Resp             = OptionWrapper(params.inVfSchd, Vec(params.numDeq, Flipped(ValidIO(new EntryDeqRespBundle))))
++  val og2Resp             = OptionWrapper(params.needOg2Resp, Vec(params.numDeq, Flipped(ValidIO(new EntryDeqRespBundle))))
+   //deq sel
+   val deqReady            = Vec(params.numDeq, Input(Bool()))
+   val deqSelOH            = Vec(params.numDeq, Flipped(ValidIO(UInt(params.numEntries.W))))
+diff --git a/src/main/scala/xiangshan/backend/issue/EntryBundles.scala b/src/main/scala/xiangshan/backend/issue/EntryBundles.scala
+index 0ae5e675d94..7bc328f17fe 100644
+--- a/src/main/scala/xiangshan/backend/issue/EntryBundles.scala
++++ b/src/main/scala/xiangshan/backend/issue/EntryBundles.scala
+@@ -64,7 +64,7 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+     val numLsElem             = NumLsElem()
+   }
+ 
+-  class EntryDeqRespBundle(implicit p: Parameters, params: IssueBlockParams) extends XSBundle {
++  class EntryDeqRespBundle(implicit p: Parameters, val params: IssueBlockParams) extends XSBundle {
+     val robIdx                = new RobPtr
+     val resp                  = RespType()
+     val fuType                = FuType()
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+index a89ed6e8528..d9dd65965fb 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+@@ -54,9 +54,9 @@ case class IssueBlockParams(
+ 
+   def isHyAddrIQ: Boolean = inMemSchd && HyuCnt > 0
+ 
+-  def isVecLduIQ: Boolean = inMemSchd && VlduCnt > 0
++  def isVecLduIQ: Boolean = inMemSchd && (VlduCnt + VseglduCnt) > 0
+ 
+-  def isVecStuIQ: Boolean = inMemSchd && VstuCnt > 0
++  def isVecStuIQ: Boolean = inMemSchd && (VstuCnt + VsegstuCnt) > 0
+ 
+   def isVecMemIQ: Boolean = isVecLduIQ || isVecStuIQ
+ 
+@@ -196,6 +196,10 @@ case class IssueBlockParams(
+ 
+   def VstuCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.vstu)).sum
+ 
++  def VseglduCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.vsegldu)).sum
++
++  def VsegstuCnt: Int = exuBlockParams.map(_.fuConfigs.count(_.fuType == FuType.vsegstu)).sum
++
+   def numRedirect: Int = exuBlockParams.count(_.hasRedirect)
+ 
+   def numWriteRegCache: Int = exuBlockParams.map(x => if (x.needWriteRegCache) 1 else 0).sum
+@@ -204,6 +208,8 @@ case class IssueBlockParams(
+ 
+   def needReadRegCache: Boolean = exuBlockParams.map(_.needReadRegCache).reduce(_ || _)
+ 
++  def needOg2Resp: Boolean = exuBlockParams.map(_.needOg2).reduce(_ || _)
++
+   /**
+     * Get the regfile type that this issue queue need to read
+     */
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+index ccff6ac2547..203167207c2 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+@@ -49,7 +49,7 @@ class IssueQueueIO()(implicit p: Parameters, params: IssueBlockParams) extends X
+ 
+   val og0Resp = Vec(params.numDeq, Flipped(ValidIO(new IssueQueueDeqRespBundle)))
+   val og1Resp = Vec(params.numDeq, Flipped(ValidIO(new IssueQueueDeqRespBundle)))
+-  val og2Resp = Option.when(params.inVfSchd)(Vec(params.numDeq, Flipped(ValidIO(new IssueQueueDeqRespBundle))))
++  val og2Resp = Option.when(params.needOg2Resp)(Vec(params.numDeq, Flipped(ValidIO(new IssueQueueDeqRespBundle))))
+   val finalIssueResp = Option.when(params.LdExuCnt > 0)(Vec(params.numDeq, Flipped(ValidIO(new IssueQueueDeqRespBundle))))
+   val memAddrIssueResp = Option.when(params.LdExuCnt > 0)(Vec(params.numDeq, Flipped(ValidIO(new IssueQueueDeqRespBundle))))
+   val vecLoadIssueResp = Option.when(params.VlduCnt > 0)(Vec(params.numDeq, Flipped(ValidIO(new IssueQueueDeqRespBundle))))
+@@ -322,7 +322,7 @@ class IssueQueueImp(override val wrapper: IssueQueue)(implicit p: Parameters, va
+     entriesIO.og1Resp.zipWithIndex.foreach { case (og1Resp, i) =>
+       og1Resp                                                   := io.og1Resp(i)
+     }
+-    if (params.inVfSchd) {
++    if (params.needOg2Resp) {
+       entriesIO.og2Resp.get.zipWithIndex.foreach { case (og2Resp, i) =>
+         og2Resp                                                 := io.og2Resp.get(i)
+       }
+diff --git a/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala b/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
+index 46e510f45db..a154de05d71 100644
+--- a/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
+@@ -91,6 +91,8 @@ case class SchdBlockParams(
+     if (bjIssueQueues.map(x => x.numEnq).sum > 0) numUopIn else 0
+   }
+ 
++  def needOg2Resp: Boolean = isVfSchd || isMemSchd && issueBlockParams.map(_.needOg2Resp).reduce(_ || _)
++
+   def needSrcFrm: Boolean = issueBlockParams.map(_.needSrcFrm).reduce(_ || _)
+ 
+   def needSrcVxrm: Boolean = issueBlockParams.map(_.needSrcVxrm).reduce(_ || _)
+diff --git a/src/main/scala/xiangshan/backend/issue/Scheduler.scala b/src/main/scala/xiangshan/backend/issue/Scheduler.scala
+index 8a120ff822b..47492aea3b3 100644
+--- a/src/main/scala/xiangshan/backend/issue/Scheduler.scala
++++ b/src/main/scala/xiangshan/backend/issue/Scheduler.scala
+@@ -132,7 +132,7 @@ class SchedulerIO()(implicit params: SchdBlockParams, p: Parameters) extends XSB
+   val toMem = if (params.isMemSchd) Some(new Bundle {
+     val loadFastMatch = Output(Vec(params.LduCnt, new IssueQueueLoadBundle))
+   }) else None
+-  val fromOg2 = if(params.isVfSchd) Some(MixedVec(params.issueBlockParams.map(x => Flipped(x.genOG2RespBundle)))) else None
++  val fromOg2Resp = if(params.needOg2Resp) Some(MixedVec(params.issueBlockParams.filter(_.needOg2Resp).map(x => Flipped(x.genOG2RespBundle)))) else None
+ }
+ 
+ abstract class SchedulerImpBase(wrapper: Scheduler)(implicit params: SchdBlockParams, p: Parameters)
+@@ -427,15 +427,17 @@ abstract class SchedulerImpBase(wrapper: Scheduler)(implicit params: SchdBlockPa
+     iq.io.vecLoadIssueResp.foreach(_.zipWithIndex.foreach { case (resp, deqIdx) =>
+       resp := io.vecLoadIssueResp(i)(deqIdx)
+     })
+-    if(params.isVfSchd) {
+-      iq.io.og2Resp.get.zipWithIndex.foreach { case (og2Resp, exuIdx) =>
+-        og2Resp := io.fromOg2.get(i)(exuIdx)
+-      }
+-    }
+     iq.io.wbBusyTableRead := io.fromWbFuBusyTable.fuBusyTableRead(i)
+     io.wbFuBusyTable(i) := iq.io.wbBusyTableWrite
+     iq.io.replaceRCIdx.foreach(x => x := 0.U.asTypeOf(x))
+   }
++  if (params.needOg2Resp) {
++    issueQueues.filter(_.params.needOg2Resp).zip(io.fromOg2Resp.get).foreach{ case (iq, og2RespVec) =>
++      iq.io.og2Resp.get.zip(og2RespVec).foreach{ case (iqOg2Resp, og2Resp) =>
++        iqOg2Resp := og2Resp
++      }
++    }
++  }
+ 
+   // Connect each replace RCIdx to IQ
+   if (params.needWriteRegCache) {

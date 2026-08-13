@@ -1,0 +1,7 @@
+// TLB.scala:550: PTW request VPN uses raw vaddr
+io.ptw.req(idx).bits.vpn := get_pn(req_out(idx).vaddr)
+
+// PageTableWalker.scala:374-376: onlyStage2 GPA = raw vpn; Sv48×4 skips the high-bit check
+full_gvpn_reg := io.req.bits.req_info.vpn
+val onlys2_gpaddr = Cat(io.req.bits.req_info.vpn, 0.U(offLen.W)) 
+val check_gpa_high_fail = Mux(... === Sv39x4, ..., false.B)

@@ -1,0 +1,37 @@
+{
+  "number": 5994,
+  "title": "Backend redirect for compressed `c.bnez` reports `isRVC=0`, causing wrong redirect CFI PC",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5994",
+  "state": "closed",
+  "labels": [
+    "type: bug/confirmed",
+    "module: frontend",
+    "module: backend"
+  ],
+  "author": "ScottaMcdonald",
+  "created_at": "2026-05-19T13:50:00Z",
+  "updated_at": "2026-06-10T02:17:05Z",
+  "source_files": [
+    "issue-5994/source/xiangshan_cbnez.zip",
+    "issue-5994/source/program-01.txt",
+    "issue-5994/source/program-02.txt",
+    "issue-5994/source/program-03.scala",
+    "issue-5994/source/program-04.txt",
+    "issue-5994/source/program-05.scala",
+    "issue-5994/source/program-06.scala",
+    "issue-5994/source/program-07.txt",
+    "issue-5994/source/program-08.txt",
+    "issue-5994/source/program-09.txt",
+    "issue-5994/source/program-10.txt",
+    "issue-5994/source/program-11.txt",
+    "issue-5994/source/program-12.txt",
+    "issue-5994/source/program-13.txt",
+    "issue-5994/source/program-14.txt",
+    "issue-5994/source/program-15.txt",
+    "issue-5994/source/program-16.txt"
+  ],
+  "archive_files": [
+    "issue-5994/source/xiangshan_cbnez.zip"
+  ],
+  "has_comments": true
+}

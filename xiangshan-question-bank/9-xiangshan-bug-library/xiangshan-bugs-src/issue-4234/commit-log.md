@@ -1,0 +1,143 @@
+# Commit Log
+- Issue: #4234
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4234
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4234
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4234
+- Changed files: 2
+- Additions: 23
+- Deletions: 18
+
+## Files
+- `src/main/scala/xiangshan/frontend/IFU.scala`
+- `src/main/scala/xiangshan/frontend/PreDecode.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/IFU.scala b/src/main/scala/xiangshan/frontend/IFU.scala
+index 53aad8233f9..01cc6423831 100644
+--- a/src/main/scala/xiangshan/frontend/IFU.scala
++++ b/src/main/scala/xiangshan/frontend/IFU.scala
+@@ -120,6 +120,7 @@ class IfuWbToFtqDB extends Bundle {
+   val is_miss_pred      = Bool()
+   val miss_pred_offset  = UInt(32.W)
+   val checkJalFault     = Bool()
++  val checkJalrFault    = Bool()
+   val checkRetFault     = Bool()
+   val checkTargetFault  = Bool()
+   val checkNotCFIFault  = Bool()
+@@ -1115,12 +1116,14 @@ class NewIFU(implicit p: Parameters) extends XSModule
+   /*write back flush type*/
+   val checkFaultType    = wb_check_result_stage2.faultType
+   val checkJalFault     = wb_valid && checkFaultType.map(_.isjalFault).reduce(_ || _)
++  val checkJalrFault    = wb_valid && checkFaultType.map(_.isjalrFault).reduce(_ || _)
+   val checkRetFault     = wb_valid && checkFaultType.map(_.isRetFault).reduce(_ || _)
+   val checkTargetFault  = wb_valid && checkFaultType.map(_.istargetFault).reduce(_ || _)
+   val checkNotCFIFault  = wb_valid && checkFaultType.map(_.notCFIFault).reduce(_ || _)
+   val checkInvalidTaken = wb_valid && checkFaultType.map(_.invalidTakenFault).reduce(_ || _)
+ 
+   XSPerfAccumulate("predecode_flush_jalFault", checkJalFault)
++  XSPerfAccumulate("predecode_flush_jalrFault", checkJalrFault)
+   XSPerfAccumulate("predecode_flush_retFault", checkRetFault)
+   XSPerfAccumulate("predecode_flush_targetFault", checkTargetFault)
+   XSPerfAccumulate("predecode_flush_notCFIFault", checkNotCFIFault)
+@@ -1201,6 +1204,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
+   ifuWbToFtqDumpData.is_miss_pred      := checkFlushWb.bits.misOffset.valid
+   ifuWbToFtqDumpData.miss_pred_offset  := checkFlushWb.bits.misOffset.bits
+   ifuWbToFtqDumpData.checkJalFault     := checkJalFault
++  ifuWbToFtqDumpData.checkJalrFault    := checkJalrFault
+   ifuWbToFtqDumpData.checkRetFault     := checkRetFault
+   ifuWbToFtqDumpData.checkTargetFault  := checkTargetFault
+   ifuWbToFtqDumpData.checkNotCFIFault  := checkNotCFIFault
+diff --git a/src/main/scala/xiangshan/frontend/PreDecode.scala b/src/main/scala/xiangshan/frontend/PreDecode.scala
+index 42f206c11b1..50e6fd84a91 100644
+--- a/src/main/scala/xiangshan/frontend/PreDecode.scala
++++ b/src/main/scala/xiangshan/frontend/PreDecode.scala
+@@ -311,12 +311,14 @@ object FaultType {
+   def targetFault  = "b011".U
+   def notCFIFault  = "b100".U // not CFI taken or invalid instruction taken
+   def invalidTaken = "b101".U
++  def jalrFault    = "b110".U
+   def apply()      = UInt(3.W)
+ }
+ 
+ class CheckInfo extends Bundle { // 8 bit
+   val value             = UInt(3.W)
+   def isjalFault        = value === FaultType.jalFault
++  def isjalrFault       = value === FaultType.jalrFault
+   def isRetFault        = value === FaultType.retFault
+   def istargetFault     = value === FaultType.targetFault
+   def invalidTakenFault = value === FaultType.invalidTaken
+@@ -349,7 +351,7 @@ class PredChecker(implicit p: Parameters) extends XSModule with HasPdConst {
+   val (instrRange, instrValid) = (io.in.instrRange, io.in.instrValid)
+   val (pds, pc, jumpOffset)    = (io.in.pds, io.in.pc, io.in.jumpOffset)
+ 
+-  val jalFaultVec, retFaultVec, targetFault, notCFITaken, invalidTaken = Wire(Vec(PredictWidth, Bool()))
++  val jalFaultVec, jalrFaultVec, retFaultVec, targetFault, notCFITaken, invalidTaken = Wire(Vec(PredictWidth, Bool()))
+ 
+   /** remask fault may appear together with other faults, but other faults are exclusive
+     * so other f ault mast use fixed mask to keep only one fault would be found and redirect to Ftq
+@@ -361,10 +363,13 @@ class PredChecker(implicit p: Parameters) extends XSModule with HasPdConst {
+   jalFaultVec := VecInit(pds.zipWithIndex.map { case (pd, i) =>
+     pd.isJal && instrRange(i) && instrValid(i) && (takenIdx > i.U && predTaken || !predTaken)
+   })
++  jalrFaultVec := VecInit(pds.zipWithIndex.map { case (pd, i) =>
++    pd.isJalr && !pd.isRet && instrRange(i) && instrValid(i) && (takenIdx > i.U && predTaken || !predTaken)
++  })
+   retFaultVec := VecInit(pds.zipWithIndex.map { case (pd, i) =>
+     pd.isRet && instrRange(i) && instrValid(i) && (takenIdx > i.U && predTaken || !predTaken)
+   })
+-  val remaskFault = VecInit((0 until PredictWidth).map(i => jalFaultVec(i) || retFaultVec(i)))
++  val remaskFault = VecInit((0 until PredictWidth).map(i => jalFaultVec(i) || jalrFaultVec(i) || retFaultVec(i)))
+   val remaskIdx   = ParallelPriorityEncoder(remaskFault.asUInt)
+   val needRemask  = ParallelOR(remaskFault)
+   val fixedRange  = instrRange.asUInt & (Fill(PredictWidth, !needRemask) | Fill(PredictWidth, 1.U(1.W)) >> ~remaskIdx)
+@@ -405,6 +410,7 @@ class PredChecker(implicit p: Parameters) extends XSModule with HasPdConst {
+   val seqTargetsNext   = RegEnable(seqTargets, io.in.fire_in)
+   val pdsNext          = RegEnable(pds, io.in.fire_in)
+   val jalFaultVecNext  = RegEnable(jalFaultVec, io.in.fire_in)
++  val jalrFaultVecNext = RegEnable(jalrFaultVec, io.in.fire_in)
+   val retFaultVecNext  = RegEnable(retFaultVec, io.in.fire_in)
+   val notCFITakenNext  = RegEnable(notCFITaken, io.in.fire_in)
+   val invalidTakenNext = RegEnable(invalidTaken, io.in.fire_in)
+@@ -416,27 +422,22 @@ class PredChecker(implicit p: Parameters) extends XSModule with HasPdConst {
+   })
+ 
+   io.out.stage2Out.faultType.zipWithIndex.foreach { case (faultType, i) =>
+-    faultType.value := Mux(
+-      jalFaultVecNext(i),
+-      FaultType.jalFault,
+-      Mux(
+-        retFaultVecNext(i),
+-        FaultType.retFault,
+-        Mux(
+-          targetFault(i),
+-          FaultType.targetFault,
+-          Mux(
+-            notCFITakenNext(i),
+-            FaultType.notCFIFault,
+-            Mux(invalidTakenNext(i), FaultType.invalidTaken, FaultType.noFault)
+-          )
+-        )
++    faultType.value := MuxCase(
++      FaultType.noFault,
++      Seq(
++        jalFaultVecNext(i)  -> FaultType.jalFault,
++        jalrFaultVecNext(i) -> FaultType.jalrFault,
++        retFaultVecNext(i)  -> FaultType.retFault,
++        targetFault(i)      -> FaultType.targetFault,
++        notCFITakenNext(i)  -> FaultType.notCFIFault,
++        invalidTakenNext(i) -> FaultType.invalidTaken
+       )
+     )
+   }
+ 
+   io.out.stage2Out.fixedMissPred.zipWithIndex.foreach { case (missPred, i) =>
+-    missPred := jalFaultVecNext(i) || retFaultVecNext(i) || notCFITakenNext(i) || invalidTakenNext(i) || targetFault(i)
++    missPred := jalFaultVecNext(i) || jalrFaultVecNext(i) || retFaultVecNext(i) || notCFITakenNext(i) ||
++      invalidTakenNext(i) || targetFault(i)
+   }
+   io.out.stage2Out.fixedTarget.zipWithIndex.foreach { case (target, i) =>
+     target := Mux(jalFaultVecNext(i) || targetFault(i), jumpTargetsNext(i), seqTargetsNext(i))
+```

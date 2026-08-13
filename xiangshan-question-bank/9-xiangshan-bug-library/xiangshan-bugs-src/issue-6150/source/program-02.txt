@@ -1,0 +1,4 @@
+VCD time             = 16898
+ftq_to_ifu_valid     = 1
+ftq_to_icache_valid  = 1
+decoded fetch start  = 0x80000090

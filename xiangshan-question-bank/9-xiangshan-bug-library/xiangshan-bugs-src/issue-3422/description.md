@@ -1,0 +1,1 @@
+Traps don’t take place in Debug Mode. Instead, they end execution of the program buffer and the hart remains in Debug Mode. Because they do not trap to M-mode, they do not update registers such as , `mepc`, `mcause`, `mtval`, `mtval2`, and `mtinst`. The same is true for the equivalent privileged registers that are updated when trapping to other modes.

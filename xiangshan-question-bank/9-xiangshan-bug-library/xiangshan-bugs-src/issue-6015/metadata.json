@@ -1,0 +1,22 @@
+{
+  "number": 6015,
+  "title": "Pipeline hangs on `vluxei32.v` when accessing unmapped physical addresses",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6015",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: memory"
+  ],
+  "author": "lhb-sec",
+  "created_at": "2026-05-25T07:15:08Z",
+  "updated_at": "2026-05-26T10:31:49Z",
+  "source_files": [
+    "issue-6015/source/emulator.zip",
+    "issue-6015/source/seed.zip"
+  ],
+  "archive_files": [
+    "issue-6015/source/emulator.zip",
+    "issue-6015/source/seed.zip"
+  ],
+  "has_comments": true
+}

@@ -1,0 +1,7 @@
+---------------- Privileged CSRs ----------------
+pc: 0x0000000080056cec  privilege mode: M (mode: 3  v: 0  debug: 0)
+   mstatus: 0x8000040a00007980   sstatus: 0x8000000200006100  vsstatus: 0x0000000200000000
+    .
+    .
+    .
+    mip: 0x0000000000000008       mie: 0x0000000000000008

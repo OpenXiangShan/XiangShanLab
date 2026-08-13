@@ -1,0 +1,3 @@
+cycle 9835: LoadUnit paddr = 0x80003000, class = secret_data
+cycle 9842: LoadUnit paddr = 0x800051c0, class = probe_secret_line
+cycle 9843: DCache outer A addr = 0x800051c0, class = probe_secret_line

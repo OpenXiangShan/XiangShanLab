@@ -1,0 +1,14 @@
+cd /path/to/unzipped/poc
+
+/root/HardwareAgent/XiangShan/build_vcd/emu \
+  --max-cycles=16000 \
+  -b 5000 -e 16000 \
+  --dump-wave-full \
+  --wave-path=poc_uncache_overflow_5000_16000.vcd \
+  -i poc_uncache_overflow.bin \
+  > poc_uncache_overflow_5000_16000.run.log 2>&1
+
+python3 parse_uncache_overflow_vcd.py \
+  poc_uncache_overflow_5000_16000.vcd \
+  poc_uncache_overflow_5000_16000.monitor.json \
+  > poc_uncache_overflow_5000_16000.monitor.log

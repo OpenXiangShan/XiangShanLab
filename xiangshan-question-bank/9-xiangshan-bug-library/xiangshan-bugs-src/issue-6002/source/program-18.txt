@@ -1,0 +1,3 @@
+target load wb    = time 16896, paddr 0x80001090, data 0xdeadbeef, rob [0,155]
+target store nuke = time 16990, paddr 0x8000108c, mask 0xf000, matchType 1, rob [0,154]
+rollbacks         = []

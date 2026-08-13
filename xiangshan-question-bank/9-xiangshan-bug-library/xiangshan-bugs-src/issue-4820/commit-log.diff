@@ -1,0 +1,107 @@
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index cdc81df3a1c..9ed76c7f9c5 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -1712,8 +1712,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+       vsMergeBuffer(i).io.uopWriteback.head.ready := io.mem_to_ooo.writebackVldu(i).ready && !vlMergeBuffer.io.uopWriteback(i).valid
+     }
+ 
+-    vfofBuffer.io.mergeUopWriteback(i).valid := vlMergeBuffer.io.uopWriteback(i).valid
+-    vfofBuffer.io.mergeUopWriteback(i).bits  := vlMergeBuffer.io.uopWriteback(i).bits
++    vfofBuffer.io.mergeUopWriteback(i).valid := vlMergeBuffer.io.toLsq(i).valid
++    vfofBuffer.io.mergeUopWriteback(i).bits  := vlMergeBuffer.io.toLsq(i).bits
+   }
+ 
+ 
+diff --git a/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala b/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
+index 579829920aa..c07f89f3f9c 100644
+--- a/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
++++ b/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
+@@ -47,6 +47,7 @@ class MBufferBundle(implicit p: Parameters) extends VLSUBundle{
+   // for exception
+   val vstart           = UInt(elemIdxBits.W)
+   val vl               = UInt(elemIdxBits.W)
++  val originVl         = UInt(elemIdxBits.W) // for backend merge data
+   val vaNeedExt        = Bool()
+   val vaddr            = UInt(XLEN.W)
+   val gpaddr           = UInt(GPAddrBits.W)
+@@ -84,6 +85,7 @@ abstract class BaseVMergeBuffer(isVStore: Boolean=false)(implicit p: Parameters)
+     sink.fof          := source.fof
+     sink.vlmax        := source.vlmax
+     sink.vl           := source.uop.vpu.vl
++    sink.originVl     := source.uop.vpu.vl
+     sink.vaddr        := source.vaddr
+     sink.vstart       := 0.U
+   }
+@@ -98,7 +100,7 @@ abstract class BaseVMergeBuffer(isVStore: Boolean=false)(implicit p: Parameters)
+     sink.vdIdxInField.get := source.vdIdx // Mgu needs to use this.
+     sink.vdIdx.get        := source.vdIdx
+     sink.uop.vpu.vstart   := source.vstart
+-    sink.uop.vpu.vl       := source.vl
++    sink.uop.vpu.vl       := source.originVl
+     sink
+   }
+   def ToLsqConnect(source: MBufferBundle): FeedbackToLsqIO = {
+@@ -288,7 +290,6 @@ abstract class BaseVMergeBuffer(isVStore: Boolean=false)(implicit p: Parameters)
+         entry.gpaddr       := selPort(0).gpaddr
+         entry.isForVSnonLeafPTE := selPort(0).isForVSnonLeafPTE
+       }.otherwise{
+-        entry.uop.vpu.vta  := VType.tu
+         entry.vl           := Mux(entry.vl < vstart, entry.vl, vstart)
+       }
+     }
+diff --git a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+index 156a1040e12..c1ab8d16292 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+@@ -904,8 +904,6 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+     writebackOut.uop.vpu.vstart         := Mux(instMicroOp.uop.exceptionVec.asUInt.orR || TriggerAction.isDmode(instMicroOp.uop.trigger), instMicroOp.exceptionVstart, instMicroOp.vstart)
+     writebackOut.uop.vpu.vmask          := maskUsed
+     writebackOut.uop.vpu.vuopIdx        := uopq(deqPtr.value).uop.vpu.vuopIdx
+-    // when exception updates vl, should use vtu strategy.
+-    writebackOut.uop.vpu.vta            := Mux(instMicroOp.exceptionVl.valid, VType.tu, instMicroOp.uop.vpu.vta)
+     writebackOut.debug                  := DontCare
+     writebackOut.vdIdxInField.get       := vdIdxInField
+     writebackOut.uop.robIdx             := instMicroOp.uop.robIdx
+diff --git a/src/main/scala/xiangshan/mem/vector/VecBundle.scala b/src/main/scala/xiangshan/mem/vector/VecBundle.scala
+index abfc4297e12..bed840f257e 100644
+--- a/src/main/scala/xiangshan/mem/vector/VecBundle.scala
++++ b/src/main/scala/xiangshan/mem/vector/VecBundle.scala
+@@ -282,7 +282,7 @@ class VSegmentUnitIO(implicit p: Parameters) extends VLSUBundle{
+ class VfofDataBuffIO(implicit p: Parameters) extends VLSUBundle{
+   val redirect            = Flipped(ValidIO(new Redirect))
+   val in                  = Vec(VecLoadPipelineWidth, Flipped(Decoupled(new MemExuInput(isVector=true))))
+-  val mergeUopWriteback   = Vec(VLUopWritebackWidth, Flipped(DecoupledIO(new MemExuOutput(isVector=true))))
++  val mergeUopWriteback   = Vec(VLUopWritebackWidth, Flipped(DecoupledIO(new FeedbackToLsqIO)))
+ 
+   val uopWriteback        = DecoupledIO(new MemExuOutput(isVector = true))
+ }
+diff --git a/src/main/scala/xiangshan/mem/vector/VfofBuffer.scala b/src/main/scala/xiangshan/mem/vector/VfofBuffer.scala
+index 16213b7ceb5..2cf88bc4799 100644
+--- a/src/main/scala/xiangshan/mem/vector/VfofBuffer.scala
++++ b/src/main/scala/xiangshan/mem/vector/VfofBuffer.scala
+@@ -81,7 +81,7 @@ class VfofBuffer(implicit p: Parameters) extends VLSUModule{
+ 
+ 
+   //Gather writeback information
+-  val wbIsfof = io.mergeUopWriteback.map{ x => x.valid && x.bits.uop.robIdx === entries.uop.robIdx }
++  val wbIsfof = io.mergeUopWriteback.map{ x => x.valid && x.bits.robidx === entries.uop.robIdx }
+ 
+   def getOldest(valid: Seq[Bool], bits: Seq[DynInst]): DynInst = {
+     def getOldest_recursion[T <: Data](valid: Seq[Bool], bits: Seq[DynInst]): (Seq[Bool], Seq[DynInst]) = {
+@@ -114,7 +114,14 @@ class VfofBuffer(implicit p: Parameters) extends VLSUModule{
+ 
+   //Update uop vl
+   io.mergeUopWriteback.map{_.ready := true.B}
+-  val wbBits          = getOldest(wbIsfof, io.mergeUopWriteback.map(_.bits.uop))
++  val portUop         = Wire(Vec(VLUopWritebackWidth, new DynInst))
++  portUop.zip(io.mergeUopWriteback.map(_.bits)).map{ case(sink, source) =>
++    sink              := WireInit(0.U.asTypeOf(new DynInst))
++    sink.robIdx       := source.robidx
++    sink.vpu.vl       := source.vl
++    sink.exceptionVec := source.exceptionVec
++  }
++  val wbBits          = getOldest(wbIsfof, portUop)
+   val wbValid         = wbIsfof.reduce(_ || _)
+   val wbHasException  = wbBits.exceptionVec.asUInt.orR
+   val wbUpdateValid = wbValid && (wbBits.vpu.vl < entries.vl || wbHasException) && valid && !needRedirect && !entries.hasException

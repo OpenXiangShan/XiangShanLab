@@ -1,0 +1,17 @@
+to_ftq metadata:
+  time                 = 19178
+  lane                 = 2
+  providerTableIdx     = 0
+  providerWayIdx       = 0
+  providerTakenCtr     = 3
+  providerUsefulCtr    = 0
+  useProvider          = 1
+
+train metadata:
+  time                 = 19204
+  lane                 = 2
+  providerTableIdx     = 0
+  providerWayIdx       = 0
+  providerTakenCtr     = 3
+  providerUsefulCtr    = 0
+  useProvider          = 1

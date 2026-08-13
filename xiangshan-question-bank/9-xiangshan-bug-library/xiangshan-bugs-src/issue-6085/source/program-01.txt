@@ -1,0 +1,6 @@
+==============  Store Commit Event (Core 0)  ==============
+Mismatch for store commits 
+  REF commits addr 0x00000000fffffff8, data 0xc400000000000000, mask 0x0080, pc 0x0000000080001210
+  DUT commits addr 0x00000000801010a0, data 0x00000000ffff668e, mask 0x000f, pc 0x0000000080001244, robidx 0x45
+Core 0: ABORT at pc = 0x8000010c
+Core-0 instrCnt = 447, cycleCnt = 6,606, IPC = 0.067666

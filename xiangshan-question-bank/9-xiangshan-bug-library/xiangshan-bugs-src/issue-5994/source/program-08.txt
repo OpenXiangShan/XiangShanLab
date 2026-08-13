@@ -1,0 +1,2 @@
+  make -C /root/HardwareAgent/XiangShan/difftest emu \
+  EMU_TRACE=1 EMU_TRACE_ALL=1 NO_DIFF=1 \

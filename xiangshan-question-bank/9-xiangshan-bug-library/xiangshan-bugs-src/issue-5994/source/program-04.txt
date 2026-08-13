@@ -1,0 +1,4 @@
+ftqOffset = 0
+isRVC = 0
+getPcOffset = 0 - 2 = -2
+redirect CFI PC = 0x80000040 - 2 = 0x8000003e

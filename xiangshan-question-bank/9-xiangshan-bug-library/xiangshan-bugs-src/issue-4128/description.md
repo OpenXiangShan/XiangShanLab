@@ -1,0 +1,1 @@
+Let CSRR instructions execute our-of-order for most CSRs, with an in-order executed CSR list given, instead of the old solution where Some OoO read CSRs were listed out. Modify CSRR's control signals at the Rename stage.

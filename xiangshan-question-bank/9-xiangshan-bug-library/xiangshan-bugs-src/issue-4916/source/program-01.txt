@@ -1,0 +1,5 @@
+  wire             io_resp_valid_0 =
+    stage1Hit
+      ? ~idle & hptw_resp_stage2
+      : ~idle & mem_addr_update & ~need_last_s2xlate
+        & (guestFault | w_mem_resp & find_pte | s_pmp_check & accessFault | onlyS2xlate);

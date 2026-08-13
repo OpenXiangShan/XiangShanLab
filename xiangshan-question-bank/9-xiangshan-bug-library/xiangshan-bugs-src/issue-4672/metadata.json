@@ -1,0 +1,21 @@
+{
+  "number": 4672,
+  "title": "fix(Smcsrind, Smstateen, Smaia): add missing permit check",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4672",
+  "state": "closed",
+  "labels": [],
+  "author": "NewPaulWalker",
+  "created_at": "2025-05-08T08:18:28Z",
+  "updated_at": "2025-05-15T13:07:51Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4672/commit-log.md"
+  ],
+  "submitted_at": "2025-05-08",
+  "branch": "",
+  "rtl_commit": ""
+}

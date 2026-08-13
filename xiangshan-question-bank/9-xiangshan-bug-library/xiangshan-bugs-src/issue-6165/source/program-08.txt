@@ -1,0 +1,16 @@
+cd xiangshan-tage-entry-useful-split-stale-meta-poc
+
+RUNTIME_SECRET=1 \
+SECRETS=1 \
+KEEP_VCD=1 \
+WARM_ITERS=512 \
+PHASE_ITERS=1 \
+RECOVERY_THRESHOLD=120 \
+INVERT_RECOVERY=1 \
+CYCLES=40000 \
+WAVE_BEGIN=7000 \
+WAVE_END=40000 \
+TIMEOUT_SECS=360 \
+SUMMARY=phased_seed_probe_runtime_p1_wide_7k40k_secret1_summary.jsonl \
+EMU=/path/to/XiangShan/build_vcd/emu \
+./run_phased_seed_probe.sh

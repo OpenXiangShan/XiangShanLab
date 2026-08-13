@@ -1,0 +1,4 @@
+0x0000000080000030  vmv.v.i v0, -1
+0x0000000080000034  vmerge.vvm v0, v24, v4, v0
+exception trap_illegal_instruction, epc 0x0000000080000034
+tval 0x000000005d820057

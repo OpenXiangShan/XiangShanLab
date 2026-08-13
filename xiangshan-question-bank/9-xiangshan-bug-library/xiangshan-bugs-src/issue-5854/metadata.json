@@ -1,0 +1,26 @@
+{
+  "number": 5854,
+  "title": "[BUG] L2TLB: cfs indexed with wrong truncated PPN, defeats bitmap isolation",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5854",
+  "state": "closed",
+  "labels": [
+    "module: memory",
+    "type: bug/fixed"
+  ],
+  "author": "Hoshi44",
+  "created_at": "2026-04-23T07:58:02Z",
+  "updated_at": "2026-05-06T08:26:56Z",
+  "source_files": [
+    "issue-5854/source/bitmap.zip",
+    "issue-5854/source/program-01.scala",
+    "issue-5854/source/program-02.scala",
+    "issue-5854/source/program-03.scala",
+    "issue-5854/source/program-04.txt",
+    "issue-5854/source/program-05.txt",
+    "issue-5854/source/program-06.scala"
+  ],
+  "archive_files": [
+    "issue-5854/source/bitmap.zip"
+  ],
+  "has_comments": true
+}

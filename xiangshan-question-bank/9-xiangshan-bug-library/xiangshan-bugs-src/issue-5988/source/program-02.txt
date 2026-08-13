@@ -1,0 +1,2 @@
+  site_A1  addr=0x80010000  setIdx=0x00  replacerSetIdx=0x00
+  site_B1  addr=0x80014000  setIdx=0x40  replacerSetIdx=0x00

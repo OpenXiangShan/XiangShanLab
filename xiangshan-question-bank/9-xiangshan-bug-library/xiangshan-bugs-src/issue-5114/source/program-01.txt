@@ -1,0 +1,11 @@
+                VS-stage Page    G-stage Page
+                 Large Page       Small Page
+                  +--------+
+                  |        |
+                +=|========|=====+========+=+
+ L1TLB Entry->  | |########|     |########| |
+                +=|========|=====+========+=+
+                  |        |
+ sfence addr ---> |        |
+ try to flush     |        |
+                  +--------+

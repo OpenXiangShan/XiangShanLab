@@ -1,0 +1,3 @@
+Assertion failed at ./XiangShan/build/rtl/LoadUnitS0.sv:780.
+Assertion failed at NewLoadUnit.scala:319
+Core 0: ABORT at pc = 0x80000060

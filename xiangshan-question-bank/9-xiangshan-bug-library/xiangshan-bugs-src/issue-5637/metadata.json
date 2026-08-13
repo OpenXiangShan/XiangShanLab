@@ -1,0 +1,28 @@
+{
+  "number": 5637,
+  "title": "chore(Rat): move RatWrapper to Rename to check Rename timing",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5637",
+  "state": "closed",
+  "labels": [
+    "module: backend",
+    "topic: functionality"
+  ],
+  "author": "sinceforYy",
+  "created_at": "2026-03-03T03:13:31Z",
+  "updated_at": "2026-03-09T02:50:37Z",
+  "submitted_at": "2026-03-03",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5637/commit-log.md"
+  ],
+  "bug_categories": [
+    "backend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

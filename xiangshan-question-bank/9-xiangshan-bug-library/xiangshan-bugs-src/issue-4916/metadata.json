@@ -1,0 +1,28 @@
+{
+  "number": 4916,
+  "title": "fix(PTW): Fix X-prop caused by using un-initialized stage1Hit in Mux()",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4916",
+  "state": "closed",
+  "labels": [],
+  "author": "forever043",
+  "created_at": "2025-07-30T01:35:59Z",
+  "updated_at": "2025-08-19T09:04:32Z",
+  "submitted_at": "2025-07-30",
+  "source_files": [
+    "issue-4916/source/program-01.txt",
+    "issue-4916/source/program-02.txt"
+  ],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4916/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

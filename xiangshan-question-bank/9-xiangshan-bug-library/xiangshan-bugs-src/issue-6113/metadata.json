@@ -1,0 +1,22 @@
+{
+  "number": 6113,
+  "title": "[Bug] VS-mode wrongly raises EX_II instead of EX_VI when mstateen0.AIA=0 and vsiselect ∈ 0x30-0x3F",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6113",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "ruc-jty",
+  "created_at": "2026-06-18T12:18:10Z",
+  "updated_at": "2026-06-24T05:00:34Z",
+  "source_files": [
+    "issue-6113/source/poc.zip",
+    "issue-6113/source/program-01.txt",
+    "issue-6113/source/program-02.txt"
+  ],
+  "archive_files": [
+    "issue-6113/source/poc.zip"
+  ],
+  "has_comments": true
+}

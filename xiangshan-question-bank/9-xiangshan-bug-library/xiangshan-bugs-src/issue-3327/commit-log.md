@@ -1,0 +1,100 @@
+# Commit Log
+- Issue: #3327
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3327
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3327
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3327
+- Changed files: 5
+- Additions: 11
+- Deletions: 6
+
+## Files
+- `.github/workflows/emu.yml`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala`
+- `src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala`
+
+## Diff
+```diff
+diff --git a/.github/workflows/emu.yml b/.github/workflows/emu.yml
+index 3ab315059c2..56af02243f1 100644
+--- a/.github/workflows/emu.yml
++++ b/.github/workflows/emu.yml
+@@ -315,6 +315,9 @@ jobs:
+       - name: Build SIMV on Remote
+         run: |
+           ssh -tt eda01 "python3 `echo $GITHUB_WORKSPACE`/scripts/xiangshan.py --vcs-build --no-db --xprop"
++      - name: V Extension Test - rvv-test
++        run: |
++          ssh -tt eda01 "python3 `echo $GITHUB_WORKSPACE`/scripts/xiangshan.py --wave-dump `echo $WAVE_HOME` --ci-vcs rvv-test"
+       - name: Simple Test - MicroBench
+         run: |
+           ssh -tt eda01 "python3 `echo $GITHUB_WORKSPACE`/scripts/xiangshan.py --wave-dump `echo $WAVE_HOME` --ci-vcs microbench --am=/nfs/home/share/ci-workloads/nexus-am/"
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala
+index 56a0a8e7cbf..fce473debab 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala
+@@ -1918,8 +1918,8 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
+   inReady := state === s_idle || state === s_active && thisAllOut
+ 
+ 
+-  XSError(io.in.valid && numOfUop === 0.U,
+-    p"uop number $numOfUop is illegal, cannot be zero")
++  XSError(inValid && inUopInfo.numOfUop === 0.U,
++    p"uop number ${inUopInfo.numOfUop} is illegal, cannot be zero")
+ //  val validSimple = Wire(Vec(DecodeWidth, Bool()))
+ //  validSimple.zip(io.validFromIBuf.zip(io.isComplex)).map{ case (dst, (src1, src2)) => dst := src1 && !src2 }
+ //  val notInf = Wire(Vec(DecodeWidth, Bool()))
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala
+index 6494d94b37e..2cd7882dd17 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala
+@@ -51,7 +51,9 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
+ 
+   // vec
+   val vstart = Module(new CSRModule("Vstart", new CSRBundle {
+-    val vstart = RW(VlWidth - 2, 0) // hold [0, 128)
++    // vstart is not a WARL CSR.
++    // Since we need to judge whether flush pipe by vstart being not 0 in DecodeStage, vstart must be initialized to some value at reset.
++    val vstart = RW(VlWidth - 2, 0).withReset(0.U) // hold [0, 128)
+   }) with HasRobCommitBundle {
+     // Todo make The use of vstart values greater than the largest element index for the current SEW setting is reserved.
+     // Not trap
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala
+index 405f5fa32a5..62db1996777 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala
+@@ -294,7 +294,7 @@ class LoadQueueRAW(implicit p: Parameters) extends XSModule
+ 
+     val addrMaskMatch = paddrModule.io.violationMmask(i).asUInt & maskModule.io.violationMmask(i).asUInt
+     val entryNeedCheck = GatedValidRegNext(VecInit((0 until LoadQueueRAWSize).map(j => {
+-      allocated(j) && isAfter(uop(j).robIdx, storeIn(i).bits.uop.robIdx) && datavalid(j) && !uop(j).robIdx.needFlush(io.redirect)
++      allocated(j) && storeIn(i).valid && isAfter(uop(j).robIdx, storeIn(i).bits.uop.robIdx) && datavalid(j) && !uop(j).robIdx.needFlush(io.redirect)
+     })))
+     val lqViolationSelVec = VecInit((0 until LoadQueueRAWSize).map(j => {
+       addrMaskMatch(j) && entryNeedCheck(j)
+@@ -307,7 +307,7 @@ class LoadQueueRAW(implicit p: Parameters) extends XSModule
+     })
+ 
+     // select logic
+-    val lqSelect = selectOldest(lqViolationSelVec, lqViolationSelUopExts)
++    val lqSelect: (Seq[Bool], Seq[XSBundleWithMicroOp]) = selectOldest(lqViolationSelVec, lqViolationSelUopExts)
+ 
+     // select one inst
+     val lqViolation = lqSelect._1(0)
+diff --git a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+index c8da9a5507e..7649e4895bf 100644
+--- a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
++++ b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+@@ -317,7 +317,7 @@ class Sbuffer(implicit p: Parameters)
+ 
+   val inptags = io.in.map(in => getPTag(in.bits.addr))
+   val invtags = io.in.map(in => getVTag(in.bits.vaddr))
+-  val sameTag = inptags(0) === inptags(1)
++  val sameTag = inptags(0) === inptags(1) && io.in(0).valid && io.in(1).valid && io.in(0).bits.vecValid && io.in(1).bits.vecValid
+   val firstWord = getVWord(io.in(0).bits.addr)
+   val secondWord = getVWord(io.in(1).bits.addr)
+   // merge condition
+```

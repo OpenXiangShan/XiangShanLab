@@ -1,0 +1,15 @@
+riscv64-unknown-elf-gcc \
+  -nostdlib -nostartfiles -static \
+  -march=rv64gc -mabi=lp64d \
+  -T link.ld \
+  -o pbmt_ifu_poc.elf \
+  pbmt_ifu_poc.S
+
+riscv64-unknown-elf-objcopy \
+  -O binary \
+  pbmt_ifu_poc.elf \
+  pbmt_ifu_poc.bin
+
+riscv64-unknown-elf-objdump \
+  -dr pbmt_ifu_poc.elf \
+  > pbmt_ifu_poc.objdump

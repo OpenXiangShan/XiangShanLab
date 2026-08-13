@@ -1,0 +1,34 @@
+# Commit Log
+- Issue: #3784
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3784
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3784
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3784
+- Changed files: 1
+- Additions: 5
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/frontend/icache/ICache.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/icache/ICache.scala b/src/main/scala/xiangshan/frontend/icache/ICache.scala
+index 957cb5777fb..ab55cad693b 100644
+--- a/src/main/scala/xiangshan/frontend/icache/ICache.scala
++++ b/src/main/scala/xiangshan/frontend/icache/ICache.scala
+@@ -629,7 +629,11 @@ class ICacheImp(outer: ICache) extends LazyModuleImp(outer) with HasICacheParame
+   // Parity error port
+   val errors       = mainPipe.io.errors
+   val errors_valid = errors.map(e => e.valid).reduce(_ | _)
+-  io.error.bits <> RegEnable(Mux1H(errors.map(e => e.valid -> e.bits)), 0.U.asTypeOf(errors(0).bits), errors_valid)
++  io.error.bits <> RegEnable(
++    PriorityMux(errors.map(e => e.valid -> e.bits)),
++    0.U.asTypeOf(errors(0).bits),
++    errors_valid
++  )
+   io.error.valid := RegNext(errors_valid, false.B)
+ 
+   XSPerfAccumulate(
+```

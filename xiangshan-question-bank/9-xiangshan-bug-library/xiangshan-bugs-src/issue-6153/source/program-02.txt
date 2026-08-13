@@ -1,0 +1,19 @@
+trigger event:
+  time              = 17512 / 17513
+  selected vaddr    = 0x80008000
+  trigger vaddr     = 0x80008000
+  s1_kill           = 0
+  s1_internal_kill  = 0
+  s2_kill           = 1
+
+killed-hit metadata update:
+  time              = 17516 / 17517
+  set               = 0
+  way               = 3
+  way_en            = 8
+  recent S2 miss    = 0
+  recent S2 kill    = 1
+
+post-trap probes:
+  target_line       = miss 1 at time 18186
+  control_line      = miss 0 at time 18426

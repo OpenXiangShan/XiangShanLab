@@ -1,0 +1,28 @@
+{
+  "number": 5104,
+  "title": "fix(resolve queue): flushed entries should remain flushed",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5104",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "topic: functionality"
+  ],
+  "author": "Yan-Muzi",
+  "created_at": "2025-10-11T14:33:32Z",
+  "updated_at": "2025-10-13T07:20:07Z",
+  "submitted_at": "2025-10-11",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5104/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

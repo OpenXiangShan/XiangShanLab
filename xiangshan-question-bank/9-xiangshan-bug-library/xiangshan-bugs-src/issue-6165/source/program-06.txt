@@ -1,0 +1,11 @@
+runtime secret = 0, seed = 0x13579d00:
+  bad_read_observations         = 0
+  bad_read_any_meta_consumed    = 0
+  bad_read_to_ftq_meta_consumed = 0
+  bad_read_train_meta_consumed  = 0
+  result_delta                  = 138
+  recovered_bit                 = 0
+
+runtime secret = 1, alternate seed = 0x13579d11:
+  result_delta                  = 137
+  recovered_bit                 = 0

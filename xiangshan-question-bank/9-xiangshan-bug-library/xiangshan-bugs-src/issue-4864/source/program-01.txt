@@ -1,0 +1,8 @@
+[28] commit pc 0000000080001000 inst 0280006f wen 0 dst 00 data 0000000000000000 idx 017 j       pc + 0x28
+[29] commit pc 0000000080001028 inst b850d617 wen 1 dst 12 data 000000003850e028 idx 018 auipc   a2, 0xb850d
+[30] commit pc 000000008000102c inst bee03893 wen 1 dst 17 data 0000000000000001 idx 019 sltiu   a7, zero, -1042
+[31] exception pc 0000000080001030 inst 000fb083 cause 0000000000000013 ld      ra, 0(t6) <--
+......
+privilegeMode: 3
+ mcause different at pc = 0x0080001028, right= 0x0000000000000005, wrong = 0x0000000000000013
+Core 0: [31mABORT at pc = 0x8000104c

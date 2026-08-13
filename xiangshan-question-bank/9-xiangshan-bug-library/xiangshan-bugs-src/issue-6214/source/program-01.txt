@@ -1,0 +1,7 @@
+// LoadUnit.scala
+s1_out.fullva := ... io.tlb.resp.bits.fullva     // :1007  
+loadTrigger.io.fromLoadStore.vaddr := s1_vaddr   // :1133  
+
+// StoreUnit.scala
+val s1_fullva = io.tlb.resp.bits.fullva           // :306
+storeTrigger.io.fromLoadStore.vaddr := s1_in.vaddr// :348

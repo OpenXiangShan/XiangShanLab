@@ -1,0 +1,30 @@
+# Commit Log
+- Issue: #4269
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4269
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4269
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4269
+- Changed files: 1
+- Additions: 1
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/frontend/PreDecode.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/PreDecode.scala b/src/main/scala/xiangshan/frontend/PreDecode.scala
+index 50e6fd84a91..826d5268b46 100644
+--- a/src/main/scala/xiangshan/frontend/PreDecode.scala
++++ b/src/main/scala/xiangshan/frontend/PreDecode.scala
+@@ -383,7 +383,7 @@ class PredChecker(implicit p: Parameters) extends XSModule with HasPdConst {
+   io.out.stage1Out.fixedRange := fixedRange.asTypeOf(Vec(PredictWidth, Bool()))
+ 
+   io.out.stage1Out.fixedTaken := VecInit(pds.zipWithIndex.map { case (pd, i) =>
+-    instrValid(i) && fixedRange(i) && (pd.isRet || pd.isJal || takenIdx === i.U && predTaken && !pd.notCFI)
++    instrValid(i) && fixedRange(i) && (pd.isRet || pd.isJal || pd.isJalr || takenIdx === i.U && predTaken && !pd.notCFI)
+   })
+ 
+   /** second check: faulse prediction fault and target fault */
+```

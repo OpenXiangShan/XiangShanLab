@@ -1,0 +1,21 @@
+{
+  "number": 4426,
+  "title": "fix(LoadUnit): fix misalign exception and clearer uncache semantics",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4426",
+  "state": "closed",
+  "labels": [],
+  "author": "Anzooooo",
+  "created_at": "2025-03-16T09:24:24Z",
+  "updated_at": "2025-03-17T06:00:12Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4426/commit-log.md"
+  ],
+  "submitted_at": "2025-03-16",
+  "branch": "",
+  "rtl_commit": ""
+}

@@ -1,0 +1,11 @@
+[750] MainBtb:
+[750]   Size(set, way, align, internal): 256 * 4 * 2 * 4 = 8192
+[750]   Address fields:
+[750]     50| 49..31 | 30..15 | 14...7 | 6.............5 | ...........4 | 3.........0 |
+[750]       | unused |    tag | setIdx | internalBankIdx | alignBankIdx | alignOffset |
+[750]                            | 11.................................4 |
+[750]                            |                       replacerSetIdx |
+[750]                    | 20....................................................1 |
+[750]                    |                                             targetLower |
+[750]                                                                | 4.........1 |
+[750]                                                                |    position |

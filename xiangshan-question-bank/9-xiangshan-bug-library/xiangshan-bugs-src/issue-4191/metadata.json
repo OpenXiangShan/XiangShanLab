@@ -1,0 +1,21 @@
+{
+  "number": 4191,
+  "title": "fix(L2TLB): Fix stuck caused by MissQueue full",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4191",
+  "state": "closed",
+  "labels": [],
+  "author": "good-circle",
+  "created_at": "2025-01-17T02:43:50Z",
+  "updated_at": "2025-01-17T08:50:15Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4191/commit-log.md"
+  ],
+  "submitted_at": "2025-01-17",
+  "branch": "",
+  "rtl_commit": ""
+}

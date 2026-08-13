@@ -1,0 +1,40 @@
+# Commit Log
+- Issue: #4892
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4892
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4892
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4892
+- Changed files: 1
+- Additions: 6
+- Deletions: 6
+
+## Files
+- `src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+index aa9767de6b2..fa8ed9dd2ec 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+@@ -428,12 +428,12 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+ 
+   val vaddr                           = nextBaseVaddr + realSegmentOffset
+ 
+-  val misalignLowVaddr                = Cat(latchVaddr(latchVaddr.getWidth - 1, 3), 0.U(3.W))
+-  val misalignLowVaddrDup             = Cat(latchVaddrDup(latchVaddrDup.getWidth - 1, 3), 0.U(3.W))
+-  val misalignHighVaddr               = Cat(latchVaddr(latchVaddr.getWidth - 1, 3) + 1.U, 0.U(3.W))
+-  val misalignHighVaddrDup            = Cat(latchVaddrDup(latchVaddrDup.getWidth - 1, 3) + 1.U, 0.U(3.W))
+-  val notCross16ByteVaddr             = Cat(latchVaddr(latchVaddr.getWidth - 1, 4), 0.U(4.W))
+-  val notCross16ByteVaddrDup          = Cat(latchVaddrDup(latchVaddrDup.getWidth - 1, 4), 0.U(4.W))
++  val misalignLowVaddr                = Cat(latchVaddr(VAddrBits - 1, 3), 0.U(3.W))
++  val misalignLowVaddrDup             = Cat(latchVaddrDup(VAddrBits - 1, 3), 0.U(3.W))
++  val misalignHighVaddr               = Cat(latchVaddr(VAddrBits - 1, 3) + 1.U, 0.U(3.W))
++  val misalignHighVaddrDup            = Cat(latchVaddrDup(VAddrBits - 1, 3) + 1.U, 0.U(3.W))
++  val notCross16ByteVaddr             = Cat(latchVaddr(VAddrBits - 1, 4), 0.U(4.W))
++  val notCross16ByteVaddrDup          = Cat(latchVaddrDup(VAddrBits - 1, 4), 0.U(4.W))
+  //  val misalignVaddr                   = Mux(notCross16ByteReg, notCross16ByteVaddr, Mux(isFirstSplit, misalignLowVaddr, misalignHighVaddr))
+   val misalignVaddr                   = Mux(isFirstSplit, misalignLowVaddr, misalignHighVaddr)
+   val misalignVaddrDup                = Mux(isFirstSplit, misalignLowVaddrDup, misalignHighVaddrDup)
+```

@@ -1,0 +1,25 @@
+SECRET_BIT=0:
+  CSR disable write:                         17942
+  internal RAS_ENABLE=0:                     17944
+  first disabled RAS/uRAS prediction:        17996
+  FTQ fetch of secret0_ret_site:             17998
+  FTQ fetch of secret0_gadget:               18008
+  decode/dispatch of secret0_gadget:         18206 / 18212
+  LSQ/DCache-address load to probe0:         18222
+  DCache request for probe0:                 18228
+  redirect to common_after:                  18494
+  rdcycle result: probe0=48, probe1=156
+  timing branch reaches hit_loop:            19580
+
+SECRET_BIT=1:
+  CSR disable write:                         17902
+  internal RAS_ENABLE=0:                     17904
+  first disabled RAS/uRAS prediction:        17956
+  FTQ fetch of secret1_ret_site:             17958
+  FTQ fetch of secret1_gadget:               17968
+  decode/dispatch of secret1_gadget:         18166 / 18172
+  LSQ/DCache-address load to probe1:         18182
+  DCache request for probe1:                 18188
+  redirect to common_after:                  18454
+  rdcycle result: probe1=48, probe0=156
+  timing branch reaches hit_loop:            19540

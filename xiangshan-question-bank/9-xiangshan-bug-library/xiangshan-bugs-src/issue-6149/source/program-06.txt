@@ -1,0 +1,4 @@
+csr_ras_enable = 0
+s3_taken       = 1
+s3_useRas      = 1
+s3_prediction_target == ras.io.topRetAddr

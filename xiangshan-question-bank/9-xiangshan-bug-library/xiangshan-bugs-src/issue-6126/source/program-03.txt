@@ -1,0 +1,3 @@
+timeout 120 cores/XiangShan/build/verilator-compile/emu \
+  -i ./elfs/xs_hlv_spvp_u_unlocked_pmp_deny_load_must_fault.elf \
+  --no-diff -C 500000

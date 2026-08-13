@@ -1,0 +1,21 @@
+{
+  "number": 4164,
+  "title": "feat(custom, csr): add two custom CSRs mcorepwr and mflushpwr to control power",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4164",
+  "state": "closed",
+  "labels": [],
+  "author": "NewPaulWalker",
+  "created_at": "2025-01-13T03:45:40Z",
+  "updated_at": "2025-01-16T05:05:58Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4164/commit-log.md"
+  ],
+  "submitted_at": "2025-01-13",
+  "branch": "",
+  "rtl_commit": ""
+}

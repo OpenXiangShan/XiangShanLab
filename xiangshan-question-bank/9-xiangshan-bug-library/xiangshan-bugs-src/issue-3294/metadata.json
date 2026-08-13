@@ -1,0 +1,21 @@
+{
+  "number": 3294,
+  "title": "difftest: support difftest for fcsr.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3294",
+  "state": "closed",
+  "labels": [],
+  "author": "NewPaulWalker",
+  "created_at": "2024-07-26T03:49:52Z",
+  "updated_at": "2024-07-31T02:32:03Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3294/commit-log.md"
+  ],
+  "submitted_at": "2024-07-26",
+  "branch": "",
+  "rtl_commit": ""
+}

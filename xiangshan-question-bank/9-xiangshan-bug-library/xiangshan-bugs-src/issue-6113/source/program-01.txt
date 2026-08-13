@@ -1,0 +1,16 @@
+private val rwSireg_EX_II = (
+    !privState.isVirtual && (
+      Iselect.isInAIA(siselect) && Iselect.isOdd(siselect) ||
+      Iselect.isInOthers(siselect)
+    ) ||
+    privState.isModeHS && (
+      mvienSEIE && Iselect.isInImsic(siselect) ||
+      !mstateen0.AIA.asBool && Iselect.isInAIA(siselect) ||    
+      !mstateen0.IMSIC.asBool && Iselect.isInImsic(siselect) 
+    ) ||
+    privState.isVirtual && (
+      Iselect.isInOthers(vsiselect) ||
+      !mstateen0.AIA.asBool && Iselect.isInAIA(vsiselect) ||    // BUG: VS-mode should not raise EX_II
+      !mstateen0.IMSIC.asBool && Iselect.isInImsic(vsiselect)   // BUG: VS-mode should not raise EX_II
+    )
+  ) && addr === CSRs.sireg.U

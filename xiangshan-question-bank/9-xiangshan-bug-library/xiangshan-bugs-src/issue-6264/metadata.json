@@ -1,0 +1,26 @@
+{
+  "number": 6264,
+  "title": "Sequential fetch fall-through across Sv39 canonical boundary does not raise instruction page fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6264",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: frontend"
+  ],
+  "author": "ZhongYic00",
+  "created_at": "2026-07-21T09:16:28Z",
+  "updated_at": "2026-07-22T11:26:46Z",
+  "source_files": [
+    "issue-6264/source/xs-fetch-fallthrough-noncanonical.zip",
+    "issue-6264/source/program-01.txt",
+    "issue-6264/source/program-02.txt",
+    "issue-6264/source/program-03.txt",
+    "issue-6264/source/program-04.txt",
+    "issue-6264/source/program-05.txt",
+    "issue-6264/source/program-06.txt"
+  ],
+  "archive_files": [
+    "issue-6264/source/xs-fetch-fallthrough-noncanonical.zip"
+  ],
+  "has_comments": true
+}

@@ -1,0 +1,17 @@
+{
+  "number": 4581,
+  "title": "Inconsistent `vsiselect` register range.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4581",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported"
+  ],
+  "author": "ha0lyu",
+  "created_at": "2025-04-17T10:19:35Z",
+  "updated_at": "2025-05-07T15:04:34Z",
+  "source_files": [
+    "issue-4581/source/program-01.txt"
+  ],
+  "archive_files": [],
+  "has_comments": true
+}

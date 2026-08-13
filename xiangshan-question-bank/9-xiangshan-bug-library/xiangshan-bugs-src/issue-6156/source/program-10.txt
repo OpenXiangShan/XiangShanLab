@@ -1,0 +1,6 @@
+gzip -dk validation_satp_fault_1450_1560.vcd.gz
+
+python3 validate_satp_first_fetch.py \
+  validation_satp_fault_1450_1560.vcd \
+  validation_wave_diff.log \
+  validation_monitor.recheck.json

@@ -1,0 +1,3 @@
+csr_ras_enable = 0
+s1_prediction_attribute.rasAction = return
+s1_prediction_target == uras.io.specOut.retTarget

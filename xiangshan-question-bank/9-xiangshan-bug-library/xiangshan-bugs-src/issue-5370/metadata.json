@@ -1,0 +1,28 @@
+{
+  "number": 5370,
+  "title": "fix(pmu): fix s3Override_takenMismatch & ITTAGEMissBubble",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5370",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "topic: verification"
+  ],
+  "author": "rich-cake",
+  "created_at": "2025-12-15T10:47:02Z",
+  "updated_at": "2025-12-16T03:28:22Z",
+  "submitted_at": "2025-12-15",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5370/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

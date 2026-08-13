@@ -1,0 +1,21 @@
+{
+  "number": 4594,
+  "title": "fix(xiselect): set the minimum range for xiselect",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4594",
+  "state": "closed",
+  "labels": [],
+  "author": "NewPaulWalker",
+  "created_at": "2025-04-18T10:40:48Z",
+  "updated_at": "2025-04-22T01:52:46Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4594/commit-log.md"
+  ],
+  "submitted_at": "2025-04-18",
+  "branch": "",
+  "rtl_commit": ""
+}

@@ -1,0 +1,1 @@
+A TLB query requires two cycles, the first (s0) to receive the req and the second (s1) to return the result. pre exception checking will be done on the first cycle, so should use `vmenable` and `s2xlateEnable` of the first cycle.

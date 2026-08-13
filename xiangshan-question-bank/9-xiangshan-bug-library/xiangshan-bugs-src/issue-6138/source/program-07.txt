@@ -1,0 +1,26 @@
+secret=0
+{
+  "wrongpath_taken": 0,
+  "wrongpath_not_taken": 2,
+  "probe_redirect_count": 0,
+  "secret_probe_redirect_seen": false,
+  "rdcycle_delta": 29,
+  "recovered_bit": 0
+}
+secret=1
+{
+  "wrongpath_taken": 2,
+  "wrongpath_not_taken": 0,
+  "probe_redirect_count": 2,
+  "secret_probe_redirect_seen": true,
+  "rdcycle_delta": 39,
+  "recovered_bit": 1
+}
+{
+  "guest_threshold_recovers_secret_bit": 1,
+  "secret_dependent_attacker_probe_redirect": 1,
+  "secret_dependent_mcycle_delta": 1,
+  "secret_dependent_wrongpath_training": 1,
+  "secret_recovery_confirmed": 1,
+  "security_primitive_confirmed": 1
+}

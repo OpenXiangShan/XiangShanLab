@@ -1,0 +1,4 @@
+   exception pc 000000008000101c inst 002026f3 cause 0000000000000002 csrr a3, frm
+   mtval different at pc = 0x0080001014,
+     right = 0x00000000002026f3,
+     wrong = 0x00000000c02cf5d3

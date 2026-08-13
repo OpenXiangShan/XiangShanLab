@@ -1,0 +1,12 @@
+commit group [15]: pc 00800005ea cmtcnt 18 <--
+
+============== Commit Instr Trace ==============
+...
+[25] commit pc 00000000800005f4 inst fa078793     addi    a5, a5, -96
+[26] commit pc 00000000800005fe inst 0d877057     vsetvli zero, a4, e64, m1, ta
+[27] commit pc 0000000080000602 inst 5e06c0d7     vmv.v.x v1, a3
+[28] commit pc 0000000080000606 inst 028780a7     vs1r.v  v1, (a5)
+[29] commit pc 000000008000060a inst c2202773     csrr    a4, vlenb
+[30] commit pc 000000008000061a inst ff078793     addi    a5, a5, -16
+[31] commit pc 000000008000061c inst 00878733     add     a4, a5, s0
+...

@@ -1,0 +1,28 @@
+{
+  "number": 5147,
+  "title": "fix(ibuffer): do not store first encountered exception when currentLastHalfRvi",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5147",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "topic: functionality"
+  ],
+  "author": "Erlkonigal",
+  "created_at": "2025-10-28T10:04:07Z",
+  "updated_at": "2025-10-29T02:34:36Z",
+  "submitted_at": "2025-10-28",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5147/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

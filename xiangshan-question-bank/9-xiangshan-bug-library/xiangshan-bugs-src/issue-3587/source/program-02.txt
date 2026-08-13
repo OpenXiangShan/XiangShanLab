@@ -1,0 +1,2 @@
+Xiangshan: 7e1c60713 (HEAD -> master, origin/master, origin/HEAD) fix(vstopi): wrong API usage in InterruptFilter (#3557)
+NEMU: 8fba3220 (HEAD -> master, origin/master, origin/HEAD) docs(issues): add issue template (#527)

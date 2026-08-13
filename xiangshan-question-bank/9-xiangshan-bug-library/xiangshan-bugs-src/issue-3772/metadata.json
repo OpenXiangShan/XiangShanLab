@@ -1,0 +1,21 @@
+{
+  "number": 3772,
+  "title": "fix(VSegmentUnit): fix VSegment trigger logic",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3772",
+  "state": "closed",
+  "labels": [],
+  "author": "wissygh",
+  "created_at": "2024-10-22T07:55:35Z",
+  "updated_at": "2024-10-24T01:56:10Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3772/commit-log.md"
+  ],
+  "submitted_at": "2024-10-22",
+  "branch": "",
+  "rtl_commit": ""
+}

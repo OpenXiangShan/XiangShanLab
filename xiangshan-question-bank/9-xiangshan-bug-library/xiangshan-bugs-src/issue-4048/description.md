@@ -1,0 +1,1 @@
+During reset, the update registers related to the return stack are not reset. At the same time, the update of the update register value is subject to some signal restrictions, resulting in the BOS pointer being updated incorrectly with the old value.

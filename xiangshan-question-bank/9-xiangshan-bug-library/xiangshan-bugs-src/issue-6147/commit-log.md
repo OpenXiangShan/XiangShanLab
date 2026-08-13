@@ -1,0 +1,53 @@
+# Commit Log
+- Issue: #6147
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6147
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6147
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6147
+- Changed files: 1
+- Additions: 6
+- Deletions: 4
+
+## Files
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index b8c46e10291..e24aa669108 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -373,11 +373,14 @@ class Ftq(implicit p: Parameters) extends FtqModule
+ 
+   resolveQueue.io.bpuTrain.ready := !trainCache.valid || io.toBpu.train.fire
+ 
+-  private val flushTrain = backendRedirect.valid && trainIndexCache > backendRedirect.bits.ftqIdx
++  private val flushTrainCache =
++    backendRedirect.valid && trainCache.valid && trainIndexCache > backendRedirect.bits.ftqIdx
+ 
+-  when(flushTrain) {
++  when(flushTrainCache) {
+     trainCache.valid := false.B
+   }.elsewhen(resolveQueue.io.bpuTrain.fire) {
++    val needFlush = backendRedirect.valid && resolveQueue.io.bpuTrain.bits.ftqIdx > backendRedirect.bits.ftqIdx
++    trainCache.valid     := !needFlush
+     trainCache.bits.meta := metaQueueResolve(resolveQueue.io.bpuTrain.bits.ftqIdx.value)
+     trainCache.bits.startPcVec.foreach { dup =>
+       dup.zipWithIndex.foreach { case (startPc, i) =>
+@@ -389,13 +392,12 @@ class Ftq(implicit p: Parameters) extends FtqModule
+     }
+     trainCache.bits.branches := resolveQueue.io.bpuTrain.bits.branches
+     trainCache.bits.perfMeta := perfQueue(resolveQueue.io.bpuTrain.bits.ftqIdx.value).bpuPerf
+-    trainCache.valid         := true.B
+     trainIndexCache          := resolveQueue.io.bpuTrain.bits.ftqIdx
+   }.elsewhen(io.toBpu.train.fire) {
+     trainCache.valid := false.B
+   }
+ 
+-  io.toBpu.train.valid := trainCache.valid && !flushTrain
++  io.toBpu.train.valid := trainCache.valid && !flushTrainCache
+   io.toBpu.train.bits  := trainCache.bits
+ 
+   // default next state receives s3 prediction meta
+```

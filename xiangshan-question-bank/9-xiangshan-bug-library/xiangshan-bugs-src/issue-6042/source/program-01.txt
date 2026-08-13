@@ -1,0 +1,2 @@
+[30] commit pc 0x800012a4 5e0f8357  vmv.v.v v6, v31
+[31] exception pc 0x800012a8 0209d087  vle16.v v1, (s3) -> Load Access Fault (mcause=5)

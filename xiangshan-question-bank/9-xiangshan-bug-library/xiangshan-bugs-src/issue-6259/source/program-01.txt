@@ -1,0 +1,9 @@
+[setup] pmpaddr0 = 0x200401ff, pmpaddr1 = 0x3fffffffffff, pmpcfg0 = 0x1f18
+        entry0 = 0x18 (NAPOT deny, unlocked), entry1 = 0x1f (NAPOT RWX)
+[control b: M-mode lw] val = 0x5ec3e7, trap_count = 0 -> OK (M bypass, expected)
+[test: hlv.wu SPVP=VU] val = 0x5ec3e7, trap_count = 0, mcause = 0, mtval = 0x0
+[setup] pmpcfg0 = 0x1f98 (entry0 locked deny)
+[src/memory/paddr.c:240,check_paddr] isa pmp check failed, vaddr=0x0000000080100000, paddr=0x0000000080100000, len=0x4, type=0x1, mode=0x3
+[control a: hlv.wu, entry0 locked] val = 0x2e, trap_count = 1, mcause = 5 -> OK (locked entry applies to M-mode too)
+BUG REPRODUCED: HLV.WU ignored SPVP=VU for PMP check
+Core 0: HIT BAD TRAP at pc = 0x800003c2

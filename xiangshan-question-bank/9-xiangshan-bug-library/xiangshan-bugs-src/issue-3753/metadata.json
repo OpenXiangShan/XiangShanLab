@@ -1,0 +1,21 @@
+{
+  "number": 3753,
+  "title": "fix(csr, aia): fix interrupt filter and deleg with AIA",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3753",
+  "state": "closed",
+  "labels": [],
+  "author": "sinceforYy",
+  "created_at": "2024-10-16T06:40:34Z",
+  "updated_at": "2024-11-22T15:40:02Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3753/commit-log.md"
+  ],
+  "submitted_at": "2024-10-16",
+  "branch": "",
+  "rtl_commit": ""
+}

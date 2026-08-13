@@ -1,0 +1,17 @@
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y build-essential clang libclang-dev llvm-dev cmake libspdlog-dev vim git libmlpack-dev curl wget time default-jre default-jdk
+RUN git clone --recursive https://github.com/OpenXiangShan/xs-env
+
+WORKDIR /xs-env
+RUN sed 's/apt\S* install/\0 -y/g;s/source /. /g;s/sudo //g' -i ./*.sh && echo 1
+RUN . ./env.sh && sed 's/$/; cd \/xs-env/g' -i ./update-submodule.sh && ./update-submodule.sh
+RUN . ./env.sh && ./setup-tools.sh
+RUN . ./env.sh && . ./install-verilator.sh
+RUN . ./env.sh && sed 's/^git submodule.*$//g;s/env.*$//g' -i ./setup.sh && . ./setup.sh
+
+RUN . ./env.sh && make -C XiangShan init
+RUN . ./env.sh && make -C XiangShan emu CONFIG=DefaultConfig MFC=1 -j 8
+RUN . ./env.sh && sed 's/unknown-//g;s/rv64gc/rv64gcv/g' -i $AM_HOME/am/arch/isa/riscv64.mk
+# Once in the docker enviroment, I used the following to build and simulate the programs:
+# source env.sh; cd $AM_HOME/apps/hello
+# make ARCH=riscv64-xs && $NOOP_HOME/build/emu --no-diff -i ./build/hello-riscv64-xs.bin 2>/dev/null

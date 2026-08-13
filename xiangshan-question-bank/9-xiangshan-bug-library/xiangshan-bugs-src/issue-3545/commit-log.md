@@ -1,0 +1,31 @@
+# Commit Log
+- Issue: #3545
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3545
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3545
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3545
+- Changed files: 1
+- Additions: 3
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/frontend/icache/IPrefetch.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala b/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala
+index 23d325a0bec..bb92c9dbae5 100644
+--- a/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala
++++ b/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala
+@@ -517,7 +517,9 @@ class IPrefetchPipe(implicit p: Parameters) extends  IPrefetchModule
+ 
+   s2_flush := io.flush
+ 
+-  val s2_finish  = (0 until PortNumber).map(i => has_send(i) || !s2_miss(i) || toMSHRArbiter.io.in(i).fire).reduce(_&&_)
++  // toMSHRArbiter.io.in(i).fire is not used here for timing consideration
++  // val s2_finish  = (0 until PortNumber).map(i => has_send(i) || !s2_miss(i) || toMSHRArbiter.io.in(i).fire).reduce(_&&_)
++  val s2_finish  = (0 until PortNumber).map(i => has_send(i) || !s2_miss(i)).reduce(_&&_)
+   s2_ready      := s2_finish || !s2_valid
+   s2_fire       := s2_valid && s2_finish && !s2_flush
+```

@@ -1,0 +1,3 @@
+val pi    = if (flati > 2) 2 else flati // index for privileges: M, S, VS.
+...
+intFile.fromCSR.claim           := fromCSR.claims(pi)

@@ -1,0 +1,28 @@
+{
+  "number": 5332,
+  "title": "fix(pmu): update bpu s1 prediction source",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5332",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "topic: verification"
+  ],
+  "author": "Erlkonigal",
+  "created_at": "2025-12-09T02:38:22Z",
+  "updated_at": "2025-12-10T10:22:46Z",
+  "submitted_at": "2025-12-09",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5332/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

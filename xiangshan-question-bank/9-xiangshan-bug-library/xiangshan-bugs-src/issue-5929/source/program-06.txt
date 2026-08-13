@@ -1,0 +1,7 @@
+pc: 0x0000000080000320 mstatus: 0x8000040a00007e00 mcause: 0x0000000000000005 mepc: 0x00000000800002ec
+mtval: 0x000000078fffffbf
+mepc different at pc = 0x0000000000, right = 0x00000000800002ec, wrong = 0x0000000000000000
+mtval different at pc = 0x0000000000, right = 0x000000078fffffbf, wrong = 0x0000000000000000
+mcause different at pc = 0x0000000000, right = 0x0000000000000005, wrong = 0x0000000000000000
+v20_low different at pc = 0x0000000000, right = 0x3a5df9a517eb24b9, wrong = 0x0000800000000000
+Core 0: ABORT at pc = 0x0

@@ -1,0 +1,2 @@
+cd appendix
+bash run_noalt_secret_probe.sh

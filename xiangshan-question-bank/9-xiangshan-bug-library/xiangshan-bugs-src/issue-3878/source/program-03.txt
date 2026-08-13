@@ -1,0 +1,3 @@
+_start:
+        sd      s6, 4(t2)
+        j _start

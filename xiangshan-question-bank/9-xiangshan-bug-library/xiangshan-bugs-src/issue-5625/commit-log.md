@@ -1,0 +1,324 @@
+# Commit Log
+- Issue: #5625
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5625
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5625
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5625
+- Changed files: 5
+- Additions: 110
+- Deletions: 69
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/Bpu.scala`
+- `src/main/scala/xiangshan/frontend/bpu/history/commonhr/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/bpu/history/commonhr/CommonHR.scala`
+- `src/main/scala/xiangshan/frontend/bpu/history/commonhr/Parameters.scala`
+- `src/main/scala/xiangshan/frontend/bpu/sc/Sc.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+index 864a96bc522..3534c889744 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+@@ -469,9 +469,11 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+ 
+   // ghr update
+   commonHR.io.stageCtrl               := stageCtrl
++  commonHR.io.s0_startPc.get          := s0_startPc
+   commonHR.io.update.startPc          := s3_startPc
+   commonHR.io.update.target           := s3_prediction.target
+   commonHR.io.update.taken            := s3_taken
++  commonHR.io.update.s3Override       := s3_override
+   commonHR.io.update.firstTakenBranch := s3_firstTakenBranch
+   commonHR.io.update.position         := VecInit(s3_mbtbResult.map(_.bits.cfiPosition))
+   commonHR.io.update.condHitMask      := s3_condHitMask
+diff --git a/src/main/scala/xiangshan/frontend/bpu/history/commonhr/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/history/commonhr/Bundles.scala
+index a80d08b0630..b4064374c3a 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/history/commonhr/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/history/commonhr/Bundles.scala
+@@ -19,6 +19,7 @@ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import utility.CircularQueuePtr
++import xiangshan.XSCoreParamsKey
+ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.bpu.BranchAttribute
+ import xiangshan.frontend.bpu.Prediction
+@@ -27,9 +28,12 @@ class CommonHREntry(implicit p: Parameters) extends CommonHRBundle {
+   val valid: Bool = Bool()
+   val ghr:   UInt = UInt(GhrHistoryLength.W)
+   val bw:    UInt = UInt(BWHistoryLength.W)
++
++  val predStartPc: Option[PrunedAddr] = Some(PrunedAddr(VAddrBits)) // for debug
+ }
+ class CommonHRUpdate(implicit p: Parameters) extends CommonHRBundle {
+   val taken:            Bool              = Bool()
++  val s3Override:       Bool              = Bool()
+   val condHitMask:      Vec[Bool]         = Vec(NumBtbResultEntries, Bool())
+   val firstTakenBranch: Valid[Prediction] = Valid(new Prediction)
+   val position:         Vec[UInt]         = Vec(NumBtbResultEntries, UInt(CfiPositionWidth.W))
+@@ -53,3 +57,20 @@ class CommonHRRedirect(implicit p: Parameters) extends CommonHRBundle {
+   val target:    PrunedAddr      = PrunedAddr(VAddrBits)
+   val meta:      CommonHRMeta    = new CommonHRMeta
+ }
++
++class HistPtr(entries: Int) extends CircularQueuePtr[HistPtr](entries) {
++  def this()(implicit p: Parameters) =
++    this(p(XSCoreParamsKey).frontendParameters.bpuParameters.commonHRParameters.HistQueueSize)
++}
++
++object HistPtr {
++  def apply(f: Bool, v: UInt)(implicit p: Parameters): HistPtr = {
++    val ptr = Wire(new HistPtr)
++    ptr.flag  := f
++    ptr.value := v
++    ptr
++  }
++
++  def width(implicit p: Parameters): Int =
++    log2Up(p(XSCoreParamsKey).frontendParameters.bpuParameters.commonHRParameters.HistQueueSize)
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/history/commonhr/CommonHR.scala b/src/main/scala/xiangshan/frontend/bpu/history/commonhr/CommonHR.scala
+index af0419a0866..eb8d9eeb40c 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/history/commonhr/CommonHR.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/history/commonhr/CommonHR.scala
+@@ -19,17 +19,22 @@ import chisel3._
+ import chisel3.util._
+ import freechips.rocketchip.util.SeqToAugmentedSeq
+ import org.chipsalliance.cde.config.Parameters
++import utility.CircularQueuePtr
++import utility.HasCircularQueuePtrHelper
+ import utility.XSError
++import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.bpu.BpuRedirect
+ import xiangshan.frontend.bpu.StageCtrl
+ 
+-class CommonHR(implicit p: Parameters) extends CommonHRModule with Helpers {
++class CommonHR(implicit p: Parameters) extends CommonHRModule with Helpers with HasCircularQueuePtrHelper {
+   class CommonHRIO extends CommonHRBundle {
+     val stageCtrl:   StageCtrl        = Input(new StageCtrl)
+     val update:      CommonHRUpdate   = Input(new CommonHRUpdate)
+     val redirect:    CommonHRRedirect = Input(new CommonHRRedirect)
+     val s0_commonHR: CommonHREntry    = Output(new CommonHREntry)
+     val commonHR:    CommonHREntry    = Output(new CommonHREntry)
++
++    val s0_startPc: Option[PrunedAddr] = Some(Input(PrunedAddr(VAddrBits))) // for debug
+   }
+   val io = IO(new CommonHRIO)
+ 
+@@ -38,11 +43,17 @@ class CommonHR(implicit p: Parameters) extends CommonHRModule with Helpers {
+   private val s2_fire = io.stageCtrl.s2_fire
+   private val s3_fire = io.stageCtrl.s3_fire
+ 
++  private val s3_override = io.update.s3Override
++
+   // common history register
+   private val s0_commonHR = WireInit(0.U.asTypeOf(new CommonHREntry))
+   private val commonHR    = RegInit(0.U.asTypeOf(new CommonHREntry))
+-  private val commonHRBuffer =
+-    Module(new Queue(new CommonHREntry, StallQueueSize, pipe = true, flow = true, hasFlush = true))
++
++  private val enqPtr     = RegInit(HistPtr(false.B, 0.U))
++  private val predPtr    = RegInit(HistPtr(false.B, 0.U))
++  private val writePtr   = RegInit(HistPtr(false.B, 0.U))
++  private val recoverPtr = RegInit(HistPtr(false.B, 0.U))
++  private val histQueue  = RegInit(VecInit(Seq.fill(HistQueueSize)(0.U.asTypeOf(new CommonHREntry))))
+ 
+   /*
+    * CommonHR train from redirect/s3_prediction
+@@ -70,8 +81,9 @@ class CommonHR(implicit p: Parameters) extends CommonHRModule with Helpers {
+   private val s3_numHit   = PopCount(s3_hitMask)
+   private val s3_commonHR = WireInit(0.U.asTypeOf(new CommonHREntry))
+ 
+-  s3_commonHR.valid := true.B
+-  s3_commonHR.ghr   := getNewHR(commonHR.ghr, s3_numLess, s3_numHit, s3_taken, s3_firstTakenIsCond)(GhrHistoryLength)
++  s3_commonHR.valid           := s3_fire
++  s3_commonHR.predStartPc.get := s3_update.startPc
++  s3_commonHR.ghr := getNewHR(commonHR.ghr, s3_numLess, s3_numHit, s3_taken, s3_firstTakenIsCond)(GhrHistoryLength)
+   s3_commonHR.bw := getNewHR(
+     commonHR.bw,
+     s3_numLess,
+@@ -103,8 +115,9 @@ class CommonHR(implicit p: Parameters) extends CommonHRModule with Helpers {
+   private val r0_numLess  = PopCount(r0_lessThanPc)
+   private val r0_numHit   = PopCount(r0_oldHits)
+   private val r0_commonHR = WireInit(0.U.asTypeOf(new CommonHREntry))
+-  r0_commonHR.valid := false.B
+-  r0_commonHR.ghr   := getNewHR(r0_metaGhr, r0_numLess, r0_numHit, r0_taken, r0_isCond)(GhrHistoryLength)
++  r0_commonHR.valid           := false.B
++  r0_commonHR.predStartPc.get := io.s0_startPc.get
++  r0_commonHR.ghr             := getNewHR(r0_metaGhr, r0_numLess, r0_numHit, r0_taken, r0_isCond)(GhrHistoryLength)
+   r0_commonHR.bw := getNewHR(r0_metaBW, r0_numLess, r0_numHit, r0_taken, r0_isCond, Option(r0_bwTaken && r0_taken))(
+     BWHistoryLength
+   )
+@@ -116,20 +129,73 @@ class CommonHR(implicit p: Parameters) extends CommonHRModule with Helpers {
+     commonHR := s3_commonHR
+   }
+ 
+-  // avoid losing updates due to !s0_fire
+-  commonHRBuffer.io.enq.valid := s3_fire
+-  commonHRBuffer.io.enq.bits  := s3_commonHR
+-  commonHRBuffer.io.flush.get := r0_valid
+-  commonHRBuffer.io.deq.ready := s0_fire
++  /*
++   * NOTE:Only applicable to the current predicted flow structure
++   * if s3_override,  the current s0 should use s2,
++   * the next cycle should use the current s1,
++   * and the next cycle should use the current s0
++   * At the current flow level, a maximum of two levels of history need to be restored
++   */
+ 
+-  XSError(s3_fire && !commonHRBuffer.io.enq.ready, "CommonHR stall queue overflow!\n")
++  private val enqEnable       = s0_fire
++  private val predEnable      = s0_fire && ((predPtr + 3.U) === enqPtr)
++  private val writeEnable     = s3_fire
++  private val hasOverrideHist = recoverPtr + 2.U === writePtr // There is sufficient history for restoration
++  private val recoverInc      = s3_fire && hasOverrideHist
++  private val sync            = predPtr === writePtr
++  private val initCommonHR    = WireInit(0.U.asTypeOf(new CommonHREntry))
++  initCommonHR.predStartPc.get := io.s0_startPc.get
+ 
+-  s0_commonHR := Mux(
+-    r0_valid,
+-    r0_commonHR,
+-    Mux(s0_fire && commonHRBuffer.io.deq.valid, commonHRBuffer.io.deq.bits, 0.U.asTypeOf(commonHR))
++  when(r0_valid) {
++    enqPtr                    := writePtr + 1.U
++    recoverPtr                := writePtr
++    predPtr                   := writePtr
++    histQueue(writePtr.value) := initCommonHR // The queue value during redirect is used for diff
++  }.elsewhen(s3_override) {
++    val realRecoverPtr = Mux(hasOverrideHist, recoverPtr + 1.U, recoverPtr)
++    histQueue(writePtr.value)         := s3_commonHR  // update s3_fire block
++    histQueue((writePtr + 1.U).value) := initCommonHR // write new s0_block
++    enqPtr                            := writePtr + 2.U
++    predPtr                           := realRecoverPtr
++    writePtr                          := writePtr + 1.U
++    recoverPtr                        := realRecoverPtr
++  }.otherwise {
++    when(enqEnable) {
++      histQueue(enqPtr.value) := initCommonHR
++      enqPtr                  := enqPtr + 1.U
++      predPtr                 := Mux(predEnable, predPtr + 1.U, predPtr)
++    }
++    when(writeEnable) {
++      histQueue(writePtr.value) := s3_commonHR
++      writePtr                  := writePtr + 1.U
++      recoverPtr                := Mux(recoverInc, recoverPtr + 1.U, recoverPtr)
++    }
++  }
++
++  XSError(enqEnable && (writePtr < predPtr || predPtr < recoverPtr), "The predPtr exceeds the correct range")
++  XSError(
++    writeEnable && s3_update.startPc =/= histQueue(writePtr.value).predStartPc.get,
++    "update history maybe mismatched!"
+   )
+ 
++  s0_commonHR := MuxCase(
++    0.U.asTypeOf(new CommonHREntry),
++    Seq(
++      r0_valid          -> r0_commonHR,
++      s3_override       -> histQueue(recoverPtr.value),
++      (s0_fire && sync) -> s3_commonHR, // bypass s3_commonHR
++      s0_fire           -> histQueue(predPtr.value)
++    )
++  )
++
++  dontTouch(writePtr)
++  dontTouch(enqPtr)
++  dontTouch(predPtr)
++  dontTouch(predEnable)
++  dontTouch(sync)
++  dontTouch(hasOverrideHist)
++  dontTouch(recoverInc)
++
+   if (EnableCommitGHistDiff) {
+     val s3_lessThanFirstTakenUInt = s3_lessThanFirstTaken.asUInt
+     val r0_lessThanPcUInt         = r0_lessThanPc.asUInt
+diff --git a/src/main/scala/xiangshan/frontend/bpu/history/commonhr/Parameters.scala b/src/main/scala/xiangshan/frontend/bpu/history/commonhr/Parameters.scala
+index 4c5b012c96c..5c6f13c9fea 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/history/commonhr/Parameters.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/history/commonhr/Parameters.scala
+@@ -18,11 +18,11 @@ package xiangshan.frontend.bpu.history.commonhr
+ import xiangshan.frontend.bpu.HasBpuParameters
+ 
+ case class CommonHRParameters(
+-    StallQueueSize: Int = 2
++    HistQueueSize: Int = 8
+ ) {}
+ 
+ trait HasCommonHRParameters extends HasBpuParameters {
+   def commonHRParameters: CommonHRParameters = bpuParameters.commonHRParameters
+ 
+-  def StallQueueSize: Int = commonHRParameters.StallQueueSize
++  def HistQueueSize: Int = commonHRParameters.HistQueueSize
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/sc/Sc.scala b/src/main/scala/xiangshan/frontend/bpu/sc/Sc.scala
+index 6b50b62a70d..8372a9de270 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/sc/Sc.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/sc/Sc.scala
+@@ -91,60 +91,12 @@ class Sc(implicit p: Parameters) extends BasePredictor with HasScParameters with
+   /*
+    * ghr stage ctrl signals
+    */
+-  private val s0_commonHR = WireInit(0.U.asTypeOf(io.commonHR))
++  private val s0_commonHR = io.commonHR
++  // private val s0_commonHR = WireInit(0.U.asTypeOf(io.commonHR))
+   private val s1_commonHR = RegEnable(s0_commonHR, s0_fire)
+   private val s2_commonHR = RegEnable(s1_commonHR, s1_fire)
+   private val s3_override = io.s3_override && io.enable
+ 
+-  /*
+-   * Only available when an bp-override occurs in s3
+-   * if s3_override,  the current s0 should use s2,
+-   * the next cycle should use the current s1,
+-   * and the next cycle should use the current io.commonHR
+-   * The state machine is used to store the above two historical records
+-   */
+-  private val idle :: state1 :: state2 :: state3 :: Nil = Enum(4)
+-
+-  private val ghrStateReg = RegInit(idle)
+-  private val stage2Ghr   = RegInit(0.U.asTypeOf(io.commonHR))
+-  private val stage3Ghr   = RegInit(0.U.asTypeOf(io.commonHR))
+-  switch(ghrStateReg) {
+-    is(idle) {
+-      when(!s3_override) {
+-        ghrStateReg := idle
+-        s0_commonHR := io.commonHR
+-      }.elsewhen(s3_override) {
+-        ghrStateReg := state1
+-        s0_commonHR := s2_commonHR
+-        stage2Ghr   := s1_commonHR
+-        stage3Ghr   := io.commonHR
+-      }
+-    }
+-    is(state1) {
+-      when(s0_fire) {
+-        ghrStateReg := state2
+-        s0_commonHR := stage2Ghr
+-      }
+-    }
+-    is(state2) {
+-      when(s0_fire) {
+-        ghrStateReg := state3
+-        s0_commonHR := stage3Ghr
+-      }
+-    }
+-    is(state3) {
+-      when(s0_fire && !s3_override) {
+-        ghrStateReg := idle
+-        s0_commonHR := io.commonHR
+-      }.elsewhen(s3_override) {
+-        ghrStateReg := state1
+-        s0_commonHR := s2_commonHR
+-        stage2Ghr   := s1_commonHR
+-        stage3Ghr   := io.commonHR
+-      }
+-    }
+-  }
+-
+   /*
+    *  predict pipeline stage 0
+    */
+```

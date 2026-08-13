@@ -1,0 +1,21 @@
+{
+  "number": 3850,
+  "title": "fix(BPU): fix potential bug on s2_fire_dup",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3850",
+  "state": "closed",
+  "labels": [],
+  "author": "Jerry-Tianchen",
+  "created_at": "2024-11-09T19:43:54Z",
+  "updated_at": "2024-11-15T07:18:45Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3850/commit-log.md"
+  ],
+  "submitted_at": "2024-11-09",
+  "branch": "",
+  "rtl_commit": ""
+}

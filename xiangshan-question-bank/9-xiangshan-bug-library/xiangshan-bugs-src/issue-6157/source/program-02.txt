@@ -1,0 +1,2 @@
+redirect_valid && from_bpu_meta_valid && !bpuEnqueue && !toBackend_wen &&
+  s3FtqPtr in circular interval [newEntryPtr, old bpuPtr)

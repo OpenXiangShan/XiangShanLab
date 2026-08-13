@@ -1,0 +1,16 @@
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.frontend.inner.icache.mainPipe: icache_bubble_s2_miss,                 3817
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.frontend.inner.icache.mainPipe: icache_bubble_s0_wayLookup,                93379
+
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: NoStall,               753541
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: OverrideBubble,                 8775
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: FtqUpdateBubble,                13897
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: TAGEMissBubble,                41512
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: SCMissBubble,                    0
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: ITTAGEMissBubble,                  330
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: RASMissBubble,                  334
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: MemVioRedirectBubble,                  201
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: OtherRedirectBubble,                   12
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: FtqFullStall,               966484
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: ICacheMissBubble,                15776
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: ITLBMissBubble,               405197
+[PERF ][time=              483563] SimTop.l_soc.core_with_l2.core.backend.inner.ctrlBlock.dispatch: BTBMissBubble,                8822

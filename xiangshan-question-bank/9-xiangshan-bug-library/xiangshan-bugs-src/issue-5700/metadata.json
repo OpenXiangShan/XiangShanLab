@@ -1,0 +1,28 @@
+{
+  "number": 5700,
+  "title": "fix(LoadUnit): raise af for unalign access on MMIO region",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5700",
+  "state": "closed",
+  "labels": [
+    "module: memory",
+    "topic: functionality"
+  ],
+  "author": "linjuanZ",
+  "created_at": "2026-03-18T08:05:06Z",
+  "updated_at": "2026-03-23T02:08:55Z",
+  "submitted_at": "2026-03-18",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5700/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

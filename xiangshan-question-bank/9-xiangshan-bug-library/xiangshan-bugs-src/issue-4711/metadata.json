@@ -1,0 +1,21 @@
+{
+  "number": 4711,
+  "title": "fix(StoreQueue): redirect logic for vector exception",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4711",
+  "state": "closed",
+  "labels": [],
+  "author": "Anzooooo",
+  "created_at": "2025-05-20T10:22:08Z",
+  "updated_at": "2025-05-21T06:48:36Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4711/commit-log.md"
+  ],
+  "submitted_at": "2025-05-20",
+  "branch": "",
+  "rtl_commit": ""
+}

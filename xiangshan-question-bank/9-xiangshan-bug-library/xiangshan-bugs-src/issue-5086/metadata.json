@@ -1,0 +1,28 @@
+{
+  "number": 5086,
+  "title": "fix(tage): fix providerIdxOH",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5086",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "topic: functionality"
+  ],
+  "author": "TheKiteRunner24",
+  "created_at": "2025-09-29T07:57:30Z",
+  "updated_at": "2025-10-09T04:00:57Z",
+  "submitted_at": "2025-09-29",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5086/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

@@ -1,0 +1,6 @@
+> halt
+riscv.cpu halted due to debug-request.
+> reg sstatus
+sstatus (/64): 0x8000000200006000
+> reg misa
+misa (/64): 0x80000000003411af

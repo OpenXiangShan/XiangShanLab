@@ -1,0 +1,438 @@
+# Commit Log
+- Issue: #3579
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3579
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3579
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3579
+- Changed files: 7
+- Additions: 160
+- Deletions: 56
+
+## Files
+- `src/main/scala/xiangshan/frontend/BPU.scala`
+- `src/main/scala/xiangshan/frontend/FTB.scala`
+- `src/main/scala/xiangshan/frontend/FauFTB.scala`
+- `src/main/scala/xiangshan/frontend/ITTAGE.scala`
+- `src/main/scala/xiangshan/frontend/SC.scala`
+- `src/main/scala/xiangshan/frontend/Tage.scala`
+- `src/main/scala/xiangshan/frontend/newRAS.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/BPU.scala b/src/main/scala/xiangshan/frontend/BPU.scala
+index 6d9236959ab..0dce03ecc26 100644
+--- a/src/main/scala/xiangshan/frontend/BPU.scala
++++ b/src/main/scala/xiangshan/frontend/BPU.scala
+@@ -859,12 +859,15 @@ class Predictor(implicit p: Parameters) extends XSModule with HasBPUConst with H
+   io.bpu_to_ftq.resp.bits.s3.hasRedirect.zip(s3_redirect_dup).map { case (hr, r) => hr := r }
+   io.bpu_to_ftq.resp.bits.s3.ftq_idx := s3_ftq_idx
+ 
+-  predictors.io.update.valid := RegNext(io.ftq_to_bpu.update.valid, init = false.B)
+-  predictors.io.update.bits  := RegEnable(io.ftq_to_bpu.update.bits, io.ftq_to_bpu.update.valid)
+-  predictors.io.update.bits.ghist := RegEnable(
+-    getHist(io.ftq_to_bpu.update.bits.spec_info.histPtr),
+-    io.ftq_to_bpu.update.valid
+-  )
++  predictors.io.update            := io.ftq_to_bpu.update
++  predictors.io.update.bits.ghist := getHist(io.ftq_to_bpu.update.bits.spec_info.histPtr)
++  // Move the update pc registers out of predictors.
++  predictors.io.update.bits.pc := SegmentedAddrNext(
++    io.ftq_to_bpu.update.bits.pc,
++    pcSegments,
++    io.ftq_to_bpu.update.valid,
++    Some("predictors_io_update_pc")
++  ).getAddr()
+ 
+   val redirect_dup = do_redirect_dup.map(_.bits)
+   predictors.io.redirect := do_redirect_dup(0)
+diff --git a/src/main/scala/xiangshan/frontend/FTB.scala b/src/main/scala/xiangshan/frontend/FTB.scala
+index 30f13a90ced..58d51b2407d 100644
+--- a/src/main/scala/xiangshan/frontend/FTB.scala
++++ b/src/main/scala/xiangshan/frontend/FTB.scala
+@@ -733,10 +733,21 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
+     s0_close_ftb_req := true.B
+   }
+ 
++  val update_valid = RegNext(io.update.valid, init = false.B)
++  val update       = Wire(new BranchPredictionUpdate)
++  update := RegEnable(io.update.bits, io.update.valid)
++
++  // The pc register has been moved outside of predictor, pc field of update bundle and other update data are not in the same stage
++  // so io.update.bits.pc is used directly here
++  val update_pc = io.update.bits.pc
++
++  // To improve Clock Gating Efficiency
++  update.meta := RegEnable(io.update.bits.meta, io.update.valid && !io.update.bits.old_entry)
++
+   // Clear counter during false_hit or ifuRedirect
+   val ftb_false_hit = WireInit(false.B)
+   val needReopen    = s0_close_ftb_req && (ftb_false_hit || io.redirectFromIFU)
+-  ftb_false_hit := io.update.valid && io.update.bits.false_hit
++  ftb_false_hit := update_valid && update.false_hit
+   when(needReopen) {
+     fauftb_ftb_entry_consistent_counter := 0.U
+     s0_close_ftb_req                    := false.B
+@@ -822,12 +833,10 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
+   )
+ 
+   // Update logic
+-  val update = io.update.bits
+-
+   val u_meta  = update.meta.asTypeOf(new FTBMeta)
+-  val u_valid = io.update.valid && !io.update.bits.old_entry && !s0_close_ftb_req
++  val u_valid = update_valid && !update.old_entry && !s0_close_ftb_req
+ 
+-  val (_, delay2_pc)    = DelayNWithValid(update.pc, u_valid, 2)
++  val (_, delay2_pc)    = DelayNWithValid(update_pc, u_valid, 2)
+   val (_, delay2_entry) = DelayNWithValid(update.ftb_entry, u_valid, 2)
+ 
+   val update_now       = u_valid && u_meta.hit
+@@ -836,14 +845,14 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
+   io.s1_ready := ftbBank.io.req_pc.ready && !update_need_read && !RegNext(update_need_read)
+ 
+   ftbBank.io.u_req_pc.valid := update_need_read
+-  ftbBank.io.u_req_pc.bits  := update.pc
++  ftbBank.io.u_req_pc.bits  := update_pc
+ 
+   val ftb_write = Wire(new FTBEntryWithTag)
+   ftb_write.entry := Mux(update_now, update.ftb_entry, delay2_entry)
+-  ftb_write.tag   := ftbAddr.getTag(Mux(update_now, update.pc, delay2_pc))(tagLength - 1, 0)
++  ftb_write.tag   := ftbAddr.getTag(Mux(update_now, update_pc, delay2_pc))(tagLength - 1, 0)
+ 
+   val write_valid = update_now || DelayN(u_valid && !u_meta.hit, 2)
+-  val write_pc    = Mux(update_now, update.pc, delay2_pc)
++  val write_pc    = Mux(update_now, update_pc, delay2_pc)
+ 
+   ftbBank.io.update_write_data.valid := write_valid
+   ftbBank.io.update_write_data.bits  := ftb_write
+@@ -880,17 +889,17 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
+   XSPerfAccumulate("ftb_read_hits", RegNext(io.s0_fire(0)) && s1_hit)
+   XSPerfAccumulate("ftb_read_misses", RegNext(io.s0_fire(0)) && !s1_hit)
+ 
+-  XSPerfAccumulate("ftb_commit_hits", io.update.valid && u_meta.hit)
+-  XSPerfAccumulate("ftb_commit_misses", io.update.valid && !u_meta.hit)
++  XSPerfAccumulate("ftb_commit_hits", update_valid && u_meta.hit)
++  XSPerfAccumulate("ftb_commit_misses", update_valid && !u_meta.hit)
+ 
+-  XSPerfAccumulate("ftb_update_req", io.update.valid)
+-  XSPerfAccumulate("ftb_update_ignored", io.update.valid && io.update.bits.old_entry)
++  XSPerfAccumulate("ftb_update_req", update_valid)
++  XSPerfAccumulate("ftb_update_ignored", update_valid && update.old_entry)
+   XSPerfAccumulate("ftb_updated", u_valid)
+   XSPerfAccumulate("ftb_closing_update_counter", s0_close_ftb_req && u_valid)
+ 
+   override val perfEvents = Seq(
+-    ("ftb_commit_hits            ", io.update.valid && u_meta.hit),
+-    ("ftb_commit_misses          ", io.update.valid && !u_meta.hit)
++    ("ftb_commit_hits            ", update_valid && u_meta.hit),
++    ("ftb_commit_misses          ", update_valid && !u_meta.hit)
+   )
+   generatePerfEvent()
+ }
+diff --git a/src/main/scala/xiangshan/frontend/FauFTB.scala b/src/main/scala/xiangshan/frontend/FauFTB.scala
+index 7d4c86a4397..edfe83dddda 100644
+--- a/src/main/scala/xiangshan/frontend/FauFTB.scala
++++ b/src/main/scala/xiangshan/frontend/FauFTB.scala
+@@ -141,26 +141,32 @@ class FauFTB(implicit p: Parameters) extends BasePredictor with FauFTBParams {
+   // s1: alloc_way and write
+ 
+   // s0
+-  val u        = io.update
+-  val u_meta   = u.bits.meta.asTypeOf(new FauFTBMeta)
+-  val u_s0_tag = getTag(u.bits.pc)
++  val u_valid = RegNext(io.update.valid, init = false.B)
++  val u_bits  = RegEnable(io.update.bits, io.update.valid)
++
++  // The pc register has been moved outside of predictor, pc field of update bundle and other update data are not in the same stage
++  // so io.update.bits.pc is used directly here
++  val u_pc = io.update.bits.pc
++
++  val u_meta   = u_bits.meta.asTypeOf(new FauFTBMeta)
++  val u_s0_tag = getTag(u_pc)
+   ways.foreach(_.io.update_req_tag := u_s0_tag)
+   val u_s0_hit_oh = VecInit(ways.map(_.io.update_hit)).asUInt
+   val u_s0_hit    = u_s0_hit_oh.orR
+   val u_s0_br_update_valids =
+     VecInit((0 until numBr).map(w =>
+-      u.bits.ftb_entry.brValids(w) && u.valid && !u.bits.ftb_entry.strong_bias(w) &&
+-        !(PriorityEncoder(u.bits.br_taken_mask) < w.U)
++      u_bits.ftb_entry.brValids(w) && u_valid && !u_bits.ftb_entry.strong_bias(w) &&
++        !(PriorityEncoder(u_bits.br_taken_mask) < w.U)
+     ))
+ 
+   // s1
+-  val u_s1_valid            = RegNext(u.valid)
+-  val u_s1_tag              = RegEnable(u_s0_tag, u.valid)
+-  val u_s1_hit_oh           = RegEnable(u_s0_hit_oh, u.valid)
+-  val u_s1_hit              = RegEnable(u_s0_hit, u.valid)
++  val u_s1_valid            = RegNext(u_valid)
++  val u_s1_tag              = RegEnable(u_s0_tag, u_valid)
++  val u_s1_hit_oh           = RegEnable(u_s0_hit_oh, u_valid)
++  val u_s1_hit              = RegEnable(u_s0_hit, u_valid)
+   val u_s1_alloc_way        = replacer.way
+   val u_s1_write_way_oh     = Mux(u_s1_hit, u_s1_hit_oh, UIntToOH(u_s1_alloc_way))
+-  val u_s1_ftb_entry        = RegEnable(u.bits.ftb_entry, u.valid)
++  val u_s1_ftb_entry        = RegEnable(u_bits.ftb_entry, u_valid)
+   val u_s1_ways_write_valid = VecInit((0 until numWays).map(w => u_s1_write_way_oh(w).asBool && u_s1_valid))
+   for (w <- 0 until numWays) {
+     ways(w).io.write_valid := u_s1_ways_write_valid(w)
+@@ -169,7 +175,7 @@ class FauFTB(implicit p: Parameters) extends BasePredictor with FauFTBParams {
+   }
+ 
+   // Illegal check for FTB entry writing
+-  val uftb_write_pc          = RegEnable(u.bits.pc, u.valid)
++  val uftb_write_pc          = RegEnable(u_pc, u_valid)
+   val uftb_write_fallThrough = u_s1_ftb_entry.getFallThrough(uftb_write_pc)
+   when(u_s1_valid && u_s1_hit) {
+     assert(
+@@ -179,8 +185,8 @@ class FauFTB(implicit p: Parameters) extends BasePredictor with FauFTBParams {
+   }
+ 
+   // update saturating counters
+-  val u_s1_br_update_valids = RegEnable(u_s0_br_update_valids, u.valid)
+-  val u_s1_br_takens        = RegEnable(u.bits.br_taken_mask, u.valid)
++  val u_s1_br_update_valids = RegEnable(u_s0_br_update_valids, u_valid)
++  val u_s1_br_takens        = RegEnable(u_bits.br_taken_mask, u_valid)
+   for (w <- 0 until numWays) {
+     when(u_s1_ways_write_valid(w)) {
+       for (br <- 0 until numBr) {
+@@ -203,24 +209,24 @@ class FauFTB(implicit p: Parameters) extends BasePredictor with FauFTBParams {
+   val u_pred_hit_way_map = (0 until numWays).map(w => s0_fire_next_cycle && s1_hit && s1_hit_way === w.U)
+   XSPerfAccumulate("uftb_read_hits", s0_fire_next_cycle && s1_hit)
+   XSPerfAccumulate("uftb_read_misses", s0_fire_next_cycle && !s1_hit)
+-  XSPerfAccumulate("uftb_commit_hits", u.valid && u_meta.hit)
+-  XSPerfAccumulate("uftb_commit_misses", u.valid && !u_meta.hit)
+-  XSPerfAccumulate("uftb_commit_read_hit_pred_miss", u.valid && !u_meta.hit && u_s0_hit_oh.orR)
++  XSPerfAccumulate("uftb_commit_hits", u_valid && u_meta.hit)
++  XSPerfAccumulate("uftb_commit_misses", u_valid && !u_meta.hit)
++  XSPerfAccumulate("uftb_commit_read_hit_pred_miss", u_valid && !u_meta.hit && u_s0_hit_oh.orR)
+   for (w <- 0 until numWays) {
+     XSPerfAccumulate(f"uftb_pred_hit_way_${w}", u_pred_hit_way_map(w))
+     XSPerfAccumulate(f"uftb_replace_way_${w}", !u_s1_hit && u_s1_alloc_way === w.U)
+   }
+ 
+   if (u_meta.pred_way.isDefined) {
+-    val u_commit_hit_way_map = (0 until numWays).map(w => u.valid && u_meta.hit && u_meta.pred_way.get === w.U)
++    val u_commit_hit_way_map = (0 until numWays).map(w => u_valid && u_meta.hit && u_meta.pred_way.get === w.U)
+     for (w <- 0 until numWays) {
+       XSPerfAccumulate(f"uftb_commit_hit_way_${w}", u_commit_hit_way_map(w))
+     }
+   }
+ 
+   override val perfEvents = Seq(
+-    ("fauftb_commit_hit       ", u.valid && u_meta.hit),
+-    ("fauftb_commit_miss      ", u.valid && !u_meta.hit)
++    ("fauftb_commit_hit       ", u_valid && u_meta.hit),
++    ("fauftb_commit_miss      ", u_valid && !u_meta.hit)
+   )
+   generatePerfEvent()
+ 
+diff --git a/src/main/scala/xiangshan/frontend/ITTAGE.scala b/src/main/scala/xiangshan/frontend/ITTAGE.scala
+index 8010c97901d..dac786730dc 100644
+--- a/src/main/scala/xiangshan/frontend/ITTAGE.scala
++++ b/src/main/scala/xiangshan/frontend/ITTAGE.scala
+@@ -410,8 +410,44 @@ class ITTage(implicit p: Parameters) extends BaseITTage {
+   io.out.last_stage_meta := resp_meta.asUInt
+ 
+   // Update logic
+-  val u_valid = io.update.valid
+-  val update  = io.update.bits
++  val u_valid = RegNext(io.update.valid, init = false.B)
++
++  val update = Wire(new BranchPredictionUpdate)
++  update := RegEnable(io.update.bits, io.update.valid)
++
++  // The pc register has been moved outside of predictor, pc field of update bundle and other update data are not in the same stage
++  // so io.update.bits.pc is used directly here
++  val update_pc = io.update.bits.pc
++
++  // To improve Clock Gating Efficiency
++  val u_meta = io.update.bits.meta.asTypeOf(new ITTageMeta)
++  update.meta.asTypeOf(new ITTageMeta).provider.bits := RegEnable(
++    u_meta.provider.bits,
++    io.update.valid && u_meta.provider.valid
++  )
++  update.meta.asTypeOf(new ITTageMeta).providerTarget := RegEnable(
++    u_meta.providerTarget,
++    io.update.valid && u_meta.provider.valid
++  )
++  update.meta.asTypeOf(new ITTageMeta).allocate.bits := RegEnable(
++    u_meta.allocate.bits,
++    io.update.valid && u_meta.allocate.valid
++  )
++  update.meta.asTypeOf(new ITTageMeta).altProvider.bits := RegEnable(
++    u_meta.altProvider.bits,
++    io.update.valid && u_meta.altProvider.valid
++  )
++  update.meta.asTypeOf(new ITTageMeta).altProviderTarget := RegEnable(
++    u_meta.altProviderTarget,
++    io.update.valid && u_meta.provider.valid && u_meta.altProvider.valid && u_meta.providerCtr === 0.U
++  )
++  update.full_target := RegEnable(
++    io.update.bits.full_target,
++    io.update.valid && (u_meta.provider.valid || io.update.bits.mispred_mask(numBr))
++  )
++  update.cfi_idx.bits := RegEnable(io.update.bits.cfi_idx.bits, io.update.valid && io.update.bits.cfi_idx.valid)
++  update.ghist        := RegEnable(io.update.bits.ghist, io.update.valid) // TODO: CGE
++
+   val updateValid =
+     update.is_jalr && !update.is_ret && u_valid && update.ftb_entry.jmpValid &&
+       update.jmp_taken && update.cfi_idx.valid && update.cfi_idx.bits === update.ftb_entry.tailSlot.offset && !update.ftb_entry.strong_bias(
+@@ -588,7 +624,7 @@ class ITTage(implicit p: Parameters) extends BaseITTage {
+ 
+     tables(i).io.update.uValid := RegEnable(updateUMask(i), false.B, updateMask(i))
+     tables(i).io.update.u      := RegEnable(updateU(i), updateMask(i))
+-    tables(i).io.update.pc     := RegEnable(update.pc, updateMask(i))
++    tables(i).io.update.pc     := RegEnable(update_pc, updateMask(i))
+     // use fetch pc instead of instruction pc
+     tables(i).io.update.ghist := RegEnable(update.ghist, updateMask(i))
+   }
+@@ -671,7 +707,7 @@ class ITTage(implicit p: Parameters) extends BaseITTage {
+       )
+     }
+   }
+-  XSDebug(updateValid, p"pc: ${Hexadecimal(update.pc)}, target: ${Hexadecimal(update.full_target)}\n")
++  XSDebug(updateValid, p"pc: ${Hexadecimal(update_pc)}, target: ${Hexadecimal(update.full_target)}\n")
+   XSDebug(updateValid, updateMeta.toPrintable + p"\n")
+   XSDebug(updateValid, p"correct(${!updateMisPred})\n")
+ 
+diff --git a/src/main/scala/xiangshan/frontend/SC.scala b/src/main/scala/xiangshan/frontend/SC.scala
+index 1ba2a109767..44ef2cdae79 100644
+--- a/src/main/scala/xiangshan/frontend/SC.scala
++++ b/src/main/scala/xiangshan/frontend/SC.scala
+@@ -419,8 +419,8 @@ trait HasSC extends HasSCParameter with HasPerfEvents { this: Tage =>
+         scTables(i).io.update.tagePreds(b) := RegEnable(scUpdateTagePreds(b), realWen)
+         scTables(i).io.update.takens(b)    := RegEnable(scUpdateTakens(b), realWen)
+         scTables(i).io.update.oldCtrs(b)   := RegEnable(scUpdateOldCtrs(b)(i), realWen)
+-        scTables(i).io.update.pc           := RegEnable(update.pc, realWen)
+-        scTables(i).io.update.ghist        := RegEnable(io.update.bits.ghist, realWen)
++        scTables(i).io.update.pc           := RegEnable(update_pc, realWen)
++        scTables(i).io.update.ghist        := RegEnable(update.ghist, realWen)
+       }
+     }
+ 
+diff --git a/src/main/scala/xiangshan/frontend/Tage.scala b/src/main/scala/xiangshan/frontend/Tage.scala
+index 4d6f8a146bb..f784eb061f5 100644
+--- a/src/main/scala/xiangshan/frontend/Tage.scala
++++ b/src/main/scala/xiangshan/frontend/Tage.scala
+@@ -678,8 +678,49 @@ class Tage(implicit p: Parameters) extends BaseTage {
+   val resp_s2 = io.out.s2
+ 
+   // Update logic
+-  val u_valid = io.update.valid
+-  val update  = io.update.bits
++  val u_valid = RegNext(io.update.valid, init = false.B)
++  val update  = Wire(new BranchPredictionUpdate)
++  update := RegEnable(io.update.bits, io.update.valid)
++
++  // The pc register has been moved outside of predictor, pc field of update bundle and other update data are not in the same stage
++  // so io.update.bits.pc is used directly here
++  val update_pc = io.update.bits.pc
++
++  // To improve Clock Gating Efficiency
++  val u_valids_for_cge =
++    VecInit((0 until TageBanks).map(w =>
++      io.update.bits.ftb_entry.brValids(w) && io.update.valid
++    )) // io.update.bits.ftb_entry.always_taken has timing issues(FTQEntryGen)
++  val u_meta = io.update.bits.meta.asTypeOf(new TageMeta)
++  for (i <- 0 until numBr) {
++    update.meta.asTypeOf(new TageMeta).providers(i).bits := RegEnable(
++      u_meta.providers(i).bits,
++      u_meta.providers(i).valid && u_valids_for_cge(i)
++    )
++    update.meta.asTypeOf(new TageMeta).providerResps(i) := RegEnable(
++      u_meta.providerResps(i),
++      u_meta.providers(i).valid && u_valids_for_cge(i)
++    )
++    update.meta.asTypeOf(new TageMeta).altUsed(i) := RegEnable(u_meta.altUsed(i), u_valids_for_cge(i))
++    update.meta.asTypeOf(new TageMeta).allocates(i) := RegEnable(
++      u_meta.allocates(i),
++      io.update.valid && io.update.bits.mispred_mask(i)
++    )
++  }
++  if (EnableSC) {
++    for (w <- 0 until TageBanks) {
++      update.meta.asTypeOf(new TageMeta).scMeta.get.scPreds(w) := RegEnable(
++        u_meta.scMeta.get.scPreds(w),
++        u_valids_for_cge(w) && u_meta.providers(w).valid
++      )
++      update.meta.asTypeOf(new TageMeta).scMeta.get.ctrs(w) := RegEnable(
++        u_meta.scMeta.get.ctrs(w),
++        u_valids_for_cge(w) && u_meta.providers(w).valid
++      )
++    }
++  }
++  update.ghist := RegEnable(io.update.bits.ghist, io.update.valid) // TODO: CGE
++
+   val updateValids = VecInit((0 until TageBanks).map(w =>
+     update.ftb_entry.brValids(w) && u_valid && !update.ftb_entry.strong_bias(w) &&
+       !(PriorityEncoder(update.br_taken_mask) < w.U)
+@@ -785,7 +826,7 @@ class Tage(implicit p: Parameters) extends BaseTage {
+     val updateProviderCorrect = updateProviderResp.ctr(TageCtrBits - 1) === updateTaken
+     val updateUseAlt          = updateMeta.altUsed(i)
+     val updateAltDiffers      = updateMeta.altDiffers(i)
+-    val updateAltIdx          = use_alt_idx(update.pc)
++    val updateAltIdx          = use_alt_idx(update_pc)
+     val updateUseAltCtr       = Mux1H(UIntToOH(updateAltIdx, NUM_USE_ALT_ON_NA), useAltOnNaCtrs(i))
+     val updateAltPred         = updateMeta.altPreds(i)
+     val updateAltCorrect      = updateAltPred === updateTaken
+@@ -921,13 +962,13 @@ class Tage(implicit p: Parameters) extends BaseTage {
+       tables(i).io.update.uMask(w) := RegEnable(updateUMask(w)(i), realWen)
+       tables(i).io.update.us(w)    := RegEnable(updateU(w)(i), realWen)
+       // use fetch pc instead of instruction pc
+-      tables(i).io.update.pc    := RegEnable(update.pc, realWen)
+-      tables(i).io.update.ghist := RegEnable(io.update.bits.ghist, realWen)
++      tables(i).io.update.pc    := RegEnable(update_pc, realWen)
++      tables(i).io.update.ghist := RegEnable(update.ghist, realWen)
+     }
+   }
+   bt.io.update_mask   := RegNext(baseupdate)
+   bt.io.update_cnt    := RegEnable(updatebcnt, baseupdate.reduce(_ | _))
+-  bt.io.update_pc     := RegEnable(update.pc, baseupdate.reduce(_ | _))
++  bt.io.update_pc     := RegEnable(update_pc, baseupdate.reduce(_ | _))
+   bt.io.update_takens := RegEnable(bUpdateTakens, baseupdate.reduce(_ | _))
+ 
+   // all should be ready for req
+@@ -982,7 +1023,7 @@ class Tage(implicit p: Parameters) extends BaseTage {
+       updateValids(b),
+       "update(%d): pc=%x, cycle=%d, taken:%b, misPred:%d, bimctr:%d, pvdr(%d):%d, altDiff:%d, pvdrU:%d, pvdrCtr:%d, alloc:%b\n",
+       b.U,
+-      update.pc,
++      update_pc,
+       0.U,
+       update.br_taken_mask(b),
+       update.mispred_mask(b),
+diff --git a/src/main/scala/xiangshan/frontend/newRAS.scala b/src/main/scala/xiangshan/frontend/newRAS.scala
+index 4d3a0f74fc6..b0d63e20ed6 100644
+--- a/src/main/scala/xiangshan/frontend/newRAS.scala
++++ b/src/main/scala/xiangshan/frontend/newRAS.scala
+@@ -713,14 +713,23 @@ class RAS(implicit p: Parameters) extends BasePredictor {
+   stack.redirect_meta_NOS  := recover_cfi.NOS
+   stack.redirect_callAddr  := recover_cfi.pc + Mux(recover_cfi.pd.isRVC, 2.U, 4.U)
+ 
+-  val update      = io.update.bits
+-  val updateMeta  = io.update.bits.meta.asTypeOf(new RASMeta)
+-  val updateValid = io.update.valid
++  val updateValid = RegNext(io.update.valid, init = false.B)
++  val update      = Wire(new BranchPredictionUpdate)
++  update := RegEnable(io.update.bits, io.update.valid)
++
++  // The pc register has been moved outside of predictor, pc field of update bundle and other update data are not in the same stage
++  // so io.update.bits.pc is used directly here
++  val update_pc = io.update.bits.pc
++
++  // To improve Clock Gating Efficiency
++  update.meta := RegEnable(io.update.bits.meta, io.update.valid && (io.update.bits.is_call || io.update.bits.is_ret))
++
++  val updateMeta = update.meta.asTypeOf(new RASMeta)
+ 
+   stack.commit_valid      := updateValid
+   stack.commit_push_valid := updateValid && update.is_call_taken
+   stack.commit_pop_valid  := updateValid && update.is_ret_taken
+-  stack.commit_push_addr := update.ftb_entry.getFallThrough(update.pc) + Mux(
++  stack.commit_push_addr := update.ftb_entry.getFallThrough(update_pc) + Mux(
+     update.ftb_entry.last_may_be_rvi_call,
+     2.U,
+     0.U
+```

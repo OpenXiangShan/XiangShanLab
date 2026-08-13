@@ -1,0 +1,4 @@
+pseg_0:
+	aes64ks1i x8, x26, 0
+	aes64ks1i x9, x31, 15
+	aes64ks1i x25, x19, 4

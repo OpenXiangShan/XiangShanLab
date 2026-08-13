@@ -1,0 +1,3 @@
+trap_count=1 mcause=5 mtval=0x80002000 mtval2=0x0 htval=0x0 hlvx=0x15
+hlvx-pma-xperm pass
+HIT GOOD TRAP

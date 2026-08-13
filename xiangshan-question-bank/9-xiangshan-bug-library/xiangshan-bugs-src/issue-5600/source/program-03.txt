@@ -1,0 +1,14 @@
+emu compiled at Feb  4 2026, 17:10:36
+Using simulated 32768B flash
+Core  0's Commit SHA is: 5b2718575f, dirty: 0
+Core  1's Commit SHA is: 5b2718575f, dirty: 0
+Using simulated 8386560MB RAM
+The image is ../simple-sw-workbench/start.bin
+Hello from hart 1
+Hello from hart 0
+^CCore 0: SOME SIGNAL STOPS THE PROGRAM at pc = 0x80000128
+Core-0 instrCnt = 307,410, cycleCnt = 1,112,751, IPC = 0.276261
+Core 1: SOME SIGNAL STOPS THE PROGRAM at pc = 0x80000128
+Core-1 instrCnt = 555,041, cycleCnt = 1,112,751, IPC = 0.498801
+Seed=0 Guest cycle spent: 1,112,756 (this will be different from cycleCnt if emu loads a snapshot)
+Host time spent: 135,692ms

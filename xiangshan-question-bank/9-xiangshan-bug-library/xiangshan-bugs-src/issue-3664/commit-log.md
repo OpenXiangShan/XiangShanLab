@@ -1,0 +1,216 @@
+# Commit Log
+- Issue: #3664
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3664
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3664
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3664
+- Changed files: 5
+- Additions: 34
+- Deletions: 25
+
+## Files
+- `src/main/scala/xiangshan/backend/CtrlBlock.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeStage.scala`
+- `src/main/scala/xiangshan/backend/decode/VTypeGen.scala`
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+- `src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index 1af1f4fb0fc..03a649875f0 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -316,12 +316,12 @@ class CtrlBlockImp(
+ 
+   // vtype commit
+   decode.io.fromCSR := io.fromCSR.toDecode
+-  decode.io.isResumeVType := rob.io.toDecode.isResumeVType
+-  decode.io.commitVType := rob.io.toDecode.commitVType
+-  decode.io.walkVType := rob.io.toDecode.walkVType
++  decode.io.fromRob.isResumeVType := rob.io.toDecode.isResumeVType
++  decode.io.fromRob.walkToArchVType := rob.io.toDecode.walkToArchVType
++  decode.io.fromRob.commitVType := rob.io.toDecode.commitVType
++  decode.io.fromRob.walkVType := rob.io.toDecode.walkVType
+ 
+   decode.io.redirect := s1_s3_redirect.valid || s2_s4_pendingRedirectValid
+-  decode.io.vtypeRedirect := s1_s3_redirect.valid
+ 
+   // add decode Buf for in.ready better timing
+   val decodeBufBits = Reg(Vec(DecodeWidth, new StaticInst))
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeStage.scala b/src/main/scala/xiangshan/backend/decode/DecodeStage.scala
+index 78279caf4b5..08d4205c5f7 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeStage.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeStage.scala
+@@ -42,7 +42,6 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+   val io = IO(new Bundle() {
+     val redirect = Input(Bool())
+     val canAccept = Output(Bool())
+-    val vtypeRedirect = Input(Bool())
+     // from Ibuffer
+     val in = Vec(DecodeWidth, Flipped(DecoupledIO(new StaticInst)))
+     // to Rename
+@@ -59,12 +58,15 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+     val fusion = Vec(DecodeWidth - 1, Input(Bool()))
+ 
+     // vtype update
+-    val isResumeVType = Input(Bool())
+-    val commitVType = new Bundle {
+-      val vtype = Flipped(Valid(new VType))
+-      val hasVsetvl = Input(Bool())
++    val fromRob = new Bundle {
++      val isResumeVType = Input(Bool())
++      val walkToArchVType = Input(Bool())
++      val commitVType = new Bundle {
++        val vtype = Flipped(Valid(new VType))
++        val hasVsetvl = Input(Bool())
++      }
++      val walkVType = Flipped(Valid(new VType))
+     }
+-    val walkVType = Flipped(Valid(new VType))
+     val stallReason = new Bundle {
+       val in = Flipped(new StallReasonIO(DecodeWidth))
+       val out = new StallReasonIO(DecodeWidth)
+@@ -125,9 +127,9 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+   }
+   // when io.redirect is True, never update vtype
+   vtypeGen.io.canUpdateVType := decoderComp.io.in.fire && decoderComp.io.in.bits.simpleDecodedInst.isVset && !io.redirect
+-  vtypeGen.io.redirect := io.vtypeRedirect
+-  vtypeGen.io.commitVType := io.commitVType
+-  vtypeGen.io.walkVType := io.walkVType
++  vtypeGen.io.walkToArchVType := io.fromRob.walkToArchVType
++  vtypeGen.io.commitVType := io.fromRob.commitVType
++  vtypeGen.io.walkVType := io.fromRob.walkVType
+   vtypeGen.io.vsetvlVType := io.vsetvlVType
+ 
+   //Comp 1
+@@ -136,7 +138,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+   decoderComp.io.vtypeBypass := vtypeGen.io.vtype
+   // The input inst of decoderComp is latched last cycle.
+   // Set input empty, if there is no complex inst latched last cycle.
+-  decoderComp.io.in.valid := complexValid && !io.isResumeVType
++  decoderComp.io.in.valid := complexValid && !io.fromRob.isResumeVType
+   decoderComp.io.in.bits.simpleDecodedInst := complexInst
+   decoderComp.io.in.bits.uopInfo := complexUopInfo
+   decoderComp.io.out.complexDecodedInsts.zipWithIndex.foreach { case (out, i) => out.ready := io.out(i).ready }
+@@ -153,7 +155,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+   // block vector inst when vtype is resuming
+   val hasVectorInst = VecInit(decoders.map(x => FuType.FuTypeOrR(x.io.deq.decodedInst.fuType, FuType.vecArithOrMem ++ FuType.vecVSET))).asUInt.orR
+ 
+-  canAccept := !io.redirect && (io.out.head.ready || decoderComp.io.in.ready) && !io.isResumeVType
++  canAccept := !io.redirect && (io.out.head.ready || decoderComp.io.in.ready) && !io.fromRob.isResumeVType
+ 
+   io.canAccept := canAccept
+ 
+@@ -161,7 +163,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+     in.ready := !io.redirect && (
+       simplePrefixVec(i) && (i.U +& complexNum) < readyCounter ||
+       firstComplexOH(i) && (i.U +& complexNum) <= readyCounter && decoderComp.io.in.ready
+-    ) && !(hasVectorInst && io.isResumeVType)
++    ) && !(hasVectorInst && io.fromRob.isResumeVType)
+   }
+ 
+   val finalDecodedInst = Wire(Vec(DecodeWidth, new DecodedInst))
+@@ -173,7 +175,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+   }
+ 
+   io.out.zipWithIndex.foreach { case (inst, i) =>
+-    inst.valid := finalDecodedInstValid(i) && !(hasVectorInst && io.isResumeVType)
++    inst.valid := finalDecodedInstValid(i) && !(hasVectorInst && io.fromRob.isResumeVType)
+     inst.bits := finalDecodedInst(i)
+     inst.bits.lsrc(0) := Mux(finalDecodedInst(i).vpu.isReverse, finalDecodedInst(i).lsrc(1), finalDecodedInst(i).lsrc(0))
+     inst.bits.lsrc(1) := Mux(finalDecodedInst(i).vpu.isReverse, finalDecodedInst(i).lsrc(0), finalDecodedInst(i).lsrc(1))
+diff --git a/src/main/scala/xiangshan/backend/decode/VTypeGen.scala b/src/main/scala/xiangshan/backend/decode/VTypeGen.scala
+index b9cb5cda788..5850b3ef829 100644
+--- a/src/main/scala/xiangshan/backend/decode/VTypeGen.scala
++++ b/src/main/scala/xiangshan/backend/decode/VTypeGen.scala
+@@ -11,7 +11,7 @@ import xiangshan.backend.fu.VsetModule
+ class VTypeGen(implicit p: Parameters) extends XSModule{
+   val io = IO(new Bundle {
+     val insts = Flipped(Vec(DecodeWidth, ValidIO(UInt(32.W))))
+-    val redirect = Input(Bool())
++    val walkToArchVType = Input(Bool())
+     val walkVType   = Flipped(Valid(new VType))
+     val canUpdateVType = Input(Bool())
+     val vtype = Output(new VType)
+@@ -72,10 +72,7 @@ class VTypeGen(implicit p: Parameters) extends XSModule{
+     vtypeSpecNext := io.vsetvlVType
+   }.elsewhen(io.walkVType.valid) {
+     vtypeSpecNext := io.walkVType.bits
+-  }.elsewhen(io.redirect && io.commitVType.vtype.valid) {
+-    // when redirect and commit both coming, we should use commit vtype
+-    vtypeSpecNext := io.commitVType.vtype.bits
+-  }.elsewhen(io.redirect && !io.commitVType.vtype.valid) {
++  }.elsewhen(io.walkToArchVType) {
+     vtypeSpecNext := vtypeArch
+   }.elsewhen(inHasVset && io.canUpdateVType) {
+     vtypeSpecNext := vtypeNew
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index a8a937ec602..6739278a426 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -77,6 +77,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     val wfi_enable = Input(Bool())
+     val toDecode = new Bundle {
+       val isResumeVType = Output(Bool())
++      val walkToArchVType = Output(Bool())
+       val walkVType = ValidIO(VType())
+       val commitVType = new Bundle {
+         val vtype = ValidIO(VType())
+@@ -330,6 +331,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   vtypeBuffer.io.snpt := io.snpt
+   vtypeBuffer.io.snpt.snptEnq := snptEnq
+   io.toDecode.isResumeVType := vtypeBuffer.io.toDecode.isResumeVType
++  io.toDecode.walkToArchVType := vtypeBuffer.io.toDecode.walkToArchVType
+   io.toDecode.commitVType := vtypeBuffer.io.toDecode.commitVType
+   io.toDecode.walkVType := vtypeBuffer.io.toDecode.walkVType
+ 
+diff --git a/src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala b/src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala
+index da3325d76ee..2a6f76a5273 100644
+--- a/src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala
++++ b/src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala
+@@ -46,6 +46,7 @@ class VTypeBufferIO(size: Int)(implicit p: Parameters) extends XSBundle {
+ 
+   val toDecode = Output(new Bundle {
+     val isResumeVType = Bool()
++    val walkToArchVType = Bool()
+     val walkVType = ValidIO(VType())
+     val commitVType = new Bundle {
+       val vtype = ValidIO(VType())
+@@ -267,10 +268,11 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+   private val newestVType = PriorityMux(walkValidVec.zip(infoVec).map { case(walkValid, info) => walkValid -> info }.reverse)
+   private val newestArchVType = PriorityMux(commitValidVec.zip(infoVec).map { case(commitValid, info) => commitValid -> info }.reverse)
+   private val commitVTypeValid = commitValidVec.asUInt.orR
++  private val walkToArchVType = RegInit(false.B)
+ 
+-  when (reset.asBool) {
+-    decodeResumeVType.valid := false.B
+-  }.elsewhen (state === s_spcl_walk) {
++  walkToArchVType := false.B
++
++  when (state === s_spcl_walk) {
+     // special walk use commit vtype
+     decodeResumeVType.valid := commitVTypeValid
+     decodeResumeVType.bits := newestArchVType
+@@ -281,6 +283,10 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+   }.elsewhen (state === s_walk && walkCount =/= 0.U) {
+     decodeResumeVType.valid := true.B
+     decodeResumeVType.bits := newestVType
++  }.elsewhen (state === s_walk && stateLastCycle =/= s_walk) {
++    // walk start with arch vtype
++    decodeResumeVType.valid := false.B
++    walkToArchVType := true.B
+   }.otherwise {
+     decodeResumeVType.valid := false.B
+   }
+@@ -296,6 +302,8 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+   io.toDecode.commitVType.vtype.valid := commitVTypeValid
+   io.toDecode.commitVType.vtype.bits := newestArchVType
+ 
++  io.toDecode.walkToArchVType := walkToArchVType
++
+   // because vsetvl flush pipe, there is only one vset instruction when vsetvl is committed
+   private val hasVsetvl = commitValidVec.zip(hasVsetvlVec).map { case(commitValid, hasVsetvl) => commitValid && hasVsetvl }.reduce(_ || _)
+   io.toDecode.commitVType.hasVsetvl := hasVsetvl
+```

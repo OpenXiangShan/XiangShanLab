@@ -1,0 +1,24 @@
+{
+  "number": 5770,
+  "title": "Vector whole register load(vl2re32.v) partially updates destination on exception",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5770",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: backend"
+  ],
+  "author": "zhangkanqi",
+  "created_at": "2026-04-06T15:31:33Z",
+  "updated_at": "2026-04-07T03:16:52Z",
+  "source_files": [
+    "issue-5770/source/vl2re32_vstrat_v18partial_mismatch.zip",
+    "issue-5770/source/program-01.S",
+    "issue-5770/source/program-02.txt",
+    "issue-5770/source/program-03.txt",
+    "issue-5770/source/program-04.sh"
+  ],
+  "archive_files": [
+    "issue-5770/source/vl2re32_vstrat_v18partial_mismatch.zip"
+  ],
+  "has_comments": true
+}

@@ -1,0 +1,127 @@
+# Commit Log
+- Issue: #6183
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6183
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6183
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6183
+- Changed files: 5
+- Additions: 15
+- Deletions: 8
+
+## Files
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala`
+- `src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala`
+- `src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala`
+- `src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 9602fed94ac..6178780c2a0 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -1330,6 +1330,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   // something must have gone wrong
+   assert(!(fenceFlush && atomicsFlush && cmoFlush))
+   sbuffer.io.flush.valid := RegNext(fenceFlush || atomicsFlush || cmoFlush)
++  sbuffer.io.flush.isCmo := RegNext(cmoFlush)
+   uncache.io.flush.valid := sbuffer.io.flush.valid
+ 
+   // AtomicsUnit: AtomicsUnit will override other control signials,
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+index 4862b556313..8eb0ad751ed 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+@@ -195,6 +195,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule
+   storeQueue.io.toDCache.req                  <> io.cmoOpReq
+   storeQueue.io.toDCache.resp                 <> io.cmoOpResp
+   io.flushSbuffer.valid                       := storeQueue.io.sbufferCtrl.req.flush
++  io.flushSbuffer.isCmo                       := storeQueue.io.sbufferCtrl.req.flush
+   storeQueue.io.sbufferCtrl.resp.empty        := io.flushSbuffer.empty
+   io.diffStore.foreach{ case sink =>
+     storeQueue.io.diffStore.foreach(sink := _)
+diff --git a/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala b/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala
+index 3176cf80379..451a4c9a7b1 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala
+@@ -140,6 +140,7 @@ class AtomicsUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSMo
+   io.dtlb.resp.ready   := true.B
+ 
+   io.flush_sbuffer.valid := false.B
++  io.flush_sbuffer.isCmo := false.B
+ 
+   when (state === s_invalid) {
+     when (io.in.fire) {
+diff --git a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+index 039fd9cd44c..2ced0fad9a2 100644
+--- a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
++++ b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+@@ -32,6 +32,7 @@ import difftest._
+ 
+ class SbufferFlushBundle extends Bundle {
+   val valid = Output(Bool())
++  val isCmo = Output(Bool())
+   val empty = Input(Bool())
+ }
+ 
+@@ -531,10 +532,12 @@ class Sbuffer(implicit p: Parameters)
+ 
+   // ---------------------- Send Dcache Req ---------------------
+ 
+-  // Flush completion must also wait until store misses in MSHR are drained.
+-  val sbuffer_empty = Cat(invalidMask).andR && io.mshr_store_empty
+-  val sq_empty = !Cat(io.in.req.map(_.valid)).orR
+-  val empty = sbuffer_empty && sq_empty
++  val sbuffer_empty = Cat(invalidMask).andR
++  // All_flush completion must also wait until store misses in MSHR are drained.
++  val sbuffer_mshr_empty = sbuffer_empty && io.mshr_store_empty
++  val inReq_empty = !Cat(io.in.req.map(_.valid)).orR
++  val cmo_empty = sbuffer_mshr_empty && inReq_empty
++  val all_empty = cmo_empty && io.sqempty
+   val threshold = Wire(UInt(5.W)) // RegNext(io.csrCtrl.sbuffer_threshold +& 1.U)
+   threshold := Constantin.createRecord(s"StoreBufferThreshold_${p(XSCoreParamsKey).HartId}", initValue = 9)
+   val base = Wire(UInt(5.W))
+@@ -547,8 +550,8 @@ class Sbuffer(implicit p: Parameters)
+ 
+   XSDebug(p"ActiveCount[$ActiveCount]\n")
+ 
+-  io.sbempty := GatedValidRegNext(empty)
+-  io.flush.empty := GatedValidRegNext(empty && io.sqempty)
++  io.sbempty := GatedValidRegNext(cmo_empty)
++  io.flush.empty := GatedValidRegNext(all_empty)
+   // lru.io.flush := sbuffer_state === x_drain_all && empty
+   switch(sbuffer_state){
+     is(x_idle){
+@@ -561,7 +564,7 @@ class Sbuffer(implicit p: Parameters)
+       }
+     }
+     is(x_drain_all){
+-      when(empty){
++      when(Mux(io.flush.isCmo, cmo_empty, all_empty)){
+         sbuffer_state := x_idle
+       }
+     }
+@@ -582,7 +585,7 @@ class Sbuffer(implicit p: Parameters)
+       }
+     }
+   }
+-  XSDebug(p"sbuffer state:${sbuffer_state} do eviction:${do_eviction} empty:${empty}\n")
++  XSDebug(p"sbuffer state:${sbuffer_state} do eviction:${do_eviction} empty:${all_empty} cmo_empty:${cmo_empty}\n")
+ 
+   def noSameBlockInflight(idx: UInt): Bool = {
+     // stateVec(idx) itself must not be s_inflight
+diff --git a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+index 07982f570d1..62909244a64 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+@@ -570,6 +570,7 @@ class VSegmentUnit(val param: ExeUnitParams)(implicit p: Parameters) extends VLS
+    * flush sbuffer IO Assign
+    */
+   io.flush_sbuffer.valid           := !sbufferEmpty && (state === s_flush_sbuffer_req || state === s_wait_flush_sbuffer_resp)
++  io.flush_sbuffer.isCmo           := false.B
+ 
+   /**
+   * update curPtr
+```

@@ -1,0 +1,2 @@
+The nc (non-cacheable) attribute instructions go through the MMIO channel. Unlike standard MMIO instructions, nc instructions can be executed speculatively. For MMIO instructions, there's no need to check whether the IBuffer is full when enqueuing. However, nc instructions must check for IBuffer fullness.
+This PR primarily fixes the issue where nc instructions were incorrectly allowed to enqueue into the IBuffer even when it was full.

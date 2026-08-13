@@ -1,0 +1,9 @@
+VCD time             = 16888
+illegal instruction  = DRET outside Debug Mode
+DRET PC              = 0x80000074
+wb_valid             = 1
+wb_ex2 / EX_II       = 1
+wb_redir_valid       = 1
+wb_redir_target      = 0x80000090
+wb_redir_fullTarget  = 0x80000090
+wb_redir_igpf/ipf/iaf = 0/0/0

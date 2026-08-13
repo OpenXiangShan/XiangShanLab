@@ -1,0 +1,21 @@
+{
+  "number": 4157,
+  "title": "fix(CSR): fix xTIP update in sstcIRGen",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4157",
+  "state": "closed",
+  "labels": [],
+  "author": "sinceforYy",
+  "created_at": "2025-01-10T03:20:31Z",
+  "updated_at": "2025-01-10T10:01:08Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4157/commit-log.md"
+  ],
+  "submitted_at": "2025-01-10",
+  "branch": "",
+  "rtl_commit": ""
+}

@@ -1,0 +1,5 @@
+      scause : 0x0000000000000001   (instruction access fault)
+      satp   : MODE = Bare
+      sepc   : 0x0000ffffffe00480   (XiangShan  -- zero-extended, high bits dropped)
+      sepc   : 0xffffffffffe00480   (NEMU reference -- full 64-bit)
+      stval  : same divergence as sepc

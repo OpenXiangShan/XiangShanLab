@@ -1,0 +1,13 @@
+SECRET_VALUE=0:
+  no_alt_event_count = 226
+  secret_no_alt_event_count = 34
+  secret useful writes = 1
+  probe_redirect_count = 2
+  wrongpath oracle LoadUnit requests = 0
+
+SECRET_VALUE=1:
+  no_alt_event_count = 232
+  secret_no_alt_event_count = 32
+  secret useful writes = 0
+  probe_redirect_count = 2
+  wrongpath oracle LoadUnit requests = 2

@@ -1,0 +1,9 @@
+result_delta store:
+  time                 = 65298
+  addr                 = 0x80080000
+  data                 = 106
+
+recovered_bit store:
+  time                 = 65310
+  addr                 = 0x80080008
+  data                 = 1

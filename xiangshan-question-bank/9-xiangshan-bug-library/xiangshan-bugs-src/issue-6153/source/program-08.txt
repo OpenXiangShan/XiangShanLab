@@ -1,0 +1,18 @@
+exploit_plru_oracle_compare.json:
+  predicate_result = differential_plru_cache_oracle_reproduced
+
+SECRET_SELECT=1:
+  expected_secret_line = target
+  target_line          = 0x80004000
+  control_line         = 0x80008000
+  evict_line           = 0x80014000
+  target probe miss    = 0
+  control probe miss   = 1
+
+SECRET_SELECT=0:
+  expected_secret_line = control
+  target_line          = 0x80004000
+  control_line         = 0x80008000
+  evict_line           = 0x80014000
+  target probe miss    = 1
+  control probe miss   = 0

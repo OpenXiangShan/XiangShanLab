@@ -1,0 +1,4 @@
+python3 parse_cross16_vcd.py \
+  cross16_repro_0_11550.vcd \
+  --json-out monitor_repro_0_11550.json \
+  > monitor_repro_0_11550.log 2>&1

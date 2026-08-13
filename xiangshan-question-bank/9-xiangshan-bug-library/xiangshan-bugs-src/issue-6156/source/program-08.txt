@@ -1,0 +1,10 @@
+XS_EMU=/path/to/XiangShan/build/emu
+XS_DIFF=/path/to/XiangShan/ready-to-run/riscv64-nemu-interpreter-so
+
+$XS_EMU \
+  --max-cycles=20000 \
+  -b 0 -e 0 \
+  --dump-commit-trace \
+  -i poc.bin \
+  --diff "$XS_DIFF" \
+  > validation_nodump_diff.log 2>&1

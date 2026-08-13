@@ -1,0 +1,21 @@
+{
+  "number": 3717,
+  "title": "fix(csr): fix read/write stimecmp raise EX_II",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3717",
+  "state": "closed",
+  "labels": [],
+  "author": "sinceforYy",
+  "created_at": "2024-10-11T10:14:36Z",
+  "updated_at": "2024-10-12T01:49:17Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3717/commit-log.md"
+  ],
+  "submitted_at": "2024-10-11",
+  "branch": "",
+  "rtl_commit": ""
+}

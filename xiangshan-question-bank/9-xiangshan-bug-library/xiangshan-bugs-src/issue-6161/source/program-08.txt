@@ -1,0 +1,2 @@
+pmpaddr0 = 0x200013ff
+pmpaddr1 = 0x20001400

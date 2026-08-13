@@ -1,0 +1,52 @@
+# Commit Log
+- Issue: #4367
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4367
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4367
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4367
+- Changed files: 2
+- Additions: 10
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala`
+- `src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala
+index ce09f91b252..4dc5fd8574d 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala
+@@ -142,7 +142,6 @@ class LoadQueueRAR(implicit p: Parameters) extends XSModule
+   // Allocate logic
+   val acceptedVec = Wire(Vec(LoadPipelineWidth, Bool()))
+   val enqIndexVec = Wire(Vec(LoadPipelineWidth, UInt(log2Up(LoadQueueRARSize).W)))
+-  require(LoadQueueRARSize == VirtualLoadQueueSize, "LoadQueueRARSize should be equal to VirtualLoadQueueSize for timing!")
+ 
+   for ((enq, w) <- io.query.map(_.req).zipWithIndex) {
+     acceptedVec(w) := false.B
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index c4f48af206b..e8d66de7c28 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -1314,7 +1314,16 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   val s2_safe_writeback = s2_real_exception || s2_safe_wakeup || s2_vp_match_fail
+ 
+   // ld-ld violation require
+-  io.lsq.ldld_nuke_query.req.valid           := s2_valid
++  /**
++    * In order to ensure timing, the RAR enqueue conditions need to be compromised, worst source of timing from pmp and missQueue.
++    *   * if LoadQueueRARSize == VirtualLoadQueueSize, just need to exclude prefetching.
++    *   * if LoadQueueRARSize < VirtualLoadQueueSize, need to consider the situation of s2_can_query
++    */
++  if (LoadQueueRARSize == VirtualLoadQueueSize) {
++    io.lsq.ldld_nuke_query.req.valid           := s2_valid && !s2_prf
++  } else {
++    io.lsq.ldld_nuke_query.req.valid           := s2_valid && s2_can_query
++  }
+   io.lsq.ldld_nuke_query.req.bits.uop        := s2_in.uop
+   io.lsq.ldld_nuke_query.req.bits.mask       := s2_in.mask
+   io.lsq.ldld_nuke_query.req.bits.paddr      := s2_in.paddr
+```

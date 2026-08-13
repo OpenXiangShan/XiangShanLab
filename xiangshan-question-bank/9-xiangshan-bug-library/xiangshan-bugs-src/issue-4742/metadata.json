@@ -1,0 +1,21 @@
+{
+  "number": 4742,
+  "title": "fix(csr, perf): skip CSR read xtopi",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4742",
+  "state": "closed",
+  "labels": [],
+  "author": "sinceforYy",
+  "created_at": "2025-05-27T07:36:30Z",
+  "updated_at": "2025-05-28T09:21:59Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4742/commit-log.md"
+  ],
+  "submitted_at": "2025-05-27",
+  "branch": "",
+  "rtl_commit": ""
+}

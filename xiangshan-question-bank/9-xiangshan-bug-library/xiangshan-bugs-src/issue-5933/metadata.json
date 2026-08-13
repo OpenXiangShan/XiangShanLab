@@ -1,0 +1,40 @@
+{
+  "number": 5933,
+  "title": "`vlsseg3e64.v` loads wrong active destination data for zero-stride segment load",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5933",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: unknown"
+  ],
+  "author": "KnightGOKU",
+  "created_at": "2026-05-10T11:38:44Z",
+  "updated_at": "2026-05-11T03:47:36Z",
+  "source_files": [
+    "issue-5933/source/program.zip",
+    "issue-5933/source/program-01.S",
+    "issue-5933/source/program-02.S",
+    "issue-5933/source/program-03.txt",
+    "issue-5933/source/program-04.S",
+    "issue-5933/source/program-05.txt",
+    "issue-5933/source/program-06.txt",
+    "issue-5933/source/program-07.txt",
+    "issue-5933/source/program-08.txt",
+    "issue-5933/source/program-09.txt",
+    "issue-5933/source/program-10.txt",
+    "issue-5933/source/program-11.S",
+    "issue-5933/source/program-12.txt",
+    "issue-5933/source/program-13.S",
+    "issue-5933/source/program-14.txt",
+    "issue-5933/source/program-15.txt",
+    "issue-5933/source/program-16.txt",
+    "issue-5933/source/program-17.txt",
+    "issue-5933/source/program-18.txt",
+    "issue-5933/source/program-19.txt",
+    "issue-5933/source/program-20.txt"
+  ],
+  "archive_files": [
+    "issue-5933/source/program.zip"
+  ],
+  "has_comments": true
+}

@@ -1,0 +1,23 @@
+{
+  "number": 6079,
+  "title": "`vl1re16.v` incorrectly computes `vstart` on Load Access Fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6079",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "lhb-sec",
+  "created_at": "2026-06-10T04:08:11Z",
+  "updated_at": "2026-06-10T08:35:22Z",
+  "source_files": [
+    "issue-6079/source/emulator.zip",
+    "issue-6079/source/seeds.zip",
+    "issue-6079/source/program-01.txt"
+  ],
+  "archive_files": [
+    "issue-6079/source/emulator.zip",
+    "issue-6079/source/seeds.zip"
+  ],
+  "has_comments": true
+}

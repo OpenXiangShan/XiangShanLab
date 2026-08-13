@@ -1,0 +1,5 @@
+cross_context_poc.sh       Build/run script
+cross_context_sequence.S   Standalone RISC-V instruction sequence
+results/*/static.txt       Static setIdx/replacerSetIdx proof
+results/*/summary.txt      Parsed stock-emulator perf counters
+results/verdict.txt        Final alias-vs-control verdict

@@ -1,0 +1,24 @@
+# Commit Log
+- Issue: #3648
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3648
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3648
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3648
+- Changed files: 1
+- Additions: 1
+- Deletions: 1
+
+## Files
+- `coupledL2`
+
+## Diff
+```diff
+diff --git a/coupledL2 b/coupledL2
+index a538dedb440..2f63bfe14bb 160000
+--- a/coupledL2
++++ b/coupledL2
+@@ -1 +1 @@
+-Subproject commit a538dedb44013e007f6ec87fdb986682858ef4a7
++Subproject commit 2f63bfe14bb8468479bfa5c563a186bf07fed358
+```

@@ -1,0 +1,115 @@
+# Commit Log
+- Issue: #4671
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4671
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4671
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4671
+- Changed files: 4
+- Additions: 26
+- Deletions: 7
+
+## Files
+- `src/main/scala/xiangshan/backend/Bundles.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/TrapInstMod.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index 4e7987e6881..d392341c7a9 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -154,11 +154,15 @@ object Bundles {
+     val ftqPtr = new FtqPtr
+     val ftqOffset = UInt(log2Up(PredictWidth).W)
+ 
+-    def needFlush(ftqPtr: FtqPtr, ftqOffset: UInt): Bool ={
++    def needFlush(ftqPtr: FtqPtr, ftqOffset: UInt): Bool = {
+       val sameFlush = this.ftqPtr === ftqPtr && this.ftqOffset > ftqOffset
+       sameFlush || isAfter(this.ftqPtr, ftqPtr)
+     }
+ 
++    def sameInst(ftqPtr: FtqPtr, ftqOffset: UInt): Bool = {
++      this.ftqPtr === ftqPtr && this.ftqOffset === ftqOffset
++    }
++
+     def fromDecodedInst(decodedInst: DecodedInst): this.type = {
+       this.instr     := decodedInst.instr
+       this.ftqPtr    := decodedInst.ftqPtr
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+index d58f896cc61..a6667d27579 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+@@ -117,7 +117,7 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   out.mstatus.bits.MIE          := 0.U
+   out.mstatus.bits.MDT          := 1.U
+   out.mepc.bits.epc             := Mux(isFetchMalAddr, in.fetchMalTval(63, 1), trapPC(63, 1))
+-  out.mcause.bits.Interrupt     := isInterrupt
++  out.mcause.bits.Interrupt     := isInterrupt && !isDTExcp
+   out.mcause.bits.ExceptionCode := Mux(isDTExcp, ExceptionNO.EX_DT.U, highPrioTrapNO)
+   out.mtval.bits.ALL            := Mux(isFetchMalAddrExcp, in.fetchMalTval, tval)
+   out.mtval2.bits.ALL           := Mux(isDTExcp, precause, tval2 >> 2)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/TrapInstMod.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/TrapInstMod.scala
+index 5bbd2ef26de..2608b89c8e6 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/TrapInstMod.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/TrapInstMod.scala
+@@ -23,6 +23,7 @@ class TrapInstMod(implicit p: Parameters) extends Module with HasCircularQueuePt
+ 
+     val fromRob = Input(new Bundle {
+       val flush = ValidIO(new FtqInfo)
++      val isInterrupt = ValidIO(Bool())
+     })
+ 
+     val faultCsrUop = Input(ValidIO(new Bundle {
+@@ -36,7 +37,8 @@ class TrapInstMod(implicit p: Parameters) extends Module with HasCircularQueuePt
+   })
+ 
+   // alias
+-  val flush = io.fromRob.flush
++  // delay flush one cycle to alias fromrob trap
++  val flush = RegNext(io.fromRob.flush)
+   val newTrapInstInfo = io.fromDecode.trapInstInfo
+ 
+   val valid = RegInit(false.B)
+@@ -56,10 +58,21 @@ class TrapInstMod(implicit p: Parameters) extends Module with HasCircularQueuePt
+   newCSRInst.ftqPtr := io.faultCsrUop.bits.ftqInfo.ftqPtr
+   newCSRInst.ftqOffset := io.faultCsrUop.bits.ftqInfo.ftqOffset
+ 
+-  when (flush.valid && valid && trapInstInfo.needFlush(flush.bits.ftqPtr, flush.bits.ftqOffset)) {
+-    valid := false.B
+-  }.elsewhen(io.readClear) {
+-    valid := false.B
++  when (flush.valid && valid ) {
++    when (trapInstInfo.needFlush(flush.bits.ftqPtr, flush.bits.ftqOffset)) {
++      when (newCSRInstValid && !newCSRInst.needFlush(flush.bits.ftqPtr, flush.bits.ftqOffset)) {
++        // when flush and CSR exception happen together
++        trapInstInfo := newCSRInst
++      }.otherwise {
++        valid := false.B
++      }
++    }.elsewhen(io.readClear) {
++      // as flush has been delay ,read clear and flush in the same cycle
++      valid := false.B
++    }.elsewhen (trapInstInfo.sameInst(flush.bits.ftqPtr, flush.bits.ftqOffset) && io.fromRob.isInterrupt.valid && io.fromRob.isInterrupt.bits) {
++      // check whether the exception store is attached with an interrupt
++      valid := false.B
++    }
+   }.elsewhen(newCSRInstValid) {
+     valid := true.B
+     when (!valid) {
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index eb14d1bda89..e5f88f3cf5e 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -184,6 +184,8 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   trapInstMod.io.fromRob.flush.valid := io.flush.valid
+   trapInstMod.io.fromRob.flush.bits.ftqPtr := io.flush.bits.ftqIdx
+   trapInstMod.io.fromRob.flush.bits.ftqOffset := io.flush.bits.ftqOffset
++  trapInstMod.io.fromRob.isInterrupt.valid := csrIn.exception.valid
++  trapInstMod.io.fromRob.isInterrupt.bits := csrIn.exception.bits.isInterrupt
+   trapInstMod.io.faultCsrUop.valid         := csrMod.io.out.valid && (csrMod.io.out.bits.EX_II || csrMod.io.out.bits.EX_VI)
+   trapInstMod.io.faultCsrUop.bits.fuOpType := DataHoldBypass(io.in.bits.ctrl.fuOpType, io.in.fire)
+   trapInstMod.io.faultCsrUop.bits.imm      := DataHoldBypass(io.in.bits.data.imm, io.in.fire)
+```

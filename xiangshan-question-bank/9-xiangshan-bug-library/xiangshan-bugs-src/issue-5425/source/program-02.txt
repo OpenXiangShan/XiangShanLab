@@ -1,0 +1,7 @@
+[fetch_decode] (M) 0x000000008000266e:   37 7f 1f 81     lui        t5,0xffffffff811f7000
+[fetch_decode] (M) 0x0000000080002672:   1b 0f bf b2     c_addiw    t5,t5,-1237
+[fetch_decode] (M) 0x0000000080002676:   3b 0f 0f 08     adduw      t5,t5,$0
+[fetch_decode] (M) 0x000000008000267a:   13 0a 90 40     c_li       s4,$0,1033
+[fetch_decode] (M) 0x000000008000267e:   56 0a           c_slli     s4,s4,21
+[fetch_decode] (M) 0x0000000080002680:   13 0a 0a 20     c_addi     s4,s4,512
+[fetch_decode] (M) 0x0000000080002684:   87 02 8a 02     vlr        ft5,40(s4),40

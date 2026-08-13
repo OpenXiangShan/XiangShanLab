@@ -1,0 +1,178 @@
+# Commit Log
+- Issue: #3374
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3374
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3374
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3374
+- Changed files: 5
+- Additions: 52
+- Deletions: 8
+
+## Files
+- `src/main/scala/xiangshan/backend/Bundles.scala`
+- `src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala`
+- `src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala`
+- `src/main/scala/xiangshan/backend/issue/Scheduler.scala`
+- `src/main/scala/xiangshan/backend/rename/BusyTable.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index a2b1f33bda9..407b1b0633d 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -601,7 +601,7 @@ object Bundles {
+     val dataSources = Vec(params.numRegSrc, DataSource())
+     val l1ExuOH = OptionWrapper(params.isIQWakeUpSink, Vec(params.numRegSrc, ExuVec()))
+     val srcTimer = OptionWrapper(params.isIQWakeUpSink, Vec(params.numRegSrc, UInt(3.W)))
+-    val loadDependency = OptionWrapper(params.isIQWakeUpSink, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))
++    val loadDependency = OptionWrapper(params.needLoadDependency, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))
+ 
+     val perfDebugInfo = new PerfDebugInfo()
+ 
+diff --git a/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala b/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
+index f7e8b1992ad..86ea304d82b 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
+@@ -28,6 +28,7 @@ case class ExeUnitParams(
+   // calculated configs
+   var iqWakeUpSourcePairs: Seq[WakeUpConfig] = Seq()
+   var iqWakeUpSinkPairs: Seq[WakeUpConfig] = Seq()
++  var needLoadDependency: Boolean = false
+   // used in bypass to select data of exu output
+   var exuIdx: Int = -1
+   var backendParam: BackendParams = null
+@@ -46,6 +47,7 @@ case class ExeUnitParams(
+   val readFpRf: Boolean = numFpSrc > 0
+   val readVecRf: Boolean = numVecSrc > 0
+   val readVfRf: Boolean = numVfSrc > 0
++  val readVlRf: Boolean = numVlSrc > 0
+   val writeIntRf: Boolean = fuConfigs.map(_.writeIntRf).reduce(_ || _)
+   val writeFpRf: Boolean = fuConfigs.map(_.writeFpRf).reduce(_ || _)
+   val writeVecRf: Boolean = fuConfigs.map(_.writeVecRf).reduce(_ || _)
+@@ -319,6 +321,11 @@ case class ExeUnitParams(
+     if (this.isIQWakeUpSource) {
+       require(!this.hasUncertainLatency || hasLoadFu || hasHyldaFu, s"${this.name} is a not-LDU IQ wake up source , but has UncertainLatency")
+     }
++    val loadWakeUpSourcePairs = cfgs.filter(x => x.source.getExuParam(backendParam.allExuParams).hasLoadFu || x.source.getExuParam(backendParam.allExuParams).hasHyldaFu)
++    val wakeUpByLoadNames = loadWakeUpSourcePairs.map(_.sink.name).toSet
++    val thisWakeUpByNames = iqWakeUpSinkPairs.map(_.source.name).toSet
++    this.needLoadDependency = !(wakeUpByLoadNames & thisWakeUpByNames).isEmpty
++    println(s"${this.name}: needLoadDependency is ${this.needLoadDependency}")
+   }
+ 
+   def updateExuIdx(idx: Int): Unit = {
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+index e32a54e334f..14c945ae00b 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+@@ -65,6 +65,8 @@ case class IssueBlockParams(
+ 
+   def needFeedBackLqIdx: Boolean = isVecMemIQ || isLdAddrIQ
+ 
++  def needLoadDependency: Boolean = exuBlockParams.map(_.needLoadDependency).reduce(_ || _)
++
+   def numExu: Int = exuBlockParams.count(!_.fakeUnit)
+ 
+   def numIntSrc: Int = exuBlockParams.map(_.numIntSrc).max
+diff --git a/src/main/scala/xiangshan/backend/issue/Scheduler.scala b/src/main/scala/xiangshan/backend/issue/Scheduler.scala
+index f7f1077a46a..8a120ff822b 100644
+--- a/src/main/scala/xiangshan/backend/issue/Scheduler.scala
++++ b/src/main/scala/xiangshan/backend/issue/Scheduler.scala
+@@ -376,7 +376,10 @@ abstract class SchedulerImpBase(wrapper: Scheduler)(implicit params: SchdBlockPa
+     }
+     iq.io.og0Cancel := io.fromDataPath.og0Cancel
+     iq.io.og1Cancel := io.fromDataPath.og1Cancel
+-    iq.io.ldCancel := io.ldCancel
++    if (iq.params.needLoadDependency)
++      iq.io.ldCancel := io.ldCancel
++    else
++      iq.io.ldCancel := 0.U.asTypeOf(io.ldCancel)
+   }
+ 
+   // connect the vl writeback informatino to the issue queues
+@@ -478,6 +481,9 @@ class SchedulerArithImp(override val wrapper: Scheduler)(implicit params: SchdBl
+   issueQueues.zipWithIndex.foreach { case (iq, i) =>
+     iq.io.flush <> io.fromCtrlBlock.flush
+     iq.io.enq <> dispatch2Iq.io.out(i)
++    if (!iq.params.needLoadDependency) {
++      iq.io.enq.map(x => x.bits.srcLoadDependency := 0.U.asTypeOf(x.bits.srcLoadDependency))
++    }
+     val intWBIQ = params.schdType match {
+       case IntScheduler() => wakeupFromIntWBVec.zipWithIndex.filter(x => iq.params.needWakeupFromIntWBPort.keys.toSeq.contains(x._2)).map(_._1)
+       case FpScheduler() => wakeupFromFpWBVec.zipWithIndex.filter(x => iq.params.needWakeupFromFpWBPort.keys.toSeq.contains(x._2)).map(_._1)
+@@ -526,6 +532,9 @@ class SchedulerMemImp(override val wrapper: Scheduler)(implicit params: SchdBloc
+   memAddrIQs.zipWithIndex.foreach { case (iq, i) =>
+     iq.io.flush <> io.fromCtrlBlock.flush
+     iq.io.enq <> dispatch2Iq.io.out(i)
++    if (!iq.params.needLoadDependency) {
++      iq.io.enq.map(x => x.bits.srcLoadDependency := 0.U.asTypeOf(x.bits.srcLoadDependency))
++    }
+     iq.io.wakeupFromWB.zip(
+       wakeupFromIntWBVec.zipWithIndex.filter(x => iq.params.needWakeupFromIntWBPort.keys.toSeq.contains(x._2)).map(_._1) ++
+       wakeupFromFpWBVec.zipWithIndex.filter(x => iq.params.needWakeupFromFpWBPort.keys.toSeq.contains(x._2)).map(_._1) ++
+diff --git a/src/main/scala/xiangshan/backend/rename/BusyTable.scala b/src/main/scala/xiangshan/backend/rename/BusyTable.scala
+index b4e7804b511..6f90e8b0107 100644
+--- a/src/main/scala/xiangshan/backend/rename/BusyTable.scala
++++ b/src/main/scala/xiangshan/backend/rename/BusyTable.scala
+@@ -49,6 +49,32 @@ class BusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB:
+     val read = Vec(numReadPorts, new BusyTableReadIO)
+   })
+ 
++  val allExuParams = params.backendParam.allExuParams
++  val intBusyTableNeedLoadCancel = allExuParams.map(x =>
++    x.needLoadDependency && x.writeIntRf && x.iqWakeUpSourcePairs.map(y => y.sink.getExuParam(allExuParams).readIntRf).foldLeft(false)(_ || _)
++  ).reduce(_ || _)
++  val fpBusyTableNeedLoadCancel = allExuParams.map(x =>
++    x.needLoadDependency && x.writeFpRf && x.iqWakeUpSourcePairs.map(y => y.sink.getExuParam(allExuParams).readFpRf).foldLeft(false)(_ || _)
++  ).reduce(_ || _)
++  val vfBusyTableNeedLoadCancel = allExuParams.map(x =>
++    x.needLoadDependency && x.writeVfRf && x.iqWakeUpSourcePairs.map(y => y.sink.getExuParam(allExuParams).readVecRf).foldLeft(false)(_ || _)
++  ).reduce(_ || _)
++  val v0BusyTableNeedLoadCancel = allExuParams.map(x =>
++    x.needLoadDependency && x.writeV0Rf && x.iqWakeUpSourcePairs.map(y => y.sink.getExuParam(allExuParams).readVecRf).foldLeft(false)(_ || _)
++  ).reduce(_ || _)
++  val vlBusyTableNeedLoadCancel = allExuParams.map(x =>
++    x.needLoadDependency && x.writeVlRf && x.iqWakeUpSourcePairs.map(y => y.sink.getExuParam(allExuParams).readVlRf).foldLeft(false)(_ || _)
++  ).reduce(_ || _)
++  val needLoadCancel = pregWB match {
++    case IntWB(_, _) => intBusyTableNeedLoadCancel
++    case FpWB(_, _) => fpBusyTableNeedLoadCancel
++    case VfWB(_, _) => vfBusyTableNeedLoadCancel
++    case V0WB(_, _) => v0BusyTableNeedLoadCancel
++    case VlWB(_, _) => vlBusyTableNeedLoadCancel
++    case _ => throw new IllegalArgumentException(s"WbConfig ${pregWB} is not permitted")
++  }
++  if (!needLoadCancel) println(s"[BusyTable]: WbConfig ${pregWB} busyTable don't need loadCancel")
++  val loadCancel = if (needLoadCancel) io.ldCancel else 0.U.asTypeOf(io.ldCancel)
+   val loadDependency = RegInit(0.U.asTypeOf(Vec(numPhyPregs, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+   val shiftLoadDependency = Wire(Vec(io.wakeUp.size, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W))))
+   val tableUpdate = Wire(Vec(numPhyPregs, Bool()))
+@@ -70,11 +96,11 @@ class BusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB:
+ 
+   wakeupOHVec.zipWithIndex.foreach{ case (wakeupOH, idx) =>
+     val tmp = pregWB match {
+-      case IntWB(_, _) => io.wakeUp.map(x => x.valid && x.bits.rfWen  && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), io.ldCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
+-      case FpWB(_, _)  => io.wakeUp.map(x => x.valid && x.bits.fpWen  && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), io.ldCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
+-      case VfWB(_, _)  => io.wakeUp.map(x => x.valid && x.bits.vecWen && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), io.ldCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
+-      case V0WB(_, _)  => io.wakeUp.map(x => x.valid && x.bits.v0Wen  && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), io.ldCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
+-      case VlWB(_, _)  => io.wakeUp.map(x => x.valid && x.bits.vlWen  && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), io.ldCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
++      case IntWB(_, _) => io.wakeUp.map(x => x.valid && x.bits.rfWen  && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), loadCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
++      case FpWB(_, _)  => io.wakeUp.map(x => x.valid && x.bits.fpWen  && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), loadCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
++      case VfWB(_, _)  => io.wakeUp.map(x => x.valid && x.bits.vecWen && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), loadCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
++      case V0WB(_, _)  => io.wakeUp.map(x => x.valid && x.bits.v0Wen  && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), loadCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
++      case VlWB(_, _)  => io.wakeUp.map(x => x.valid && x.bits.vlWen  && UIntToOH(x.bits.pdest)(idx) && !LoadShouldCancel(Some(x.bits.loadDependency), loadCancel) && !(x.bits.is0Lat && io.og0Cancel(x.bits.params.exuIdx)))
+       case _ => throw new IllegalArgumentException(s"WbConfig ${pregWB} is not permitted")
+     }
+     wakeupOH := (if (io.wakeUp.nonEmpty) VecInit(tmp.toSeq).asUInt else 0.U)
+@@ -82,7 +108,7 @@ class BusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB:
+   val wbMask = reqVecToMask(io.wbPregs)
+   val allocMask = reqVecToMask(io.allocPregs)
+   val wakeUpMask = VecInit(wakeupOHVec.map(_.orR).toSeq).asUInt
+-  val ldCancelMask = loadDependency.map(x => LoadShouldCancel(Some(x), io.ldCancel))
++  val ldCancelMask = loadDependency.map(x => LoadShouldCancel(Some(x), loadCancel))
+ 
+   loadDependency.zipWithIndex.foreach{ case (ldDp, idx) =>
+     when(allocMask(idx) || wbMask(idx) || ldCancelMask(idx)) {
+```

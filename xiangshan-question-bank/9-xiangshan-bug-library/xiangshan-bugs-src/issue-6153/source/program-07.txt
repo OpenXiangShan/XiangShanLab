@@ -1,0 +1,4 @@
+./compare_plru_oracle.py \
+  --secret1 exploit_plru_oracle_secret1_v3_0_12500.monitor.json \
+  --secret0 exploit_plru_oracle_secret0_v3_0_12500.monitor.json \
+  --json-out exploit_plru_oracle_compare.json

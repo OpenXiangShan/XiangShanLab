@@ -1,0 +1,21 @@
+{
+  "number": 4132,
+  "title": "fix(Unprivileged): wait a cycle to update `time` when `nextV =/= v`",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4132",
+  "state": "closed",
+  "labels": [],
+  "author": "Tang-Haojin",
+  "created_at": "2025-01-05T11:48:47Z",
+  "updated_at": "2025-01-05T18:32:05Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4132/commit-log.md"
+  ],
+  "submitted_at": "2025-01-05",
+  "branch": "",
+  "rtl_commit": ""
+}

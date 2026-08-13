@@ -1,0 +1,1 @@
+emu --enable-jtag --no-diff -i trigger-baseline-riscv64-xs.bin 2>&1 | tee baseline.txt

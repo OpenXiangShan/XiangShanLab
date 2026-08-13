@@ -1,0 +1,2 @@
+[test] trap = 1, mcause = 12, mtval = 0x4000000000, mepc = 0x4000000000, alias flag = 0x0
+CORRECT: fall-through to non-canonical VA raised IPF

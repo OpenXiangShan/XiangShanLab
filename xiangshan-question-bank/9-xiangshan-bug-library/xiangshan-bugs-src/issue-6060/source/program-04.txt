@@ -1,0 +1,2 @@
+[ERROR] SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner.lsq.storeQueue: pointer update error!
+Assertion failed at NewStoreQueue.sv:36581

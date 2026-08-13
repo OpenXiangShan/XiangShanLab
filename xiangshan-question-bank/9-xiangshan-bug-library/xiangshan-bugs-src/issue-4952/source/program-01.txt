@@ -1,0 +1,13 @@
+00000000800003a6 <_l47>:
+    800003a6:	30005073          	csrwi	mstatus,0
+    800003aa:	f134df73          	csrrwi	t5,mimpid,9
+    800003ae:	c07a                	sw	t5,0(sp)
+
+00000000800003b0 <_l48>:
+    800003b0:	c0210053          	fcvt.l.s	zero,ft2,rne
+
+00000000800003b4 <_l49>:
+    800003b4:	d90dd937          	lui	s2,0xd90dd
+
+00000000800003b8 <_good_exit>:
+    800003b8:	00002097          	auipc	ra,0x2

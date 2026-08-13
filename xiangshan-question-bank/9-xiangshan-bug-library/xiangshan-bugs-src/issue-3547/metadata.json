@@ -1,0 +1,21 @@
+{
+  "number": 3547,
+  "title": "fix(aia): fix permit check for aia and fix wen for aia csr.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3547",
+  "state": "closed",
+  "labels": [],
+  "author": "NewPaulWalker",
+  "created_at": "2024-09-11T09:26:07Z",
+  "updated_at": "2024-09-13T01:49:38Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3547/commit-log.md"
+  ],
+  "submitted_at": "2024-09-11",
+  "branch": "",
+  "rtl_commit": ""
+}

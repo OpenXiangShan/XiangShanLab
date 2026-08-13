@@ -1,0 +1,1 @@
+build/verilator-compile/emu --image program.elf --diff ready-to-run/riscv64-spike-so

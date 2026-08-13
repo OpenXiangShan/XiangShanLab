@@ -1,0 +1,3 @@
+cd stale_target_control
+EMU_VCD=/path/to/emu ./reproduce.sh
+cat stale_target.monitor.log

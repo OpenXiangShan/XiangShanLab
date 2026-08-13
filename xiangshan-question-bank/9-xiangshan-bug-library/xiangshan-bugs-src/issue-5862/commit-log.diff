@@ -1,0 +1,353 @@
+diff --git a/src/main/resources/config/Default.yml b/src/main/resources/config/Default.yml
+index e47febc8b4a..3a076f72e83 100644
+--- a/src/main/resources/config/Default.yml
++++ b/src/main/resources/config/Default.yml
+@@ -97,3 +97,5 @@ CVMParams:
+ EnableBitmapCheck: true
+ 
+ EnableBitmapCheckDefault: false
++
++EnableResetMtvec: false
+diff --git a/src/main/scala/top/ArgParser.scala b/src/main/scala/top/ArgParser.scala
+index e739f7db7cc..659c6e34cc9 100644
+--- a/src/main/scala/top/ArgParser.scala
++++ b/src/main/scala/top/ArgParser.scala
+@@ -99,6 +99,10 @@ object ArgParser {
+           nextOption(config.alter((site, here, up) => {
+             case XSTileKey => up(XSTileKey).map(_.copy(hartIDDmodeWidth = width.toInt))
+           }), tail)
++        case "--enable-reset-mtvec" :: tail =>
++          nextOption(config.alter((site, here, up) => {
++            case XSTileKey => up(XSTileKey).map(_.copy(enableResetMtvec = true))
++          }), tail)
+         case "--with-dramsim3" :: tail =>
+           nextOption(config.alter((site, here, up) => {
+             case DebugOptionsKey => up(DebugOptionsKey).copy(UseDRAMSim = true)
+diff --git a/src/main/scala/top/Top.scala b/src/main/scala/top/Top.scala
+index 2b528ca0bbe..daee1f51497 100644
+--- a/src/main/scala/top/Top.scala
++++ b/src/main/scala/top/Top.scala
+@@ -280,6 +280,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
+       val riscv_halt = Output(Vec(NumCores, Bool()))
+       val riscv_critical_error = Output(Vec(NumCores, Bool()))
+       val riscv_rst_vec = Input(Vec(NumCores, UInt(soc.PAddrBits.W)))
++      val riscv_rst_mtvec = Option.when(tiles.exists(_.enableResetMtvec))(Input(Vec(NumCores, Valid(UInt(soc.PAddrBits.W)))))
+       val traceCoreInterface = Vec(NumCores, new Bundle {
+         val fromEncoder = Input(new Bundle {
+           val enable = Bool()
+@@ -364,6 +365,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc()
+       core.module.io.dft.foreach(dontTouch(_) := DontCare)
+       core.module.io.dft_reset.foreach(dontTouch(_) := DontCare)
+       core.module.io.reset_vector := io.riscv_rst_vec(i)
++      core.module.io.reset_mtvec.foreach(_ := io.riscv_rst_mtvec.get(i))
+     }
+ 
+     withClockAndReset(io.clock, io.reset) {
+diff --git a/src/main/scala/top/XSNoCTop.scala b/src/main/scala/top/XSNoCTop.scala
+index 8dce137777e..81d64873ade 100644
+--- a/src/main/scala/top/XSNoCTop.scala
++++ b/src/main/scala/top/XSNoCTop.scala
+@@ -238,6 +238,7 @@ trait HasXSTileImp[+L <: HasXSTile] { this: BaseXSSocImp with HasAsyncClockImp =
+     val hartResetReq = Input(Bool())
+     val hartIsInReset = Output(Bool())
+     val riscv_rst_vec = Input(UInt(socParams.soc.PAddrBits.W))
++    val riscv_rst_mtvec = Option.when(socParams.tiles.head.enableResetMtvec)(Input(Valid(UInt(socParams.soc.PAddrBits.W))))
+     val nodeID = Input(UInt(socParams.soc.NodeIDWidthList(socParams.issue).W))
+   }).suggestName("io")
+ 
+@@ -250,6 +251,7 @@ trait HasXSTileImp[+L <: HasXSTile] { this: BaseXSSocImp with HasAsyncClockImp =
+   core_with_l2.module.io.hartResetReq := tileio.hartResetReq
+   tileio.hartIsInReset := core_with_l2.module.io.hartIsInReset
+   core_with_l2.module.io.reset_vector := tileio.riscv_rst_vec
++  core_with_l2.module.io.reset_mtvec.foreach(_ := tileio.riscv_rst_mtvec.get)
+   core_with_l2.module.io.hartId := tileio.hartId
+   core_with_l2.module.io.nodeID.get := tileio.nodeID
+ 
+diff --git a/src/main/scala/top/YamlParser.scala b/src/main/scala/top/YamlParser.scala
+index 55337bfc45a..6fde05ab113 100644
+--- a/src/main/scala/top/YamlParser.scala
++++ b/src/main/scala/top/YamlParser.scala
+@@ -67,6 +67,7 @@ case class YamlConfig(
+   CVMParams: Option[CVMParameters],
+   EnableBitmapCheck: Option[Boolean],
+   EnableBitmapCheckDefault: Option[Boolean],
++  EnableResetMtvec: Option[Boolean],
+ )
+ 
+ object YamlParser {
+@@ -128,6 +129,11 @@ object YamlParser {
+         case XSTileKey => up(XSTileKey).map(_.copy(hartIDDmodeWidth = width))
+       })
+     }
++    yamlConfig.EnableResetMtvec.foreach { enable =>
++      newConfig = newConfig.alter((site, here, up) => {
++        case XSTileKey => up(XSTileKey).map(_.copy(enableResetMtvec = enable))
++      })
++    }
+     yamlConfig.DebugModuleParams.foreach { params =>
+       newConfig = newConfig.alter((site, here, up) => {
+         case DebugModuleKey => Some(params)
+diff --git a/src/main/scala/xiangshan/L2Top.scala b/src/main/scala/xiangshan/L2Top.scala
+index 1d5cb55ac03..26883502b50 100644
+--- a/src/main/scala/xiangshan/L2Top.scala
++++ b/src/main/scala/xiangshan/L2Top.scala
+@@ -168,7 +168,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+     TLFilter(TLFilter.mSubtract(mmioFilters)) :=
+     TLBuffer() :=
+     mmio_xbar
+-  
++
+   beu_local_int_source_buffer := beu_local_int_source
+ 
+   class Imp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
+@@ -178,6 +178,10 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+         val fromTile = Input(UInt(PAddrBits.W))
+         val toCore = Output(UInt(PAddrBits.W))
+       }
++      val reset_mtvec = Option.when(enableResetMtvec)(new Bundle {
++        val fromTile = Input(Valid(UInt(PAddrBits.W)))
++        val toCore = Output(Valid(UInt(PAddrBits.W)))
++      })
+       val hartId = new Bundle() {
+         val fromTile = Input(UInt(64.W))
+         val toCore = Output(UInt(64.W))
+@@ -247,6 +251,10 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+     io.dft_reset_out.zip(io.dft_reset).foreach({ case(a, b) => a := b })
+ 
+     val resetDelayN = Module(new DelayN(UInt(PAddrBits.W), 5))
++    io.reset_mtvec.foreach{ mtvec =>
++      mtvec.toCore.valid := RegNext(mtvec.fromTile.valid)
++      mtvec.toCore.bits  := RegEnable(mtvec.fromTile.bits, mtvec.toCore.valid)
++    }
+ 
+     val (beu_int_out, _) = beu_local_int_source.out(0)
+     beu_int_out(0) := beu.module.io.interrupt
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 63a5e08893f..7d97fac95a8 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -352,6 +352,7 @@ case class XSCoreParameters
+   softPTWDelay: Int = 1,
+   wfiResume: Boolean = true,
+   hartIDDmodeWidth: Int = -1, // only for Customization
++  enableResetMtvec: Boolean = false, // only for Customization
+ ){
+   def ISABase = "rv64i"
+   def ISAExtensions = Seq(
+@@ -597,6 +598,7 @@ trait HasXSParameter {
+   val fLen = 64
+   def hartIdLen = p(MaxHartIdBits)
+   def hartIDDmodeWidth = coreParams.hartIDDmodeWidth
++  def enableResetMtvec = coreParams.enableResetMtvec
+   val xLen = XLEN
+ 
+   def HasBitmapCheck = coreParams.HasBitmapCheck
+diff --git a/src/main/scala/xiangshan/XSCore.scala b/src/main/scala/xiangshan/XSCore.scala
+index 349715703b4..a2902a33037 100644
+--- a/src/main/scala/xiangshan/XSCore.scala
++++ b/src/main/scala/xiangshan/XSCore.scala
+@@ -90,6 +90,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
+     val teemsiAck = Option.when(soc.IMSICParams.HasTEEIMSIC)(Output(Bool()))
+     val clintTime = Input(ValidIO(UInt(64.W)))
+     val reset_vector = Input(UInt(PAddrBits.W))
++    val reset_mtvec  = Option.when(enableResetMtvec)(Input(Valid(UInt(PAddrBits.W))))
+     val cpu_halt = Output(Bool())
+     val l2_flush_done = Input(Bool())
+     val l2_flush_en = Output(Bool())
+@@ -208,6 +209,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
+   memBlock.io.hartId := io.hartId
+   memBlock.io.l2_flush_done := io.l2_flush_done
+   memBlock.io.outer_reset_vector := io.reset_vector
++  memBlock.io.fromTopToBackend.reset_mtvec.foreach(_ := io.reset_mtvec.get)
+   memBlock.io.outer_hc_perfEvents := io.perfEvents
+   // frontend -> memBlock
+   memBlock.io.inner_beu_errors_icache <> frontend.io.error
+diff --git a/src/main/scala/xiangshan/XSTile.scala b/src/main/scala/xiangshan/XSTile.scala
+index 725fcb2c5dd..6f36bbfd584 100644
+--- a/src/main/scala/xiangshan/XSTile.scala
++++ b/src/main/scala/xiangshan/XSTile.scala
+@@ -106,6 +106,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+       val teemsiInfo = Option.when(soc.IMSICParams.HasTEEIMSIC)(Input(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))))
+       val teemsiAck = Option.when(soc.IMSICParams.HasTEEIMSIC)(Output(Bool()))
+       val reset_vector = Input(UInt(PAddrBits.W))
++      val reset_mtvec  = Option.when(enableResetMtvec)(Input(Valid(UInt(PAddrBits.W))))
+       val cpu_halt = Output(Bool())
+       val cpu_crtical_error = Output(Bool())
+       val hartIsInReset = Output(Bool())
+@@ -134,6 +135,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+     l2top.module.io.hartId.fromTile := io.hartId
+     core.module.io.hartId := l2top.module.io.hartId.toCore
+     core.module.io.reset_vector := l2top.module.io.reset_vector.toCore
++    core.module.io.reset_mtvec.foreach(_ := l2top.module.io.reset_mtvec.get.toCore)
+     core.module.io.msiInfo := l2top.module.io.msiInfo.toCore
+     l2top.module.io.msiInfo.fromTile := io.msiInfo
+     core.module.io.teemsiInfo zip l2top.module.io.teemsiInfo foreach { case (core_teemsiInfo, l2top_teemsiInfo) =>
+@@ -145,6 +147,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+     core.module.io.clintTime := l2top.module.io.clintTime.toCore
+     l2top.module.io.clintTime.fromTile := io.clintTime
+     l2top.module.io.reset_vector.fromTile := io.reset_vector
++    l2top.module.io.reset_mtvec.foreach(x => x.fromTile := io.reset_mtvec.get)
+     l2top.module.io.cpu_halt.fromCore := core.module.io.cpu_halt
+     io.cpu_halt := l2top.module.io.cpu_halt.toTile
+     l2top.module.io.cpu_critical_error.fromCore := core.module.io.cpu_critical_error
+diff --git a/src/main/scala/xiangshan/XSTileWrap.scala b/src/main/scala/xiangshan/XSTileWrap.scala
+index 3857f19a2ec..7178612870a 100644
+--- a/src/main/scala/xiangshan/XSTileWrap.scala
++++ b/src/main/scala/xiangshan/XSTileWrap.scala
+@@ -77,6 +77,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+       val teemsiInfo = Option.when(soc.IMSICParams.HasTEEIMSIC)(Input(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))))
+       val teemsiAck = Option.when(soc.IMSICParams.HasTEEIMSIC)(Output(Bool()))
+       val reset_vector = Input(UInt(PAddrBits.W))
++      val reset_mtvec  = Option.when(enableResetMtvec)(Input(Valid(UInt(PAddrBits.W))))
+       val cpu_halt = Output(Bool())
+       val cpu_crtical_error = Output(Bool())
+       val hartResetReq = Input(Bool())
+@@ -142,6 +143,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+       tile_teemsiInfo.bits := teemsi_data_cpu
+     }
+     tile.module.io.reset_vector := io.reset_vector
++    tile.module.io.reset_mtvec.foreach(_ := io.reset_mtvec.get)
+     tile.module.io.dft.zip(io.dft).foreach({ case (a, b) => a := b })
+     tile.module.io.dft_reset.zip(io.dft_reset).foreach({ case (a, b) => a := b })
+     io.cpu_halt := tile.module.io.cpu_halt
+@@ -152,9 +154,9 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+     }
+     io.hartIsInReset := tile.module.io.hartIsInReset
+     withClockAndReset(clock, reset_sync) {
+-      tile.module.io.traceCoreInterface.fromEncoder.enable := 
++      tile.module.io.traceCoreInterface.fromEncoder.enable :=
+         AsyncResetSynchronizerShiftReg(io.traceCoreInterface.fromEncoder.enable, 3, 0)
+-      tile.module.io.traceCoreInterface.fromEncoder.stall := 
++      tile.module.io.traceCoreInterface.fromEncoder.stall :=
+         AsyncResetSynchronizerShiftReg(io.traceCoreInterface.fromEncoder.stall, 3, 0)
+     }
+     io.traceCoreInterface.toEncoder := tile.module.io.traceCoreInterface.toEncoder
+diff --git a/src/main/scala/xiangshan/backend/Backend.scala b/src/main/scala/xiangshan/backend/Backend.scala
+index e27454ee729..a60f5133d19 100644
+--- a/src/main/scala/xiangshan/backend/Backend.scala
++++ b/src/main/scala/xiangshan/backend/Backend.scala
+@@ -575,6 +575,7 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+   csrin.clintTime.valid := RegNext(io.fromTop.clintTime.valid)
+   csrin.clintTime.bits := RegEnable(io.fromTop.clintTime.bits, io.fromTop.clintTime.valid)
+   csrin.l2FlushDone := RegNext(io.fromTop.l2FlushDone)
++  csrin.reset_mtvec.foreach(_ := io.fromTop.reset_mtvec.get)
+   csrin.trapInstInfo := ctrlBlock.io.toCSR.trapInstInfo
+   csrin.fromVecExcpMod.busy := vecExcpMod.o.status.busy
+   csrin.criticalErrorState := backendCriticalError
+@@ -1068,6 +1069,7 @@ class TopToBackendBundle(implicit p: Parameters) extends XSBundle with HasSoCPar
+   val teemsiInfo        = Option.when(soc.IMSICParams.HasTEEIMSIC)(Output(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))))
+   val clintTime         = Output(ValidIO(UInt(64.W)))
+   val l2FlushDone       = Output(Bool())
++  val reset_mtvec       = Option.when(enableResetMtvec)(Output(Valid(UInt(PAddrBits.W))))
+ }
+ 
+ class BackendToTopBundle(implicit p: Parameters) extends XSBundle with HasSoCParameter{
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+index bbff2c7b70f..c8323f5b211 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+@@ -119,7 +119,22 @@ trait MachineLevel { self: NewCSR =>
+     }
+   }).setAddr(CSRs.mie)
+ 
+-  val mtvec = Module(new CSRModule("Mtvec", new XtvecBundle))
++  val mtvec = Module(new CSRModule("Mtvec", new XtvecBundle){
++    val reset_mtvec = Option.when(enableResetMtvec)(IO(Input(Valid(UInt(PAddrBits.W)))))
++    val resetMtvec = RegInit(true.B)
++    reset_mtvec.foreach{ rst =>
++      when(wen){
++        reg.addr := wdata.addr
++        reg.mode := Mux(XtvecMode.isLegal(wdata.mode), wdata.mode, reg.mode)
++        resetMtvec := false.B
++      }.elsewhen(rst.valid && resetMtvec){
++        reg.addr := rst.bits
++        reg.mode := XtvecMode.Direct
++      }.otherwise{
++        reg := reg
++      }
++    }
++  })
+     .setAddr(CSRs.mtvec)
+ 
+   // Todo: support "Stimecmp/Vstimecmp" Extension, Version 1.0.0
+@@ -364,7 +379,7 @@ trait MachineLevel { self: NewCSR =>
+     }).setAddr(CSRs.mhpmcounter3 - 3 + num)
+   )
+ 
+-  // JEDEC JEP106 Manufacturer ID: 
++  // JEDEC JEP106 Manufacturer ID:
+   //   Bank 17 (16 continuations), Offset 0x6F (111)
+   val mvendorid = Module(new CSRModule("Mvendorid", new MvendoridBundle))
+     .setAddr(CSRs.mvendorid)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 946ae3f78f4..8e37acc2235 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -126,6 +126,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+       val hartId = UInt(hartIdLen.W)
+       val clintTime = Input(ValidIO(UInt(64.W)))
+       val l2FlushDone = Input(Bool())
++      val reset_mtvec = Option.when(enableResetMtvec)(Input(Valid(UInt(PAddrBits.W))))
+       val criticalErrorState = Input(Bool())
+     })
+     val in = Flipped(DecoupledIO(new NewCSRInput))
+@@ -550,6 +551,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+ 
+   mhartid.hartid := this.io.fromTop.hartId
+   mhartid.dmode  := debugMode
++  mtvec.reset_mtvec.foreach(_ := this.io.fromTop.reset_mtvec.get)
+ 
+   pmpcfgs.zipWithIndex.foreach { case (mod, i) =>
+     mod.w.wen   := wenLegalReg && (addr === (CSRs.pmpcfg0 + i / 8 * 2).U)
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index 8dabd68a47c..d33125e9fab 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -176,6 +176,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   csrMod.io.fromTop.hartId := io.csrin.get.hartId
+   csrMod.io.fromTop.clintTime := io.csrin.get.clintTime
+   csrMod.io.fromTop.l2FlushDone := io.csrin.get.l2FlushDone
++  csrMod.io.fromTop.reset_mtvec.foreach(_ := io.csrin.get.reset_mtvec.get)
+   csrMod.io.fromTop.criticalErrorState := io.csrin.get.criticalErrorState
+   private val csrModOutValid = csrMod.io.out.valid
+   private val csrModOut      = csrMod.io.out.bits
+@@ -397,6 +398,7 @@ class CSRInput(implicit p: Parameters) extends XSBundle with HasSoCParameter {
+   val criticalErrorState = Input(Bool())
+   val clintTime = Input(ValidIO(UInt(64.W)))
+   val l2FlushDone = Input(Bool())
++  val reset_mtvec = Option.when(enableResetMtvec)(Input(Valid(UInt(PAddrBits.W))))
+   val trapInstInfo = Input(ValidIO(new TrapInstInfo))
+   val fromVecExcpMod = Input(new Bundle {
+     val busy = Bool()
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 36a77fe5ce0..e6cd8a2e706 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -339,6 +339,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+       val msiInfo   = ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))
+       val teemsiInfo   = Option.when(soc.IMSICParams.HasTEEIMSIC)(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W)))
+       val clintTime = ValidIO(UInt(64.W))
++      val reset_mtvec = Option.when(enableResetMtvec)(Input(Valid(UInt(PAddrBits.W))))
+     })
+     val inner_hartId = Output(UInt(hartIdLen.W))
+     val inner_reset_vector = Output(UInt(PAddrBits.W))
+@@ -2017,6 +2018,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+       x_teemsiInfo        := DelayNWithValid(io_teemsiInfo, 1)
+     }
+     x.clintTime         := DelayNWithValid(io.fromTopToBackend.clintTime, 1)
++    x.reset_mtvec.foreach(_ := DelayNWithValid(io.fromTopToBackend.reset_mtvec.get, 1))
+   }
+ 
+   io.memInfo.sqFull := RegNext(lsq.io.sqFull)
+diff --git a/src/test/scala/top/SimTop.scala b/src/test/scala/top/SimTop.scala
+index 2f1ca4b8e7d..2c554bcd834 100644
+--- a/src/test/scala/top/SimTop.scala
++++ b/src/test/scala/top/SimTop.scala
+@@ -65,6 +65,7 @@ class XiangShanSim(implicit p: Parameters) extends Module with HasDiffTestInterf
+   soc.io.pll0_lock := true.B
+   soc.io.cacheable_check := DontCare
+   soc.io.riscv_rst_vec.foreach(_ := 0x10000000L.U)
++  soc.io.riscv_rst_mtvec.foreach{vec => vec.map(x => x := 0.U.asTypeOf(x))}
+   l_soc.nmi.foreach(_.foreach(intr => { intr := false.B; dontTouch(intr) }))
+   soc.io.traceCoreInterface.foreach(_.fromEncoder.enable := false.B)
+   soc.io.traceCoreInterface.foreach(_.fromEncoder.stall  := false.B)

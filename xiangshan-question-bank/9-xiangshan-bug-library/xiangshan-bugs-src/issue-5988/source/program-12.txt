@@ -1,0 +1,1 @@
+  replacer.io.victim.setIdx := getReplacerSetIndex(io.t0_startPc)

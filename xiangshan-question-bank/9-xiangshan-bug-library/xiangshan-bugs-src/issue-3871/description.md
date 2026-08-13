@@ -1,0 +1,1 @@
+In PR #3822, the gpaddr generating logic is modified for cross-page handleing. But that modification doesn't consider that the fullva of iTLB is always zero and should not be used, which causes the wrong htval/mtval2 when instruction guest page fault occurs. This patch fixes this.

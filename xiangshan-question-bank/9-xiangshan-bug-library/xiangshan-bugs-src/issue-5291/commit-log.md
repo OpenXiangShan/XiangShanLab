@@ -1,0 +1,34 @@
+# Commit Log
+- Issue: #5291
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5291
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5291
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5291
+- Changed files: 1
+- Additions: 2
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala b/src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala
+index b156b6124e3..04109c5b782 100644
+--- a/src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala
++++ b/src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala
+@@ -120,10 +120,10 @@ class BypassNetwork()(implicit p: Parameters, params: BackendParams) extends XSM
+     dontTouch(bypass2ValidVec3)
+   }
+   private val bypass2DateEn = VecInit(
+-    fromExus.map(x => GatedValidRegNext(x.valid))
++    fromExus.map(x => RegNext(x.valid))
+   ).asUInt
+   private val bypass2DataVec = if (fromDPsHasBypass2Source.length == 0) VecInit(Seq(0.U)) else VecInit(
+-    fromDPsHasBypass2Source.map(x => RegEnable(bypassDataVec(x), bypass2DateEn(x).asBool))
++    fromDPsHasBypass2Source.map(x => RegNext(bypassDataVec(x)))
+   )
+ 
+   println(s"[BypassNetwork] HasBypass2SourceExuNum: ${fromDPsHasBypass2Source.size} HasBypass2SinkExuNum: ${fromDPsHasBypass2Sink.size} bypass2DataVecSize: ${bypass2DataVec.length}")
+```

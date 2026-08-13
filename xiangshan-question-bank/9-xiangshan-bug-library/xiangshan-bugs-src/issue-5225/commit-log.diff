@@ -1,0 +1,62 @@
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 8111d35bf2a..ed71b108c04 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -175,6 +175,9 @@ class Ftq(implicit p: Parameters) extends FtqModule
+     metaQueue(io.fromBpu.s3FtqPtr.value) := io.fromBpu.meta.bits
+   }
+ 
++  resolveQueue.io.bpuEnqueue    := bpuEnqueue
++  resolveQueue.io.bpuEnqueuePtr := predictionPtr
++
+   // --------------------------------------------------------------------------------
+   // Interaction with ICache and IFU
+   // --------------------------------------------------------------------------------
+diff --git a/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala b/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala
+index 78f50a0214f..3a2cd10fdfa 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala
+@@ -21,7 +21,7 @@ import xiangshan.frontend.HasFrontendParameters
+ 
+ case class FtqParameters(
+     FtqSize:            Int = 64,
+-    ResolveQueueSize:   Int = 64,
++    ResolveQueueSize:   Int = 16,
+     BpRunAheadDistance: Int = 8,
+     BpTrainStallLimit:  Int = 8
+ ) {
+diff --git a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+index da8b37587ca..ddffcd61792 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+@@ -27,10 +27,13 @@ import xiangshan.frontend.bpu.HalfAlignHelper
+ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelper with HasCircularQueuePtrHelper {
+ 
+   class ResolveQueueIO extends Bundle {
+-    val backendResolve:     Vec[Valid[Resolve]]       = Input(Vec(backendParams.BrhCnt, Valid(new Resolve)))
+-    val backendRedirect:    Bool                      = Input(Bool())
+-    val backendRedirectPtr: FtqPtr                    = Input(new FtqPtr)
+-    val bpuTrain:           DecoupledIO[ResolveEntry] = Decoupled(new ResolveEntry)
++    val backendResolve: Vec[Valid[Resolve]]       = Input(Vec(backendParams.BrhCnt, Valid(new Resolve)))
++    val bpuTrain:       DecoupledIO[ResolveEntry] = Decoupled(new ResolveEntry)
++
++    val backendRedirect:    Bool   = Input(Bool())
++    val backendRedirectPtr: FtqPtr = Input(new FtqPtr)
++    val bpuEnqueue:         Bool   = Input(Bool())
++    val bpuEnqueuePtr:      FtqPtr = Input(new FtqPtr)
+   }
+ 
+   val io: ResolveQueueIO = IO(new ResolveQueueIO)
+@@ -113,6 +116,12 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+     )
+   }
+ 
++  when(io.bpuEnqueue) {
++    mem.foreach(entry =>
++      when(entry.valid)(entry.bits.flushed := entry.bits.flushed || entry.bits.ftqIdx === io.bpuEnqueuePtr)
++    )
++  }
++
+   private val deqValid = mem(deqPtr.value).valid && !io.backendResolve.map(branch =>
+     branch.valid && branch.bits.ftqIdx === mem(deqPtr.value).bits.ftqIdx
+   ).reduce(_ || _)

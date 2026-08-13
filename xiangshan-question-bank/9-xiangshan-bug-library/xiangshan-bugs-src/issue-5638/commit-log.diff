@@ -1,0 +1,14 @@
+diff --git a/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala
+index 4ff54d81be0..9d1c1648d21 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala
+@@ -39,8 +39,8 @@ trait Helpers extends HasMainBtbParameters
+     extraFields = Seq(
+       ("replacerSetIdx", FetchBlockSizeWidth, SetIdxLen),
+       ("targetLower", instOffsetBits, TargetWidth),
+-      ("position", instOffsetBits, FetchBlockAlignWidth),
+-      ("cfiPosition", instOffsetBits, FetchBlockSizeWidth)
++      ("position", instOffsetBits, CfiAlignedPositionWidth),
++      ("cfiPosition", instOffsetBits, CfiPositionWidth)
+     )
+   )

@@ -1,0 +1,19 @@
+SECRET_BIT=0:
+  attack_phase_start                         = 16780
+  csr_ras_disabled_seen                      = true
+  disabled_prediction_to_expected_gadget     = true
+  disabled_prediction_to_opposite_gadget     = false
+  ftq_fetch_expected_after_prediction        = true
+  ftq_fetch_opposite_after_prediction        = false
+  expected_gadget                            = gadget0
+  success                                    = true
+
+SECRET_BIT=1:
+  attack_phase_start                         = 16780
+  csr_ras_disabled_seen                      = true
+  disabled_prediction_to_expected_gadget     = true
+  disabled_prediction_to_opposite_gadget     = false
+  ftq_fetch_expected_after_prediction        = true
+  ftq_fetch_opposite_after_prediction        = false
+  expected_gadget                            = gadget1
+  success                                    = true

@@ -1,0 +1,313 @@
+# Commit Log
+- Issue: #4659
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4659
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4659
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4659
+- Changed files: 5
+- Additions: 60
+- Deletions: 83
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/MMUBundle.scala`
+- `src/main/scala/xiangshan/cache/mmu/PageTableCache.scala`
+- `src/main/scala/xiangshan/cache/mmu/Repeater.scala`
+- `src/main/scala/xiangshan/cache/mmu/TLB.scala`
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+index 79fd7fe580f..69765fa6074 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+@@ -836,24 +836,6 @@ class PtwEntry(tagLen: Int, hasPerm: Boolean = false, hasLevel: Boolean = false,
+   val prefetch = Bool()
+   val v = Bool()
+ 
+-  def is_normalentry(): Bool = {
+-    if (!hasLevel) true.B
+-    else level.get === 2.U
+-  }
+-
+-  def genPPN(vpn: UInt): UInt = {
+-    if (!hasLevel) {
+-      ppn
+-    } else {
+-      MuxLookup(level.get, 0.U)(Seq(
+-        3.U -> Cat(ppn(ppn.getWidth-1, vpnnLen*3), vpn(vpnnLen*3-1, 0)),
+-        2.U -> Cat(ppn(ppn.getWidth-1, vpnnLen*2), vpn(vpnnLen*2-1, 0)),
+-        1.U -> Cat(ppn(ppn.getWidth-1, vpnnLen), vpn(vpnnLen-1, 0)),
+-        0.U -> ppn)
+-      )
+-    }
+-  }
+-
+   //s2xlate control whether compare vmid or not
+   def hit(vpn: UInt, asid: UInt, vasid: UInt, vmid: UInt, allType: Boolean = false, ignoreAsid: Boolean = false, s2xlate: Bool) = {
+     require(vpn.getWidth == vpnLen)
+@@ -881,20 +863,6 @@ class PtwEntry(tagLen: Int, hasPerm: Boolean = false, hasLevel: Boolean = false,
+         0.U -> (tag_match(3) && tag_match(2) && tag_match(1) && tag_match(0)))
+       )
+ 
+-      asid_hit && vmid_hit && level_match
+-    } else if (hasLevel) {
+-      val tag_match = Wire(Vec(3, Bool())) // SuperPage, 512GB, 1GB or 2MB
+-      tag_match(0) := tag(tagLen - 1, tagLen - vpnnLen - extendVpnnBits) === vpn(vpnLen - 1, vpnLen - vpnnLen - extendVpnnBits)
+-      for (i <- 1 until 3) {
+-        tag_match(i) := tag(tagLen - vpnnLen * i - extendVpnnBits - 1, tagLen - vpnnLen * (i + 1) - extendVpnnBits) === vpn(vpnLen - vpnnLen * i - extendVpnnBits - 1, vpnLen - vpnnLen * (i + 1) - extendVpnnBits)
+-      }
+-
+-      val level_match = MuxLookup(level.getOrElse(0.U), false.B)(Seq(
+-        3.U -> tag_match(0),
+-        2.U -> (tag_match(0) && tag_match(1)),
+-        1.U -> (tag_match(0) && tag_match(1) && tag_match(2)))
+-      )
+-
+       asid_hit && vmid_hit && level_match
+     } else {
+       asid_hit && vmid_hit && tag === vpn(vpnLen - 1, vpnLen - tagLen)
+@@ -978,6 +946,7 @@ class PtwEntries(num: Int, tagLen: Int, level: Int, hasPerm: Boolean, ReservedBi
+     getVpnClip(vpn, level)(log2Up(num) - 1, 0)
+   }
+ 
++  // For PTWCache l0 & l1 entries, need not consider napot
+   def hit(vpn: UInt, asid: UInt, vasid: UInt, vmid:UInt, ignoreAsid: Boolean = false, s2xlate: Bool) = {
+     val asid_value = Mux(s2xlate, vasid, asid)
+     val asid_hit = if (ignoreAsid) true.B else (this.asid === asid_value)
+@@ -1141,11 +1110,14 @@ class HptwResp(implicit p: Parameters) extends PtwBundle {
+ 
+   def hit(gvpn: UInt, vmid: UInt): Bool = {
+     val vmid_hit = this.entry.vmid.getOrElse(0.U) === vmid
+-    val tag_match = Wire(Vec(4, Bool())) // 512GB, 1GB, 2MB or 4KB, not parameterized here
+-    for (i <- 0 until 3) {
++    val tag_match = Wire(Vec(Level + 1, Bool()))
++    tag_match(0) := Mux(entry.n.getOrElse(0.U) === 0.U,
++      entry.tag(vpnnLen - 1, 0) === gvpn(vpnnLen - 1, 0),
++      entry.tag(vpnnLen - 1, pteNapotBits) === gvpn(vpnnLen - 1, pteNapotBits))
++    for (i <- 1 until Level) {
+       tag_match(i) := entry.tag(vpnnLen * (i + 1)  - 1, vpnnLen * i) === gvpn(vpnnLen * (i + 1)  - 1, vpnnLen * i)
+     }
+-    tag_match(3) := entry.tag(gvpnLen - 1, vpnnLen * 3) === gvpn(gvpnLen - 1, vpnnLen * 3)
++    tag_match(Level) := entry.tag(gvpnLen - 1, vpnnLen * Level) === gvpn(gvpnLen - 1, vpnnLen * Level)
+ 
+     val level_match = MuxLookup(entry.level.getOrElse(0.U), false.B)(Seq(
+       3.U -> tag_match(3),
+@@ -1192,41 +1164,29 @@ class PtwSectorResp(implicit p: Parameters) extends PtwBundle {
+ 
+   def hit(vpn: UInt, asid: UInt, vmid: UInt, allType: Boolean = false, ignoreAsid: Boolean = false, s2xlate: Bool): Bool = {
+     require(vpn.getWidth == vpnLen)
+-    //    require(this.asid.getWidth <= asid.getWidth)
++    require(allType)
++    // require(this.asid.getWidth <= asid.getWidth)
+     val asid_hit = if (ignoreAsid) true.B else (this.entry.asid === asid)
+     val vmid_hit = Mux(s2xlate, this.entry.vmid.getOrElse(0.U) === vmid, true.B)
+-    if (allType) {
+-      val addr_low_hit = valididx(vpn(sectortlbwidth - 1, 0))
+-      val tag_match = Wire(Vec(4, Bool())) // 512GB, 1GB, 2MB or 4KB, not parameterized here
+-      tag_match(0) := entry.tag(vpnnLen - sectortlbwidth - 1, 0) === vpn(vpnnLen - 1, sectortlbwidth)
+-      for (i <- 1 until 3) {
+-        tag_match(i) := entry.tag(vpnnLen * (i + 1) - sectortlbwidth - 1, vpnnLen * i - sectortlbwidth) === vpn(vpnnLen * (i + 1) - 1, vpnnLen * i)
+-      }
+-      tag_match(3) := entry.tag(sectorvpnLen - 1, vpnnLen * 3 - sectortlbwidth) === vpn(vpnLen - 1, vpnnLen * 3)
+-
+-      val level_match = MuxLookup(entry.level.getOrElse(0.U), false.B)(Seq(
+-        3.U -> tag_match(3),
+-        2.U -> (tag_match(3) && tag_match(2)),
+-        1.U -> (tag_match(3) && tag_match(2) && tag_match(1)),
+-        0.U -> (tag_match(3) && tag_match(2) && tag_match(1) && tag_match(0)))
+-      )
+ 
+-      asid_hit && vmid_hit && level_match && addr_low_hit
+-    } else {
+-      val addr_low_hit = valididx(vpn(sectortlbwidth - 1, 0))
+-      val tag_match = Wire(Vec(3, Bool())) // SuperPage, 512GB, 1GB or 2MB
+-      for (i <- 0 until 3) {
+-        tag_match(i) := entry.tag(sectorvpnLen - vpnnLen * i - 1, sectorvpnLen - vpnnLen * (i + 1)) === vpn(vpnLen - vpnnLen * i - 1, vpnLen - vpnnLen * (i + 1))
+-      }
++    val addr_low_hit = valididx(vpn(sectortlbwidth - 1, 0))
++    val tag_match = Wire(Vec(Level + 1, Bool()))
++    tag_match(0) := Mux(entry.n.getOrElse(0.U) === 0.U,
++      entry.tag(vpnnLen - sectortlbwidth - 1, 0) === vpn(vpnnLen - 1, sectortlbwidth),
++      entry.tag(vpnnLen - sectortlbwidth - 1, pteNapotBits - sectortlbwidth) === vpn(vpnnLen - 1, pteNapotBits))
++    for (i <- 1 until Level) {
++      tag_match(i) := entry.tag(vpnnLen * (i + 1) - sectortlbwidth - 1, vpnnLen * i - sectortlbwidth) === vpn(vpnnLen * (i + 1) - 1, vpnnLen * i)
++    }
++    tag_match(Level) := entry.tag(sectorvpnLen - 1, vpnnLen * Level - sectortlbwidth) === vpn(vpnLen - 1, vpnnLen * Level)
+ 
+-      val level_match = MuxLookup(entry.level.getOrElse(0.U), false.B)(Seq(
+-        3.U -> tag_match(0),
+-        2.U -> (tag_match(0) && tag_match(1)),
+-        1.U -> (tag_match(0) && tag_match(1) && tag_match(2)))
+-      )
++    val level_match = MuxLookup(entry.level.getOrElse(0.U), false.B)(Seq(
++      3.U -> tag_match(3),
++      2.U -> (tag_match(3) && tag_match(2)),
++      1.U -> (tag_match(3) && tag_match(2) && tag_match(1)),
++      0.U -> (tag_match(3) && tag_match(2) && tag_match(1) && tag_match(0)))
++    )
+ 
+-      asid_hit && vmid_hit && level_match && addr_low_hit
+-    }
++    asid_hit && vmid_hit && level_match && addr_low_hit
+   }
+ }
+ 
+@@ -1312,12 +1272,25 @@ class PtwRespS2(implicit p: Parameters) extends PtwBundle {
+                   // when allStage, level is the smaller one of stage1 and stage2
+                   // e.g. stage1 is 1GB page, stage2 is 2MB page，then level is 2MB
+                   s1.entry.level.getOrElse(0.U) min s2.entry.level.getOrElse(0.U))
+-
+-    val tag_match = Wire(Vec(4, Bool())) // 512GB, 1GB, 2MB or 4KB, not parameterized here
+-    for (i <- 0 until 3) {
++    // When all stage, the size of the TLB entry is the smaller one of two-stage translation result
++    // n is valid (represents a 64KB page) when:
++    // 1. s1 is napot(64KB) and s2 is superpage(greater than or equal to 2MB)
++    // 2. s2 is napot(64KB) and s1 is superpage(greater than or equal to 2MB)
++    // 3. s1 is napot(64KB) and s2 is also napot(64KB)
++    val allStage_n = (s1.entry.n.getOrElse(0.U) =/= 0.U && s2.entry.level.getOrElse(0.U) =/= 0.U) ||
++      (s2.entry.n.getOrElse(0.U) =/= 0.U && s1.entry.level.getOrElse(0.U) =/= 0.U) ||
++      (s1.entry.n.getOrElse(0.U) =/= 0.U && s2.entry.n.getOrElse(0.U) =/= 0.U)
++    val n = Mux(this.s2xlate === onlyStage1, s1.entry.n.getOrElse(0.U), allStage_n)
++
++    val tag_match = Wire(Vec(Level + 1, Bool()))
++    tag_match(0) := Mux(n === 0.U,
++      vpn(vpnnLen - 1, 0) === s1vpn(vpnnLen - 1, 0),
++      vpn(vpnnLen - 1, pteNapotBits) === s1vpn(vpnnLen - 1, pteNapotBits))
++    for (i <- 1 until Level) {
+       tag_match(i) := vpn(vpnnLen * (i + 1) - 1, vpnnLen * i) === s1vpn(vpnnLen * (i + 1) - 1, vpnnLen * i)
+     }
+-    tag_match(3) := vpn(vpnLen - 1, vpnnLen * 3) === s1vpn(vpnLen - 1, vpnnLen * 3)
++    tag_match(Level) := vpn(vpnLen - 1, vpnnLen * Level) === s1vpn(vpnLen - 1, vpnnLen * Level)
++
+     val level_match = MuxLookup(level, false.B)(Seq(
+       3.U -> tag_match(3),
+       2.U -> (tag_match(3) && tag_match(2)),
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+index 076f47e16e8..8ee2cdbbc96 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+@@ -642,7 +642,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+ 
+     spAccessPerf.zip(hitVec).map{ case (s, h) => s := h && stageDelay_valid_1cycle }
+     for (i <- 0 until l2tlbParams.spSize) {
+-      XSDebug(stageReq.fire, p"[sp] sp(${i.U}) ${sp(i)} hit:${sp(i).hit(vpn_search, io.csr_dup(0).satp.asid, io.csr_dup(0).vsatp.asid, io.csr_dup(0).hgatp.vmid, s2xlate = h_search =/= noS2xlate)} spv:${spv(i)}\n")
++      XSDebug(stageReq.fire, p"[sp] sp(${i.U}) ${sp(i)} hit:${sp(i).hit(vpn_search, io.csr_dup(0).satp.asid, io.csr_dup(0).vsatp.asid, io.csr_dup(0).hgatp.vmid, allType = true, s2xlate = h_search =/= noS2xlate)} spv:${spv(i)}\n")
+     }
+     XSDebug(stageDelay_valid_1cycle, p"[sp] spHit:${hit} spHitData:${hitData} hitVec:${Binary(VecInit(hitVec).asUInt)}\n")
+ 
+@@ -1121,11 +1121,11 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+       when (sfence_dup(0).bits.rs2) {
+         // specific leaf of addr && all asid
+         l0v := l0v & ~(l0virthit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(sfence_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, ignoreAsid = true, s2xlate = io.csr_dup(0).priv.virt))).asUInt)
++        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(sfence_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, ignoreAsid = true, s2xlate = io.csr_dup(0).priv.virt))).asUInt)
+       } .otherwise {
+         // specific leaf of addr && specific asid
+         l0v := l0v & ~(l0virthit & ~l0g & l0asidhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(~spg & sphhit & VecInit(sp.map(_.hit(sfence_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, s2xlate = io.csr_dup(0).priv.virt))).asUInt)
++        spv := spv & ~(~spg & sphhit & VecInit(sp.map(_.hit(sfence_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, s2xlate = io.csr_dup(0).priv.virt))).asUInt)
+       }
+     }
+   }
+@@ -1165,10 +1165,10 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     }.otherwise {
+       when(sfence_dup(0).bits.rs2) {
+         l0v := l0v & ~(l0hhit & l0vmidhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfencev_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, ignoreAsid = true, s2xlate = true.B))).asUInt)
++        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfencev_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, ignoreAsid = true, s2xlate = true.B))).asUInt)
+       }.otherwise {
+         l0v := l0v & ~(l0hhit & l0vmidhit & ~l0g & l0asidhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(~spg & sphhit & VecInit(sp.map(_.hit(hfencev_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, s2xlate = true.B))).asUInt)
++        spv := spv & ~(~spg & sphhit & VecInit(sp.map(_.hit(hfencev_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, s2xlate = true.B))).asUInt)
+       }
+     }
+   }
+@@ -1209,10 +1209,10 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     }.otherwise {
+       when(sfence_dup(0).bits.rs2) {
+         l0v := l0v & ~(l0hhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfenceg_gvpn, 0.U, 0.U, sfence_dup(0).bits.id, ignoreAsid = true, s2xlate = false.B))).asUInt)
++        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfenceg_gvpn, 0.U, 0.U, sfence_dup(0).bits.id, allType = true, ignoreAsid = true, s2xlate = false.B))).asUInt)
+       }.otherwise {
+         l0v := l0v & ~(l0hhit & l0vmidhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfenceg_gvpn, 0.U, 0.U, sfence_dup(0).bits.id, ignoreAsid = true, s2xlate = true.B))).asUInt)
++        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfenceg_gvpn, 0.U, 0.U, sfence_dup(0).bits.id, allType = true, ignoreAsid = true, s2xlate = true.B))).asUInt)
+       }
+     }
+   }
+diff --git a/src/main/scala/xiangshan/cache/mmu/Repeater.scala b/src/main/scala/xiangshan/cache/mmu/Repeater.scala
+index ea14c0db9b6..e687c8b0c9b 100644
+--- a/src/main/scala/xiangshan/cache/mmu/Repeater.scala
++++ b/src/main/scala/xiangshan/cache/mmu/Repeater.scala
+@@ -191,9 +191,9 @@ class PTWFilterEntry(Width: Int, Size: Int, hasHint: Boolean = false)(implicit p
+ 
+   val entryIsMatchVec = WireInit(VecInit(Seq.fill(Width)(false.B)))
+   val entryMatchIndexVec = WireInit(VecInit(Seq.fill(Width)(0.U(log2Up(Size).W))))
+-  val ptwResp_EntryMatchVec = vpn.zip(v).zip(s2xlate).map{ case ((pi, vi), s2xlatei) => vi && s2xlatei === io.ptw.resp.bits.s2xlate && io.ptw.resp.bits.hit(pi, io.csr.satp.asid, io.csr.vsatp.asid, io.csr.hgatp.vmid, true)}
++  val ptwResp_EntryMatchVec = vpn.zip(v).zip(s2xlate).map{ case ((pi, vi), s2xlatei) => vi && s2xlatei === io.ptw.resp.bits.s2xlate && io.ptw.resp.bits.hit(pi, io.csr.satp.asid, io.csr.vsatp.asid, io.csr.hgatp.vmid, allType = true)}
+   val ptwResp_EntryMatchFirst = firstValidIndex(ptwResp_EntryMatchVec, true.B)
+-  val ptwResp_ReqMatchVec = io.tlb.req.map(a => io.ptw.resp.valid && a.bits.s2xlate === io.ptw.resp.bits.s2xlate && io.ptw.resp.bits.hit(a.bits.vpn, io.csr.satp.asid, io.csr.vsatp.asid, io.csr.hgatp.vmid, true))
++  val ptwResp_ReqMatchVec = io.tlb.req.map(a => io.ptw.resp.valid && a.bits.s2xlate === io.ptw.resp.bits.s2xlate && io.ptw.resp.bits.hit(a.bits.vpn, io.csr.satp.asid, io.csr.vsatp.asid, io.csr.hgatp.vmid, allType = true))
+ 
+   io.refill := Cat(ptwResp_EntryMatchVec).orR && io.ptw.resp.fire
+   io.ptw.resp.ready := true.B
+@@ -463,7 +463,7 @@ class PTWFilter(Width: Int, Size: Int, FenceDelay: Int)(implicit p: Parameters)
+   val inflight_full = inflight_counter === Size.U
+ 
+   def ptwResp_hit(vpn: UInt, s2xlate: UInt, resp: PtwRespS2): Bool = {
+-    s2xlate === resp.s2xlate && resp.hit(vpn, io.csr.satp.asid, io.csr.vsatp.asid, io.csr.hgatp.vmid, true)
++    s2xlate === resp.s2xlate && resp.hit(vpn, io.csr.satp.asid, io.csr.vsatp.asid, io.csr.hgatp.vmid, allType = true)
+   }
+ 
+   when (io.ptw.req(0).fire =/= io.ptw.resp.fire) {
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLB.scala b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+index c3adbe449b6..9e880a2b3de 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+@@ -500,7 +500,7 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+       (csr.hgatp.mode === 0.U) -> onlyStage1
+     ))
+ 
+-    val ptw_just_back = ptw.resp.fire && req_s2xlate === ptw.resp.bits.s2xlate && ptw.resp.bits.hit(get_pn(req_out(idx).vaddr), csr.satp.asid, csr.vsatp.asid, csr.hgatp.vmid, true, false)
++    val ptw_just_back = ptw.resp.fire && req_s2xlate === ptw.resp.bits.s2xlate && ptw.resp.bits.hit(get_pn(req_out(idx).vaddr), csr.satp.asid, csr.vsatp.asid, csr.hgatp.vmid, allType = true)
+     // TODO: RegNext enable: ptw.resp.valid ? req.valid
+     val ptw_resp_bits_reg = RegEnable(ptw.resp.bits, ptw.resp.valid)
+     val ptw_already_back = GatedValidRegNext(ptw.resp.fire) && req_s2xlate === ptw_resp_bits_reg.s2xlate && ptw_resp_bits_reg.hit(get_pn(req_out(idx).vaddr), csr.satp.asid, csr.vsatp.asid, csr.hgatp.vmid, allType = true)
+@@ -622,7 +622,7 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+     val onlyS2 = s2xlate === onlyStage2
+     val onlyS1 = s2xlate === onlyStage1
+     val s2xlate_hit = s2xlate === ptw.resp.bits.s2xlate
+-    val resp_hit = ptw.resp.bits.hit(vpn, csr.satp.asid, csr.vsatp.asid, csr.hgatp.vmid, true, false)
++    val resp_hit = ptw.resp.bits.hit(vpn, csr.satp.asid, csr.vsatp.asid, csr.hgatp.vmid, allType = true)
+     val p_hit = GatedValidRegNext(resp_hit && io.ptw.resp.fire && s2xlate_hit)
+     val ppn_s1 = ptw.resp.bits.s1.genPPN(vpn)(ppnLen - 1, 0)
+     val gvpn = Mux(onlyS2, vpn, ppn_s1)
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 86bb68ef9c6..d83bc557fb0 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -728,7 +728,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+ 
+   for (i <- 0 until LdExuCnt) {
+     tlbreplay(i) := dtlb_ld(0).ptw.req(i).valid && ptw_resp_next.vector(0) && ptw_resp_v &&
+-      ptw_resp_next.data.hit(dtlb_ld(0).ptw.req(i).bits.vpn, tlbcsr.satp.asid, tlbcsr.vsatp.asid, tlbcsr.hgatp.vmid, allType = true, ignoreAsid = true)
++      ptw_resp_next.data.hit(dtlb_ld(0).ptw.req(i).bits.vpn, tlbcsr.satp.asid, tlbcsr.vsatp.asid, tlbcsr.hgatp.vmid,
++        allType = true, ignoreAsid = true) // Maybe need not ignoreAsid here, however not a functional bug
+   }
+ 
+   dtlb.flatMap(a => a.ptw.req)
+@@ -740,7 +741,10 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+       else if (i < TlbEndVec(dtlb_ld_idx)) Cat(ptw_resp_next.vector.slice(TlbStartVec(dtlb_ld_idx), TlbEndVec(dtlb_ld_idx))).orR
+       else if (i < TlbEndVec(dtlb_st_idx)) Cat(ptw_resp_next.vector.slice(TlbStartVec(dtlb_st_idx), TlbEndVec(dtlb_st_idx))).orR
+       else                                 Cat(ptw_resp_next.vector.slice(TlbStartVec(dtlb_pf_idx), TlbEndVec(dtlb_pf_idx))).orR
+-    ptwio.req(i).valid := tlb.valid && !(ptw_resp_v && vector_hit && ptw_resp_next.data.hit(tlb.bits.vpn, tlbcsr.satp.asid, tlbcsr.vsatp.asid, tlbcsr.hgatp.vmid, allType = true, ignoreAsid = true))
++    ptwio.req(i).valid := tlb.valid &&
++      !(ptw_resp_v && vector_hit &&
++        ptw_resp_next.data.hit(tlb.bits.vpn, tlbcsr.satp.asid, tlbcsr.vsatp.asid, tlbcsr.hgatp.vmid,
++          allType = true, ignoreAsid = true)) // // Maybe need not ignoreAsid here, however not a functional bug
+   }
+   dtlb.foreach(_.ptw.resp.bits := ptw_resp_next.data)
+   if (refillBothTlb) {
+```

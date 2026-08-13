@@ -1,0 +1,105 @@
+# Commit Log
+- Issue: #4628
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4628
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4628
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4628
+- Changed files: 4
+- Additions: 11
+- Deletions: 3
+
+## Files
+- `src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+index 626884d659b..214bd6c9c3d 100644
+--- a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
++++ b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+@@ -31,7 +31,7 @@ import utility._
+ import utils._
+ import xiangshan._
+ import xiangshan.backend.Bundles.DynInst
+-import xiangshan.backend.rob.RobDebugRollingIO
++import xiangshan.backend.rob.{RobDebugRollingIO, RobPtr}
+ import xiangshan.cache.wpu._
+ import xiangshan.mem.{AddPipelineReg, HasL1PrefetchSourceParameter}
+ import xiangshan.mem.prefetch._
+@@ -522,6 +522,7 @@ class DCacheWordIO(implicit p: Parameters) extends DCacheBundle
+ 
+ class UncacheWordReq(implicit p: Parameters) extends DCacheBundle
+ {
++  val robIdx = new RobPtr
+   val cmd  = UInt(M_SZ.W)
+   val addr = UInt(PAddrBits.W)
+   val vaddr = UInt(VAddrBits.W) // for uncache buffer forwarding
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+index eca1c75db8f..cd8f028ee2b 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+@@ -250,13 +250,17 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
+   // naive uncache arbiter
+   val s_idle :: s_load :: s_store :: Nil = Enum(3)
+   val pendingstate = RegInit(s_idle)
++  val selectLq = (loadQueue.io.uncache.req.valid && !storeQueue.io.uncache.req.valid) || (
++    loadQueue.io.uncache.req.valid && storeQueue.io.uncache.req.valid && 
++    loadQueue.io.uncache.req.bits.robIdx < storeQueue.io.uncache.req.bits.robIdx
++  )
+ 
+   switch(pendingstate){
+     is(s_idle){
+       when(io.uncache.req.fire){
+         pendingstate :=
+           Mux(io.uncacheOutstanding && io.uncache.req.bits.nc, s_idle,
+-          Mux(loadQueue.io.uncache.req.valid, s_load,
++          Mux(selectLq, s_load,
+           s_store))
+       }
+     }
+@@ -281,7 +285,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
+   storeQueue.io.uncache.resp.valid := false.B
+   storeQueue.io.uncache.idResp.valid := false.B
+   when(pendingstate === s_idle){
+-    when(loadQueue.io.uncache.req.valid){
++    when(selectLq){
+       io.uncache.req <> loadQueue.io.uncache.req
+     }.otherwise{
+       io.uncache.req <> storeQueue.io.uncache.req
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala
+index 8cd9cc9f1a7..1a52d8ee73c 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala
+@@ -175,6 +175,7 @@ class UncacheEntry(entryIndex: Int)(implicit p: Parameters) extends XSModule
+   io.uncache.req.bits.id   := entryIndex.U
+   io.uncache.req.bits.instrtype := DontCare
+   io.uncache.req.bits.replayCarry := DontCare
++  io.uncache.req.bits.robIdx := req.uop.robIdx
+   io.uncache.req.bits.nc := req.nc
+   io.uncache.req.bits.memBackTypeMM := req.memBackTypeMM
+ 
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+index e0409bbf597..16891bc51fa 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+@@ -857,6 +857,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   mmioReq.bits.vaddr:= vaddrModule.io.rdata(0)
+   mmioReq.bits.data := shiftDataToLow(paddrModule.io.rdata(0), dataModule.io.rdata(0).data)
+   mmioReq.bits.mask := shiftMaskToLow(paddrModule.io.rdata(0), dataModule.io.rdata(0).mask)
++  mmioReq.bits.robIdx := uop(GatedRegNext(rdataPtrExtNext(0)).value).robIdx
+   mmioReq.bits.memBackTypeMM := memBackTypeMM(GatedRegNext(rdataPtrExtNext(0)).value)
+   mmioReq.bits.nc := false.B
+   mmioReq.bits.id := rdataPtrExt(0).value
+@@ -913,6 +914,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   ncReq.bits.vaddr:= vaddrModule.io.rdata(0)
+   ncReq.bits.data := shiftDataToLow(paddrModule.io.rdata(0), dataModule.io.rdata(0).data)
+   ncReq.bits.mask := shiftMaskToLow(paddrModule.io.rdata(0), dataModule.io.rdata(0).mask)
++  ncReq.bits.robIdx := uop(GatedRegNext(rdataPtrExtNext(0)).value).robIdx
+   ncReq.bits.memBackTypeMM := memBackTypeMM(GatedRegNext(rdataPtrExtNext(0)).value)
+   ncReq.bits.nc := true.B
+   ncReq.bits.id := rptr0
+```

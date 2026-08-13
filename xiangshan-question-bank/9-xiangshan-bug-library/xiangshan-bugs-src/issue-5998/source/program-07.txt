@@ -1,0 +1,15 @@
+riscv64-unknown-elf-gcc \
+  -nostdlib -nostartfiles \
+  -march=rv64gc_zicsr_zifencei -mabi=lp64 \
+  -T link.ld \
+  -o cross16_multistore_forward.elf \
+  cross16_multistore_forward.S
+
+riscv64-unknown-elf-objcopy \
+  -O binary \
+  cross16_multistore_forward.elf \
+  cross16_multistore_forward.bin
+
+riscv64-unknown-elf-objdump \
+  -dr cross16_multistore_forward.elf \
+  > cross16_multistore_forward.objdump

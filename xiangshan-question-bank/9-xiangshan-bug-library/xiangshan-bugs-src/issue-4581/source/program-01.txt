@@ -1,0 +1,4 @@
+csrw  vsiselect, zero
+li t6, 0x200
+csrw vsiselect, t6
+csrr t6, vsiselect

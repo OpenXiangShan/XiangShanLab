@@ -1,0 +1,21 @@
+{
+  "number": 3722,
+  "title": "fix(ROB): exclude frontend exceptions from deqIsVlsException",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3722",
+  "state": "closed",
+  "labels": [],
+  "author": "huxuan0307",
+  "created_at": "2024-10-12T07:48:43Z",
+  "updated_at": "2024-10-14T06:57:30Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3722/commit-log.md"
+  ],
+  "submitted_at": "2024-10-12",
+  "branch": "",
+  "rtl_commit": ""
+}

@@ -1,0 +1,2 @@
+cd attachment
+XIANGSHAN_HOME=/path/to/XiangShan bash run_poc.sh

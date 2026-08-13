@@ -1,0 +1,3 @@
+"predicate": "reproduced"
+"expected_bare_fault_pc": "0x0000004000000004"
+"observed_wrong_sv39_fault_pc": "0xffffffc000000004"

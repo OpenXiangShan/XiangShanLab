@@ -1,0 +1,163 @@
+# Commit Log
+- Issue: #3606
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3606
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3606
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3606
+- Changed files: 3
+- Additions: 60
+- Deletions: 10
+
+## Files
+- `src/main/scala/xiangshan/frontend/Tage.scala`
+- `src/main/scala/xiangshan/frontend/WrBypass.scala`
+- `utility`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/Tage.scala b/src/main/scala/xiangshan/frontend/Tage.scala
+index 2c14ce1ce1c..db6d943d1c3 100644
+--- a/src/main/scala/xiangshan/frontend/Tage.scala
++++ b/src/main/scala/xiangshan/frontend/Tage.scala
+@@ -165,6 +165,8 @@ class TageBTable(implicit p: Parameters) extends XSModule with TBTParams{
+       bypassWrite = true
+     ))
+ 
++  val wrbypass = Module(new WrBypass(UInt(2.W), bypassEntries, log2Up(BtSize), numWays = numBr, extraPort = Some(true))) // logical bridx
++
+   // Power-on reset to weak taken
+   val doing_reset = RegInit(true.B)
+   val resetRow = RegInit(0.U(log2Ceil(BtSize).W))
+@@ -180,8 +182,10 @@ class TageBTable(implicit p: Parameters) extends XSModule with TBTParams{
+   bt.io.r.req.valid := s0_fire
+   bt.io.r.req.bits.setIdx := s0_idx
+ 
+-  val s1_read = bt.io.r.resp.data
+   val s1_idx = RegEnable(s0_idx, s0_fire)
++  //The cached data in wrbypass can participate in prediction
++  val use_wrbypass_data = wrbypass.io.has_conflict.getOrElse(false.B) && wrbypass.io.update_idx.getOrElse(0.U) === s1_idx
++  val s1_read = Mux(use_wrbypass_data, wrbypass.io.update_data.get, bt.io.r.resp.data)
+ 
+ 
+   val per_br_ctr = VecInit((0 until numBr).map(i => Mux1H(UIntToOH(get_phy_br_idx(s1_idx, i), numBr), s1_read)))
+@@ -192,7 +196,6 @@ class TageBTable(implicit p: Parameters) extends XSModule with TBTParams{
+ 
+   val newCtrs = Wire(Vec(numBr, UInt(2.W))) // physical bridx
+ 
+-  val wrbypass = Module(new WrBypass(UInt(2.W), bypassEntries, log2Up(BtSize), numWays = numBr)) // logical bridx
+   wrbypass.io.wen := io.update_mask.reduce(_||_)
+   wrbypass.io.write_idx := u_idx
+   wrbypass.io.write_way_mask.map(_ := io.update_mask)
+@@ -230,13 +233,25 @@ class TageBTable(implicit p: Parameters) extends XSModule with TBTParams{
+     ).reduce(_||_)
+   )).asUInt
+ 
++  //Using WrBypass to store wdata dual ports for reading and writing to the same address.
++  val write_conflict = u_idx === s0_idx && io.update_mask.reduce(_||_) && s0_fire
++  val can_write = (wrbypass.io.update_idx.get =/= s0_idx || !s0_fire) && wrbypass.io.has_conflict.get
++
++  wrbypass.io.conflict_valid.get := write_conflict || (can_write && (io.update_mask.reduce(_||_) || doing_reset))
++  wrbypass.io.conflict_write_data.get := Mux(doing_reset, VecInit(Seq.fill(numBr)(2.U(2.W))), newCtrs)
++  wrbypass.io.conflict_way_mask.get := Mux(doing_reset, Fill(numBr, 1.U(1.W)).asUInt, updateWayMask.asUInt)
++
++  val wrbrpass_idx = wrbypass.io.update_idx.get
++  val wrbypass_write_data = wrbypass.io.update_data.get
++  val wrbypass_write_waymask = wrbypass.io.update_way_mask.get
++  wrbypass.io.conflict_clean.get := can_write
++
+   bt.io.w.apply(
+-    valid = io.update_mask.reduce(_||_) || doing_reset,
+-    data = Mux(doing_reset, VecInit(Seq.fill(numBr)(2.U(2.W))), newCtrs), // Weak taken
+-    setIdx = Mux(doing_reset, resetRow, u_idx),
+-    waymask = Mux(doing_reset, Fill(numBr, 1.U(1.W)).asUInt, updateWayMask)
++    valid = ((io.update_mask.reduce(_||_) || doing_reset) && !write_conflict) || can_write,
++    data = Mux(can_write, wrbypass_write_data, Mux(doing_reset, VecInit(Seq.fill(numBr)(2.U(2.W))), newCtrs)), // Weak taken
++    setIdx = Mux(can_write, wrbrpass_idx, Mux(doing_reset, resetRow, u_idx)),
++    waymask = Mux(can_write, wrbypass_write_waymask , Mux(doing_reset, Fill(numBr, 1.U(1.W)).asUInt, updateWayMask))
+   )
+-
+ }
+ 
+ 
+diff --git a/src/main/scala/xiangshan/frontend/WrBypass.scala b/src/main/scala/xiangshan/frontend/WrBypass.scala
+index e2cd85402af..949ba24238c 100644
+--- a/src/main/scala/xiangshan/frontend/WrBypass.scala
++++ b/src/main/scala/xiangshan/frontend/WrBypass.scala
+@@ -24,7 +24,7 @@ import utility._
+ import xiangshan.cache.mmu.CAMTemplate
+ 
+ class WrBypass[T <: Data](gen: T, val numEntries: Int, val idxWidth: Int,
+-  val numWays: Int = 1, val tagWidth: Int = 0)(implicit p: Parameters) extends XSModule {
++  val numWays: Int = 1, val tagWidth: Int = 0, val extraPort: Option[Boolean] = None)(implicit p: Parameters) extends XSModule {
+   require(numEntries >= 0)
+   require(idxWidth > 0)
+   require(numWays >= 1)
+@@ -38,8 +38,18 @@ class WrBypass[T <: Data](gen: T, val numEntries: Int, val idxWidth: Int,
+     val write_data = Input(Vec(numWays, gen))
+     val write_way_mask = if (multipleWays) Some(Input(Vec(numWays, Bool()))) else None
+ 
++    val conflict_valid = if(extraPort.isDefined) Some(Input(Bool())) else None
++    val conflict_write_data = if(extraPort.isDefined) Some(Input(Vec(numWays, gen))) else None
++    val conflict_way_mask = if(extraPort.isDefined) Some(Input(UInt(numBr.W))) else None
++
+     val hit = Output(Bool())
+     val hit_data = Vec(numWays, Valid(gen))
++    val has_conflict = if(extraPort.isDefined) Some(Output(Bool())) else None
++    val update_idx = if(extraPort.isDefined) Some(Output(UInt(idxWidth.W))) else None
++    val update_data = if(extraPort.isDefined) Some(Output(Vec(numWays, gen))) else None
++    val update_way_mask = if(extraPort.isDefined) Some(Output(UInt(numBr.W))) else None
++
++    val conflict_clean = if(extraPort.isDefined) Some(Input(Bool())) else None
+   })
+ 
+   class Idx_Tag extends Bundle {
+@@ -50,7 +60,8 @@ class WrBypass[T <: Data](gen: T, val numEntries: Int, val idxWidth: Int,
+       this.tag.map(_ := tag)
+     }
+   }
+-  val idx_tag_cam = Module(new CAMTemplate(new Idx_Tag, numEntries, 1))
++
++  val idx_tag_cam = Module(new IndexableCAMTemplate(new Idx_Tag, numEntries, 1, isIndexable = extraPort.isDefined))
+   val data_mem = Mem(numEntries, Vec(numWays, gen))
+ 
+   val valids = RegInit(0.U.asTypeOf(Vec(numEntries, Vec(numWays, Bool()))))
+@@ -109,6 +120,30 @@ class WrBypass[T <: Data](gen: T, val numEntries: Int, val idxWidth: Int,
+   idx_tag_cam.io.w.bits.index := enq_idx
+   idx_tag_cam.io.w.bits.data(io.write_idx, io.write_tag.getOrElse(0.U))
+ 
++  //Extra ports are used to handle dual port read/write conflicts
++  if (extraPort.isDefined) {
++    val conflict_flags = RegInit(0.U.asTypeOf(Vec(numEntries, Bool())))
++    val conflict_way_mask = RegInit(0.U.asTypeOf(io.conflict_way_mask.get))
++    val conflict_data = RegInit(VecInit(Seq.tabulate(numWays)( i => 0.U.asTypeOf(gen))))
++    val conflict_idx = OHToUInt(conflict_flags)
++
++    idx_tag_cam.io.ridx.get := conflict_idx
++
++    when (io.wen && io.conflict_valid.getOrElse(false.B)) {
++      conflict_flags(Mux(hit, hit_idx, enq_idx)) := true.B
++      conflict_way_mask := io.conflict_way_mask.get
++      conflict_data := io.conflict_write_data.get
++    }
++    when (io.conflict_clean.getOrElse(false.B)) {
++      conflict_flags(conflict_idx) := false.B
++    }
++    // for update the cached data
++    io.has_conflict.get := conflict_flags.reduce(_||_)
++    io.update_idx.get := idx_tag_cam.io.rdata.get.idx
++    io.update_way_mask.get := conflict_way_mask
++    io.update_data.foreach(_ := conflict_data)
++  } else None
++
+   XSPerfAccumulate("wrbypass_hit",  io.wen &&  hit)
+   XSPerfAccumulate("wrbypass_miss", io.wen && !hit)
+ 
+diff --git a/utility b/utility
+index c54d93a18ff..22e90842ca4 160000
+--- a/utility
++++ b/utility
+@@ -1 +1 @@
+-Subproject commit c54d93a18ff7bf5f09aaf435cef6898fc16e535a
++Subproject commit 22e90842ca40ec3fe8606603138008895ab9e0f0
+```

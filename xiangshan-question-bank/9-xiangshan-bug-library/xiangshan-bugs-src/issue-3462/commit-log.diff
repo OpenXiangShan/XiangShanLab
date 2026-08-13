@@ -1,0 +1,83 @@
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 72173417784..cf69ee49ce2 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -767,7 +767,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   s0_out.alignedType    := s0_sel_src.alignedType
+   s0_out.mbIndex        := s0_sel_src.mbIndex
+   // s0_out.flowPtr         := s0_sel_src.flowPtr
+-  s0_out.uop.exceptionVec(loadAddrMisaligned) := !s0_addr_aligned && s0_sel_src.vecActive
++  s0_out.uop.exceptionVec(loadAddrMisaligned) := (!s0_addr_aligned || s0_sel_src.uop.exceptionVec(loadAddrMisaligned)) && s0_sel_src.vecActive
+   s0_out.forward_tlDchannel := s0_super_ld_rep_select
+   when(io.tlb.req.valid && s0_sel_src.isFirstIssue) {
+     s0_out.uop.debugInfo.tlbFirstReqTime := GTimer()
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 765ff4af74e..91a4edfc45b 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -214,7 +214,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   ))
+   // if vector store sends 128-bit requests, its address must be 128-aligned
+   XSError(s0_use_flow_vec && s0_out.vaddr(3, 0) =/= 0.U && s0_vecstin.alignedType(2), "unit stride 128 bit element is not aligned!")
+-  s0_out.uop.exceptionVec(storeAddrMisaligned) := Mux(s0_use_non_prf_flow, !s0_addr_aligned, false.B)
++  s0_out.uop.exceptionVec(storeAddrMisaligned) := Mux(s0_use_non_prf_flow, (!s0_addr_aligned || s0_vecstin.uop.exceptionVec(storeAddrMisaligned) && s0_vecActive), false.B)
+ 
+   io.st_mask_out.valid       := s0_use_flow_rs || s0_use_flow_vec
+   io.st_mask_out.bits.mask   := s0_out.mask
+diff --git a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+index 23d28c368cf..69cca4404ae 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+@@ -400,8 +400,8 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+       "b11".U   -> (vaddr(2, 0) === 0.U)  //d
+     ))
+     val missAligned = !addr_aligned
+-    exceptionVec(loadAddrMisaligned)  := !addr_aligned && FuType.isVLoad(fuType) && canTriggerException
+-    exceptionVec(storeAddrMisaligned) := !addr_aligned && !FuType.isVLoad(fuType) && canTriggerException
++    exceptionVec(loadAddrMisaligned)  := missAligned && FuType.isVLoad(fuType)  && canTriggerException
++    exceptionVec(storeAddrMisaligned) := missAligned && FuType.isVStore(fuType) && canTriggerException
+ 
+     exception_va := exceptionVec(storePageFault) || exceptionVec(loadPageFault) ||
+       exceptionVec(storeAccessFault) || exceptionVec(loadAccessFault) || (missAligned && canTriggerException)
+diff --git a/src/main/scala/xiangshan/mem/vector/VSplit.scala b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+index 2c628afdada..300eabac5c2 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSplit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+@@ -21,6 +21,7 @@ import chisel3._
+ import chisel3.util._
+ import utils._
+ import utility._
++import xiangshan.ExceptionNO._
+ import xiangshan._
+ import xiangshan.backend.rob.RobPtr
+ import xiangshan.backend.Bundles._
+@@ -353,6 +354,13 @@ abstract class VSplitBuffer(isVStore: Boolean = false)(implicit p: Parameters) e
+   val regOffset        = getCheckAddrLowBits(issueUsLowBitsAddr, maxMemByteNum) // offset in 256-bits vd
+   XSError((splitIdx > 1.U && usNoSplit) || (splitIdx > 1.U && !issuePreIsSplit) , "Unit-Stride addr split error!\n")
+ 
++  val addrAligned = LookupTree(issueEew, List(
++    "b00".U   -> true.B,                   //b
++    "b01".U   -> (issueBaseAddr(0)    === 0.U), //h
++    "b10".U   -> (issueBaseAddr(1, 0) === 0.U), //w
++    "b11".U   -> (issueBaseAddr(2, 0) === 0.U)  //d
++  ))
++
+   // data
+   io.out.bits match { case x =>
+     x.uop                   := issueUop
+@@ -433,6 +441,7 @@ class VSSplitBufferImp(implicit p: Parameters) extends VSplitBuffer(isVStore = t
+ 
+   val sqIdx = issueUop.sqIdx + splitIdx
+   io.out.bits.uop.sqIdx := sqIdx
++  io.out.bits.uop.exceptionVec(storeAddrMisaligned) := !addrAligned && !issuePreIsSplit && io.out.bits.mask.orR
+ 
+   // send data to sq
+   val vstd = io.vstd.get
+@@ -449,6 +458,7 @@ class VSSplitBufferImp(implicit p: Parameters) extends VSplitBuffer(isVStore = t
+ 
+ class VLSplitBufferImp(implicit p: Parameters) extends VSplitBuffer(isVStore = false){
+   io.out.bits.uop.lqIdx := issueUop.lqIdx + splitIdx
++  io.out.bits.uop.exceptionVec(loadAddrMisaligned) := !addrAligned && !issuePreIsSplit && io.out.bits.mask.orR
+ }
+ 
+ class VSSplitPipelineImp(implicit p: Parameters) extends VSplitPipeline(isVStore = true){

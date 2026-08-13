@@ -1,0 +1,33 @@
+# Commit Log
+- Issue: #3745
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3745
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3745
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3745
+- Changed files: 1
+- Additions: 1
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index a77ad6d152a..d0f20aab0b9 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -1181,10 +1181,9 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     exc_wb.bits.replayInst      := wb.bits.replay.getOrElse(false.B)
+     exc_wb.bits.singleStep      := false.B
+     exc_wb.bits.crossPageIPFFix := false.B
+-    // TODO: make trigger configurable
+     val trigger = wb.bits.trigger.getOrElse(TriggerAction.None).asTypeOf(exc_wb.bits.trigger)
+     exc_wb.bits.trigger := trigger
+-    exc_wb.bits.vstartEn := (if (wb.bits.vls.nonEmpty) wb.bits.exceptionVec.get.asUInt.orR else 0.U)
++    exc_wb.bits.vstartEn := (if (wb.bits.vls.nonEmpty) wb.bits.exceptionVec.get.asUInt.orR || TriggerAction.isDmode(trigger) else 0.U)
+     exc_wb.bits.vstart := (if (wb.bits.vls.nonEmpty) wb.bits.vls.get.vpu.vstart else 0.U)
+     exc_wb.bits.vuopIdx := (if (wb.bits.vls.nonEmpty) wb.bits.vls.get.vpu.vuopIdx else 0.U)
+     exc_wb.bits.isVecLoad := wb.bits.vls.map(_.isVecLoad).getOrElse(false.B)
+```

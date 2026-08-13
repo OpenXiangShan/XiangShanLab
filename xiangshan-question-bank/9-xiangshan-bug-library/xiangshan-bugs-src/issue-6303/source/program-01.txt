@@ -1,0 +1,9 @@
+8000138c <bwd_0>:
+    8000138c:   d0217bd3    fcvt.s.l fs7,sp       # illegal instruction (both trap)
+    80001390:   ff47bf73    .word 0xff47bf73      # illegal instruction (both trap)
+    80001394:   660fac87    flw fs9,1632(t6)
+    80001398:   001d1d73    fsflags s10,s10
+    8000139c:   fffd8d93    addi s11,s11,-1
+    800013a0:   fff00493    li s1,-1
+    800013a4:   0d84f057    vsetvli zero,s1,e64,m1,ta,ma
+    800013a8:   fe0d92e3    bnez s11,8000138c <bwd_0>

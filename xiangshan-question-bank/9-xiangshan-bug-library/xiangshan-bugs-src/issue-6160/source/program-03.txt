@@ -1,0 +1,5 @@
+updateValid = 1
+provider.valid = 1
+altProvider.valid = 0
+altDiffers = 1
+providerTarget != 0

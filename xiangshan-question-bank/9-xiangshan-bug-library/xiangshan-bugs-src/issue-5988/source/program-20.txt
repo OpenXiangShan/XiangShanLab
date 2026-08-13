@@ -1,0 +1,5 @@
+frontend.inner.bpu.mbtb.alignBanks_0: _allocate
+frontend.inner.ftq: commit_branch_mispredicts_reason_BTB
+frontend.inner.ftq: commit_branch_mispredicts_type_direct
+frontend.inner.icache.prefetcher: bpuS0Flush
+backend.inner.ctrlBlock.rob: commitInstr

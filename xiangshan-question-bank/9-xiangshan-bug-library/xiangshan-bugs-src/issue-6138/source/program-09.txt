@@ -1,0 +1,6 @@
+{
+  "emulator_perf_counter_observable": true,
+  "secret1_has_extra_committed_branch_mispredict": true,
+  "secret1_has_extra_conditional_branch_mispredict": true,
+  "secret1_has_extra_tage_reason_mispredict": true
+}

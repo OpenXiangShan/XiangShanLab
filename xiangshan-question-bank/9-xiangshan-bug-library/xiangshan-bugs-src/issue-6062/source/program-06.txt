@@ -1,0 +1,4 @@
+Assertion failed at ./XiangShan/build/rtl/NewStoreQueue.sv:14793.
+Assertion failed at LogUtils.scala:132
+[ERROR] ...storeQueue: pointer update error!
+Core 0: ABORT

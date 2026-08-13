@@ -1,0 +1,4 @@
+predicate_result = reproduced
+expected_load_data = 0xaabbccdd11223344
+bad_writebacks = 0x0000000011223344, 0x0000000011223344
+good_writebacks = []

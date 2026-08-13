@@ -1,0 +1,2 @@
+  Run under NEMU-difftest:
+      ./build/emu -i xs6208_workload_trap_highaddr.elf --diff <riscv64-nemu-interpreter-so>

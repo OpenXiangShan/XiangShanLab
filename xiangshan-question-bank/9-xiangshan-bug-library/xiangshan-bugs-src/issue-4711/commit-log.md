@@ -1,0 +1,34 @@
+# Commit Log
+- Issue: #4711
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4711
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4711
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4711
+- Changed files: 1
+- Additions: 5
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+index 01a9d39b3b2..85afb150c80 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+@@ -1459,7 +1459,11 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   // misprediction recovery / exception redirect
+   // invalidate sq term using robIdx
+   for (i <- 0 until StoreQueueSize) {
+-    needCancel(i) := (uop(i).robIdx.needFlush(io.brqRedirect) & !isVec(i) || isAfter(uop(i).robIdx, io.brqRedirect.bits.robIdx) && io.brqRedirect.valid && isVec(i)) && allocated(i) && !committed(i)
++    needCancel(i) := allocated(i) && !committed(i) && Mux(
++        vecExceptionFlag.valid,
++        isAfter(uop(i).robIdx, io.brqRedirect.bits.robIdx) && io.brqRedirect.valid,
++        uop(i).robIdx.needFlush(io.brqRedirect)
++      )
+     when (needCancel(i)) {
+       allocated(i) := false.B
+       completed(i) := false.B
+```

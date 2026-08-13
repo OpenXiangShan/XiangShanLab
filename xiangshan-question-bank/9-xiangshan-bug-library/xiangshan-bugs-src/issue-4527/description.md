@@ -1,0 +1,1 @@
+For allStage case, when there is a PageTableCache Stage1Hit, the GVPN is reconstructed within the PTW. However, this reconstruction process did not account for the napot case. This commit fixes the bug.

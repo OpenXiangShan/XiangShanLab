@@ -1,0 +1,61 @@
+# Commit Log
+- Issue: #3826
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3826
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3826
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3826
+- Changed files: 2
+- Additions: 7
+- Deletions: 6
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
+index 5d42a5113ff..937213a9eab 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
+@@ -288,11 +288,12 @@ class InterruptFilter extends Module {
+ 
+   // support debug interrupt
+   // support smrnmi when NMIE is 0, all interrupt disable
+-  val disableInterrupt = io.in.debugMode || (io.in.dcsr.STEP.asBool && !io.in.dcsr.STEPIE.asBool) || !io.in.mnstatusNMIE
+-  val debugInterupt = ((io.in.debugIntr && !io.in.debugMode) << CSRConst.IRQ_DEBUG).asUInt
++  val disableDebugIntr = io.in.debugMode || (io.in.dcsr.STEP.asBool && !io.in.dcsr.STEPIE.asBool)
++  val disableAllIntr = disableDebugIntr || !io.in.mnstatusNMIE
++  val debugInterupt = ((io.in.debugIntr && !disableDebugIntr)  << CSRConst.IRQ_DEBUG).asUInt
+ 
+-  val normalIntrVec = mIRVec | hsIRVec | vsMapHostIRVec | debugInterupt
+-  val intrVec = VecInit(Mux(io.in.nmi, io.in.nmiVec, normalIntrVec).asBools.map(IR => IR && !disableInterrupt)).asUInt
++  val normalIntrVec = mIRVec | hsIRVec | vsMapHostIRVec
++  val intrVec = VecInit(Mux(io.in.nmi, io.in.nmiVec, normalIntrVec).asBools.map(IR => IR && !disableAllIntr)).asUInt | debugInterupt
+ 
+   // virtual interrupt with hvictl injection
+   val vsIRModeCond = privState.isModeVS && vsstatusSIE || privState < PrivState.ModeVS
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index b1d6e1bde00..b9bd068f5af 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -671,7 +671,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+     println(mod.dumpFields)
+   }
+ 
+-  trapEntryMNEvent.valid  := ((hasTrap && nmi) || dbltrpToMN) && !debugMode && mnstatus.regOut.NMIE
++  trapEntryMNEvent.valid  := ((hasTrap && nmi) || dbltrpToMN) && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE
+   trapEntryMEvent .valid  := hasTrap && entryPrivState.isModeM && !dbltrpToMN && !entryDebugMode && !debugMode && !nmi && mnstatus.regOut.NMIE
+   trapEntryHSEvent.valid  := hasTrap && entryPrivState.isModeHS && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE
+   trapEntryVSEvent.valid  := hasTrap && entryPrivState.isModeVS && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE
+@@ -1032,7 +1032,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   debugMod.io.in.tdata1Wdata               := wdata
+   debugMod.io.in.triggerCanRaiseBpExp      := triggerCanRaiseBpExp
+ 
+-  entryDebugMode := debugMod.io.out.hasDebugTrap && !debugMode && !nmi
++  entryDebugMode := debugMod.io.out.hasDebugTrap && !debugMode
+ 
+   trapEntryDEvent.valid                       := entryDebugMode
+   trapEntryDEvent.in.hasDebugIntr             := debugMod.io.out.hasDebugIntr
+```

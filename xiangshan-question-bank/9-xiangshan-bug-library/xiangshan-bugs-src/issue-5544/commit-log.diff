@@ -1,0 +1,233 @@
+diff --git a/XSCache b/XSCache
+index 54a2a7527f7..857c2c2a576 160000
+--- a/XSCache
++++ b/XSCache
+@@ -1 +1 @@
+-Subproject commit 54a2a7527f7366e3cb3fe378b1f1e92f18cbf33f
++Subproject commit 857c2c2a576de4c016a2b10e6ad241123901291e
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+index 868fe865a3c..3954dbd7154 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+@@ -112,7 +112,7 @@ class MainPipeReq(implicit p: Parameters) extends DCacheBundle {
+     req.source := DCACHE_PREFETCH_SOURCE.U
+     req.cmd := MemoryOpConstants.M_PFR
+     req.addr := prefetch.paddr
+-    req.vaddr := prefetch.getVaddr()
++    req.vaddr := prefetch.vaddr
+     req.replace := false.B
+     req.error := false.B
+     req.miss_fail_cause_evict_btot := false.B
+diff --git a/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
+index 2bbe70b7607..29f093de30b 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
+@@ -160,8 +160,8 @@ class LoadUnitS0(param: ExeUnitParams)(
+   prefetch.accessType.pftType := PrefetchType.hwData
+   prefetch.accessType.pftCoh := Mux(io.prefetchReq.bits.is_store, PrefetchCoh.write, PrefetchCoh.read)
+   prefetch.uop := DontCare
+-  prefetch.vaddr := io.prefetchReq.bits.getVaddr() // not actual vaddr, but Cat(alias, page offset)
+-  prefetch.fullva := io.prefetchReq.bits.getVaddr()
++  prefetch.vaddr := io.prefetchReq.bits.vaddr
++  prefetch.fullva := io.prefetchReq.bits.vaddr
+   prefetch.size := DontCare
+   prefetch.mask := 0.U
+   prefetch.paddr.get := io.prefetchReq.bits.paddr
+diff --git a/src/main/scala/xiangshan/mem/prefetch/Berti.scala b/src/main/scala/xiangshan/mem/prefetch/Berti.scala
+index 0d2ee8b4d57..d76ca52761b 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/Berti.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/Berti.scala
+@@ -884,7 +884,7 @@ class DeltaPrefetchBuffer(size: Int, name: String)(implicit p: Parameters) exten
+       pfIdxArb.io.out.ready := io.l1_req.ready
+       io.l1_req.valid := pfIdxArb.io.out.valid
+       io.l1_req.bits.paddr := entries(pfIdx).getPrefetchPA
+-      io.l1_req.bits.alias := entries(pfIdx).getPrefetchAlias
++      io.l1_req.bits.vaddr := entries(pfIdx).getPrefetchVA
+       io.l1_req.bits.confidence := 1.U
+       io.l1_req.bits.is_store := false.B
+       io.l1_req.bits.pf_source.value := L1_HW_PREFETCH_BERTI
+@@ -954,7 +954,7 @@ class BertiPrefetcher()(implicit p: Parameters) extends BasePrefecher with HasBe
+   val trainValid = trainFilter.io.trainReq.valid
+   val trainBits = trainFilter.io.trainReq.bits
+   val demandMiss = trainValid && trainBits.miss
+-  val demandPfHit = trainValid && isFromBerti(trainBits.metaSource)
++  val demandPfHit = trainValid && isFromL1Prefetch(trainBits.metaSource)
+ 
+   historyTable.io.access.valid := demandMiss || demandPfHit
+   historyTable.io.access.bits.pc := trainBits.pc
+diff --git a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
+index 06c442e03e1..e62c2631331 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
+@@ -220,7 +220,6 @@ class MLPReqFilterBundle(implicit p: Parameters) extends XSBundle with HasL1Pref
+   val bit_vec = UInt(BIT_VEC_WITDH.W)
+   val sent_vec = UInt(BIT_VEC_WITDH.W)
+   val sink = UInt(SINK_BITS.W)
+-  val alias = UInt(2.W)
+   val is_vaddr = Bool()
+   val source = new L1PrefetchSource()
+   val debug_va_region = UInt(REGION_TAG_BITS.W)
+@@ -232,7 +231,6 @@ class MLPReqFilterBundle(implicit p: Parameters) extends XSBundle with HasL1Pref
+     bit_vec := 0.U
+     sent_vec := 0.U
+     sink := SINK_L1
+-    alias := 0.U
+     is_vaddr := false.B
+     source.value := L1_HW_PREFETCH_NULL
+     debug_va_region := 0.U
+@@ -263,7 +261,7 @@ class MLPReqFilterBundle(implicit p: Parameters) extends XSBundle with HasL1Pref
+     !valid || RegNext(PopCount(sent_vec) === BIT_VEC_WITDH.U)
+   }
+ 
+-  def get_pf_addr(): UInt = {
++  def get_pf_paddr(): UInt = {
+     require(PAddrBits <= VAddrBits)
+     require((region.getWidth + REGION_BITS + BLOCK_OFFSET) == VAddrBits)
+ 
+@@ -271,7 +269,7 @@ class MLPReqFilterBundle(implicit p: Parameters) extends XSBundle with HasL1Pref
+     Cat(region, candidate, 0.U(BLOCK_OFFSET.W))
+   }
+ 
+-  def get_pf_debug_vaddr(): UInt = {
++  def get_pf_vaddr(): UInt = {
+     val candidate = PriorityEncoder(bit_vec & ~sent_vec).asTypeOf(UInt(REGION_BITS.W))
+     Cat(debug_va_region, candidate, 0.U(BLOCK_OFFSET.W))
+   }
+@@ -282,7 +280,6 @@ class MLPReqFilterBundle(implicit p: Parameters) extends XSBundle with HasL1Pref
+   }
+ 
+   def fromStreamPrefetchReqBundle(x : StreamPrefetchReqBundle): MLPReqFilterBundle = {
+-    require(PAGE_OFFSET >= REGION_TAG_OFFSET, "region is greater than 4k, alias bit may be incorrect")
+ 
+     val res = Wire(new MLPReqFilterBundle)
+     res.tag := region_hash_tag(x.region)
+@@ -292,7 +289,6 @@ class MLPReqFilterBundle(implicit p: Parameters) extends XSBundle with HasL1Pref
+     res.sink := x.sink
+     res.is_vaddr := true.B
+     res.source := x.source
+-    res.alias := x.region(PAGE_OFFSET - REGION_TAG_OFFSET + 1, PAGE_OFFSET - REGION_TAG_OFFSET)
+     res.debug_va_region := x.region
+     res.confidence := x.confidence
+ 
+@@ -668,12 +664,12 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+   for(i <- 0 until MLP_L1_SIZE) {
+     val evict = s1_l1_alloc && (s1_l1_index === i.U)
+     l1_pf_req_arb.io.in(i).valid := l1_array(i).can_send_pf(l1_valids(i)) && l1_array(i).sink === SINK_L1 && !evict
+-    l1_pf_req_arb.io.in(i).bits.req.paddr := l1_array(i).get_pf_addr()
+-    l1_pf_req_arb.io.in(i).bits.req.alias := l1_array(i).alias
++    l1_pf_req_arb.io.in(i).bits.req.paddr := l1_array(i).get_pf_paddr()
++    l1_pf_req_arb.io.in(i).bits.req.vaddr := l1_array(i).get_pf_vaddr()
+     l1_pf_req_arb.io.in(i).bits.req.confidence := l1_array(i).confidence
+     l1_pf_req_arb.io.in(i).bits.req.is_store := false.B
+     l1_pf_req_arb.io.in(i).bits.req.pf_source := l1_array(i).source
+-    l1_pf_req_arb.io.in(i).bits.debug_vaddr := l1_array(i).get_pf_debug_vaddr()
++    l1_pf_req_arb.io.in(i).bits.debug_vaddr := l1_array(i).get_pf_vaddr()
+   }
+ 
+   when(s0_pf_fire) {
+@@ -717,12 +713,12 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+   for(i <- 0 until MLP_L2L3_SIZE) {
+     val evict = s1_l2_alloc && (s1_l2_index === i.U)
+     l2_pf_req_arb.io.in(i).valid := l2_array(i).can_send_pf(l2_valids(i)) && (l2_array(i).sink === SINK_L2) && !evict
+-    l2_pf_req_arb.io.in(i).bits.req.addr := l2_array(i).get_pf_addr()
++    l2_pf_req_arb.io.in(i).bits.req.addr := l2_array(i).get_pf_paddr()
+     l2_pf_req_arb.io.in(i).bits.req.source := MuxLookup(l2_array(i).source.value, MemReqSource.Prefetch2L2Unknown.id.U)(Seq(
+       L1_HW_PREFETCH_STRIDE -> MemReqSource.Prefetch2L2Stride.id.U,
+       L1_HW_PREFETCH_STREAM -> MemReqSource.Prefetch2L2Stream.id.U
+     ))
+-    l2_pf_req_arb.io.in(i).bits.debug_vaddr := l2_array(i).get_pf_debug_vaddr()
++    l2_pf_req_arb.io.in(i).bits.debug_vaddr := l2_array(i).get_pf_vaddr()
+   }
+ 
+   when(l2_pf_req_arb.io.out.valid) {
+@@ -762,7 +758,7 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+   for(i <- 0 until MLP_L2L3_SIZE) {
+     val evict = s1_l2_alloc && (s1_l2_index === i.U)
+     l3_pf_req_arb.io.in(i).valid := l2_array(i).can_send_pf(l2_valids(i)) && (l2_array(i).sink === SINK_L3) && !evict
+-    l3_pf_req_arb.io.in(i).bits.addr := l2_array(i).get_pf_addr()
++    l3_pf_req_arb.io.in(i).bits.addr := l2_array(i).get_pf_paddr()
+     l3_pf_req_arb.io.in(i).bits.source := MuxLookup(l2_array(i).source.value, MemReqSource.Prefetch2L3Unknown.id.U)(Seq(
+       L1_HW_PREFETCH_STRIDE -> MemReqSource.Prefetch2L3Stride.id.U,
+       L1_HW_PREFETCH_STREAM -> MemReqSource.Prefetch2L3Stream.id.U
+diff --git a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchInterface.scala b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchInterface.scala
+index 69374d643c5..33cff89ee1e 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchInterface.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchInterface.scala
+@@ -58,16 +58,11 @@ class L1PrefetchSource(implicit p: Parameters) extends XSBundle with HasL1Prefet
+ 
+ class L1PrefetchReq(implicit p: Parameters) extends XSBundle with HasDCacheParameters {
+   val paddr = UInt(PAddrBits.W)
+-  val alias = UInt(2.W)
++  val vaddr = UInt(VAddrBits.W)
+   val confidence = UInt(1.W)
+   val is_store = Bool()
+   val pf_source = new L1PrefetchSource
+ 
+-  // only index bit is used, do not use tag
+-  def getVaddr(): UInt = {
+-    Cat(alias, paddr(DCacheSameVPAddrLength-1, 0))
+-  }
+-
+   // when l1 cache prefetch req arrives at load unit:
+   // if (confidence == 1)
+   //   override load unit 2 load req
+@@ -101,7 +96,7 @@ class L1PrefetchFuzzer(implicit p: Parameters) extends DCacheModule{
+   val rand_paddr = DelayN(io.paddr, 2)
+ 
+   io.req.bits.paddr := PmemRanges.map(_.lower).min.U + rand_offset
+-  io.req.bits.alias := io.req.bits.paddr(13,12)
++  io.req.bits.vaddr := 0.U
+   io.req.bits.confidence := LFSR64(seed=Some(789L))(4,0) === 0.U
+   io.req.bits.is_store := LFSR64(seed=Some(890L))(4,0) === 0.U
+   io.req.valid := LFSR64(seed=Some(901L))(3,0) === 0.U
+diff --git a/src/main/scala/xiangshan/mem/prefetch/PrefetcherWrapper.scala b/src/main/scala/xiangshan/mem/prefetch/PrefetcherWrapper.scala
+index a988ec5d640..029d32dcac0 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/PrefetcherWrapper.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/PrefetcherWrapper.scala
+@@ -183,7 +183,7 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+       pf.io.ld_in(i).valid := Mux(
+         pf_train_on_hit,
+         primaryValid,
+-        primaryValid && source.bits.isFirstIssue && source.bits.miss
++        primaryValid && source.bits.isFirstIssue && (source.bits.miss || isFromL1Prefetch(source.bits.metaSource))
+       ) // && isLoadAccess(source.bits.uop)
+       pf.io.ld_in(i).bits := source.bits
+       pf.io.ld_in(i).bits.pc := Mux(
+@@ -199,7 +199,7 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+       pf.io.st_in(i).valid := Mux(
+         pf_train_on_hit,
+         primaryValid,
+-        primaryValid && source.bits.isFirstIssue && source.bits.miss
++        primaryValid && source.bits.isFirstIssue && (source.bits.miss || isFromL1Prefetch(source.bits.metaSource))
+       ) // && isStoreAccess(source.bits.uop)
+       pf.io.st_in(i).bits := source.bits
+       pf.io.st_in(i).bits.pc := s3_storePcVec(i)
+@@ -226,6 +226,7 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+ 
+     // stride will train on miss or prefetch hit
+     for(i <- 0 until LD_TRAIN_WIDTH){
++      // for stride
+       val source = io.trainSource.s3_load(i)
+       pf.stride_train(i).valid := source.valid && source.bits.isFirstIssue && (
+         source.bits.miss || isFromStride(source.bits.metaSource)
+@@ -236,6 +237,7 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+         s2_loadPcVec(i),
+         s3_loadPcVec(i)
+       )
++      // for stream
+       pf.io.ld_in(i).valid := source.valid && source.bits.isFirstIssue && !source.bits.isHwPrefetch
+       // && isLoadAccess(source.bits.uop)
+       pf.io.ld_in(i).bits := source.bits
+diff --git a/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala b/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala
+index 29bdf63a0ba..6793b8eaa7d 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala
+@@ -1238,7 +1238,7 @@ class SMSPrefetcher()(implicit p: Parameters) extends BasePrefecher with HasSMSM
+ 
+   // for now, sms will not send l1 prefetch requests
+   io.l1_req.bits.paddr := pf_filter.io.l2_pf_addr.bits
+-  io.l1_req.bits.alias := pf_filter.io.pf_alias_bits
++  io.l1_req.bits.vaddr := 0.U // DontCare
+   io.l1_req.bits.is_store := true.B
+   io.l1_req.bits.confidence := 1.U
+   io.l1_req.bits.pf_source.value := L1_HW_PREFETCH_NULL

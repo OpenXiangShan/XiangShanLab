@@ -1,0 +1,45 @@
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+index 0d1222b40d8..4103509d826 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+@@ -330,10 +330,10 @@ class LsqEnqCtrl(implicit p: Parameters) extends XSModule
+   val loadQueueElem = needEnqLoadQueue.zip(numLsElem).map(x => Mux(x._1, x._2, 0.U))
+   val storeQueueElem = needEnqStoreQueue.zip(numLsElem).map(x => Mux(x._1, x._2, 0.U))
+   val loadFlowPopCount = 0.U +: loadQueueElem.zipWithIndex.map{ case (l, i) =>
+-    loadQueueElem.take(i + 1).reduce(_ + _)
++    loadQueueElem.take(i + 1).reduce(_ +& _).asTypeOf(UInt(elemIdxBits.W))
+   }
+   val storeFlowPopCount = 0.U +: storeQueueElem.zipWithIndex.map { case (s, i) =>
+-    storeQueueElem.take(i + 1).reduce(_ + _)
++    storeQueueElem.take(i + 1).reduce(_ +& _).asTypeOf(UInt(elemIdxBits.W))
+   }
+   val lqAllocNumber = PriorityMux(blockVec.zip(loadFlowPopCount))
+   val sqAllocNumber = PriorityMux(blockVec.zip(storeFlowPopCount))
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+index 992996466c1..b668f7bdd1b 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+@@ -353,8 +353,8 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   io.enq.canAccept := allowEnqueue
+   val canEnqueue = io.enq.req.map(_.valid)
+   val enqCancel = io.enq.req.map(_.bits.robIdx.needFlush(io.brqRedirect))
+-  val vStoreFlow = io.enq.req.map(_.bits.numLsElem)
+-  val validVStoreFlow = vStoreFlow.zipWithIndex.map{case (vLoadFlowNumItem, index) => Mux(!RegNext(io.brqRedirect.valid) && canEnqueue(index), vLoadFlowNumItem, 0.U)}
++  val vStoreFlow = io.enq.req.map(_.bits.numLsElem.asTypeOf(UInt(elemIdxBits.W)))
++  val validVStoreFlow = vStoreFlow.zipWithIndex.map{case (vStoreFlowNumItem, index) => Mux(!RegNext(io.brqRedirect.valid) && canEnqueue(index), vStoreFlowNumItem, 0.U)}
+   val validVStoreOffset = vStoreFlow.zip(io.enq.needAlloc).map{case (flow, needAllocItem) => Mux(needAllocItem, flow, 0.U)}
+   val validVStoreOffsetRShift = 0.U +: validVStoreOffset.take(vStoreFlow.length - 1)
+ 
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala
+index 552d63f67a6..126ab91861a 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala
+@@ -106,7 +106,7 @@ class VirtualLoadQueue(implicit p: Parameters) extends XSModule
+   val redirectCancelCount = RegEnable(lastCycleCancelCount + lastEnqCancel, 0.U, lastCycleRedirect.valid)
+ 
+   // update enqueue pointer
+-  val vLoadFlow = io.enq.req.map(_.bits.numLsElem)
++  val vLoadFlow = io.enq.req.map(_.bits.numLsElem.asTypeOf(UInt(elemIdxBits.W)))
+   val validVLoadFlow = vLoadFlow.zipWithIndex.map{case (vLoadFlowNumItem, index) => Mux(canEnqueue(index), vLoadFlowNumItem, 0.U)}
+   val validVLoadOffset = vLoadFlow.zip(io.enq.needAlloc).map{case (flow, needAllocItem) => Mux(needAllocItem, flow, 0.U)}
+   val validVLoadOffsetRShift = 0.U +: validVLoadOffset.take(validVLoadFlow.length - 1)

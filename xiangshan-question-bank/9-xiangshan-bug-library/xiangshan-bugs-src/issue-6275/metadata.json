@@ -1,0 +1,28 @@
+{
+  "number": 6275,
+  "title": "fix(L1PF, LSQ): reject stale TLB updates and nonphysical store wakeups",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/6275",
+  "state": "closed",
+  "labels": [
+    "module: memory",
+    "topic: functionality"
+  ],
+  "author": "fuhuakai",
+  "created_at": "2026-07-23T04:34:21Z",
+  "updated_at": "2026-07-24T07:37:18Z",
+  "submitted_at": "2026-07-23",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6275/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

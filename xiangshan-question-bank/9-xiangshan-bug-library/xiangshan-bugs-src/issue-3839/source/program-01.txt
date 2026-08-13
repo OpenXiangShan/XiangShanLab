@@ -1,0 +1,6 @@
+.section .text
+.globl _start
+_start:
+    li     t0, 0x8000000a00100a00     #FS: 00
+    csrw    mstatus, t0 
+    flh     ft0, 9(sp)

@@ -1,0 +1,1 @@
+The Napot extension requires that the lower 4 bits of the page table's PPN satisfy 4'b1000. However, `pte_in.getPPN()` contains the original PPN value, while ptw_resp.ppn has already been truncated once. So we should use `pte_in.getPPN()` here to check Napot pages.

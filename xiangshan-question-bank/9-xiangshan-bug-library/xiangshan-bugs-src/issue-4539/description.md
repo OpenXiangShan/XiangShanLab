@@ -1,0 +1,1 @@
+In "RISC-V Instruction Set Manual: Volume II: Privileged Architecture": The G bit in all G-stage PTEs is reserved for future standard use. Until its use is defined by a standard extension, it should be cleared by software for forward compatibility, and must be ignored by hardware.

@@ -1,0 +1,38 @@
+# Commit Log
+- Issue: #3717
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3717
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3717
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3717
+- Changed files: 2
+- Additions: 2
+- Deletions: 3
+
+## Files
+- `ready-to-run`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala`
+
+## Diff
+```diff
+diff --git a/ready-to-run b/ready-to-run
+index fdef845c16d..7fc81759b63 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit fdef845c16dd0d6d0357186d48c7b7e7645a1f89
++Subproject commit 7fc81759b63b903e7035361946050660829d092d
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
+index fd38cf9faad..028a9b0eef6 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
+@@ -231,8 +231,7 @@ class CSRPermitModule extends Module {
+    * Sm/Ssstateen end
+    */
+ 
+-  private val rwStimecmp_EX_II = csrAccess && ((privState.isModeHS && !mcounterenTM || !privState.isModeM && !menvcfgSTCE) && addr === CSRs.vstimecmp.U ||
+-    ((privState.isModeHS || privState.isModeVS) && !mcounterenTM || !privState.isModeM && !menvcfgSTCE) && addr === CSRs.stimecmp.U)
++  private val rwStimecmp_EX_II = csrAccess && !privState.isModeM && (!mcounterenTM || !menvcfgSTCE) && (addr === CSRs.vstimecmp.U || addr === CSRs.stimecmp.U)
+   private val rwStimecmp_EX_VI = (csrAccess && privState.isModeVS && (mcounterenTM && !hcounterenTM || menvcfgSTCE && !henvcfgSTCE) ||
+     wen && privState.isModeVS && hvictlVTI) && addr === CSRs.stimecmp.U
+```

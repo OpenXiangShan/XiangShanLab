@@ -1,0 +1,40 @@
+{
+  "number": 6343,
+  "title": "AtomicsUnit retains stale `hardwareError` across atomic operations",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6343",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "LeeHaofeng",
+  "created_at": "2026-08-11T03:19:54Z",
+  "updated_at": "2026-08-12T02:06:01Z",
+  "submitted_at": "2026-08-11",
+  "source_files": [
+    "issue-6343/source/atomics_stale_hwerr_repro.zip",
+    "issue-6343/source/program-01.scala",
+    "issue-6343/source/program-02.scala",
+    "issue-6343/source/program-03.scala",
+    "issue-6343/source/program-04.scala",
+    "issue-6343/source/program-05.scala",
+    "issue-6343/source/program-06.scala",
+    "issue-6343/source/program-07.scala",
+    "issue-6343/source/program-08.txt",
+    "issue-6343/source/program-09.scala",
+    "issue-6343/source/program-10.scala"
+  ],
+  "archive_files": [
+    "issue-6343/source/atomics_stale_hwerr_repro.zip"
+  ],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

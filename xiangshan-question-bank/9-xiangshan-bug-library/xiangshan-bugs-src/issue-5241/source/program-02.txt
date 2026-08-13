@@ -1,0 +1,22 @@
+sequenceDiagram
+    autonumber
+    participant CSR as MachineLevel CSR
+    participant MBMC as MbmcStruct (tlb.mbmc)
+    participant TLB as BitmapCheck / L2TLB
+    participant PMP as PMPChecker
+    participant FE as Frontend / MemBlock
+
+    CSR->>MBMC: expose mbmc.KEYIDEN
+    MBMC->>TLB: propagate KEYIDEN in csr_dup(0).mbmc
+    alt KeyIDBits > 0 && HasBitmapCheck
+        TLB->>PMP: apply(KEYIDEN.asBool, CMODE, ...)
+        Note right of PMP `#DDEFEF`: keyIDen=true → mask KeyID bits (check_ppn)
+        PMP-->>TLB: permission result (keyID-aware)
+        FE->>PMP: call with KEYIDEN prepended
+    else
+        TLB->>PMP: apply(CMODE, ...)
+        Note right of PMP `#F7F7F7`: keyIDen=false → normal addr
+        PMP-->>TLB: permission result (regular)
+        FE->>PMP: call without KEYIDEN
+    end
+    TLB->>FE: deliver permission / effective_ppn

@@ -1,0 +1,7 @@
+predicate                 = reproduced
+satp mode                 = Sv39
+instruction page fault    = observed
+mcause                    = 12
+trapToM/diff mepc         = 0xffffffc000000004
+trapToM/diff mtval        = 0xffffffc000000004
+expected reference value  = 0x0000004000000004

@@ -1,0 +1,28 @@
+{
+  "number": 5766,
+  "title": "`vle8ff` fault-only-first followed by immediate `csrr vl` returns 0 on XiangShan, while Spike returns the expected `vl`",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5766",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: backend"
+  ],
+  "author": "KnightGOKU",
+  "created_at": "2026-04-05T08:55:35Z",
+  "updated_at": "2026-04-07T03:16:49Z",
+  "source_files": [
+    "issue-5766/source/vle8ff_single_fixvl_probe.diff.log",
+    "issue-5766/source/vle8ff_single_fixvl_probe.nodiff.log",
+    "issue-5766/source/vle8ff_single_fixvl_probe.spike.log",
+    "issue-5766/source/bug-report.zip",
+    "issue-5766/source/program-01.S",
+    "issue-5766/source/program-02.S"
+  ],
+  "archive_files": [
+    "issue-5766/source/vle8ff_single_fixvl_probe.diff.log",
+    "issue-5766/source/vle8ff_single_fixvl_probe.nodiff.log",
+    "issue-5766/source/vle8ff_single_fixvl_probe.spike.log",
+    "issue-5766/source/bug-report.zip"
+  ],
+  "has_comments": true
+}

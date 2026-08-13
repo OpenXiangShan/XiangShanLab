@@ -1,0 +1,2 @@
+Assertion failed at /xs-env/XiangShan/build/rtl/Rob.sv:37719.
+Core 0: ABORT at pc = 0x10

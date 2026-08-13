@@ -1,0 +1,13 @@
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 2812775172d..d9a91e2eb51 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -192,7 +192,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+     io.misalign_stin.bits.mask,
+     Mux(
+       s0_use_flow_rs,
+-      genVWmask128(s0_saddr, s0_uop.fuOpType(2,0)),
++      Mux(s0_isCbo, Fill(VLEN/8, 1.U(1.W)), genVWmask128(s0_saddr, s0_uop.fuOpType(2,0))),
+       Mux(
+         s0_use_flow_vec,
+         s0_vecstin.mask,

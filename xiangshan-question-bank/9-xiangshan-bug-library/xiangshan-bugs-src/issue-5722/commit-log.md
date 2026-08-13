@@ -1,0 +1,217 @@
+# Commit Log
+- Issue: #5722
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5722
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5722
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5722
+- Changed files: 3
+- Additions: 47
+- Deletions: 25
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala
+index 0197fdd31f6..8a43a77f741 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala
+@@ -249,13 +249,24 @@ abstract class BaseTrigger()(implicit val p: Parameters) extends Module with Has
+ 
+   val tiggerVaddrHit = Mux(isCacheLine, cacheLineEq, Mux(isVectorStride, hitVecVectorStride, triggerHitVec))
+   TriggerCheckCanFire(TriggerNum, triggerCanFireVec, tiggerVaddrHit, triggerTimingVec, triggerChainVec)
+-  val triggerFireOH = PriorityEncoderOH(triggerCanFireVec)
+-  val triggerVaddr  = PriorityMux(triggerFireOH, VecInit(tdataVec.map(_.tdata2))).asUInt
+-  val triggerMask   = PriorityMux(triggerFireOH, VecInit(tdataVec.map(x => UIntToOH(x.tdata2(lowBitWidth-1, 0))))).asUInt
+ 
+   val actionVec = VecInit(tdataVec.map(_.action))
+   val triggerAction = Wire(TriggerAction())
+-  TriggerUtil.triggerActionGen(triggerAction, triggerCanFireVec, actionVec, triggerCanRaiseBpExp)
++  val fireDebugModeVec = TriggerUtil.triggerActionMatchVec(triggerCanFireVec, actionVec, TriggerAction.DebugMode)
++  val fireBreakpointExpVec = TriggerUtil.triggerActionMatchVec(triggerCanFireVec, actionVec, TriggerAction.BreakpointExp)
++  val fireDebugMode = fireDebugModeVec.asUInt.orR
++  val breakPointExp = fireBreakpointExpVec.asUInt.orR && triggerCanRaiseBpExp
++  triggerAction := MuxCase(TriggerAction.None, Seq(
++    fireDebugMode -> TriggerAction.DebugMode,
++    breakPointExp -> TriggerAction.BreakpointExp,
++  ))
++  val triggerFireVec = MuxCase(VecInit(Seq.fill(TriggerNum)(false.B)), Seq(
++    fireDebugMode -> fireDebugModeVec,
++    breakPointExp -> fireBreakpointExpVec,
++  ))
++  val triggerFireOH = PriorityEncoderOH(triggerFireVec)
++  val triggerVaddr  = Mux(triggerFireVec.asUInt.orR, PriorityMux(triggerFireOH, VecInit(tdataVec.map(_.tdata2))).asUInt, 0.U(VAddrBits.W))
++  val triggerMask   = Mux(triggerFireVec.asUInt.orR, PriorityMux(triggerFireOH, VecInit(tdataVec.map(x => UIntToOH(x.tdata2(lowBitWidth-1, 0))))).asUInt, 0.U((VLEN/8).W))
+ 
+   io.toLoadStore.triggerAction := triggerAction
+   io.toLoadStore.triggerVaddr  := triggerVaddr
+@@ -340,4 +351,4 @@ class VSegmentTrigger(override implicit val p: Parameters) extends BaseTrigger {
+   def DcacheLineBitsEq(): (Bool, Vec[Bool]) = {
+     (false.B, VecInit(Seq.fill(tdataVec.length)(false.B)))
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
+index 0f91d8b935f..e2774eec470 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
+@@ -45,7 +45,7 @@ trait DebugLevel { self: NewCSR =>
+   val tdata1RegVec: Seq[CSRModule[_]] = Range(0, TriggerNum).map(i =>
+     Module(new CSRModule(s"Trigger$i" + s"_Tdata1", new Tdata1Bundle) with HasTriggerBundle {
+       when(wen){
+-        reg := wdata.writeTdata1(canWriteDmode, chainable).asUInt
++        reg := wdata.writeTdata1(canWriteDmode, chainable, dmodeNextTrigger).asUInt
+       }
+     })
+   )
+@@ -131,7 +131,7 @@ class Tdata1Bundle extends CSRBundle{
+     res.ACTION
+   }
+ 
+-  def writeTdata1(canWriteDmode: Bool, chainable: Bool): Tdata1Bundle = {
++  def writeTdata1(canWriteDmode: Bool, chainable: Bool, dmodeNextTrigger: Bool): Tdata1Bundle = {
+     val res = Wire(new Tdata1Bundle)
+     res := this.asUInt
+     val dmode = this.DMODE.asBool && canWriteDmode
+@@ -140,7 +140,8 @@ class Tdata1Bundle extends CSRBundle{
+     when(this.TYPE.isLegal) {
+       val mcontrol6Res = Wire(new Mcontrol6)
+       mcontrol6Res := this.DATA.asUInt
+-      res.DATA := mcontrol6Res.writeData(dmode, chainable).asUInt
++      val chain = chainable && !(!dmode && dmodeNextTrigger)
++      res.DATA := mcontrol6Res.writeData(dmode, chain).asUInt
+     }.otherwise{
+       res.DATA := 0.U
+     }
+@@ -322,6 +323,7 @@ trait HasTdataSink { self: CSRModule[_] =>
+ trait HasTriggerBundle { self: CSRModule[_] =>
+   val canWriteDmode = IO(Input(Bool()))
+   val chainable = IO(Input(Bool()))
++  val dmodeNextTrigger = IO(Input(Bool()))
+ }
+ 
+ trait HasNmipBundle { self: CSRModule[_] =>
+@@ -362,6 +364,12 @@ object TriggerUtil {
+     !ConsecutiveOnes(chainVec, chainLen)
+   }
+ 
++  def triggerActionMatchVec(triggerCanFireVec: Vec[Bool], actionVec: Vec[UInt], targetAction: UInt): Vec[Bool] = {
++    VecInit(triggerCanFireVec.zip(actionVec).map {
++      case (canFire, action) => canFire && (action === targetAction)
++    })
++  }
++
+   /**
+    * Generate Trigger action
+    * @return triggerAction return
+@@ -370,19 +378,15 @@ object TriggerUtil {
+    * @param  triggerCanRaiseBpExp from csr
+    */
+   def triggerActionGen(triggerAction: UInt, triggerCanFireVec: Vec[Bool], actionVec: Vec[UInt], triggerCanRaiseBpExp: Bool): Unit = {
+-    // More than one triggers can hit at the same time, but only fire one.
+-    // We select the first hit trigger to fire.
+-    val hasTriggerFire    = triggerCanFireVec.asUInt.orR
+-    val triggerFireOH     = PriorityEncoderOH(triggerCanFireVec)
+-    val triggerFireAction = PriorityMux(triggerFireOH, actionVec).asUInt
+-    val actionIsBPExp     = hasTriggerFire && (triggerFireAction === TriggerAction.BreakpointExp)
+-    val actionIsDmode     = hasTriggerFire && (triggerFireAction === TriggerAction.DebugMode)
+-    val breakPointExp     = actionIsBPExp && triggerCanRaiseBpExp
++    val fireDebugModeVec = triggerActionMatchVec(triggerCanFireVec, actionVec, TriggerAction.DebugMode)
++    val fireBreakpointExpVec = triggerActionMatchVec(triggerCanFireVec, actionVec, TriggerAction.BreakpointExp)
++    val fireDebugMode = fireDebugModeVec.asUInt.orR
++    val breakPointExp = fireBreakpointExpVec.asUInt.orR && triggerCanRaiseBpExp
+ 
+     // todo: add more for trace
+     triggerAction := MuxCase(TriggerAction.None, Seq(
++      fireDebugMode -> TriggerAction.DebugMode,
+       breakPointExp -> TriggerAction.BreakpointExp,
+-      actionIsDmode -> TriggerAction.DebugMode,
+     ))
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 1a7e9788aa8..2fd7898182f 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -274,7 +274,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val debugMode = RegInit(false.B)
+   private val nextV = WireInit(VirtMode(0), VirtMode.Off)
+   V := nextV
+-  // dcsr stopcount 
++  // dcsr stopcount
+   val debugModeStopCountNext = debugMode && dcsr.regOut.STOPCOUNT
+   val debugModeStopTimeNext  = debugMode && dcsr.regOut.STOPTIME
+   val debugModeStopCount = RegNext(debugModeStopCountNext)
+@@ -929,7 +929,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val addrInPerfCnt = (wenLegal || ren) && (
+     (addr >= CSRs.mcycle.U) && (addr <= CSRs.mhpmcounter31.U) ||
+     (addr >= CSRs.cycle.U) && (addr <= CSRs.hpmcounter31.U)
+-  ) || 
++  ) ||
+   ren && (
+     (addr === CSRs.vstopi.U) || (addr === CSRs.vstopei.U) ||
+     (addr === CSRs.stopi.U) || (addr === CSRs.stopei.U) ||
+@@ -1130,7 +1130,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   nonDebugTrapTargetPc.raiseIPF  := io.status.instrAddrTransType.checkPageFault(delayedPcFromXtvec)
+   nonDebugTrapTargetPc.raiseIAF  := io.status.instrAddrTransType.checkAccessFault(delayedPcFromXtvec)
+   nonDebugTrapTargetPc.raiseIGPF := io.status.instrAddrTransType.checkGuestPageFault(delayedPcFromXtvec)
+-  
++
+   private val trapTargetUpdate = RegNext(nonDebugTrapEventValid || trapEntryDEvent.valid, false.B)
+   io.trapTargetPc.valid := trapTargetUpdate
+   io.trapTargetPc.bits := DataHoldBypass(
+@@ -1211,11 +1211,18 @@ class NewCSR(implicit val p: Parameters) extends Module
+     tdata1Pre := (if (idx > 0) tdata1RegVec(idx - 1) else tdata1RegVec(idx)).rdata.asUInt
+     mcontrol6Pre := tdata1Pre.DATA.asUInt
+     val canWriteDmode = WireInit(false.B)
+-    canWriteDmode := (if(idx > 0) (Mux(mcontrol6Pre.CHAIN.asBool, tdata1Pre.DMODE.asBool && tdata1Pre.TYPE.isLegal, true.B)) && debugMode else debugMode).asBool
++    canWriteDmode := (if (idx > 0) (Mux(mcontrol6Pre.CHAIN.asBool, tdata1Pre.DMODE.asBool && tdata1Pre.TYPE.isLegal, true.B)) && debugMode else debugMode).asBool
++
++    val tdata1Next = Wire(new Tdata1Bundle)
++    tdata1Next := (if (idx < TriggerNum - 1) tdata1RegVec(idx + 1) else tdata1RegVec(idx)).rdata.asUInt
++    val dmodeNextTrigger = WireInit(false.B)
++    dmodeNextTrigger := (if (idx < TriggerNum - 1) tdata1Next.TYPE.isLegal && tdata1Next.DMODE.asBool else false.B)
++
+     tdata1RegVec(idx) match {
+       case m: HasTriggerBundle =>
+         m.canWriteDmode := canWriteDmode
+         m.chainable := debugMod.io.out.newTriggerChainIsLegal
++        m.dmodeNextTrigger := dmodeNextTrigger
+       case _ =>
+     }
+   }
+@@ -1261,7 +1268,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+     Seq(mtval.rdata,       stval.rdata,        vstval.rdata)
+   )
+   io.status.traceCSR.mstatus  := mstatus.regOut.asUInt
+-  
++
+   /**
+    * perf_begin
+    * perf number: 29 (frontend 8, ctrlblock 8, memblock 8, huancun 5)
+@@ -1282,7 +1289,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val countingEn        = RegInit(0.U.asTypeOf(Vec(perfCntNum, Bool())))
+   val ofFromPerfCntVec  = Wire(Vec(perfCntNum, Bool()))
+   val lcofiReqVec       = Wire(Vec(perfCntNum, Bool()))
+-  
++
+   for(i <- 0 until perfCntNum) {
+     mhpmcounters(i) match {
+       case m: HasPerfCounterBundle =>
+@@ -1297,7 +1304,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+         m.ofFromPerfCnt := ofFromPerfCntVec(i)
+       case _ =>
+     }
+-    
++
+     val mhpmevent = Wire(new MhpmeventBundle)
+     mhpmevent := mhpmevents(i).rdata
+     lcofiReqVec(i) := ofFromPerfCntVec(i) && !mhpmevent.OF.asBool
+```

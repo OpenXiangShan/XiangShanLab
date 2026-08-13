@@ -1,0 +1,1 @@
+When virt mode changed, `time` should be updated because we may need a offset version with `htimedelta`. This commit delays a cycle to update `time` register because `v` is actually changed a cycle after `nextV =/= v`.

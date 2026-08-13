@@ -1,0 +1,1 @@
+  s2_fire_dup := s2_valid_dup

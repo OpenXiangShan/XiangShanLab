@@ -1,0 +1,8 @@
+NewLoadUnit.scala
+  scalar ldout/toIntRf valid remains asserted after redirect kill
+
+MemBlock.scala
+  forwards newLoadUnits(i).io.ldout into load writeback ports
+
+WbArbiter.scala
+  arbitrates valid integer writebacks into backend RF write ports

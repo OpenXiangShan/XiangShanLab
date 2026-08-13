@@ -1,0 +1,23 @@
+{
+  "number": 5765,
+  "title": "Difftest mismatch on tail bits of v0 after vlm.v",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5765",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: backend"
+  ],
+  "author": "KnightGOKU",
+  "created_at": "2026-04-03T14:51:49Z",
+  "updated_at": "2026-04-07T03:16:48Z",
+  "source_files": [
+    "issue-5765/source/bug-report.tar.gz",
+    "issue-5765/source/program-01.S",
+    "issue-5765/source/program-02.txt",
+    "issue-5765/source/program-03.S"
+  ],
+  "archive_files": [
+    "issue-5765/source/bug-report.tar.gz"
+  ],
+  "has_comments": true
+}

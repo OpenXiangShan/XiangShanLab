@@ -1,0 +1,11 @@
+{
+  "redirect_valid": 1,
+  "from_bpu_meta_valid": 1,
+  "bpu_enqueue": 0,
+  "to_backend_wen": 0,
+  "new_entry_ptr": [0, 5],
+  "old_bpu_ptr": [1, 2],
+  "from_bpu_s3_ptr": [1, 0],
+  "flushed_span_from_new_entry_to_old_bpu_ptr": 5,
+  "s3_distance_from_new_entry_ptr": 3
+}

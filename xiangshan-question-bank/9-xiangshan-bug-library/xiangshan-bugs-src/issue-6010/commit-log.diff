@@ -1,0 +1,74 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
+index b166c6b4825..f41b7021742 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
+@@ -37,8 +37,11 @@ class InterruptFilter extends Module {
+   val miprios = io.in.miprios
+   val hsiprios = io.in.hsiprios
+   val hviprios = Cat(hviprio2.asUInt, hviprio1.asUInt)
+-  val fromAIAValid = io.in.fromAIA.meip || io.in.fromAIA.seip || io.in.fromAIA.notice_pending
+   val platformValid = io.in.platform.meip || io.in.platform.seip
++  val mvienSEIE = io.in.mvienSEIE
++  val mvipSEIP = io.in.mvipSEIP
++  val midelegSEI = io.in.mideleg.SEI.asBool
++  val SEIfromEIC = io.in.platform.seip || io.in.fromAIA.seip
+ 
+   /**
+    * Sort by implemented interrupt default priority
+@@ -60,12 +63,7 @@ class InterruptFilter extends Module {
+   val hstopigather = hsip & hsie & (~hideleg).asUInt
+   val vstopigather = vsip & vsie & NoSEIMask
+ 
+-  val flag = RegInit(false.B)
+-  when (platformValid) {
+-    flag := true.B
+-  }.elsewhen(fromAIAValid) {
+-    flag := false.B
+-  }
++  val injectSEI = !(midelegSEI === mvienSEIE) && mvipSEIP
+ 
+   val mipriosSort = Wire(Vec(InterruptNO.interruptDefaultPrio.size, new IpriosSort))
+   mipriosSort.zip(InterruptNO.interruptDefaultPrio).zipWithIndex.foreach { case ((iprio, defaultPrio), i) =>
+@@ -73,7 +71,7 @@ class InterruptFilter extends Module {
+     when (mtopigather(defaultPrio)) {
+       iprio.enable := true.B
+       when (defaultPrio.U === InterruptNO.MEI.U) {
+-        iprio.isZero := platformValid || flag
++        iprio.isZero := platformValid
+         val mtopeiGreaterThan255 = mtopei.IPRIO.asUInt(10, 8).orR
+         iprio.greaterThan255 := mtopeiGreaterThan255
+         iprio.prioNum := mtopei.IPRIO.asUInt(7, 0)
+@@ -95,9 +93,9 @@ class InterruptFilter extends Module {
+     when (hstopigather(defaultPrio)) {
+       iprio.enable := true.B
+       when (defaultPrio.U === InterruptNO.SEI.U) {
+-        iprio.isZero := platformValid || flag
++        iprio.isZero := platformValid
+         val stopeiGreaterThan255 = stopei.IPRIO.asUInt(10, 8).orR
+-        iprio.greaterThan255 := stopeiGreaterThan255
++        iprio.greaterThan255 := (injectSEI && !SEIfromEIC) || stopeiGreaterThan255
+         iprio.prioNum := stopei.IPRIO.asUInt(7, 0)
+       }.otherwise {
+         iprio.isZero := !hsiprios(7 + 8 * defaultPrio, 8 * defaultPrio).orR
+@@ -617,6 +615,8 @@ class InterruptFilterIO extends Bundle {
+       val seip = Bool()
+       val notice_pending = Bool()
+     }
++    val mvienSEIE = Bool()
++    val mvipSEIP = Bool()
+   })
+ 
+   val out = Output(new Bundle {
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 3bf4fcb5a2b..29b4efd9ebb 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -406,6 +406,8 @@ class NewCSR(implicit val p: Parameters) extends Module
+   intrMod.io.in.fromAIA.meip := fromAIA.meip
+   intrMod.io.in.fromAIA.seip := fromAIA.seip
+   intrMod.io.in.fromAIA.notice_pending := fromAIA.notice_pending
++  intrMod.io.in.mvienSEIE := mvien.regOut.SEIE.asBool
++  intrMod.io.in.mvipSEIP := mvip.regOut.SEIP.asBool
+ 
+   val intrVec = RegEnable(intrMod.io.out.interruptVec.bits, 0.U, intrMod.io.out.interruptVec.valid)
+   val debug = RegEnable(intrMod.io.out.debug, false.B, intrMod.io.out.interruptVec.valid)

@@ -1,0 +1,2 @@
+utage_bank_io_r_req_valid = 1
+utage_bank_rckEn          = 1

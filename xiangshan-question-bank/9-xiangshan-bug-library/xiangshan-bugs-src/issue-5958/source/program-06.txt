@@ -1,0 +1,6 @@
+.gitignore
+Makefile
+README.md
+linker.ld
+main.c
+start.S

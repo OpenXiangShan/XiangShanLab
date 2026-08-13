@@ -1,0 +1,130 @@
+# Commit Log
+- Issue: #5797
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5797
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5797
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5797
+- Changed files: 3
+- Additions: 39
+- Deletions: 12
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/Bpu.scala`
+- `src/main/scala/xiangshan/frontend/bpu/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/bpu/CompareMatrix.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+index 4218b92c03a..cafeccfe56b 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+@@ -311,11 +311,30 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+ 
+   s1_utageMeta := utage.io.meta.bits
+ 
++  private val s2_s1Prediction = RegEnable(s1_prediction, s1_fire)
++
++  s2_realUtageMeta := s2_utageMeta
++  s2_realUtageMeta.abtbResult.zipWithIndex.foreach { case (result, idx) =>
++    result.valid :=
++      s2_utageMeta.abtbResult(idx).valid && (s2_utageMeta.abtbResult(idx).cfiPosition <= s2_s1Prediction.cfiPosition)
++  }
++
++  private val s2_compareMatrix = CompareMatrix(VecInit(mbtb.io.result.map(_.bits.cfiPosition)))
++
+   /* *** s3 prediction selection *** */
+   private val s3_mbtbResult     = RegEnable(mbtb.io.result, s2_fire)
+   private val s3_tagePrediction = RegEnable(tage.io.prediction, s2_fire)
+   private val s3_scUsed         = RegEnable(sc.io.scUsed, s2_fire)
+   private val s3_scTakenMask    = RegEnable(sc.io.scTakenMask, s2_fire)
++  private val s3_compareMatrix  = RegEnable(s2_compareMatrix, s2_fire)
++  private val s3_s1Prediction   = RegEnable(s2_s1Prediction, s2_fire)
++
++  // timing optimization: The comparison of predictions and the generation of the s3_taken are performed in parallel.
++  private val s3_mbtbCfiPositionDiffVec = VecInit(s3_mbtbResult.map(_.bits.cfiPosition =/= s3_s1Prediction.cfiPosition))
++  private val s3_mbtbAttributeDiffVec   = VecInit(s3_mbtbResult.map(_.bits.attribute =/= s3_s1Prediction.attribute))
++  private val s3_mbtbTargetDiffVec      = VecInit(s3_mbtbResult.map(_.bits.target =/= s3_s1Prediction.target))
++  private val s3_ittageTargetDiff       = ittage.io.prediction.target =/= s3_s1Prediction.target
++  private val s3_rasTargetDiff          = ras.io.topRetAddr =/= s3_s1Prediction.target
+ 
+   private val s3_takenMask = VecInit(s3_mbtbResult.zipWithIndex.map { case (entry, i) =>
+     val tagePred = s3_tagePrediction(i)
+@@ -338,7 +357,6 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+   })
+   private val s3_taken = s3_takenMask.reduce(_ || _)
+ 
+-  private val s3_compareMatrix      = CompareMatrix(VecInit(s3_mbtbResult.map(_.bits.cfiPosition)))
+   private val s3_firstTakenBranchOH = s3_compareMatrix.getLeastElementOH(s3_takenMask)
+   private val s3_firstTakenBranch   = Mux1H(s3_firstTakenBranchOH, s3_mbtbResult)
+   private val s3_useRas             = s3_firstTakenBranch.bits.attribute.isReturn
+@@ -365,16 +383,22 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+       )
+     )
+ 
+-  private val s2_s1Prediction = RegEnable(s1_prediction, s1_fire)
+-  private val s3_s1Prediction = RegEnable(s2_s1Prediction, s2_fire)
+-  s2_realUtageMeta := s2_utageMeta
+-  s2_realUtageMeta.abtbResult.zipWithIndex.map {
+-    case (result, idx) =>
+-      result.valid := s2_utageMeta.abtbResult(idx).valid &&
+-        (s2_utageMeta.abtbResult(idx).cfiPosition <= s2_s1Prediction.cfiPosition)
+-  }
++  s3_override := {
++    val takenDiff       = s3_taken =/= s3_s1Prediction.taken
++    val cfiPositionDiff = Mux1H(s3_firstTakenBranchOH, s3_mbtbCfiPositionDiffVec)
++    val attributeDiff   = Mux1H(s3_firstTakenBranchOH, s3_mbtbAttributeDiffVec)
++    val targetDiff =
++      MuxCase(
++        false.B, // fall-through
++        Seq(
++          (s3_taken && s3_useRas)    -> s3_rasTargetDiff,
++          (s3_taken && s3_useIttage) -> s3_ittageTargetDiff,
++          s3_taken                   -> Mux1H(s3_firstTakenBranchOH, s3_mbtbTargetDiffVec)
++        )
++      )
+ 
+-  s3_override := s3_valid && !(s3_prediction === s3_s1Prediction)
++    s3_valid && (takenDiff || cfiPositionDiff || attributeDiff || targetDiff)
++  }
+ 
+   private val s2_phrMeta = RegEnable(phr.io.phrMeta, s1_fire)
+   private val s3_phrMeta = RegEnable(s2_phrMeta, s2_fire)
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+index 123d09f9260..cd6d6c277cd 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+@@ -59,6 +59,9 @@ class BranchAttribute extends Bundle {
+   def hasPush: Bool = rasAction(BranchAttribute.RasAction.pushBit)
+ 
+   def needIttage: Bool = isIndirect && !hasPop
++
++  def =/=(that: BranchAttribute): Bool =
++    this.branchType =/= that.branchType || this.rasAction =/= that.rasAction
+ }
+ 
+ object BranchAttribute {
+diff --git a/src/main/scala/xiangshan/frontend/bpu/CompareMatrix.scala b/src/main/scala/xiangshan/frontend/bpu/CompareMatrix.scala
+index d309b536723..01f46974451 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/CompareMatrix.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/CompareMatrix.scala
+@@ -19,7 +19,7 @@ import chisel3._
+ import chisel3.util._
+ 
+ class CompareMatrix(n: Int) extends Bundle {
+-  val m: Vec[Vec[Bool]] = Wire(Vec(n, Vec(n, Bool())))
++  val m: Vec[Vec[Bool]] = Vec(n, Vec(n, Bool()))
+ 
+   def apply(i: Int): Vec[Bool] = m(i)
+ 
+@@ -119,7 +119,7 @@ object CompareMatrix {
+       order: (UInt, UInt) => Bool = (a: UInt, b: UInt) => a < b
+   ): CompareMatrix = {
+     val n = value.length
+-    val m = new CompareMatrix(n)
++    val m = Wire(new CompareMatrix(n))
+     (0 until n).foreach { i =>
+       (0 until n).foreach { j =>
+         if (i == j)
+```

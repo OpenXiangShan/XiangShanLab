@@ -1,0 +1,71 @@
+# Commit Log
+- Issue: #4456
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4456
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4456
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4456
+- Changed files: 2
+- Additions: 9
+- Deletions: 6
+
+## Files
+- `src/main/scala/xiangshan/backend/CtrlBlock.scala`
+- `src/main/scala/xiangshan/backend/decode/FusionDecoder.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index de195a3923d..270867e617e 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -560,8 +560,9 @@ class CtrlBlockImp(
+ 
+   val decodeHasException = decode.io.out.map(x => x.bits.exceptionVec.asUInt.orR || (!TriggerAction.isNone(x.bits.trigger)))
+   // fusion decoder
++  fusionDecoder.io.disableFusion := disableFusion
+   for (i <- 0 until DecodeWidth) {
+-    fusionDecoder.io.in(i).valid := decode.io.out(i).valid && !(decodeHasException(i) || disableFusion)
++    fusionDecoder.io.in(i).valid := decode.io.out(i).valid && !decodeHasException(i)
+     fusionDecoder.io.in(i).bits := decode.io.out(i).bits.instr
+     if (i > 0) {
+       fusionDecoder.io.inReady(i - 1) := decode.io.out(i).ready
+diff --git a/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala b/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala
+index a4f21323667..ff4a68fb120 100644
+--- a/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala
++++ b/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala
+@@ -537,6 +537,7 @@ class FusionDecodeReplace(implicit p: Parameters) extends XSBundle {
+ 
+ class FusionDecoder(implicit p: Parameters) extends XSModule {
+   val io = IO(new Bundle {
++    val disableFusion = Input(Bool())
+     // T0: detect instruction fusions in these instructions
+     val in = Vec(DecodeWidth, Flipped(ValidIO(UInt(32.W))))
+     val inReady = Vec(DecodeWidth - 1, Input(Bool())) // dropRight(1)
+@@ -590,8 +591,9 @@ class FusionDecoder(implicit p: Parameters) extends XSModule {
+     // NOTE: The RD of some FENCE instructions are not 0, but they are also HINT instructions.
+     //       However, as FENCE instructions can never be fused, we do not need to consider them.
+     val notHint = RegEnable(VecInit(pair.map(_.bits(11, 7) =/= 0.U)).asUInt.andR, fire)
++    val enabled = RegEnable(!io.disableFusion, fire)
+     val thisCleared = io.clear(i)
+-    out.valid := instrPairValid && !thisCleared && fusionVec.asUInt.orR && notHint
++    out.valid := instrPairValid && !thisCleared && fusionVec.asUInt.orR && notHint && enabled
+     XSError(instrPairValid && PopCount(fusionVec) > 1.U, "more then one fusion matched\n")
+     def connectByInt(field: FusionDecodeReplace => Valid[UInt], replace: Seq[Option[Int]]): Unit = {
+       field(out.bits).valid := false.B
+@@ -646,10 +648,10 @@ class FusionDecoder(implicit p: Parameters) extends XSModule {
+ 
+     val src2WithZero = VecInit(fusionVec.zip(fusionList.map(_.lsrc2NeedZero)).filter(_._2).map(_._1)).asUInt.orR
+     val src2WithMux = VecInit(fusionVec.zip(fusionList.map(_.lsrc2NeedMux)).filter(_._2).map(_._1)).asUInt.orR
+-    io.info(i).rs2FromZero := src2WithZero
+-    io.info(i).rs2FromRs1 := src2WithMux && !RegEnable(fusionList.head.destToRs1, fire)
+-    io.info(i).rs2FromRs2 := src2WithMux && RegEnable(fusionList.head.destToRs1, fire)
+-    out.bits.lsrc2.valid := src2WithMux || src2WithZero
++    io.info(i).rs2FromZero := enabled && src2WithZero
++    io.info(i).rs2FromRs1 := enabled && src2WithMux && !RegEnable(fusionList.head.destToRs1, fire)
++    io.info(i).rs2FromRs2 := enabled && src2WithMux && RegEnable(fusionList.head.destToRs1, fire)
++    out.bits.lsrc2.valid := enabled && (src2WithMux || src2WithZero)
+     when (src2WithMux) {
+       out.bits.lsrc2.bits := RegEnable(fusionList.head.lsrc2MuxResult, fire)
+     }.otherwise {//elsewhen (src2WithZero) {
+```

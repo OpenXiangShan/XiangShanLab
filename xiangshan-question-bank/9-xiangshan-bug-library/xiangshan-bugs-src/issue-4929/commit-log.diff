@@ -1,0 +1,13 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPMA.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPMA.scala
+index 9ee6f830dda..6b5eaa2e4a9 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPMA.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPMA.scala
+@@ -42,7 +42,7 @@ trait CSRPMA { self: NewCSR =>
+   )
+ 
+   val pmaCSROutMap: SeqMap[Int, UInt] = SeqMap.from(
+-    pmpCSRMods.map(csr => csr.addr -> csr.regOut.asInstanceOf[CSRBundle].asUInt).iterator
++    pmaCSRMods.map(csr => csr.addr -> csr.regOut.asInstanceOf[CSRBundle].asUInt).iterator
+   )
+ 
+   private val pmaCfgRead = Cat(pmacfgs.map(_.rdata(7, 0)).reverse)

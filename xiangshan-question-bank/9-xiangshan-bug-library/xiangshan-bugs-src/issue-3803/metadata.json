@@ -1,0 +1,21 @@
+{
+  "number": 3803,
+  "title": "fix(AtomicsUnit): Assert `atom_override_xtval` when trigger fire.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3803",
+  "state": "closed",
+  "labels": [],
+  "author": "wissygh",
+  "created_at": "2024-10-29T07:02:43Z",
+  "updated_at": "2024-11-06T02:04:17Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3803/commit-log.md"
+  ],
+  "submitted_at": "2024-10-29",
+  "branch": "",
+  "rtl_commit": ""
+}

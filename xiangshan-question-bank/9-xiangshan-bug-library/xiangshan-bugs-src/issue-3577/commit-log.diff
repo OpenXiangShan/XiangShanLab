@@ -1,0 +1,632 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRDefines.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRDefines.scala
+index 97c898e71d7..5386e0d5abd 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRDefines.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRDefines.scala
+@@ -257,6 +257,8 @@ object CSRDefines {
+     val U = Value(0.U)
+     val S = Value(1.U)
+     val M = Value(3.U)
++
++    override def isLegal(enumeration: CSREnumType): Bool = enumeration.isOneOf(U, S, M)
+   }
+ 
+   object VirtMode extends CSREnum with RWApply {
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+index 1c2b32a53f6..803746e56ec 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+@@ -54,7 +54,16 @@ trait EventUpdatePrivStateOutput {
+ }
+ 
+ trait EventOutputBase {
+-  def getBundleByName(name: String): Valid[CSRBundle]
++  import scala.reflect.runtime.{universe => ru}
++
++  def getBundleByName(name: String): Valid[CSRBundle] = {
++    val mirror: ru.Mirror = ru.runtimeMirror(getClass.getClassLoader)
++    val im = mirror.reflect(this)
++    val classSymbol: ru.ClassSymbol = im.symbol.asClass
++    val fieldSymbol = classSymbol.info.decl(ru.TermName(name)).asTerm
++    val fieldMirror: ru.FieldMirror = mirror.reflect(this).reflectField(fieldSymbol)
++    fieldMirror.get.asInstanceOf[Valid[CSRBundle]]
++  }
+ }
+ 
+ trait CSREventBase {
+@@ -140,6 +149,16 @@ class TrapEntryEventInput(implicit val p: Parameters) extends Bundle with HasXSP
+   val hvictlIID = Input(UInt(HIIDWidth.W))
+ }
+ 
++trait EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
++  protected def addUpdateBundleInCSREnumType(updateBundle: ValidIO[CSRBundle]): Unit = {
++    (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case (sink, source) =>
++      if (updateBundle.bits.eventFields.contains(source)) {
++        sink.addOtherUpdate(updateBundle.valid, source)
++      }
++    }
++  }
++}
++
+ class TargetPCBundle extends Bundle {
+   val pc = UInt(XLEN.W)
+   val raiseIPF = Bool()
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/DretEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/DretEvent.scala
+index fca46b78061..15042240f74 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/DretEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/DretEvent.scala
+@@ -15,13 +15,6 @@ class DretEventOutput extends Bundle with EventUpdatePrivStateOutput with EventO
+   val debugMode = ValidIO(Bool())
+   val debugIntrEnable = ValidIO(Bool())
+   val targetPc = ValidIO(new TargetPCBundle)
+-
+-  override def getBundleByName(name: String): ValidIO[CSRBundle] = {
+-    name match {
+-      case "dcsr" => this.dcsr
+-      case "mstatus" => this.mstatus
+-    }
+-  }
+ }
+ 
+ class DretEventInput extends Bundle {
+@@ -74,16 +67,10 @@ class DretEventModule(implicit p: Parameters) extends Module with CSREventBase {
+   out.targetPc.bits.raiseIGPF := instrAddrTransType.checkGuestPageFault(in.dpc.asUInt)
+ }
+ 
+-trait DretEventSinkBundle { self: CSRModule[_] =>
++trait DretEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+   val retFromD = IO(Flipped(new DretEventOutput))
+ 
+-  private val updateBundle: ValidIO[CSRBundle] = retFromD.getBundleByName(self.modName.toLowerCase())
++  addUpdateBundleInCSREnumType(retFromD.getBundleByName(self.modName.toLowerCase()))
+ 
+-  (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case(sink, source) =>
+-    if (updateBundle.bits.eventFields.contains(source)) {
+-      when(updateBundle.valid) {
+-        sink := source
+-      }
+-    }
+-  }
++  reconnectReg()
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MNretEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MNretEvent.scala
+index 2609fc37037..b4bbb2ffbca 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MNretEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MNretEvent.scala
+@@ -17,13 +17,6 @@ class MNretEventOutput extends Bundle with EventUpdatePrivStateOutput with Event
+   val mnstatus  = ValidIO((new MnstatusBundle).addInEvent(_.MNPP, _.MNPV, _.NMIE))
+   val mstatus   = ValidIO((new MstatusBundle).addInEvent(_.MPRV))
+   val targetPc  = ValidIO(new TargetPCBundle)
+-
+-  override def getBundleByName(name: String): ValidIO[CSRBundle] = {
+-    name match {
+-      case "mnstatus"  => this.mnstatus
+-      case "mstatus"   => this.mstatus
+-    }
+-  }
+ }
+ 
+ class MNretEventInput extends Bundle {
+@@ -74,17 +67,10 @@ class MNretEventModule(implicit p: Parameters) extends Module with CSREventBase
+   out.targetPc.bits.raiseIGPF := instrAddrTransType.checkGuestPageFault(in.mnepc.asUInt)
+ }
+ 
+-trait MNretEventSinkBundle { self: CSRModule[_] =>
++trait MNretEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+   val retFromMN = IO(Flipped(new MNretEventOutput))
+ 
+-  private val updateBundle: ValidIO[CSRBundle] = retFromMN.getBundleByName(self.modName.toLowerCase())
+-
+-  (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case (sink, source) =>
+-    if (updateBundle.bits.eventFields.contains(source)) {
+-      when(updateBundle.valid) {
+-        sink := source
+-      }
+-    }
+-  }
++  addUpdateBundleInCSREnumType(retFromMN.getBundleByName(self.modName.toLowerCase()))
+ 
++  reconnectReg()
+ }
+\ No newline at end of file
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala
+index af3ca502f08..60a402b6147 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala
+@@ -17,13 +17,6 @@ class MretEventOutput extends Bundle with EventUpdatePrivStateOutput with EventO
+   val mstatus  = ValidIO((new MstatusBundle).addInEvent(_.MPP, _.MPV, _.MIE, _.MPIE, _.MPRV))
+   val tcontrol = ValidIO((new TcontrolBundle).addInEvent(_.MTE))
+   val targetPc = ValidIO(new TargetPCBundle)
+-
+-  override def getBundleByName(name: String): ValidIO[CSRBundle] = {
+-    name match {
+-      case "mstatus"  => this.mstatus
+-      case "tcontrol" => this.tcontrol
+-    }
+-  }
+ }
+ 
+ class MretEventInput extends Bundle {
+@@ -77,17 +70,10 @@ class MretEventModule(implicit p: Parameters) extends Module with CSREventBase {
+   out.targetPc.bits.raiseIGPF := instrAddrTransType.checkGuestPageFault(in.mepc.asUInt)
+ }
+ 
+-trait MretEventSinkBundle { self: CSRModule[_] =>
++trait MretEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+   val retFromM = IO(Flipped(new MretEventOutput))
+ 
+-  private val updateBundle: ValidIO[CSRBundle] = retFromM.getBundleByName(self.modName.toLowerCase())
+-
+-  (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case (sink, source) =>
+-    if (updateBundle.bits.eventFields.contains(source)) {
+-      when(updateBundle.valid) {
+-        sink := source
+-      }
+-    }
+-  }
++  addUpdateBundleInCSREnumType(retFromM.getBundleByName(self.modName.toLowerCase()))
+ 
++  reconnectReg()
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/SretEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/SretEvent.scala
+index bd1e041b7db..0fa64efd417 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/SretEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/SretEvent.scala
+@@ -19,14 +19,6 @@ class SretEventOutput extends Bundle with EventUpdatePrivStateOutput with EventO
+   val hstatus = ValidIO((new HstatusBundle).addInEvent(_.SPV))
+   val vsstatus = ValidIO((new SstatusBundle).addInEvent(_.SIE, _.SPIE, _.SPP))
+   val targetPc = ValidIO(new TargetPCBundle)
+-
+-  override def getBundleByName(name: String): ValidIO[CSRBundle] = {
+-    name match {
+-      case "mstatus" => this.mstatus
+-      case "hstatus" => this.hstatus
+-      case "vsstatus" => this.vsstatus
+-    }
+-  }
+ }
+ 
+ class SretEventInput extends Bundle {
+@@ -111,16 +103,10 @@ class SretEventModule(implicit p: Parameters) extends Module with CSREventBase {
+   dontTouch(sretInVS)
+ }
+ 
+-trait SretEventSinkBundle { self: CSRModule[_] =>
++trait SretEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+   val retFromS = IO(Flipped(new SretEventOutput))
+ 
+-  private val updateBundle: ValidIO[CSRBundle] = retFromS.getBundleByName(self.modName.toLowerCase())
++  addUpdateBundleInCSREnumType(retFromS.getBundleByName(self.modName.toLowerCase()))
+ 
+-  (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case (sink, source) =>
+-    if (updateBundle.bits.eventFields.contains(source)) {
+-      when(updateBundle.valid) {
+-        sink := source
+-      }
+-    }
+-  }
++  reconnectReg()
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
+index a705c750f34..9f0c5288452 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
+@@ -19,13 +19,6 @@ class TrapEntryDEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val targetPc        = ValidIO(new TargetPCBundle)
+   val debugMode       = ValidIO(Bool())
+   val debugIntrEnable = ValidIO(Bool())
+-
+-  def getBundleByName(name: String): Valid[CSRBundle] = {
+-    name match {
+-      case "dcsr" => this.dcsr
+-      case "dpc"  => this.dpc
+-    }
+-  }
+ }
+ 
+ class TrapEntryDEventInput(implicit override val p: Parameters) extends TrapEntryEventInput{
+@@ -104,16 +97,10 @@ class TrapEntryDEventModule(implicit val p: Parameters) extends Module with CSRE
+ 
+ }
+ 
+-trait TrapEntryDEventSinkBundle { self: CSRModule[_] =>
++trait TrapEntryDEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+   val trapToD = IO(Flipped(new TrapEntryDEventOutput))
+ 
+-  private val updateBundle: ValidIO[CSRBundle] = trapToD.getBundleByName(self.modName.toLowerCase())
++  addUpdateBundleInCSREnumType(trapToD.getBundleByName(self.modName.toLowerCase()))
+ 
+-  (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case (sink, source) =>
+-    if (updateBundle.bits.eventFields.contains(source)) {
+-      when(updateBundle.valid) {
+-        sink := source
+-      }
+-    }
+-  }
++  reconnectReg()
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+index 683f314eb8a..681d249dccf 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+@@ -23,18 +23,6 @@ class TrapEntryHSEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val htval   = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val htinst  = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val targetPc  = ValidIO(new TargetPCBundle)
+-
+-  def getBundleByName(name: String): Valid[CSRBundle] = {
+-    name match {
+-      case "mstatus" => this.mstatus
+-      case "hstatus" => this.hstatus
+-      case "sepc"    => this.sepc
+-      case "scause"  => this.scause
+-      case "stval"   => this.stval
+-      case "htval"   => this.htval
+-      case "htinst"  => this.htinst
+-    }
+-  }
+ }
+ 
+ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSREventBase {
+@@ -154,16 +142,10 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+   dontTouch(tvalFillGVA)
+ }
+ 
+-trait TrapEntryHSEventSinkBundle { self: CSRModule[_] =>
++trait TrapEntryHSEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+   val trapToHS = IO(Flipped(new TrapEntryHSEventOutput))
+ 
+-  private val updateBundle: ValidIO[CSRBundle] = trapToHS.getBundleByName(self.modName.toLowerCase())
++  addUpdateBundleInCSREnumType(trapToHS.getBundleByName(self.modName.toLowerCase()))
+ 
+-  (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case (sink, source) =>
+-    if (updateBundle.bits.eventFields.contains(source)) {
+-      when(updateBundle.valid) {
+-        sink := source
+-      }
+-    }
+-  }
++  reconnectReg()
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+index a46c4f69697..a59c5c071f0 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+@@ -21,18 +21,6 @@ class TrapEntryMEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val mtinst    = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val tcontrol  = ValidIO((new TcontrolBundle).addInEvent(_.MPTE, _.MTE))
+   val targetPc  = ValidIO(new TargetPCBundle)
+-
+-  def getBundleByName(name: String): Valid[CSRBundle] = {
+-    name match {
+-      case "mstatus"  => this.mstatus
+-      case "mepc"     => this.mepc
+-      case "mcause"   => this.mcause
+-      case "mtval"    => this.mtval
+-      case "mtval2"   => this.mtval2
+-      case "mtinst"   => this.mtinst
+-      case "tcontrol" => this.tcontrol
+-    }
+-  }
+ }
+ 
+ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSREventBase {
+@@ -142,16 +130,10 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   dontTouch(tvalFillGVA)
+ }
+ 
+-trait TrapEntryMEventSinkBundle { self: CSRModule[_] =>
++trait TrapEntryMEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+   val trapToM = IO(Flipped(new TrapEntryMEventOutput))
+ 
+-  private val updateBundle: ValidIO[CSRBundle] = trapToM.getBundleByName(self.modName.toLowerCase())
++  addUpdateBundleInCSREnumType(trapToM.getBundleByName(self.modName.toLowerCase()))
+ 
+-  (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case (sink, source) =>
+-    if (updateBundle.bits.eventFields.contains(source)) {
+-      when(updateBundle.valid) {
+-        sink := source
+-      }
+-    }
+-  }
++  reconnectReg()
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMNEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMNEvent.scala
+index 3264f31f97b..410d946e22d 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMNEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMNEvent.scala
+@@ -15,14 +15,6 @@ class TrapEntryMNEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val mnepc    = ValidIO((new Epc           ).addInEvent(_.epc))
+   val mncause  = ValidIO((new CauseBundle   ).addInEvent(_.Interrupt, _.ExceptionCode))
+   val targetPc = ValidIO(new TargetPCBundle)
+-
+-  def getBundleByName(name: String): Valid[CSRBundle] = {
+-    name match {
+-      case "mnstatus"  => this.mnstatus
+-      case "mnepc"     => this.mnepc
+-      case "mncause"   => this.mncause
+-    }
+-  }
+ }
+ 
+ class TrapEntryMNEventModule(implicit val p: Parameters) extends Module with CSREventBase {
+@@ -69,16 +61,10 @@ class TrapEntryMNEventModule(implicit val p: Parameters) extends Module with CSR
+ 
+ }
+ 
+-trait TrapEntryMNEventSinkBundle { self: CSRModule[_] =>
++trait TrapEntryMNEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+   val trapToMN = IO(Flipped(new TrapEntryMNEventOutput))
+ 
+-  private val updateBundle: ValidIO[CSRBundle] = trapToMN.getBundleByName(self.modName.toLowerCase())
++  addUpdateBundleInCSREnumType(trapToMN.getBundleByName(self.modName.toLowerCase()))
+ 
+-  (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case (sink, source) =>
+-    if (updateBundle.bits.eventFields.contains(source)) {
+-      when(updateBundle.valid) {
+-        sink := source
+-      }
+-    }
+-  }
++  reconnectReg()
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+index 84a99a9392c..c457ba28b45 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+@@ -19,15 +19,6 @@ class TrapEntryVSEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val vscause  = ValidIO((new CauseBundle   ).addInEvent(_.Interrupt, _.ExceptionCode))
+   val vstval   = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val targetPc = ValidIO(new TargetPCBundle)
+-
+-  def getBundleByName(name: String): Valid[CSRBundle] = {
+-    name match {
+-      case "vsstatus" => this.vsstatus
+-      case "vsepc"    => this.vsepc
+-      case "vscause"  => this.vscause
+-      case "vstval"   => this.vstval
+-    }
+-  }
+ }
+ 
+ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSREventBase {
+@@ -142,16 +133,10 @@ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSR
+   dontTouch(tvalFillGVA)
+ }
+ 
+-trait TrapEntryVSEventSinkBundle { self: CSRModule[_] =>
++trait TrapEntryVSEventSinkBundle extends EventSinkBundle { self: CSRModule[_ <: CSRBundle] =>
+   val trapToVS = IO(Flipped(new TrapEntryVSEventOutput))
+ 
+-  private val updateBundle: ValidIO[CSRBundle] = trapToVS.getBundleByName(self.modName.toLowerCase())
++  addUpdateBundleInCSREnumType(trapToVS.getBundleByName(self.modName.toLowerCase()))
+ 
+-  (reg.asInstanceOf[CSRBundle].getFields zip updateBundle.bits.getFields).foreach { case (sink, source) =>
+-    if (updateBundle.bits.eventFields.contains(source)) {
+-      when(updateBundle.valid) {
+-        sink := source
+-      }
+-    }
+-  }
++  reconnectReg()
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRFields.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRFields.scala
+index 4a89bdfd8f6..cd40dd870a0 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRFields.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRFields.scala
+@@ -3,6 +3,7 @@ package xiangshan.backend.fu.NewCSR
+ import chisel3._
+ import chisel3.util.Fill
+ import xiangshan.backend.fu.NewCSR.CSRFunc._
++import scala.collection.mutable
+ 
+ import scala.language.implicitConversions
+ 
+@@ -127,6 +128,8 @@ class CSREnumType(
+   override val factory: ChiselEnum
+ ) extends EnumType(factory) {
+ 
++  var otherUpdateSeq: mutable.Seq[Tuple2[Bool, Data]] = mutable.Seq()
++
+   if (factory.all.isEmpty) {
+     factory.asInstanceOf[CSREnum].addMinValue
+   }
+@@ -313,6 +316,11 @@ class CSREnumType(
+     this.asUInt | Fill(this.getWidth, that)
+   }
+ 
++  def addOtherUpdate(cond: Bool, value: CSREnumType): this.type = {
++    this.otherUpdateSeq :+= (cond, value)
++    this
++  }
++
+   // override cloneType to make ValidIO etc function return CSREnumType not EnumType
+   override def cloneType: this.type = factory.asInstanceOf[CSREnum].makeType.asInstanceOf[this.type].setRwType(this.rwType)
+ }
+@@ -361,8 +369,6 @@ class CSREnum extends ChiselEnum {
+   def legalize(enumeration: CSREnumType): CSREnumType = makeType
+ 
+   def legalize(enumeration: CSREnumType, dmode: Bool): CSREnumType = makeType
+-
+-  println(s"A new CSREnum is created, factory: $this")
+ }
+ 
+ trait RWApply { self: CSREnum =>
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRModule.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRModule.scala
+index c976fca53e1..b85f4756e48 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRModule.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRModule.scala
+@@ -21,55 +21,59 @@ class CSRModule[T <: CSRBundle](
+   // read data without mask
+   val regOut = IO(Output(bundle))
+ 
+-  val reg = (if (bundle.needReset) RegInit(bundle, bundle.init) else Reg(bundle))
++  protected val reg = (if (bundle.needReset) RegInit(bundle, bundle.init) else Reg(bundle))
+ 
+   protected val wen = w.wen
+   protected val wdata = w.wdataFields
+ 
+-  reg.elements.foreach { case (str, field: CSREnumType) =>
++  bundle.elements.foreach { case (str, field: CSREnumType) =>
+     val wfield = wdata.elements(str).asInstanceOf[CSREnumType]
+     field.rwType match {
+       case WARLType(wfn, _) =>
+-        when(wen && wfield.isLegal)(field := wdata.elements(str))
++        field.addOtherUpdate(wen && wfield.isLegal, wdata.elements(str).asInstanceOf[CSREnumType])
+       case WLRLType(wfn, _) =>
+-        when(wen && wfield.isLegal)(field := wdata.elements(str))
++        field.addOtherUpdate(wen && wfield.isLegal, wdata.elements(str).asInstanceOf[CSREnumType])
+       case RWType() =>
+-        when(wen)(field := wdata.elements(str))
++        field.addOtherUpdate(wen, wdata.elements(str).asInstanceOf[CSREnumType])
+       case ROType(_) =>
+-      case RefROType(ref, rfn) =>
+-      case RefRWType(ref) =>
+-      case RefWARLType(ref, wfn, rfn) =>
+-      case RefWLRLType(ref, wfn, rfn) =>
+       case _ =>
+     }
+   }
+ 
++  reconnectReg()
++
+   protected val rdataFields = Wire(bundle)
+   rdataFields :|= regOut
+ 
+   rdata := rdataFields.asUInt
+   regOut := reg
+ 
+-  def wfnField(field: CSREnumType, str: String)(wAliasSeq: Seq[CSRAddrWriteBundle[_]]) = {
++  private def wfnField(field: CSREnumType, str: String): Unit = {
+     val wfield: CSREnumType = wdata.elements(str).asInstanceOf[CSREnumType]
+ 
+-    when(wen && wfield.isLegal | wAliasSeq.map(x => x.wen && x.wdataFields.asInstanceOf[CSRBundle].elements(str).asInstanceOf[CSREnumType].isLegal).fold(false.B)(_ | _)) {
++    when (wen && wfield.isLegal || field.otherUpdateSeq.map(_._1).fold(false.B)(_ || _)) {
+       field := Mux1H(
+-        wAliasSeq.map(wAlias => wAlias.wen -> wAlias.wdataFields.asInstanceOf[CSRBundle].elements(str)) :+
+-        wen -> wdata.elements(str)
++        field.otherUpdateSeq.map { case (valid, data) =>
++          valid -> data
++        } :+ (wen -> wdata.elements(str)),
+       )
++    }.otherwise {
++      field := field
+     }
+   }
+ 
+-  def wfn(reg: T)(wAliasSeq: Seq[CSRAddrWriteBundle[_]]) = {
++  private def wfn(reg: CSRBundle): Unit = {
+     reg.elements.foreach { case (str, field: CSREnumType) =>
+       if (!field.isRef) {
+-        val fieldWAliasSeq = wAliasSeq.filter(_.wdataFields.asInstanceOf[CSRBundle].elements.contains(str))
+-        wfnField(field, str)(fieldWAliasSeq)
++        wfnField(field, str)
+       }
+     }
+   }
+ 
++  protected def reconnectReg(): Unit = {
++    this.wfn(this.reg)
++  }
++
+   def dumpFields: String = {
+     this.reg.getFields.map(_.dumpName).mkString("\n")
+   }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+index 6b746a61b21..fc550814c90 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+@@ -281,12 +281,12 @@ trait MachineLevel { self: NewCSR =>
+     .setAddr(CSRs.mtval2)
+ 
+   val mseccfg = Module(new CSRModule("Mseccfg", new CSRBundle {
+-    val PMM   = RO(33, 32)
+-    val SSEED = RO(     9)
+-    val USEED = RO(     8)
+-    val RLB   = RO(     2)
+-    val MMWP  = RO(     1)
+-    val MML   = RO(     0)
++    val MLPE  = RO(10) // Landing pand, Zicfilp extension
++    val SSEED = RO( 9) // Zkr extension
++    val USEED = RO( 8) // Zkr extension
++    val RLB   = RO( 2) // Smepmp
++    val MMWP  = RO( 1) // Smepmp
++    val MML   = RO( 0) // Smepmp
+   })).setAddr(CSRs.mseccfg)
+ 
+   val mcycle = Module(new CSRModule("Mcycle") with HasMachineCounterControlBundle {
+@@ -478,9 +478,15 @@ class MstatusModule(implicit override val p: Parameters) extends CSRModule("MSta
+   val sstatusRdata = IO(Output(UInt(64.W)))
+ 
+   val wAliasSstatus = IO(Input(new CSRAddrWriteBundle(new SstatusBundle)))
++  for ((name, field) <- wAliasSstatus.wdataFields.elements) {
++    reg.elements(name).asInstanceOf[CSREnumType].addOtherUpdate(
++      wAliasSstatus.wen && field.asInstanceOf[CSREnumType].isLegal,
++      field.asInstanceOf[CSREnumType]
++    )
++  }
+ 
+   // write connection
+-  this.wfn(reg)(Seq(wAliasSstatus))
++  reconnectReg()
+ 
+   when (robCommit.fsDirty || writeFCSR) {
+     assert(reg.FS =/= ContextStatus.Off, "The [m|s]status.FS should not be Off when set dirty, please check decode")
+@@ -498,13 +504,14 @@ class MstatusModule(implicit override val p: Parameters) extends CSRModule("MSta
+   rdata := mstatus.asUInt
+   sstatusRdata := sstatus.asUInt
+ }
+-class MnstatusBundle extends CSRBundle {
+ 
++class MnstatusBundle extends CSRBundle {
+   val NMIE   = CSRRWField  (3).withReset(1.U) // as opensbi not support smrnmi, we init nmie open
+   val MNPV   = VirtMode    (7).withReset(0.U)
+-  val MNPELP = CSRRWField  (9).withReset(0.U)
++  val MNPELP = RO          (9).withReset(0.U)
+   val MNPP   = PrivMode    (12, 11).withReset(PrivMode.U)
+ }
++
+ class MisaBundle extends CSRBundle {
+   // Todo: reset with ISA string
+   val A = RO( 0).withReset(1.U) // Atomic extension
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala
+index 3a634371172..d642b8a8391 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala
+@@ -30,8 +30,17 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
+     val fflagsRdata = IO(Output(Fflags()))
+     val frmRdata = IO(Output(Frm()))
+ 
++    for (wAlias <- Seq(wAliasFflags, wAliasFfm)) {
++      for ((name, field) <- wAlias.wdataFields.elements) {
++        reg.elements(name).asInstanceOf[CSREnumType].addOtherUpdate(
++          wAlias.wen && field.asInstanceOf[CSREnumType].isLegal,
++          field.asInstanceOf[CSREnumType]
++        )
++      }
++    }
++
+     // write connection
+-    this.wfn(reg)(Seq(wAliasFflags, wAliasFfm))
++    reconnectReg()
+ 
+     when (robCommit.fflags.valid) {
+       reg.NX := robCommit.fflags.bits(0) || reg.NX
+@@ -82,8 +91,17 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
+     val vxsat = IO(Output(Vxsat()))
+     val vxrm  = IO(Output(Vxrm()))
+ 
++    for (wAlias <- Seq(wAliasVxsat, wAlisaVxrm)) {
++      for ((name, field) <- wAlias.wdataFields.elements) {
++        reg.elements(name).asInstanceOf[CSREnumType].addOtherUpdate(
++          wAlias.wen && field.asInstanceOf[CSREnumType].isLegal,
++          field.asInstanceOf[CSREnumType]
++        )
++      }
++    }
++
+     // write connection
+-    this.wfn(reg)(Seq(wAliasVxsat, wAlisaVxrm))
++    reconnectReg()
+ 
+     when(robCommit.vxsat.valid) {
+       reg.VXSAT := reg.VXSAT.asBool || robCommit.vxsat.bits.asBool

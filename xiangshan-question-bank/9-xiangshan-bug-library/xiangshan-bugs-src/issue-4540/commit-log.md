@@ -1,0 +1,40 @@
+# Commit Log
+- Issue: #4540
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4540
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4540
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4540
+- Changed files: 1
+- Additions: 3
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+index 8d3e603c69a..fdb4b0d7954 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+@@ -153,7 +153,9 @@ class PTW()(implicit p: Parameters) extends XSModule with HasPtwConst with HasPe
+ 
+   val idle = RegInit(true.B)
+   val finish = WireInit(false.B)
++  dontTouch(finish)
+   val vs_finish = WireInit(false.B) // need to wait for G-stage translate, should not do pmp check
++  dontTouch(vs_finish)
+ 
+   val hptw_pageFault = RegInit(false.B)
+   val hptw_accessFault = RegInit(false.B)
+@@ -242,7 +244,7 @@ class PTW()(implicit p: Parameters) extends XSModule with HasPtwConst with HasPe
+ 
+   io.req.ready := idle
+   val ptw_resp = Wire(new PtwMergeResp)
+-  ptw_resp.apply(Mux(pte_valid, pageFault && !accessFault, false.B), accessFault || (ppn_af && !(pte_valid && (pageFault || guestFault))), Mux(accessFault, af_level, Mux(guestFault, gpf_level, level)), Mux(pte_valid, pte, fake_pte), vpn, satp.asid, hgatp.vmid, vpn(sectortlbwidth - 1, 0), not_super = false, not_merge = false, bitmap_checkfailed.asBool)
++  ptw_resp.apply(Mux(pte_valid, pageFault && !accessFault, false.B), (accessFault || ppn_af) && !(pte_valid && (pageFault || guestFault)), Mux(accessFault, af_level, Mux(guestFault, gpf_level, level)), Mux(pte_valid, pte, fake_pte), vpn, satp.asid, hgatp.vmid, vpn(sectortlbwidth - 1, 0), not_super = false, not_merge = false, bitmap_checkfailed.asBool)
+ 
+   val normal_resp = idle === false.B && mem_addr_update && !need_last_s2xlate && (guestFault || (w_mem_resp && find_pte) || (s_pmp_check && accessFault) || onlyS2xlate )
+   val stageHit_resp = idle === false.B && hptw_resp_stage2
+```

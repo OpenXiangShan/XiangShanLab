@@ -1,0 +1,28 @@
+diff --git a/ready-to-run b/ready-to-run
+index ad1aac3902a..37e90060f7b 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit ad1aac3902a339866a4beba4720b09b4365b0c63
++Subproject commit 37e90060f7baf8feddf0aea69a3a588f0576594e
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala
+index 5da7593e503..be12ac88177 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala
+@@ -23,7 +23,15 @@ trait HypervisorLevel { self: NewCSR =>
+   val hedeleg = Module(new CSRModule("Hedeleg", new HedelegBundle))
+     .setAddr(CSRs.hedeleg)
+ 
+-  val hideleg = Module(new CSRModule("Hideleg", new HidelegBundle))
++  val hideleg = Module(new CSRModule("Hideleg", new HidelegBundle)
++    with HasIpIeBundle
++  {
++    regOut := reg & mideleg
++    regOut.getLocal.zip(reg.getLocal).zip(mideleg.getLocal).zip(mvien.getLocal).foreach {
++      case (((regOutLCI, regLCI), midelegLCI), mvienLCI) =>
++        regOutLCI := regLCI && (midelegLCI || mvienLCI)
++    }
++  })
+     .setAddr(CSRs.hideleg)
+ 
+   val hie = Module(new CSRModule("Hie", new HieBundle)

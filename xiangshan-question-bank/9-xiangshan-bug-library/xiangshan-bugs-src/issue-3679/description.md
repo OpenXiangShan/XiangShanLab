@@ -1,0 +1,2 @@
+- In PTW, use a reg to store gvpn to check the high bits.
+- The len of gvpn(wire type) is wrong. It should be ptePPNLen.

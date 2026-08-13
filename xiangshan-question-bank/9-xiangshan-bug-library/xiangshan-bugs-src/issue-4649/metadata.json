@@ -1,0 +1,21 @@
+{
+  "number": 4649,
+  "title": "fix(Smstateen): fix access to sireg/vsireg",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4649",
+  "state": "closed",
+  "labels": [],
+  "author": "wissygh",
+  "created_at": "2025-04-29T09:16:02Z",
+  "updated_at": "2025-05-01T13:53:30Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4649/commit-log.md"
+  ],
+  "submitted_at": "2025-04-29",
+  "branch": "",
+  "rtl_commit": ""
+}

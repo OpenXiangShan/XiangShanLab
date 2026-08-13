@@ -1,0 +1,19 @@
+time = 7800
+table = 0, bank = 2
+abtb_io_enable              = 0
+bpu_sramResetDone           = 1
+bpu_s0_fire                 = 1
+utage_table_sramResetDone   = 1
+utage_bank_resetDone        = 1
+utage_bank_io_r_req_valid   = 1
+utage_bank_rckEn            = 1
+
+time = 7800
+table = 1, bank = 0
+abtb_io_enable              = 0
+bpu_sramResetDone           = 1
+bpu_s0_fire                 = 1
+utage_table_sramResetDone   = 1
+utage_bank_resetDone        = 1
+utage_bank_io_r_req_valid   = 1
+utage_bank_rckEn            = 1

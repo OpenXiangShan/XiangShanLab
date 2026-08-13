@@ -1,0 +1,25 @@
+{
+  "number": 6158,
+  "title": "`prefetch.w` loses write intent and is admitted as a read prefetch on a read-only page",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6158",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "ScottaMcdonald",
+  "created_at": "2026-06-27T06:11:54Z",
+  "updated_at": "2026-06-30T08:23:43Z",
+  "source_files": [
+    "issue-6158/source/prefetchw-pmp-write.zip",
+    "issue-6158/source/program-01.txt",
+    "issue-6158/source/program-02.txt",
+    "issue-6158/source/program-03.txt",
+    "issue-6158/source/program-04.txt",
+    "issue-6158/source/program-05.txt"
+  ],
+  "archive_files": [
+    "issue-6158/source/prefetchw-pmp-write.zip"
+  ],
+  "has_comments": true
+}

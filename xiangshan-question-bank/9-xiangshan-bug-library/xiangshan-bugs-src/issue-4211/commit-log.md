@@ -1,0 +1,162 @@
+# Commit Log
+- Issue: #4211
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4211
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4211
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4211
+- Changed files: 7
+- Additions: 38
+- Deletions: 13
+
+## Files
+- `ready-to-run`
+- `rocket-chip`
+- `scripts/xiangshan.py`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnit.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala`
+- `src/main/scala/xiangshan/package.scala`
+
+## Diff
+```diff
+diff --git a/ready-to-run b/ready-to-run
+index 7b4e611a04e..b346e75ab9d 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit 7b4e611a04e7e226039ff8b3087d00c1aed8bb11
++Subproject commit b346e75ab9d57dd59bdc4e289beee9e5d01a6e4b
+diff --git a/rocket-chip b/rocket-chip
+index 61a5be26075..bf9289b42b0 160000
+--- a/rocket-chip
++++ b/rocket-chip
+@@ -1 +1 @@
+-Subproject commit 61a5be26075b1c4dad74250b20edd3a8d260a8de
++Subproject commit bf9289b42b0ace179adc44e1db681760a8369749
+diff --git a/scripts/xiangshan.py b/scripts/xiangshan.py
+index febd43c5336..de8d6165203 100644
+--- a/scripts/xiangshan.py
++++ b/scripts/xiangshan.py
+@@ -359,7 +359,8 @@ def __get_ci_misc(self, name=None):
+             "smstateen/rvh_test.bin",
+             "zacas/zacas-riscv64-xs.bin",
+             "Svpbmt/rvh_test.bin",
+-            "Svnapot/svnapot-test.bin"
++            "Svnapot/svnapot-test.bin",
++            "Zawrs/Zawrs-zawrs.bin"
+         ]
+         misc_tests = map(lambda x: os.path.join(base_dir, x), workloads)
+         return misc_tests
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index 6fc5890841f..7371061d188 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -230,6 +230,10 @@ object XDecode extends DecodeConstants {
+     FENCE      -> XSDecode(SrcType.pc , SrcType.imm, SrcType.X, FuType.fence, FenceOpType.fence , SelImm.X, noSpec = T, blockBack = T, flushPipe = T),
+     PAUSE      -> XSDecode(SrcType.pc , SrcType.imm, SrcType.X, FuType.fence, FenceOpType.fence , SelImm.X, noSpec = T, blockBack = T, flushPipe = T),
+ 
++    // Zawrs
++    WRS_NTO -> XSDecode(SrcType.pc , SrcType.imm, SrcType.X, FuType.csr, CSROpType.wrs_nto, SelImm.X , noSpec = T, blockBack = T),
++    WRS_STO -> XSDecode(SrcType.pc , SrcType.imm, SrcType.X, FuType.csr, CSROpType.wrs_sto, SelImm.X , noSpec = T, blockBack = T),
++
+     // RV64A
+     AMOADD_W  -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amoadd_w , SelImm.X, xWen = T, noSpec = T, blockBack = T),
+     AMOXOR_W  -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amoxor_w , SelImm.X, xWen = T, noSpec = T, blockBack = T),
+@@ -892,6 +896,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+     ) ||
+     io.fromCSR.illegalInst.vsIsOff    && FuType.FuTypeOrR(decodedInst.fuType, FuType.vecAll) ||
+     io.fromCSR.illegalInst.wfi        && FuType.FuTypeOrR(decodedInst.fuType, FuType.csr)   && CSROpType.isWfi(decodedInst.fuOpType) ||
++    io.fromCSR.illegalInst.wrs_nto    && FuType.FuTypeOrR(decodedInst.fuType, FuType.csr)   && CSROpType.isWrsNto(decodedInst.fuOpType) ||
+     (decodedInst.needFrm.scalaNeedFrm || FuType.isScalaNeedFrm(decodedInst.fuType)) && (((decodedInst.fpu.rm === 5.U) || (decodedInst.fpu.rm === 6.U)) || ((decodedInst.fpu.rm === 7.U) && io.fromCSR.illegalInst.frm)) ||
+     (decodedInst.needFrm.vectorNeedFrm || FuType.isVectorNeedFrm(decodedInst.fuType)) && io.fromCSR.illegalInst.frm ||
+     io.fromCSR.illegalInst.cboZ       && isCboZero ||
+@@ -907,6 +912,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+     io.fromCSR.virtualInst.hlsv       && FuType.FuTypeOrR(decodedInst.fuType, FuType.ldu)   && (LSUOpType.isHlv(decodedInst.fuOpType) || LSUOpType.isHlvx(decodedInst.fuOpType)) ||
+     io.fromCSR.virtualInst.hlsv       && FuType.FuTypeOrR(decodedInst.fuType, FuType.stu)   && LSUOpType.isHsv(decodedInst.fuOpType) ||
+     io.fromCSR.virtualInst.wfi        && FuType.FuTypeOrR(decodedInst.fuType, FuType.csr)   && CSROpType.isWfi(decodedInst.fuOpType) ||
++    io.fromCSR.virtualInst.wrs_nto    && FuType.FuTypeOrR(decodedInst.fuType, FuType.csr)   && CSROpType.isWrsNto(decodedInst.fuOpType) ||
+     io.fromCSR.virtualInst.cboZ       && isCboZero ||
+     io.fromCSR.virtualInst.cboCF      && (isCboClean || isCboFlush) ||
+     io.fromCSR.virtualInst.cboI       && isCboInval
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index a858a3a7ba8..2290b6103d5 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -1361,6 +1361,8 @@ class NewCSR(implicit val p: Parameters) extends Module
+   io.toDecode.illegalInst.vsIsOff    := mstatus.regOut.VS === ContextStatus.Off || (isModeVS || isModeVU) && vsstatus.regOut.VS === ContextStatus.Off
+   io.toDecode.illegalInst.wfi        := isModeHU || !isModeM && mstatus.regOut.TW
+   io.toDecode.virtualInst.wfi        := isModeVS && !mstatus.regOut.TW && hstatus.regOut.VTW || isModeVU && !mstatus.regOut.TW
++  io.toDecode.illegalInst.wrs_nto    := !isModeM && mstatus.regOut.TW
++  io.toDecode.virtualInst.wrs_nto    := privState.V && !mstatus.regOut.TW && hstatus.regOut.VTW
+   io.toDecode.illegalInst.frm        := frmIsReserved
+   // Ref: The RISC-V Instruction Set Manual Volume I - 20.5. Control and Status Register State
+   io.toDecode.illegalInst.cboZ       := !isModeM && !menvcfg.regOut.CBZE || isModeHU && !senvcfg.regOut.CBZE
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index a3a15729f99..9ff3ac5e6ee 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -440,6 +440,12 @@ class CSRToDecode(implicit p: Parameters) extends XSBundle {
+      */
+     val wfi = Bool()
+ 
++    /**
++     * illegal wrs_nto
++     * raise EX_II when !isModeM && mstatus.TW=1
++     */
++    val wrs_nto = Bool()
++
+     /**
+      * frm reserved
+      * raise EX_II when frm.data > 4
+@@ -496,6 +502,12 @@ class CSRToDecode(implicit p: Parameters) extends XSBundle {
+      */
+     val wfi = Bool()
+ 
++    /**
++     * illegal wrs_nto
++     * raise EX_VI when privState.V && mstatus.TW=0 && hstatus.VTW=1
++     */
++    val wrs_nto = Bool()
++
+     /**
+      * illegal CBO.ZERO
+      * raise [[EX_VI]] when MEnvCfg.CBZE && (isModeVS && !HEnvCfg.CBZE || isModeVU && (!HEnvCfg.CBZE || !SEnvCfg.CBZE))
+diff --git a/src/main/scala/xiangshan/package.scala b/src/main/scala/xiangshan/package.scala
+index 3aeec1aae0e..ef8f0ab9446 100644
+--- a/src/main/scala/xiangshan/package.scala
++++ b/src/main/scala/xiangshan/package.scala
+@@ -229,18 +229,22 @@ package object xiangshan {
+ 
+ 
+   object CSROpType {
+-    //               | func3|
+-    def jmp   = "b010_000".U
+-    def wfi   = "b100_000".U
+-    def wrt   = "b001_001".U
+-    def set   = "b001_010".U
+-    def clr   = "b001_011".U
+-    def wrti  = "b001_101".U
+-    def seti  = "b001_110".U
+-    def clri  = "b001_111".U
++    //                 | func3|
++    def jmp     = "b010_000".U
++    def wfi     = "b100_000".U
++    def wrs_nto = "b100_010".U
++    def wrs_sto = "b100_011".U
++    def wrt     = "b001_001".U
++    def set     = "b001_010".U
++    def clr     = "b001_011".U
++    def wrti    = "b001_101".U
++    def seti    = "b001_110".U
++    def clri    = "b001_111".U
+ 
+     def isSystemOp (op: UInt): Bool = op(4)
+-    def isWfi      (op: UInt): Bool = op(5)
++    def isWfi      (op: UInt): Bool = op(5) && !op(1)
++    def isWrsNto   (op: UInt): Bool = op(5) && op(1, 0) === "b10".U
++    def isWrsSto   (op: UInt): Bool = op(5) && op(1, 0) === "b11".U
+     def isCsrAccess(op: UInt): Bool = op(3)
+     def isReadOnly (op: UInt): Bool = op(3) && op(2, 0) === 0.U
+     def notReadOnly(op: UInt): Bool = op(3) && op(2, 0) =/= 0.U
+```

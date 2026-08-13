@@ -1,0 +1,27 @@
+{
+  "number": 5674,
+  "title": "fix(StoreUnit): fix the revoke logic of misalignbuffer",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5674",
+  "state": "closed",
+  "labels": [
+    "module: memory"
+  ],
+  "author": "Anzooooo",
+  "created_at": "2026-03-10T10:59:37Z",
+  "updated_at": "2026-03-16T09:44:49Z",
+  "submitted_at": "2026-03-10",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5674/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

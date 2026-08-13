@@ -1,0 +1,61 @@
+# Commit Log
+- Issue: #4257
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4257
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4257
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4257
+- Changed files: 2
+- Additions: 11
+- Deletions: 16
+
+## Files
+- `src/main/scala/xiangshan/frontend/IFU.scala`
+- `utility`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/IFU.scala b/src/main/scala/xiangshan/frontend/IFU.scala
+index a2bb77c81b8..c7c2fad1c42 100644
+--- a/src/main/scala/xiangshan/frontend/IFU.scala
++++ b/src/main/scala/xiangshan/frontend/IFU.scala
+@@ -948,21 +948,16 @@ class NewIFU(implicit p: Parameters) extends XSModule
+     io.toIbuffer.bits.valid     := f3_lastHalf_mask & f3_instr_valid.asUInt
+   }
+ 
+-  when(io.toIbuffer.valid && io.toIbuffer.ready) {
+-    val enqVec = io.toIbuffer.bits.enqEnable
+-    val allocateSeqNum = VecInit((0 until PredictWidth).map{i =>
+-      val idx  = PopCount(enqVec.take(i + 1))
+-      val pc   = f3_pc(i)
+-      val code = io.toIbuffer.bits.instrs(i)
+-      PerfCCT.createInstMetaAtFetch(idx, pc, code, enqVec(i), clock, reset)
+-    })
+-    io.toIbuffer.bits.debug_seqNum.zipWithIndex.foreach { case (a, i) =>
+-      a := allocateSeqNum(i)
+-    }
+-  }.otherwise {
+-    io.toIbuffer.bits.debug_seqNum.zipWithIndex.foreach { case (a, i) =>
+-      a := 0.U
+-    }
++  val enqVec = io.toIbuffer.bits.enqEnable
++  val allocateSeqNum = VecInit((0 until PredictWidth).map{i =>
++    val idx  = PopCount(enqVec.take(i+1))
++    val pc   = f3_pc(i)
++    val code = io.toIbuffer.bits.instrs(i)
++    PerfCCT.createInstMetaAtFetch(idx, pc, code, io.toIbuffer.valid && io.toIbuffer.ready && enqVec(i), clock, reset)
++  })
++
++  io.toIbuffer.bits.debug_seqNum.zipWithIndex.foreach { case (sn, i) =>
++    sn := Mux(io.toIbuffer.valid && io.toIbuffer.ready && enqVec(i), allocateSeqNum(i), 0.U)
+   }
+ 
+   /** to backend */
+diff --git a/utility b/utility
+index 2b4f0bf7528..fcf03ecad01 160000
+--- a/utility
++++ b/utility
+@@ -1 +1 @@
+-Subproject commit 2b4f0bf75285b0e4f96d532e9643fca01123996f
++Subproject commit fcf03ecad0107ef0575079a1eaba0aecde72c859
+```

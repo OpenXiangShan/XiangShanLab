@@ -1,0 +1,48 @@
+# Commit Log
+- Issue: #5795
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5795
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5795
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5795
+- Changed files: 1
+- Additions: 6
+- Deletions: 0
+
+## Files
+- `src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala
+index faebc602d8e..b385752d4d1 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala
+@@ -154,6 +154,9 @@ class VirtualLoadQueue(implicit p: Parameters) extends XSModule
+   io.ldWbPtr := deqPtr
+   io.lqEmpty := RegNext(validCount === 0.U)
+ 
++  XSError((enqPtrExt.head < deqPtr) &&
++  !(enqPtrExt.head.value === deqPtr.value && enqPtrExt.head.flag ^ deqPtr.flag), s"deqPtr exceed enqptr\n")
++
+   /**
+    * Enqueue at dispatch
+    *
+@@ -186,6 +189,7 @@ class VirtualLoadQueue(implicit p: Parameters) extends XSModule
+       debug_mmio(i) := false.B
+       debug_paddr(i) := 0.U
+     }
++    XSError(entryCanEnq && allocated(i), s"can't allocated entry twice! ${i}\n")
+   }
+ 
+   for (i <- 0 until io.enq.req.length) {
+@@ -257,6 +261,8 @@ class VirtualLoadQueue(implicit p: Parameters) extends XSModule
+         debug_paddr(loadWbIndex) := io.ldin(i).bits.paddr
+       }
+     }
++    XSError((io.ldin(i).bits.uop.robIdx =/= robIdx(loadWbIndex)) && io.ldin(i).valid, s"writeback load robIdx missMatch! at pipeline ${i}\n")
++    XSError((!allocated(loadWbIndex) || committed(loadWbIndex)) && io.ldin(i).valid, s"writeback load invalid! at pipeline ${i}\n")
+     XSInfo(io.ldin(i).valid && !need_rep && need_valid,
+       "load hit write to lq idx %d pc 0x%x vaddr %x paddr %x mask %x forwardData %x forwardMask: %x mmio %x isvec %x\n",
+       io.ldin(i).bits.uop.lqIdx.asUInt,
+```

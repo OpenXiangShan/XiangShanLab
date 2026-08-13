@@ -1,0 +1,290 @@
+# Commit Log
+- Issue: #4493
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4493
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4493
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4493
+- Changed files: 7
+- Additions: 49
+- Deletions: 34
+
+## Files
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+- `src/main/scala/xiangshan/mem/Bundles.scala`
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala`
+- `src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala`
+- `src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index e8c9e56cbb4..9451c586378 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -1269,7 +1269,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+       }
+     }
+   }
+-  
++
+   /**
+    * debug info
+    */
+diff --git a/src/main/scala/xiangshan/mem/Bundles.scala b/src/main/scala/xiangshan/mem/Bundles.scala
+index a79468367e9..719f326a3db 100644
+--- a/src/main/scala/xiangshan/mem/Bundles.scala
++++ b/src/main/scala/xiangshan/mem/Bundles.scala
+@@ -161,7 +161,8 @@ object Bundles {
+       }
+       connectSamePort(this, inputReg)
+       this.rep_info := DontCare
+-      this.data_wen_dup   := DontCare
++      this.nc_with_data := DontCare
++      this.data_wen_dup := DontCare
+     }
+   }
+ 
+@@ -358,4 +359,9 @@ object Bundles {
+     val sqIdx = Vec(backendParams.StdCnt, ValidIO(new SqPtr))
+   }
+ 
++  class MisalignBufferEnqIO(implicit p: Parameters) extends XSBundle {
++    val req = DecoupledIO(new LqWriteBundle)
++    val revoke = Output(Bool())
++  }
++
+ }
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 5f690426fb1..37d0cf66394 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -995,7 +995,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     lsq.io.tlb_hint <> dtlbRepeater.io.hint.get
+ 
+     // connect misalignBuffer
+-    loadMisalignBuffer.io.req(i) <> loadUnits(i).io.misalign_buf
++    loadMisalignBuffer.io.enq(i) <> loadUnits(i).io.misalign_enq
+ 
+     if (i == MisalignWBPort) {
+       loadUnits(i).io.misalign_ldin  <> loadMisalignBuffer.io.splitLoadReq
+@@ -1254,7 +1254,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     lsq.io.sta.storeMaskIn(i) <> stu.io.st_mask_out
+ 
+     // connect misalignBuffer
+-    storeMisalignBuffer.io.req(i) <> stu.io.misalign_buf
++    storeMisalignBuffer.io.enq(i) <> stu.io.misalign_enq
+ 
+     if (i == 0) {
+       stu.io.misalign_stin  <> storeMisalignBuffer.io.splitStoreReq
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
+index 0f78ab5df6e..bfffb56985b 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
+@@ -116,7 +116,7 @@ class LoadMisalignBuffer(implicit p: Parameters) extends XSModule
+ 
+   val io = IO(new Bundle() {
+     val redirect        = Flipped(Valid(new Redirect))
+-    val req             = Vec(enqPortNum, Flipped(Decoupled(new LqWriteBundle)))
++    val enq             = Vec(enqPortNum, Flipped(new MisalignBufferEnqIO))
+     val rob             = Flipped(new RobLsqIO)
+     val splitLoadReq    = Decoupled(new LsPipelineBundle)
+     val splitLoadResp   = Flipped(Valid(new LqWriteBundle))
+@@ -143,18 +143,17 @@ class LoadMisalignBuffer(implicit p: Parameters) extends XSModule
+ 
+   io.loadMisalignFull := req_valid
+ 
+-  (0 until io.req.length).map{i =>
++  (0 until io.enq.length).map{i =>
+     if (i == 0) {
+-      io.req(0).ready := !req_valid && io.req(0).valid
++      io.enq(0).req.ready := !req_valid && io.enq(0).req.valid
+     }
+     else {
+-      io.req(i).ready := !io.req.take(i).map(_.ready).reduce(_ || _) && !req_valid && io.req(i).valid
++      io.enq(i).req.ready := !io.enq.take(i).map(_.req.ready).reduce(_ || _) && !req_valid && io.enq(i).req.valid
+     }
+   }
+ 
+-
+-  val select_req_bit   = ParallelPriorityMux(io.req.map(_.valid), io.req.map(_.bits))
+-  val select_req_valid = io.req.map(_.valid).reduce(_ || _)
++  val select_req_bit   = ParallelPriorityMux(io.enq.map(_.req.valid), io.enq.map(_.req.bits))
++  val select_req_valid = io.enq.map(_.req.valid).reduce(_ || _)
+   val canEnqValid = !req_valid && !select_req_bit.uop.robIdx.needFlush(io.redirect) && select_req_valid
+   when(canEnqValid) {
+     req := select_req_bit
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+index 2359ffd79c2..2178f2fb397 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+@@ -96,7 +96,7 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+ 
+   val io = IO(new Bundle() {
+     val redirect        = Flipped(Valid(new Redirect))
+-    val req             = Vec(enqPortNum, Flipped(Decoupled(new LsPipelineBundle)))
++    val enq             = Vec(enqPortNum, Flipped(new MisalignBufferEnqIO))
+     val rob             = Flipped(new RobLsqIO)
+     val splitStoreReq   = Decoupled(new LsPipelineBundle)
+     val splitStoreResp  = Flipped(Valid(new SqWriteBundle))
+@@ -141,10 +141,10 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+ 
+   // enqueue
+   // s1:
+-  val s1_req = VecInit(io.req.map(_.bits))
+-  val s1_valid = VecInit(io.req.map(x => x.valid))
++  val s1_req = VecInit(io.enq.map(_.req.bits))
++  val s1_valid = VecInit(io.enq.map(x => x.req.valid))
+ 
+-  val s1_index = (0 until io.req.length).map(_.asUInt)
++  val s1_index = (0 until io.enq.length).map(_.asUInt)
+   val reqSel = selectOldest(s1_valid, s1_req, s1_index)
+ 
+   val reqSelValid = reqSel._1(0)
+@@ -156,15 +156,22 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+   val canEnq = !req_valid && !reqRedirect && reqSelValid
+   val robMatch = req_valid && io.rob.pendingst && (io.rob.pendingPtr === req.uop.robIdx)
+ 
++  val s2_canEnq = GatedRegNext(canEnq)
++  val s2_reqSelPort = GatedRegNext(reqSelPort)
++  val misalign_can_split = Wire(Bool())
++  misalign_can_split := Mux(s2_canEnq, (0 until enqPortNum).map {
++    case i => !io.enq(i).revoke && s2_reqSelPort === i.U
++  }.reduce(_|_), GatedRegNext(misalign_can_split))
++
+   when(canEnq) {
+     connectSamePort(req, reqSelBits)
+     req.portIndex := reqSelPort
+-    req_valid := !reqSelBits.hasException
++    req_valid := true.B
+   }
+   val cross4KBPageEnq = WireInit(false.B)
+   when (cross4KBPageBoundary && !reqRedirect) {
+     when(
+-      reqSelValid && !reqSelBits.hasException &&
++      reqSelValid &&
+       (isAfter(req.uop.robIdx, reqSelBits.uop.robIdx) || (isNotBefore(req.uop.robIdx, reqSelBits.uop.robIdx) && req.uop.uopIdx > reqSelBits.uop.uopIdx)) &&
+       bufferState === s_idle
+     ) {
+@@ -180,8 +187,8 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+ 
+   val reqSelCanEnq = UIntToOH(reqSelPort)
+ 
+-  io.req.zipWithIndex.map{
+-    case (reqPort, index) => reqPort.ready := reqSelCanEnq(index) && (!req_valid || cross4KBPageBoundary && cross4KBPageEnq)
++  io.enq.zipWithIndex.map{
++    case (reqPort, index) => reqPort.req.ready := reqSelCanEnq(index) && (!req_valid || cross4KBPageBoundary && cross4KBPageEnq)
+   }
+ 
+   io.toVecStoreMergeBuffer.zipWithIndex.map{
+@@ -218,18 +225,17 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+   //state transition
+   switch(bufferState) {
+     is (s_idle) {
+-      when(cross4KBPageBoundary) {
++      when(cross4KBPageBoundary && misalign_can_split) {
+         when(robMatch) {
+           bufferState := s_split
+           isCrossPage := true.B
+         }
+       } .otherwise {
+-        when (req_valid) {
++        when (req_valid && misalign_can_split) {
+           bufferState := s_split
+           isCrossPage := false.B
+         }
+       }
+-
+     }
+ 
+     is (s_split) {
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 83d2c6a48e7..b815a768535 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -199,7 +199,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+     val fast_rep_out = Decoupled(new LqWriteBundle)
+ 
+     // to misalign buffer
+-    val misalign_buf = Decoupled(new LqWriteBundle)
++    val misalign_enq = new MisalignBufferEnqIO
+     val misalign_allow_spec = Input(Bool())
+ 
+     // Load RAR rollback
+@@ -1549,8 +1549,9 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+ 
+   // connect to misalignBuffer
+   val toMisalignBufferValid = s3_can_enter_lsq_valid && s3_mis_align && !s3_frm_mabuf
+-  io.misalign_buf.valid := toMisalignBufferValid && s3_misalign_can_go
+-  io.misalign_buf.bits  := s3_in
++  io.misalign_enq.req.valid := toMisalignBufferValid && s3_misalign_can_go
++  io.misalign_enq.req.bits  := s3_in
++  io.misalign_enq.revoke := false.B
+ 
+   /* <------- DANGEROUS: Don't change sequence here ! -------> */
+   io.lsq.ldin.bits.nc_with_data := s3_nc_with_data
+@@ -1572,7 +1573,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   val s3_flushPipe = s3_ldld_rep_inst
+ 
+   val s3_lrq_rep_info = WireInit(s3_in.rep_info)
+-  s3_lrq_rep_info.misalign_nack := toMisalignBufferValid && !(io.misalign_buf.ready && s3_misalign_can_go)
++  s3_lrq_rep_info.misalign_nack := toMisalignBufferValid && !(io.misalign_enq.req.ready && s3_misalign_can_go)
+   val s3_lrq_sel_rep_cause = PriorityEncoderOH(s3_lrq_rep_info.cause.asUInt)
+   val s3_replayqueue_rep_cause = WireInit(0.U.asTypeOf(s3_in.rep_info.cause))
+ 
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 0e6c29f518b..61b835589a9 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -67,7 +67,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+     val vecstin           = Flipped(Decoupled(new VecPipeBundle(isVStore = true)))
+     val vec_isFirstIssue  = Input(Bool())
+     // writeback to misalign buffer
+-    val misalign_buf = Decoupled(new LsPipelineBundle)
++    val misalign_enq = new MisalignBufferEnqIO
+     // trigger
+     val fromCsrTrigger = Input(new CsrTriggerBundle)
+ 
+@@ -413,6 +413,11 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   val s1_mis_align = s1_valid && !s1_tlb_miss && !s1_in.isHWPrefetch && !s1_isCbo && !s1_out.nc && !s1_out.mmio &&
+                       GatedValidRegNext(io.csrCtrl.hd_misalign_st_enable) && s1_in.isMisalign && !s1_in.misalignWith16Byte &&
+                       !s1_trigger_breakpoint && !s1_trigger_debug_mode
++  val s1_toMisalignBufferValid = s1_valid && !s1_tlb_miss && !s1_in.isHWPrefetch &&
++    !s1_frm_mabuf && !s1_isCbo && s1_in.isMisalign && !s1_in.misalignWith16Byte &&
++    GatedValidRegNext(io.csrCtrl.hd_misalign_st_enable)
++  io.misalign_enq.req.valid := s1_toMisalignBufferValid
++  io.misalign_enq.req.bits.fromLsPipelineBundle(s1_in)
+ 
+   // Pipeline
+   // --------------------------------------------------------------------------------
+@@ -479,11 +484,9 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+ 
+   val s2_mis_align = s2_valid && RegEnable(s1_mis_align, s1_fire) && !s2_exception
+   // goto misalignBuffer
+-  val toMisalignBufferValid = s2_valid && GatedValidRegNext(s1_mis_align && !s1_frm_mabuf)
+-  io.misalign_buf.valid := toMisalignBufferValid
+-  io.misalign_buf.bits  := s2_in
+-  io.misalign_buf.bits.hasException := s2_exception
+-  val misalignBufferNack = toMisalignBufferValid && !io.misalign_buf.ready
++  io.misalign_enq.revoke := s2_exception
++  val s2_misalignBufferNack = !io.misalign_enq.revoke &&
++    RegEnable(s1_toMisalignBufferValid && !io.misalign_enq.req.ready, false.B, s1_fire)
+ 
+   // feedback tlb miss to RS in store_s2
+   val feedback_slow_valid = WireInit(false.B)
+@@ -491,10 +494,10 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   feedback_slow_valid := s1_feedback.valid && !s1_out.uop.robIdx.needFlush(io.redirect) && !s1_out.isvec && !s1_frm_mabuf
+   io.feedback_slow.valid := GatedValidRegNext(feedback_slow_valid)
+   io.feedback_slow.bits  := RegEnable(s1_feedback.bits, feedback_slow_valid)
+-  io.feedback_slow.bits.hit  := RegEnable(s1_feedback.bits.hit, feedback_slow_valid) && !misalignBufferNack
++  io.feedback_slow.bits.hit  := RegEnable(s1_feedback.bits.hit, feedback_slow_valid) && !s2_misalignBufferNack
+ 
+   val s2_vecFeedback = RegNext(!s1_out.uop.robIdx.needFlush(io.redirect) && s1_feedback.bits.hit && s1_feedback.valid) &&
+-                       !misalignBufferNack && s2_in.isvec && !s2_frm_mabuf
++                       !s2_misalignBufferNack && s2_in.isvec && !s2_frm_mabuf
+ 
+   val s2_misalign_stout = WireInit(0.U.asTypeOf(io.misalign_stout))
+   s2_misalign_stout.valid := s2_valid && s2_can_go && s2_frm_mabuf
+```

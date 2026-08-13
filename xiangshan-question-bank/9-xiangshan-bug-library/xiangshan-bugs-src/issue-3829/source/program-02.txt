@@ -1,0 +1,8 @@
+0x0000000080000b98:   9b 12 e3 01                 slliw   t0,t1,30
+[src/cpu/cpu-exec.c:52,debug_hook] 0x0000000080000b9c:   67 83 04 00                 jalr   t1,s1,0
+0x0000000080000b9c:   67 83 04 00                 jalr   t1,s1,0
+[src/isa/riscv64/system/intr.c:69,raise_intr] raise intr cause NO: 4, epc: 8000e946
+==============  In the last commit group  ==============
+the first commit instr pc of DUT is 0x0000000080000b80
+the first commit instr pc of REF is 0x0000000080000b80
+============== Commit Group Trace (Core 0) ==============

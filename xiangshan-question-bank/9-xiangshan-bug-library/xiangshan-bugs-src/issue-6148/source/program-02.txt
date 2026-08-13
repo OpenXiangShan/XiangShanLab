@@ -1,0 +1,7 @@
+control_bank_delta_cycles          = 0
+hammer_bank0_minus_bank1_cycles    = 227
+hammer_bank0_over_bank1_ratio      = 1.405357
+hammer_conflict_bank0_minus_bank1  = 79
+hammer_misp_bank0_minus_bank1      = 12
+hammer_tage_misp_bank0_minus_bank1 = 15
+e2e_timing_channel_observed        = true

@@ -1,0 +1,9 @@
+{
+  "all_direct_phases_have_no_indirect": true,
+  "all_program_results_observed": true,
+  "control_banks_have_equal_timing": true,
+  "e2e_timing_channel_observed": true,
+  "hammer_bank0_has_more_branch_mispredicts": true,
+  "hammer_bank0_has_more_ittage_conflict": true,
+  "hammer_bank0_is_slower_than_bank1": true
+}

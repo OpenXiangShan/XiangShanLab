@@ -1,0 +1,83 @@
+# Commit Log
+- Issue: #4157
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4157
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4157
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4157
+- Changed files: 2
+- Additions: 28
+- Deletions: 10
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/SstcInterruptGen.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 2e3042760a2..2cf9486ef14 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -497,10 +497,15 @@ class NewCSR(implicit val p: Parameters) extends Module
+   sstcIRGen.i.stime.bits  := time.stime
+   sstcIRGen.i.vstime.valid := time.updated
+   sstcIRGen.i.vstime.bits  := time.vstime
+-  sstcIRGen.i.stimecmp := stimecmp.rdata
+-  sstcIRGen.i.vstimecmp := vstimecmp.rdata
+-  sstcIRGen.i.menvcfgSTCE := menvcfg.regOut.STCE.asBool
+-  sstcIRGen.i.henvcfgSTCE := henvcfg.regOut.STCE.asBool
++  sstcIRGen.i.stimecmp.wen := GatedValidRegNext(stimecmp.w.wen)
++  sstcIRGen.i.stimecmp.rdata  := stimecmp.rdata
++  sstcIRGen.i.vstimecmp.wen   := GatedValidRegNext(vstimecmp.w.wen)
++  sstcIRGen.i.vstimecmp.rdata := vstimecmp.rdata
++  sstcIRGen.i.menvcfg.wen   := GatedValidRegNext(menvcfg.w.wen)
++  sstcIRGen.i.menvcfg.STCE  := menvcfg.regOut.STCE.asBool
++  sstcIRGen.i.henvcfg.wen   := GatedValidRegNext(henvcfg.w.wen)
++  sstcIRGen.i.henvcfg.STCE  := henvcfg.regOut.STCE.asBool
++  sstcIRGen.i.htimedeltaWen := GatedValidRegNext(htimedelta.w.wen)
+ 
+   miregiprios.foreach { mod =>
+     mod.w.wen := mireg.w.wen && (miselect.regOut.ALL.asUInt === mod.addr.U)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/SstcInterruptGen.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/SstcInterruptGen.scala
+index 865250ddc53..59bda779f5d 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/SstcInterruptGen.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/SstcInterruptGen.scala
+@@ -7,10 +7,23 @@ class SstcInterruptGen extends Module {
+   val i = IO(Input(new Bundle {
+     val stime      = ValidIO(UInt(64.W))
+     val vstime     = ValidIO(UInt(64.W))
+-    val stimecmp   = UInt(64.W)
+-    val vstimecmp  = UInt(64.W)
+-    val menvcfgSTCE = Bool()
+-    val henvcfgSTCE = Bool()
++    val stimecmp   = new Bundle {
++      val wen = Bool()
++      val rdata = UInt(64.W)
++    }
++    val vstimecmp  = new Bundle {
++      val wen = Bool()
++      val rdata = UInt(64.W)
++    }
++    val htimedeltaWen = Bool()
++    val menvcfg = new Bundle {
++      val wen = Bool()
++      val STCE = Bool()
++    }
++    val henvcfg = new Bundle {
++      val wen = Bool()
++      val STCE = Bool()
++    }
+   }))
+   val o = IO(Output(new Bundle {
+     val STIP = Bool()
+@@ -18,6 +31,6 @@ class SstcInterruptGen extends Module {
+   }))
+ 
+   // Guard TIP by envcfg.STCE to avoid wrong assertion of time interrupt
+-  o.STIP  := RegEnable(i.stime.bits  >= i.stimecmp,  false.B, i.stime.valid  && i.menvcfgSTCE)
+-  o.VSTIP := RegEnable(i.vstime.bits >= i.vstimecmp, false.B, i.vstime.valid && i.henvcfgSTCE)
++  o.STIP  := RegEnable(i.stime.bits >= i.stimecmp.rdata && i.menvcfg.STCE, false.B, i.stime.valid || i.stimecmp.wen || i.menvcfg.wen)
++  o.VSTIP := RegEnable(i.vstime.bits >= i.vstimecmp.rdata && i.henvcfg.STCE, false.B, i.vstime.valid || i.vstimecmp.wen || i.htimedeltaWen || i.menvcfg.wen || i.henvcfg.wen)
+ }
+```

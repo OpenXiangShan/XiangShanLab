@@ -1,0 +1,15 @@
+{
+  "number": 4276,
+  "title": "clang-14: error: clang frontend command failed with exit code 139 (use -v to see invocation)",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4276",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported"
+  ],
+  "author": "zxl819",
+  "created_at": "2025-02-14T10:21:38Z",
+  "updated_at": "2025-02-15T01:17:23Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true
+}

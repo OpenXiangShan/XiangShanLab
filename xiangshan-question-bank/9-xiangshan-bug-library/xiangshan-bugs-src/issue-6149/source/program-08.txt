@@ -1,0 +1,7 @@
+{
+  "both_runs_ras_disabled": true,
+  "both_runs_success": true,
+  "prediction_targets_differ": true,
+  "post_prediction_fetch_targets_differ": true,
+  "secret_dependent_wrong_path_fetch": true
+}

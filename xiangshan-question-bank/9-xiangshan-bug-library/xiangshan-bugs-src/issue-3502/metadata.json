@@ -1,0 +1,21 @@
+{
+  "number": 3502,
+  "title": "fix(L1TLB, RVH): fix the length of tag_match about hit in MMUBundle",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3502",
+  "state": "closed",
+  "labels": [],
+  "author": "pxk27",
+  "created_at": "2024-09-05T04:30:05Z",
+  "updated_at": "2024-09-06T03:02:15Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3502/commit-log.md"
+  ],
+  "submitted_at": "2024-09-05",
+  "branch": "",
+  "rtl_commit": ""
+}

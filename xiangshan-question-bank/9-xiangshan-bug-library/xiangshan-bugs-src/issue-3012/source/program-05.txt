@@ -1,0 +1,12 @@
+diff --git a/main.c b/main.c
+index a101b50..545712d 100644
+--- a/main.c
++++ b/main.c
+@@ -49,6 +49,7 @@ int main(long hartid) {
+      */
+     char *s = 0x90000000u;
+     char *t = 0x90001000u;
++    for (int i=0;i<512;i++) s[i] = 0;
+     for (int i=0;i<100;i++) {
+         test_memcpy(t + 4, s + 4, 512);
+         // print_long(I);

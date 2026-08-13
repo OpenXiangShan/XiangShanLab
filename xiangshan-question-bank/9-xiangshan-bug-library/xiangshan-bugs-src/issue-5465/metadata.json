@@ -1,0 +1,27 @@
+{
+  "number": 5465,
+  "title": "fix(Backend, Region): use `basicDebugEn` for `diffVl` debug IO",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5465",
+  "state": "closed",
+  "labels": [
+    "module: backend"
+  ],
+  "author": "wissygh",
+  "created_at": "2025-12-30T10:09:34Z",
+  "updated_at": "2025-12-31T08:55:34Z",
+  "submitted_at": "2025-12-30",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5465/commit-log.md"
+  ],
+  "bug_categories": [
+    "backend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

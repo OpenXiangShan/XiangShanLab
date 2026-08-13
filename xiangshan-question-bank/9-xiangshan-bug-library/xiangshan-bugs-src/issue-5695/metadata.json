@@ -1,0 +1,21 @@
+{
+  "number": 5695,
+  "title": "Misaligned accesses to non-idempotent regions raise AddrMisaligned instead of AccessFault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5695",
+  "state": "closed",
+  "labels": [
+    "module: memory",
+    "type: bug/fixed"
+  ],
+  "author": "oChunCai",
+  "created_at": "2026-03-17T17:15:16Z",
+  "updated_at": "2026-03-25T08:30:27Z",
+  "source_files": [
+    "issue-5695/source/program-01.scala",
+    "issue-5695/source/program-02.scala",
+    "issue-5695/source/program-03.scala",
+    "issue-5695/source/program-04.scala"
+  ],
+  "archive_files": [],
+  "has_comments": true
+}

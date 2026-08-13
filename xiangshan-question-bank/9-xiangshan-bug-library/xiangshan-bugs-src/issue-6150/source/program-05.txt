@@ -1,0 +1,5 @@
+instruction          = DRET
+debugMode            = 0
+EX_II                = 1
+redirect_valid       = 1
+redirect_target      = stale xRET target from an earlier legal xRET

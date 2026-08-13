@@ -1,0 +1,3 @@
+The first instruction of core 0 has commited. Difftest enabled.
+Core 0: EXCEEDING CYCLE/INSTR LIMIT at pc = 0x80000046
+Core-0 instrCnt = 4394, cycleCnt = 9000, IPC = 0.488222

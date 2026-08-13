@@ -1,0 +1,48 @@
+# Commit Log
+- Issue: #5271
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5271
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5271
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5271
+- Changed files: 2
+- Additions: 7
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/Bpu.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+index d2d2a18f49d..8afeba170c8 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+@@ -469,7 +469,7 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+   ))
+ 
+   private val s2_s1PredictionSource = RegEnable(s1_predictionSource, s1_fire)
+-  private val s3_s1PredictionSource = RegEnable(s2_s1PredictionSource, s1_fire)
++  private val s3_s1PredictionSource = RegEnable(s2_s1PredictionSource, s2_fire)
+ 
+   private val s3_debugMeta = Wire(new BpuDebugMeta)
+   s3_debugMeta.startVAddr          := s3_pc
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 8cadddd3be5..13e9a46f227 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -467,6 +467,12 @@ class Ftq(implicit p: Parameters) extends FtqModule
+       debugMeta.bpSource.s3Override &&
+       debugMeta.bpSource.s3Fallthrough
+   )
++  XSPerfAccumulate(
++    "branchMispredicts_s3FallthroughTage",
++    backendRedirect.valid && backendRedirect.bits.isMisPred &&
++      debugMeta.bpSource.s3Override &&
++      debugMeta.bpSource.s3FallthroughTage
++  )
+   XSPerfAccumulate(
+     "branchMispredicts_s3Mbtb",
+     backendRedirect.valid && backendRedirect.bits.isMisPred &&
+```

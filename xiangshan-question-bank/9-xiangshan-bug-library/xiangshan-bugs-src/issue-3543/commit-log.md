@@ -1,0 +1,38 @@
+# Commit Log
+- Issue: #3543
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3543
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3543
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3543
+- Changed files: 1
+- Additions: 2
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/frontend/FTB.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/FTB.scala b/src/main/scala/xiangshan/frontend/FTB.scala
+index bfbe108dff5..d5f138e9c65 100644
+--- a/src/main/scala/xiangshan/frontend/FTB.scala
++++ b/src/main/scala/xiangshan/frontend/FTB.scala
+@@ -809,7 +809,7 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
+   val update = io.update.bits
+ 
+   val u_meta  = update.meta.asTypeOf(new FTBMeta)
+-  val u_valid = io.update.valid && !io.update.bits.old_entry
++  val u_valid = io.update.valid && !io.update.bits.old_entry && !s0_close_ftb_req
+ 
+   val (_, delay2_pc)    = DelayNWithValid(update.pc, u_valid, 2)
+   val (_, delay2_entry) = DelayNWithValid(update.ftb_entry, u_valid, 2)
+@@ -870,6 +870,7 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
+   XSPerfAccumulate("ftb_update_req", io.update.valid)
+   XSPerfAccumulate("ftb_update_ignored", io.update.valid && io.update.bits.old_entry)
+   XSPerfAccumulate("ftb_updated", u_valid)
++  XSPerfAccumulate("ftb_closing_update_counter", s0_close_ftb_req && u_valid)
+ 
+   override val perfEvents = Seq(
+     ("ftb_commit_hits            ", io.update.valid && u_meta.hit),
+```

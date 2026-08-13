@@ -1,0 +1,44 @@
+diff --git a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
+index 9b065b1ffd1..7e9ed32926a 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
+@@ -469,8 +469,8 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+     val tlb_req = new TlbRequestIO(nRespDups = 2)
+     val pmp_resp = Flipped(new PMPRespBundle())
+     val l1_req = DecoupledIO(new L1PrefetchReq())
+-    val l2_pf_addr = ValidIO(new L2PrefetchReq())
+-    val l3_pf_addr = ValidIO(new L3PrefetchReq())
++    val l2_pf_addr = DecoupledIO(new L2PrefetchReq())
++    val l3_pf_addr = DecoupledIO(new L3PrefetchReq())
+     val l2PfqBusy = Input(Bool())
+   })
+ 
+@@ -846,7 +846,7 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+   io.l2_pf_addr.valid := l2_pf_req_arb.io.out.valid
+   io.l2_pf_addr.bits := l2_pf_req_arb.io.out.bits.req
+ 
+-  l2_pf_req_arb.io.out.ready := true.B
++  l2_pf_req_arb.io.out.ready := io.l2_pf_addr.ready
+ 
+   for(i <- 0 until MLP_L2L3_SIZE) {
+     val evict = s1_l2_alloc && (s1_l2_index === i.U)
+@@ -891,7 +891,7 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+   io.l3_pf_addr.valid := l3_pf_req_arb.io.out.valid
+   io.l3_pf_addr.bits := l3_pf_req_arb.io.out.bits
+ 
+-  l3_pf_req_arb.io.out.ready := true.B
++  l3_pf_req_arb.io.out.ready := io.l3_pf_addr.ready
+ 
+   for(i <- 0 until MLP_L2L3_SIZE) {
+     val evict = s1_l2_alloc && (s1_l2_index === i.U)
+@@ -1009,8 +1009,10 @@ class L1Prefetcher(implicit p: Parameters) extends BasePrefecher with HasStreamP
+   val l2_in_pmem = PmemRanges.map(_.cover(pf_queue_filter.io.l2_pf_addr.bits.addr)).reduce(_ || _)
+   io.l2_req.valid := pf_queue_filter.io.l2_pf_addr.valid && l2_in_pmem && enable
+   io.l2_req.bits := pf_queue_filter.io.l2_pf_addr.bits
++  pf_queue_filter.io.l2_pf_addr.ready := io.l2_req.ready
+ 
+   val l3_in_pmem = PmemRanges.map(_.cover(pf_queue_filter.io.l3_pf_addr.bits.addr)).reduce(_ || _)
+   io.l3_req.valid := pf_queue_filter.io.l3_pf_addr.valid && l3_in_pmem && enable
+   io.l3_req.bits := pf_queue_filter.io.l3_pf_addr.bits
++  pf_queue_filter.io.l3_pf_addr.ready := io.l3_req.ready
+ }

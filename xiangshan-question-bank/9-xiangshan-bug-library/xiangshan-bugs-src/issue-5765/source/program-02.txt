@@ -1,0 +1,2 @@
+v0_low different at pc = 0x008000002c, right = 0x0000000000000380, wrong = 0xffffffffffff0380
+v0_high different at pc = 0x008000002c, right = 0x0000000000000000, wrong = 0xffffffffffffffff

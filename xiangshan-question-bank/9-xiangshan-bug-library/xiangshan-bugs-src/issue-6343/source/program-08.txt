@@ -1,0 +1,2 @@
+storeAccessFault = 1
+hardwareError    = 1  // stale from operation A

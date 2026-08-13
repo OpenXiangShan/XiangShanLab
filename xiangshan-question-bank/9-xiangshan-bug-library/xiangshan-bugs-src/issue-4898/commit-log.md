@@ -1,0 +1,101 @@
+# Commit Log
+- Issue: #4898
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4898
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4898
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4898
+- Changed files: 3
+- Additions: 19
+- Deletions: 3
+
+## Files
+- `src/main/scala/xiangshan/frontend/IFU.scala`
+- `src/main/scala/xiangshan/frontend/icache/ICacheMissUnit.scala`
+- `src/main/scala/xiangshan/frontend/icache/InstrUncache.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/IFU.scala b/src/main/scala/xiangshan/frontend/IFU.scala
+index d5ca41361c0..32c39c1f078 100644
+--- a/src/main/scala/xiangshan/frontend/IFU.scala
++++ b/src/main/scala/xiangshan/frontend/IFU.scala
+@@ -839,7 +839,12 @@ class NewIFU(implicit p: Parameters) extends XSModule
+   toUncache.valid      := ((mmio_state === m_sendReq) || (mmio_state === m_resendReq)) && f3_req_is_mmio
+   toUncache.bits.addr  := Mux(mmio_state === m_resendReq, mmio_resend_addr, f3_paddrs(0))
+   toUncache.bits.flush := f3_ftq_flush_self || f3_ftq_flush_by_older || mmioF3Flush && !f3_need_not_flush
+-  fromUncache.ready    := true.B
++  // if !pmp_mmio, then we're actually sending a MMIO request to main memory, it must be pbmt.nc/io
++  // we need to tell L2 Cache about this to make it work correctly
++  toUncache.bits.memBackTypeMM := !f3_pmp_mmio
++  toUncache.bits.memPageTypeNC := f3_itlb_pbmt === Pbmt.nc
++  // always ready to receive response: we just send one request at same time
++  fromUncache.ready := true.B
+ 
+   // send itlb request in m_sendTLB state
+   io.iTLBInter.req.valid                   := (mmio_state === m_sendTLB) && f3_req_is_mmio
+diff --git a/src/main/scala/xiangshan/frontend/icache/ICacheMissUnit.scala b/src/main/scala/xiangshan/frontend/icache/ICacheMissUnit.scala
+index d0221d428ea..9e752754fb0 100644
+--- a/src/main/scala/xiangshan/frontend/icache/ICacheMissUnit.scala
++++ b/src/main/scala/xiangshan/frontend/icache/ICacheMissUnit.scala
+@@ -19,6 +19,7 @@ package xiangshan.frontend.icache
+ 
+ import chisel3._
+ import chisel3.util._
++import coupledL2.MemBackTypeMM
+ import difftest._
+ import freechips.rocketchip.tilelink._
+ import org.chipsalliance.cde.config.Parameters
+@@ -165,6 +166,7 @@ class ICacheMSHR(edge: TLEdgeOut, isFetch: Boolean, ID: Int)(implicit p: Paramet
+   )._2
+   io.acquire.bits.acquire := getBlock
+   io.acquire.bits.acquire.user.lift(ReqSourceKey).foreach(_ := MemReqSource.CPUInst.id.U)
++  io.acquire.bits.acquire.user.lift(MemBackTypeMM).foreach(_ := true.B) // icache is always requesting main memory
+   io.acquire.bits.vSetIdx := vSetIdx
+ 
+   // get victim way when acquire fire
+diff --git a/src/main/scala/xiangshan/frontend/icache/InstrUncache.scala b/src/main/scala/xiangshan/frontend/icache/InstrUncache.scala
+index 71a55709b8c..391bf686b45 100644
+--- a/src/main/scala/xiangshan/frontend/icache/InstrUncache.scala
++++ b/src/main/scala/xiangshan/frontend/icache/InstrUncache.scala
+@@ -19,6 +19,10 @@ package xiangshan.frontend.icache
+ 
+ import chisel3._
+ import chisel3.util._
++import coupledL2.MemBackTypeMM
++import coupledL2.MemBackTypeMMField
++import coupledL2.MemPageTypeNC
++import coupledL2.MemPageTypeNCField
+ import freechips.rocketchip.diplomacy.IdRange
+ import freechips.rocketchip.diplomacy.LazyModule
+ import freechips.rocketchip.diplomacy.LazyModuleImp
+@@ -35,7 +39,9 @@ import xiangshan.WfiReqBundle
+ import xiangshan.frontend._
+ 
+ class InsUncacheReq(implicit p: Parameters) extends ICacheBundle {
+-  val addr: UInt = UInt(PAddrBits.W)
++  val addr:          UInt = UInt(PAddrBits.W)
++  val memBackTypeMM: Bool = Bool() // !pmp.mmio, pbmt.nc/io on a main memory region
++  val memPageTypeNC: Bool = Bool() // pbmt.nc
+   // FIXME: this IO is re-organized in kunminghu-v3, this is a temp solution for v2
+   val flush: Bool = Bool()
+ }
+@@ -106,6 +112,8 @@ class InstrMMIOEntry(edge: TLEdgeOut)(implicit p: Parameters) extends ICacheModu
+       toAddress = Cat(address_aligned, 0.U(log2Ceil(mmioBusBytes).W)),
+       lgSize = log2Ceil(mmioBusBytes).U
+     )._2
++    io.mmio_acquire.bits.user.lift(MemBackTypeMM).foreach(_ := req.memBackTypeMM)
++    io.mmio_acquire.bits.user.lift(MemPageTypeNC).foreach(_ := req.memPageTypeNC)
+ 
+     when(io.mmio_acquire.fire) {
+       state := s_refill_resp
+@@ -162,7 +170,8 @@ class InstrUncache()(implicit p: Parameters) extends LazyModule with HasICachePa
+     clients = Seq(TLMasterParameters.v1(
+       "InstrUncache",
+       sourceId = IdRange(0, cacheParams.nMMIOs)
+-    ))
++    )),
++    requestFields = Seq(MemBackTypeMMField(), MemPageTypeNCField())
+   )
+   val clientNode: TLClientNode = TLClientNode(Seq(clientParameters))
+```

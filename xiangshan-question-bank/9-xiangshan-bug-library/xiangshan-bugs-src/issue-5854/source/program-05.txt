@@ -1,0 +1,13 @@
+// L2TLB.scala:788-799
+    for (i <- 0 until tlbcontiguous) {
+      val ppn_equal = pte.entry(i).ppn === pte.entry(OHToUInt(pte.pteidx)).ppn
+      val pbmt_equal = pte.entry(i).pbmt === pte.entry(OHToUInt(pte.pteidx)).pbmt
+      val perm_equal = pte.entry(i).perm.getOrElse(0.U.asTypeOf(new PtePermBundle)).asUInt === pte.entry(OHToUInt(pte.pteidx)).perm.getOrElse(0.U.asTypeOf(new PtePermBundle)).asUInt
+      val v_equal = pte.entry(i).v === pte.entry(OHToUInt(pte.pteidx)).v
+      val af_equal = pte.entry(i).af === pte.entry(OHToUInt(pte.pteidx)).af
+      val pf_equal = pte.entry(i).pf === pte.entry(OHToUInt(pte.pteidx)).pf
+      val cf_equal = if (HasBitmapCheck) pte.entry(i).cf === pte.entry(OHToUInt(pte.pteidx)).cf else true.B
+      ptw_sector_resp.valididx(i) := ((ppn_equal && pbmt_equal && perm_equal && v_equal && af_equal && pf_equal && cf_equal) || !pte.not_super) && !pte.not_merge
+      ptw_sector_resp.ppn_low(i) := pte.entry(i).ppn_low
+    }
+    ptw_sector_resp.valididx(OHToUInt(pte.pteidx)) := true.B

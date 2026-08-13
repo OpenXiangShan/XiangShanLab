@@ -1,0 +1,3 @@
+Git commit: 1e64239649566a1217ea26efad20ace05771cb11
+Core 0's Commit SHA is: 1e64239649, dirty: 1
+emu compiled at May 8 2026, 16:58:47

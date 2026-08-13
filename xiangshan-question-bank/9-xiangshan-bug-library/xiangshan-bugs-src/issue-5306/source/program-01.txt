@@ -1,0 +1,2 @@
+-  private val t1_bankIdx  = getBankIndex(t1_startVAddr)
++  private val t1_bankIdx  = getBaseTableBankIndex(t1_startVAddr)

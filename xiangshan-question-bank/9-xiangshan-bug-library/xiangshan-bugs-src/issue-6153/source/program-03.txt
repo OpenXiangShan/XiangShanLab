@@ -1,0 +1,15 @@
+predicate_result = differential_plru_cache_oracle_reproduced
+
+checks:
+  secret1_predicate                         = true
+  secret0_predicate                         = true
+  same_addresses                            = true
+  same_set_stride_0x4000                    = true
+  secret1_target_trigger_not_s1_killed      = true
+  secret0_control_trigger_not_s1_killed     = true
+  secret1_killed_target_metadata_update     = true
+  secret0_killed_control_metadata_update    = true
+  secret1_probe_target_hit                  = true
+  secret1_probe_control_miss                = true
+  secret0_probe_target_miss                 = true
+  secret0_probe_control_hit                 = true

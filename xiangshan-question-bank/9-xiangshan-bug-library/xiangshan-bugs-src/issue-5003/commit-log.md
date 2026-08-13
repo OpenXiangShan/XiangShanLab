@@ -1,0 +1,112 @@
+# Commit Log
+- Issue: #5003
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5003
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5003
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5003
+- Changed files: 5
+- Additions: 10
+- Deletions: 5
+
+## Files
+- `src/main/scala/xiangshan/Parameters.scala`
+- `src/main/scala/xiangshan/backend/BackendParams.scala`
+- `src/main/scala/xiangshan/backend/Bundles.scala`
+- `src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala`
+- `src/main/scala/xiangshan/backend/rename/Rename.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 980728ab628..014adb73139 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -121,7 +121,7 @@ case class XSCoreParameters
+   StoreQueueNWriteBanks: Int = 8, // NOTE: make sure that StoreQueueSize is divided by StoreQueueNWriteBanks
+   StoreQueueForwardWithMask: Boolean = true,
+   VlsQueueSize: Int = 8,
+-  RobSize: Int = 224,
++  RobSize: Int = 160,
+   RabSize: Int = 256,
+   VTypeBufferSize: Int = 64, // used to reorder vtype
+   IssueQueueSize: Int = 20,
+diff --git a/src/main/scala/xiangshan/backend/BackendParams.scala b/src/main/scala/xiangshan/backend/BackendParams.scala
+index 81162d09d32..d036450f601 100644
+--- a/src/main/scala/xiangshan/backend/BackendParams.scala
++++ b/src/main/scala/xiangshan/backend/BackendParams.scala
+@@ -41,7 +41,7 @@ case class BackendParams(
+ 
+   def debugEn(implicit p: Parameters): Boolean = p(DebugOptionsKey).EnableDifftest
+ 
+-  def robCompressEn: Boolean = false
++  def robCompressEn: Boolean = true
+ 
+   def basicDebugEn(implicit p: Parameters): Boolean = p(DebugOptionsKey).AlwaysBasicDiff || debugEn
+ 
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index 54ac8bd2360..e09ab7920a8 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -231,7 +231,8 @@ object Bundles {
+     val singleStep = Bool() // debug module
+     val numLsElem = NumLsElem()
+     val hasException = Bool()
+-    val ftqLastOffset = UInt(log2Up(PredictWidth).W) // store ftqoffset before channge in rename
++    val ftqLastOffset = UInt(log2Up(PredictWidth).W) // store ftqoffset before change in rename
++    val lastIsRVC = Bool() // store isrvc before change in rename
+     val debug = OptionWrapper(backendParams.debugEn, new RenameOutUopDebug())
+     val crossFtqCommit = UInt(2.W) // use to caculate the ftq idx of ftqentry when commit
+     val crossFtq = Bool() // use to caculate the ftq idx of brh instructions when pass to exu
+diff --git a/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala b/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
+index ed0c9d45b5e..510b41b2ea0 100644
+--- a/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
++++ b/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
+@@ -167,6 +167,7 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+   val fromRenameUpdate = Wire(Vec(RenameWidth, Flipped(ValidIO(new DispatchUpdateUop))))
+ 
+   // Update ftqidx to dispatch: Due to branch instructions/store compression, the required ftqidx should correspond to the ftqidx of the last instruction in the compressed robentry.
++  // update isrvc to dispatch: branch need last isrvc, rob need first isrvc as rob should attach interrupt to first uop
+   for (i <- 0 until RenameWidth) {
+     fromRenameUpdate(i).valid := fromRename(i).valid
+     // srcLoadDependency and srcState
+@@ -175,6 +176,7 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+     fromRenameUpdate(i).bits.debug.foreach(connectSamePort(_, fromRename(i).bits.debug.get))
+     fromRenameUpdate(i).bits.ftqOffset := fromRename(i).bits.ftqLastOffset
+     fromRenameUpdate(i).bits.ftqPtr := fromRename(i).bits.ftqPtr + fromRename(i).bits.crossFtq
++    fromRenameUpdate(i).bits.preDecodeInfo.isRVC := fromRename(i).bits.lastIsRVC
+   }
+ 
+   val renameWidth = io.fromRename.size
+diff --git a/src/main/scala/xiangshan/backend/rename/Rename.scala b/src/main/scala/xiangshan/backend/rename/Rename.scala
+index 80298d84816..2528d105114 100644
+--- a/src/main/scala/xiangshan/backend/rename/Rename.scala
++++ b/src/main/scala/xiangshan/backend/rename/Rename.scala
+@@ -311,6 +311,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     uops(i).crossFtq := false.B
+     uops(i).crossFtqCommit := 0.U
+     uops(i).ftqLastOffset := io.in(i).bits.ftqOffset
++    uops(i).lastIsRVC := io.in(i).bits.preDecodeInfo.isRVC
+     // alloc a new phy reg
+     needV0Dest(i) := io.in(i).valid && needDestReg(Reg_V0, io.in(i).bits)
+     needVlDest(i) := io.in(i).valid && needDestReg(Reg_Vl, io.in(i).bits)
+@@ -355,6 +356,9 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+         uops(i).firstUop := false.B
+         uops(i).ftqPtr := uops(i - 1).ftqPtr
+         uops(i).ftqOffset := uops(i - 1).ftqOffset
++        // rob need first uop isrvc, as it may attach interrupt to first uop(calculate pc)
++        // branch need last uop isrvc, it will change in dispatch
++        uops(i).preDecodeInfo.isRVC := uops(i - 1).preDecodeInfo.isRVC
+         uops(i).numWB := instrSizesVec(i) - PopCount(compressMasksVec(i) & (Cat(isMove.reverse) | Cat(fusionValidVec.reverse)))
+       }
+     }
+@@ -372,8 +376,6 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     if (i < RenameWidth - 1){
+       when(!needRobFlags(i)) {
+         uops(i).commitType := uops(i + 1).commitType
+-        // for store/load/brh/jmp need to flush pipe if compress rob should store the last predecodeinfo
+-        uops(i).preDecodeInfo.isRVC := uops(i + 1).preDecodeInfo.isRVC
+       }
+     }
+     uops(i).wfflags := (compressMasksVec(i) & Cat(io.in.map(_.bits.wfflags).reverse)).orR
+```

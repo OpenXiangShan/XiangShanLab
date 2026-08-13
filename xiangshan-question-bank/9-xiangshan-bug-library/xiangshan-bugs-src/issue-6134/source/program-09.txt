@@ -1,0 +1,27 @@
+{
+  "pbmt_io_observed": {
+    "time": 8717,
+    "s2_pbmt": 2,
+    "s2_pmp_mmio": 0
+  },
+  "unsafe_ifu_to_uncache_fire": {
+    "time": 8717,
+    "s3_use_uncache": 1,
+    "s3_pmp_mmio": 0,
+    "backend_empty": 0,
+    "ibuffer_empty": 1,
+    "is_first_instr": 0,
+    "ifu_uncache_state": 2,
+    "to_uncache_full_addr": 2147483924
+  },
+  "tl_get_fire": {
+    "time": 8718,
+    "tl_a_address": 2147483920
+  },
+  "tl_grant_valid": {
+    "time": 8752,
+    "tl_d_data": 476747837475
+  },
+  "delta_ifu_to_tl": 1,
+  "delta_tl_to_grant": 34
+}

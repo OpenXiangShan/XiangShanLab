@@ -1,0 +1,3 @@
+vsetivli x0, 4, e32, m1, ta, ma
+...
+vsext.vf4 v21, v16

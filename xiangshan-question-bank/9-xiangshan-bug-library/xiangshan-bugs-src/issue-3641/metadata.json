@@ -1,0 +1,21 @@
+{
+  "number": 3641,
+  "title": "fix(ftb): When FTB is closed, the s2_multi_hit_enable should be lowered & Add FTB reading port low fallthroughErr assert.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3641",
+  "state": "closed",
+  "labels": [],
+  "author": "sleep-zzz",
+  "created_at": "2024-09-24T10:21:48Z",
+  "updated_at": "2024-09-28T06:11:17Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3641/commit-log.md"
+  ],
+  "submitted_at": "2024-09-24",
+  "branch": "",
+  "rtl_commit": ""
+}

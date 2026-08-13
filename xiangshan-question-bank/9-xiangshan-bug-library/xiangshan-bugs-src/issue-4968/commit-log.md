@@ -1,0 +1,180 @@
+# Commit Log
+- Issue: #4968
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4968
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4968
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4968
+- Changed files: 9
+- Additions: 31
+- Deletions: 8
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/Abstracts.scala`
+- `src/main/scala/xiangshan/frontend/bpu/Bpu.scala`
+- `src/main/scala/xiangshan/frontend/bpu/FallThroughPredictor.scala`
+- `src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala`
+- `src/main/scala/xiangshan/frontend/bpu/ittage/Ittage.scala`
+- `src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala`
+- `src/main/scala/xiangshan/frontend/bpu/ras/Ras.scala`
+- `src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala`
+- `src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Abstracts.scala b/src/main/scala/xiangshan/frontend/bpu/Abstracts.scala
+index 73acbbf0411..958abf179df 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Abstracts.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Abstracts.scala
+@@ -39,6 +39,8 @@ abstract class BasePredictorIO(implicit p: Parameters) extends BpuBundle {
+   val startVAddr: PrunedAddr = Input(PrunedAddr(VAddrBits))
+   // train
+   val train: Valid[BpuTrain] = Input(Valid(new BpuTrain))
++
++  val resetDone: Bool = Output(Bool())
+ }
+ 
+ // The abstract class is used to abstract the setIdx and tag from write requests for updating write buffer entries
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+index 82a6f166adf..5b90d34754b 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+@@ -99,14 +99,11 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+ 
+   private val s3_override = WireDefault(false.B)
+ 
+-  private val resetDone = RegInit(false.B)
+-
+   private val s0_pc    = WireDefault(0.U.asTypeOf(PrunedAddr(VAddrBits)))
+   private val s0_pcReg = RegEnable(s0_pc, !s0_stall)
+ 
+   when(RegNext(RegNext(reset.asBool)) && !reset.asBool) {
+-    s0_pcReg  := io.resetVector
+-    resetDone := true.B
++    s0_pcReg := io.resetVector
+   }
+ 
+   private val s1_pc = RegEnable(s0_pc, s0_fire)
+@@ -162,9 +159,7 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+   s2_ready := s2_fire || !s2_valid
+   s3_ready := s3_fire || !s3_valid
+ 
+-  private val predictorsReady = true.B // FIXME
+-
+-  s0_fire := s1_ready && predictorsReady && resetDone
++  s0_fire := s1_ready && predictors.map(_.io.resetDone).reduce(_ && _)
+   s1_fire := s1_valid && s2_ready && io.toFtq.prediction.ready
+   s2_fire := s2_valid && s3_ready
+   s3_fire := s3_valid
+diff --git a/src/main/scala/xiangshan/frontend/bpu/FallThroughPredictor.scala b/src/main/scala/xiangshan/frontend/bpu/FallThroughPredictor.scala
+index 121bf97ee9a..0c59d395fbe 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/FallThroughPredictor.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/FallThroughPredictor.scala
+@@ -29,6 +29,8 @@ class FallThroughPredictor(implicit p: Parameters) extends BasePredictor
+ 
+   val io: FallThroughPredictorIO = IO(new FallThroughPredictorIO)
+ 
++  io.resetDone := true.B
++
+   /* *** predict stage 0 *** */
+   private val s0_fire       = io.stageCtrl.s0_fire
+   private val s0_startVAddr = io.startVAddr
+diff --git a/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala
+index fc0650d8f38..b080e8fcaee 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala
+@@ -44,6 +44,12 @@ class AheadBtb(implicit p: Parameters) extends BasePredictor with Helpers with B
+   private val banks     = Seq.fill(NumBanks)(Module(new AheadBtbBank))
+   private val replacers = Seq.fill(NumBanks)(Module(new AheadBtbReplacer))
+ 
++  private val resetDone = RegInit(false.B)
++  when(banks.map(_.io.readReq.ready).reduce(_ && _)) {
++    resetDone := true.B
++  }
++  io.resetDone := resetDone
++
+   private val takenCounter = Reg(Vec(NumBanks, Vec(NumSets, Vec(NumWays, new SaturateCounter(TakenCounterWidth)))))
+ 
+   // TODO: write ctr bypass to read
+@@ -63,7 +69,7 @@ class AheadBtb(implicit p: Parameters) extends BasePredictor with Helpers with B
+   private val redirectValid   = io.redirectValid
+   private val overrideValid   = io.overrideValid
+ 
+-  s0_fire := predictReqValid && banks.map(_.io.readReq.ready).reduce(_ && _)
++  s0_fire := predictReqValid
+   s1_fire := s1_valid && s2_ready && predictReqValid
+   s2_fire := s2_valid
+ 
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ittage/Ittage.scala b/src/main/scala/xiangshan/frontend/bpu/ittage/Ittage.scala
+index 0fe7ad68555..170ab74ec72 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/ittage/Ittage.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/ittage/Ittage.scala
+@@ -62,6 +62,8 @@ class Ittage(implicit p: Parameters) extends XSModule with HasIttageParameters w
+ 
+   val io: IttageIO = IO(new IttageIO)
+ 
++  io.resetDone := true.B // FIXME: sram read ready
++
+   private val s0_pc   = io.startVAddr
+   private val s0_fire = io.stageCtrl.s0_fire
+   private val s1_fire = io.stageCtrl.s1_fire
+diff --git a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
+index ab3b011b518..aadd3d4a1d7 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
+@@ -57,6 +57,12 @@ class MainBtb(implicit p: Parameters) extends BasePredictor with HasMainBtbParam
+     Module(new WriteBuffer(new MainBtbSramWriteReq, WriteBufferSize, NumWay, pipe = true))
+   }
+ 
++  private val resetDone = RegInit(false.B)
++  when(sramBanks.flatMap(_.flatMap(_.map(_.io.r.req.ready))).reduce(_ && _)) {
++    resetDone := true.B
++  }
++  io.resetDone := resetDone
++
+   sramBanks.map(_.map(_.map { m =>
+     m.io.r.req.valid       := false.B
+     m.io.r.req.bits.setIdx := 0.U
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ras/Ras.scala b/src/main/scala/xiangshan/frontend/bpu/ras/Ras.scala
+index 3f124e064e2..2905048c6ed 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/ras/Ras.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/ras/Ras.scala
+@@ -50,6 +50,8 @@ class Ras(implicit p: Parameters) extends BasePredictor with HasRasParameters wi
+ 
+   val io: RasIO = IO(new RasIO)
+ 
++  io.resetDone := true.B
++
+   def alignMask: UInt = ((~0.U(VAddrBits.W)) << FetchBlockAlignWidth).asUInt
+ 
+   private val stack = Module(new RasStack(StackSize, SpecQueueSize)).io
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+index f9d135909be..5a6b0be09e0 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+@@ -55,6 +55,12 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+       ).suggestName(s"tage_base_table_sram_align${alignIdx}_bank${bankIdx}")
+     }
+ 
++  private val resetDone = RegInit(false.B)
++  when(baseTableSramBanks.flatMap(_.map(_.io.r.req.ready)).reduce(_ && _)) {
++    resetDone := true.B
++  }
++  io.resetDone := resetDone
++
+   private val baseTableWriteBuffers =
+     Seq.tabulate(BaseTableNumAlignBanks, BaseTableInternalBanks) { (_, _) =>
+       Module(new WriteBuffer(new BaseTableSramWriteReq, WriteBufferSize, numPorts = 1, pipe = true, hasTag = false))
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala b/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala
+index b4ea9b29118..f87f3a65029 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala
+@@ -32,6 +32,8 @@ class MicroBtb(implicit p: Parameters) extends BasePredictor with HasMicroBtbPar
+ 
+   val io: MicroBtbIO = IO(new MicroBtbIO)
+ 
++  io.resetDone := true.B
++
+   /* *** submodules *** */
+   private val entries = RegInit(VecInit(Seq.fill(NumEntries)(0.U.asTypeOf(new MicroBtbEntry))))
+```

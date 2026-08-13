@@ -1,0 +1,2 @@
+- fix trapInst update when flush and CSR illegal instruction happen together
+- exception instruction stored in trapinst was not flushed when being interrupted at the same time

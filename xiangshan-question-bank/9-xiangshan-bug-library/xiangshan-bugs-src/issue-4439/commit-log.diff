@@ -1,0 +1,13 @@
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index 637cab3a1cc..de195a3923d 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -558,7 +558,7 @@ class CtrlBlockImp(
+   rat.io.snpt.snptSelect := snptSelect
+   rat.io.snpt.flushVec := flushVec
+ 
+-  val decodeHasException = decode.io.out.map(x => x.bits.exceptionVec(instrPageFault) || x.bits.exceptionVec(instrAccessFault))
++  val decodeHasException = decode.io.out.map(x => x.bits.exceptionVec.asUInt.orR || (!TriggerAction.isNone(x.bits.trigger)))
+   // fusion decoder
+   for (i <- 0 until DecodeWidth) {
+     fusionDecoder.io.in(i).valid := decode.io.out(i).valid && !(decodeHasException(i) || disableFusion)

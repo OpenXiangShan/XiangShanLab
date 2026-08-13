@@ -1,0 +1,31 @@
+# Commit Log
+- Issue: #5913
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5913
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5913
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5913
+- Changed files: 1
+- Additions: 2
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+index 2719ddc57f3..75b13f10c9f 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+@@ -1385,7 +1385,8 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+     }
+ 
+     (0 until queueSize).map{i =>
+-      when(needCancel(i)) { // when redirect, unalignQueue not allow enqueue.
++      val deqCancel = i.U === deqPtr.value && io.toDeqModule.fire
++      when(needCancel(i) || deqCancel) { // when redirect, unalignQueue not allow enqueue.
+         allocated(i) := false.B
+       }.elsewhen((i.U === enqPtr.value) && doEnq){
+         allocated(i) := true.B
+```

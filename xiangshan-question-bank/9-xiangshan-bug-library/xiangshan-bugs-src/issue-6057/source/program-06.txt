@@ -1,0 +1,13 @@
+riscv64-unknown-elf-as \
+  -march=rv64gcv_zicsr_zifencei_zfh_zba_zbb_zbkc_zbc_zbkb_zbs_zmmul_zknh_zkne_zknd_zbkx_zfhmin \
+  -c mtval_wrong_instruction_repro.S \
+  -o mtval_wrong_instruction_repro.o
+
+riscv64-unknown-elf-ld \
+  -T ./link.ld \
+  mtval_wrong_instruction_repro.o \
+  -o mtval_wrong_instruction_repro.elf
+
+riscv64-unknown-elf-objcopy -O binary \
+  mtval_wrong_instruction_repro.elf \
+  mtval_wrong_instruction_repro.img

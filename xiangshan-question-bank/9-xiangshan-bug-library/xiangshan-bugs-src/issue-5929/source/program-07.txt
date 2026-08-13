@@ -1,0 +1,2 @@
+Core 0's Commit SHA is: 5fedf66dd6, dirty: 1
+emu compiled at Apr 28 2026, 12:47:13

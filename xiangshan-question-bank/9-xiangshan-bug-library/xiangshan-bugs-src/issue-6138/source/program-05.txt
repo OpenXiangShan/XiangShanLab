@@ -1,0 +1,10 @@
+older branch:
+  pc              = 0x8000004c
+  target          = 0x80000060
+  taken           = 1
+
+younger train packet:
+  pc              = 0x80000050
+  same FTQ block  = true
+  skipped by old branch target = true
+  reaches BPU train path       = true

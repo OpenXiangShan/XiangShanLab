@@ -1,0 +1,6 @@
+entry write for table/bank/way/set has committed
+matching useful-counter write has not committed yet
+readResp tag matches the new entry
+readResp usefulCtr is the old value
+FTQ metadata consumes providerUsefulCtr from that read
+BPU train metadata consumes providerUsefulCtr from that read

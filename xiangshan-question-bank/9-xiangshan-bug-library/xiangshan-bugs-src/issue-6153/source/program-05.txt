@@ -1,0 +1,8 @@
+SECRET_SELECT=1 ASM_SOURCE=exploit_plru_oracle_leak.S \
+  PREFIX=exploit_plru_oracle_secret1_v3 \
+  CYCLES=12500 WAVE_BEGIN=0 WAVE_END=12500 ./run_exploit_cache_leak.sh
+
+./monitor_plru_oracle.py exploit_plru_oracle_secret1_v3_0_12500.vcd \
+  --symbols exploit_plru_oracle_secret1_v3.sym \
+  --secret-select 1 \
+  --json-out exploit_plru_oracle_secret1_v3_0_12500.monitor.json

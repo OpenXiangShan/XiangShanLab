@@ -1,0 +1,27 @@
+{
+  "number": 6157,
+  "title": "`FTQ` accepts delayed BPU metadata for redirect-flushed entries",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6157",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "ScottaMcdonald",
+  "created_at": "2026-06-27T05:55:29Z",
+  "updated_at": "2026-06-27T06:55:14Z",
+  "source_files": [
+    "issue-6157/source/xiangshan-ftq-delayed-bpu-meta-flushed-entry-attachment.zip",
+    "issue-6157/source/program-01.txt",
+    "issue-6157/source/program-02.txt",
+    "issue-6157/source/program-03.txt",
+    "issue-6157/source/program-04.txt",
+    "issue-6157/source/program-05.txt",
+    "issue-6157/source/program-06.txt",
+    "issue-6157/source/program-07.txt"
+  ],
+  "archive_files": [
+    "issue-6157/source/xiangshan-ftq-delayed-bpu-meta-flushed-entry-attachment.zip"
+  ],
+  "has_comments": true
+}

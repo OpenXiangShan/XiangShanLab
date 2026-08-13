@@ -1,0 +1,7 @@
+{
+  "mmio_or_nc_reqs_seen": true,
+  "uncache_reqs_seen": false,
+  "rollbacks_seen": true,
+  "rollback_metadata_mismatch_seen": true,
+  "reproduced": true
+}

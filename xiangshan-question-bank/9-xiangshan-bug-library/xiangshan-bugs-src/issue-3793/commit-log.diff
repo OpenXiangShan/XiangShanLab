@@ -1,0 +1,520 @@
+diff --git a/difftest b/difftest
+index e3cd34c3492..7c4bd5491a0 160000
+--- a/difftest
++++ b/difftest
+@@ -1 +1 @@
+-Subproject commit e3cd34c3492ce0c2dde0078ecce966d98d79c2e4
++Subproject commit 7c4bd5491a0482db79a071cbfba9e730ce498b32
+diff --git a/src/main/scala/top/Top.scala b/src/main/scala/top/Top.scala
+index 1cf9c444c35..176b04e5290 100644
+--- a/src/main/scala/top/Top.scala
++++ b/src/main/scala/top/Top.scala
+@@ -254,6 +254,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc() with HasSoCParameter
+       val rtc_clock = Input(Bool())
+       val cacheable_check = new TLPMAIO()
+       val riscv_halt = Output(Vec(NumCores, Bool()))
++      val riscv_critical_error = Output(Vec(NumCores, Bool()))
+       val riscv_rst_vec = Input(Vec(NumCores, UInt(soc.PAddrBits.W)))
+     })
+ 
+@@ -292,6 +293,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc() with HasSoCParameter
+       core.module.io.msiInfo := msiInfo
+       core.module.io.clintTime := misc.module.clintTime
+       io.riscv_halt(i) := core.module.io.cpu_halt
++      io.riscv_critical_error(i) := core.module.io.cpu_crtical_error
+       core.module.io.reset_vector := io.riscv_rst_vec(i)
+     }
+ 
+diff --git a/src/main/scala/top/XSNoCTop.scala b/src/main/scala/top/XSNoCTop.scala
+index d995608d8a3..0eac365e1c6 100644
+--- a/src/main/scala/top/XSNoCTop.scala
++++ b/src/main/scala/top/XSNoCTop.scala
+@@ -110,6 +110,7 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
+     val io = IO(new Bundle {
+       val hartId = Input(UInt(p(MaxHartIdBits).W))
+       val riscv_halt = Output(Bool())
++      val riscv_critical_error = Output(Bool())
+       val hartIsInReset = Output(Bool())
+       val riscv_rst_vec = Input(UInt(soc.PAddrBits.W))
+       val chi = new PortIO
+@@ -146,6 +147,7 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
+     core_with_l2.module.io.hartId := io.hartId
+     core_with_l2.module.io.nodeID.get := io.nodeID
+     io.riscv_halt := core_with_l2.module.io.cpu_halt
++    io.riscv_critical_error := core_with_l2.module.io.cpu_crtical_error
+     io.hartIsInReset := core_with_l2.module.io.hartIsInReset
+     core_with_l2.module.io.reset_vector := io.riscv_rst_vec
+ 
+diff --git a/src/main/scala/xiangshan/L2Top.scala b/src/main/scala/xiangshan/L2Top.scala
+index 884795ed150..6b037aaacf5 100644
+--- a/src/main/scala/xiangshan/L2Top.scala
++++ b/src/main/scala/xiangshan/L2Top.scala
+@@ -153,6 +153,10 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+         val fromCore = Input(Bool())
+         val toTile = Output(Bool())
+       }
++      val cpu_critical_error = new Bundle() {
++        val fromCore = Input(Bool())
++        val toTile = Output(Bool())
++      }
+       val hartIsInReset = new Bundle() {
+         val resetInFrontend = Input(Bool())
+         val toTile = Output(Bool())
+@@ -178,8 +182,10 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+     io.reset_vector.toCore := resetDelayN.io.out
+     io.hartId.toCore := io.hartId.fromTile
+     io.cpu_halt.toTile := io.cpu_halt.fromCore
++    io.cpu_critical_error.toTile := io.cpu_critical_error.fromCore
+     dontTouch(io.hartId)
+     dontTouch(io.cpu_halt)
++    dontTouch(io.cpu_critical_error)
+     if (!io.chi.isEmpty) { dontTouch(io.chi.get) }
+ 
+     val hartIsInReset = RegInit(true.B)
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 01686003206..47d2001fb70 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -47,7 +47,7 @@ import coupledL2.tl2chi._
+ import xiangshan.backend.datapath.WakeUpConfig
+ import xiangshan.mem.prefetch.{PrefetcherParams, SMSParams}
+ 
+-import scala.math.{max, min}
++import scala.math.{max, min, pow}
+ 
+ case object XSTileKey extends Field[Seq[XSCoreParameters]]
+ 
+@@ -868,6 +868,8 @@ trait HasXSParameter {
+   def numCSRPCntLsu      = 8
+   def numCSRPCntHc       = 5
+   def printEventCoding   = true
++  def printCriticalError = false
++  def maxCommitStuck = pow(2, 21).toInt
+ 
+   // Vector load exception
+   def maxMergeNumPerCycle = 4
+diff --git a/src/main/scala/xiangshan/XSCore.scala b/src/main/scala/xiangshan/XSCore.scala
+index ef2427c57bd..9890889f692 100644
+--- a/src/main/scala/xiangshan/XSCore.scala
++++ b/src/main/scala/xiangshan/XSCore.scala
+@@ -82,6 +82,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
+     val clintTime = Input(ValidIO(UInt(64.W)))
+     val reset_vector = Input(UInt(PAddrBits.W))
+     val cpu_halt = Output(Bool())
++    val cpu_critical_error = Output(Bool())
+     val resetInFrontend = Output(Bool())
+     val l2_pf_enable = Output(Bool())
+     val perfEvents = Input(Vec(numPCntHc * coreParams.L2NBanks + 1, new PerfEvent))
+@@ -236,6 +237,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
+   memBlock.io.debugRolling := backend.io.debugRolling
+ 
+   io.cpu_halt := memBlock.io.outer_cpu_halt
++  io.cpu_critical_error := memBlock.io.outer_cpu_critical_error
+   io.beu_errors.icache <> memBlock.io.outer_beu_errors_icache
+   io.beu_errors.dcache <> memBlock.io.error.bits.toL1BusErrorUnitInfo(memBlock.io.error.valid)
+   io.beu_errors.l2 <> DontCare
+diff --git a/src/main/scala/xiangshan/XSTile.scala b/src/main/scala/xiangshan/XSTile.scala
+index 4fd6d226f3a..07776dd595e 100644
+--- a/src/main/scala/xiangshan/XSTile.scala
++++ b/src/main/scala/xiangshan/XSTile.scala
+@@ -111,6 +111,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+       val msiInfo = Input(ValidIO(new MsiInfoBundle))
+       val reset_vector = Input(UInt(PAddrBits.W))
+       val cpu_halt = Output(Bool())
++      val cpu_crtical_error = Output(Bool())
+       val hartIsInReset = Output(Bool())
+       val debugTopDown = new Bundle {
+         val robHeadPaddr = Valid(UInt(PAddrBits.W))
+@@ -135,6 +136,8 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+     l2top.module.io.reset_vector.fromTile := io.reset_vector
+     l2top.module.io.cpu_halt.fromCore := core.module.io.cpu_halt
+     io.cpu_halt := l2top.module.io.cpu_halt.toTile
++    l2top.module.io.cpu_critical_error.fromCore := core.module.io.cpu_critical_error
++    io.cpu_crtical_error := l2top.module.io.cpu_critical_error.toTile
+ 
+     l2top.module.io.hartIsInReset.resetInFrontend := core.module.io.resetInFrontend
+     io.hartIsInReset := l2top.module.io.hartIsInReset.toTile
+diff --git a/src/main/scala/xiangshan/XSTileWrap.scala b/src/main/scala/xiangshan/XSTileWrap.scala
+index f76c07b1953..1a2477279c6 100644
+--- a/src/main/scala/xiangshan/XSTileWrap.scala
++++ b/src/main/scala/xiangshan/XSTileWrap.scala
+@@ -59,6 +59,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+       val msiInfo = Input(ValidIO(new MsiInfoBundle))
+       val reset_vector = Input(UInt(PAddrBits.W))
+       val cpu_halt = Output(Bool())
++      val cpu_crtical_error = Output(Bool())
+       val hartIsInReset = Output(Bool())
+       val debugTopDown = new Bundle {
+         val robHeadPaddr = Valid(UInt(PAddrBits.W))
+@@ -89,7 +90,8 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+     tile.module.io.hartId := io.hartId
+     tile.module.io.msiInfo := imsicAsync.o.msiInfo
+     tile.module.io.reset_vector := io.reset_vector
+-    io.cpu_halt := tile.module.io.cpu_halt 
++    io.cpu_halt := tile.module.io.cpu_halt
++    io.cpu_crtical_error := tile.module.io.cpu_crtical_error
+     io.hartIsInReset := tile.module.io.hartIsInReset
+     io.debugTopDown <> tile.module.io.debugTopDown
+     tile.module.io.nodeID.foreach(_ := io.nodeID.get)
+diff --git a/src/main/scala/xiangshan/backend/Backend.scala b/src/main/scala/xiangshan/backend/Backend.scala
+index 373b7e9474c..afe9389619a 100644
+--- a/src/main/scala/xiangshan/backend/Backend.scala
++++ b/src/main/scala/xiangshan/backend/Backend.scala
+@@ -20,6 +20,7 @@ import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+ import device.MsiInfoBundle
++import difftest._
+ import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+ import system.HasSoCParameter
+ import utility._
+@@ -183,7 +184,8 @@ class BackendInlined(val params: BackendParams)(implicit p: Parameters) extends
+ 
+ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parameters) extends LazyModuleImp(wrapper)
+   with HasXSParameter
+-  with HasPerfEvents {
++  with HasPerfEvents
++  with HasCriticalErrors {
+   implicit private val params: BackendParams = wrapper.params
+ 
+   val io = IO(new BackendIO()(p, wrapper.params))
+@@ -805,7 +807,23 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+   val allPerfInc = allPerfEvents.map(_._2.asTypeOf(new PerfEvent))
+   val perfEvents = HPerfMonitor(csrevents, allPerfInc).getPerfEvents
+   csrio.perf.perfEventsBackend := VecInit(perfEvents.map(_._2.asTypeOf(new PerfEvent)))
+-  generatePerfEvent()
++
++  val ctrlBlockError = ctrlBlock.getCriticalErrors
++  val intExuBlockError = intExuBlock.getCriticalErrors
++  val criticalErrors = ctrlBlockError ++ intExuBlockError
++
++  if (printCriticalError) {
++    for (((name, error), _) <- criticalErrors.zipWithIndex) {
++      XSError(error, s"critical error: $name \n")
++    }
++  }
++
++  // expand to collect frontend/memblock/L2 critical errors
++  val backendCriticalError = criticalErrors.map(_._2).reduce(_ || _)
++
++  ctrlBlock.io.robio.criticalError := backendCriticalError
++  io.toTop.cpuCriticalError := backendCriticalError
++
+ }
+ 
+ class BackendMemIO(implicit p: Parameters, params: BackendParams) extends XSBundle {
+@@ -905,6 +923,7 @@ class TopToBackendBundle(implicit p: Parameters) extends XSBundle {
+ 
+ class BackendToTopBundle extends Bundle {
+   val cpuHalted = Output(Bool())
++  val cpuCriticalError = Output(Bool())
+ }
+ 
+ class BackendIO(implicit p: Parameters, params: BackendParams) extends XSBundle with HasSoCParameter {
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index fd40b84233f..a1678d4ff35 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -64,6 +64,7 @@ class CtrlBlockImp(
+   with HasXSParameter
+   with HasCircularQueuePtrHelper
+   with HasPerfEvents
++  with HasCriticalErrors
+ {
+   val pcMemRdIndexes = new NamedIndexes(Seq(
+     "redirect"  -> 1,
+@@ -616,6 +617,7 @@ class CtrlBlockImp(
+   rob.io.debug_ls := io.robio.debug_ls
+   rob.io.debugHeadLsIssue := io.robio.robHeadLsIssue
+   rob.io.lsTopdownInfo := io.robio.lsTopdownInfo
++  rob.io.criticalError := io.robio.criticalError
+   rob.io.debugEnqLsq := io.debugEnqLsq
+ 
+   io.robio.robDeqPtr := rob.io.robDeqPtr
+@@ -667,6 +669,9 @@ class CtrlBlockImp(
+ 
+   val perfEvents = Seq(decode, rename, dispatch, intDq0, intDq1, vecDq, lsDq, rob).flatMap(_.getPerfEvents)
+   generatePerfEvent()
++
++  val criticalErrors = rob.getCriticalErrors
++  generateCriticalErrors()
+ }
+ 
+ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBundle {
+@@ -724,6 +729,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
+       val vtype = Output(ValidIO(VType()))
+       val hasVsetvl = Output(Bool())
+     }
++    val criticalError = Input(Bool())
+   }
+ 
+   val toDecode = new Bundle {
+diff --git a/src/main/scala/xiangshan/backend/MemBlock.scala b/src/main/scala/xiangshan/backend/MemBlock.scala
+index 6f7f31c57df..68c8bd0caaa 100644
+--- a/src/main/scala/xiangshan/backend/MemBlock.scala
++++ b/src/main/scala/xiangshan/backend/MemBlock.scala
+@@ -303,6 +303,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     val inner_reset_vector = Output(UInt(PAddrBits.W))
+     val outer_reset_vector = Input(UInt(PAddrBits.W))
+     val outer_cpu_halt = Output(Bool())
++    val outer_cpu_critical_error = Output(Bool())
+     val inner_beu_errors_icache = Input(new L1BusErrorUnitInfo)
+     val outer_beu_errors_icache = Output(new L1BusErrorUnitInfo)
+     val inner_l2_pf_enable = Input(Bool())
+@@ -323,6 +324,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   dontTouch(io.inner_reset_vector)
+   dontTouch(io.outer_reset_vector)
+   dontTouch(io.outer_cpu_halt)
++  dontTouch(io.outer_cpu_critical_error)
+   dontTouch(io.inner_beu_errors_icache)
+   dontTouch(io.outer_beu_errors_icache)
+   dontTouch(io.inner_l2_pf_enable)
+@@ -1813,6 +1815,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   io.inner_hartId := io.hartId
+   io.inner_reset_vector := RegNext(io.outer_reset_vector)
+   io.outer_cpu_halt := io.ooo_to_mem.backendToTopBypass.cpuHalted
++  io.outer_cpu_critical_error := io.ooo_to_mem.backendToTopBypass.cpuCriticalError
+   io.outer_beu_errors_icache := RegNext(io.inner_beu_errors_icache)
+   io.outer_l2_pf_enable := io.inner_l2_pf_enable
+   io.inner_hc_perfEvents <> io.outer_hc_perfEvents
+diff --git a/src/main/scala/xiangshan/backend/exu/ExeUnit.scala b/src/main/scala/xiangshan/backend/exu/ExeUnit.scala
+index e8f04cd055b..50fe87e485b 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExeUnit.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExeUnit.scala
+@@ -57,7 +57,7 @@ class ExeUnitImp(
+   override val wrapper: ExeUnit
+ )(implicit
+   p: Parameters, exuParams: ExeUnitParams
+-) extends LazyModuleImp(wrapper) with HasXSParameter{
++) extends LazyModuleImp(wrapper) with HasXSParameter with HasCriticalErrors {
+   private val fuCfgs = exuParams.fuConfigs
+ 
+   val io = IO(new ExeUnitIO(exuParams))
+@@ -307,6 +307,9 @@ class ExeUnitImp(
+       (funcUnits.zip(fuOutValidOH).filter{ case (fu, _) => fu.cfg.writeVlRf}.map{ case(_, fuoutOH) => fuoutOH}),
+   ).flatten
+ 
++  val criticalErrors = funcUnits.filter(fu => fu.cfg.needCriticalErrors).flatMap(fu => fu.getCriticalErrors)
++  generateCriticalErrors()
++
+   io.out.valid := Cat(fuOutValidOH).orR
+   funcUnits.foreach(fu => fu.io.out.ready := io.out.ready)
+ 
+diff --git a/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala b/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
+index 86ea304d82b..46e05805259 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
+@@ -80,6 +80,7 @@ case class ExeUnitParams(
+   val needVPUCtrl: Boolean = fuConfigs.map(_.needVecCtrl).reduce(_ || _)
+   val writeVConfig: Boolean = fuConfigs.map(_.writeVlRf).reduce(_ || _)
+   val writeVType: Boolean = fuConfigs.map(_.writeVType).reduce(_ || _)
++  val needCriticalErrors: Boolean = fuConfigs.map(_.needCriticalErrors).reduce(_ || _)
+   val isHighestWBPriority: Boolean = wbPortConfigs.forall(_.priority == 0)
+ 
+   val isIntExeUnit: Boolean = schdType.isInstanceOf[IntScheduler]
+diff --git a/src/main/scala/xiangshan/backend/exu/ExuBlock.scala b/src/main/scala/xiangshan/backend/exu/ExuBlock.scala
+index 81d5cef9c74..beea16a1c02 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExuBlock.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExuBlock.scala
+@@ -27,7 +27,7 @@ class ExuBlockImp(
+ )(implicit
+   p: Parameters,
+   params: SchdBlockParams
+-) extends LazyModuleImp(wrapper) {
++) extends LazyModuleImp(wrapper) with HasCriticalErrors {
+   val io = IO(new ExuBlockIO)
+ 
+   private val exus = wrapper.exus.map(_.module)
+@@ -64,6 +64,8 @@ class ExuBlockImp(
+   for (i <- 0 until (brhFireSeq.size + 1)) {
+     XSPerfAccumulate(s"brh_fire_${i}_cnt", PopCount(brhFireSeq) === i.U)
+   }
++  val criticalErrors = exus.filter(_.wrapper.exuParams.needCriticalErrors).flatMap(exu => exu.getCriticalErrors)
++  generateCriticalErrors()
+ }
+ 
+ class ExuBlockIO(implicit p: Parameters, params: SchdBlockParams) extends XSBundle {
+diff --git a/src/main/scala/xiangshan/backend/fu/FuConfig.scala b/src/main/scala/xiangshan/backend/fu/FuConfig.scala
+index f05aef1d956..88925d9527b 100644
+--- a/src/main/scala/xiangshan/backend/fu/FuConfig.scala
++++ b/src/main/scala/xiangshan/backend/fu/FuConfig.scala
+@@ -164,6 +164,8 @@ case class FuConfig (
+       vipu, vialuF, vimac, vidiv, vfpu, vppu, vfalu, vfma, vfdiv, vfcvt, vldu, vstu).contains(fuType)
+   }
+ 
++  def needCriticalErrors: Boolean = Seq(FuType.csr).contains(fuType)
++
+   def isMul: Boolean = fuType == FuType.mul
+ 
+   def isDiv: Boolean = fuType == FuType.div
+diff --git a/src/main/scala/xiangshan/backend/fu/FuncUnit.scala b/src/main/scala/xiangshan/backend/fu/FuncUnit.scala
+index 317d69fe3ec..334c3fd699a 100644
+--- a/src/main/scala/xiangshan/backend/fu/FuncUnit.scala
++++ b/src/main/scala/xiangshan/backend/fu/FuncUnit.scala
+@@ -3,7 +3,7 @@ package xiangshan.backend.fu
+ import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+-import utility.DataHoldBypass
++import utility._
+ import utils.OptionWrapper
+ import xiangshan._
+ import xiangshan.backend.Bundles.VPUCtrlSignals
+@@ -97,8 +97,9 @@ class FuncUnitIO(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+   val instrAddrTransType = Option.when(cfg.isJmp || cfg.isBrh)(Input(new AddrTransType))
+ }
+ 
+-abstract class FuncUnit(val cfg: FuConfig)(implicit p: Parameters) extends XSModule {
++abstract class FuncUnit(val cfg: FuConfig)(implicit p: Parameters) extends XSModule with HasCriticalErrors {
+   val io = IO(new FuncUnitIO(cfg))
++  val criticalErrors = Seq(("none", false.B))
+ 
+   // should only be used in non-piped fu
+   def connectNonPipedCtrlSingal: Unit = {
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index b1d6e1bde00..533e97d548a 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -6,7 +6,7 @@ import difftest._
+ import freechips.rocketchip.rocket.CSRs
+ import org.chipsalliance.cde.config.Parameters
+ import top.{ArgParser, Generator}
+-import utility.{DataHoldBypass, DelayN, GatedValidRegNext, RegNextWithEnable, SignExt, ZeroExt, HPerfMonitor, PerfEvent}
++import utility._
+ import utils.OptionWrapper
+ import xiangshan.backend.fu.NewCSR.CSRBundles.{CSRCustomState, PrivState, RobCommitCSR}
+ import xiangshan.backend.fu.NewCSR.CSRDefines._
+@@ -114,6 +114,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   with DebugLevel
+   with CSRCustom
+   with CSRPMP
++  with HasCriticalErrors
+   with IpIeAliasConnect
+ {
+ 
+@@ -1032,7 +1033,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   debugMod.io.in.tdata1Wdata               := wdata
+   debugMod.io.in.triggerCanRaiseBpExp      := triggerCanRaiseBpExp
+ 
+-  entryDebugMode := debugMod.io.out.hasDebugTrap && !debugMode && !nmi
++  entryDebugMode := debugMod.io.out.hasDebugTrap && !debugMode
+ 
+   trapEntryDEvent.valid                       := entryDebugMode
+   trapEntryDEvent.in.hasDebugIntr             := debugMod.io.out.hasDebugIntr
+@@ -1277,6 +1278,11 @@ class NewCSR(implicit val p: Parameters) extends Module
+ 
+   io.distributedWenLegal := wenLegal
+ 
++  val criticalErrors = Seq(
++    ("csr_dbltrp_inMN", !mnstatus.regOut.NMIE && hasTrap && !entryDebugMode),
++  )
++  generateCriticalErrors()
++
+   // Always instantiate basic difftest modules.
+   if (env.AlwaysBasicDiff || env.EnableDifftest) {
+     // Delay trap passed to difftest until VecExcpMod is not busy
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index 70b7fdba7c1..8ecac7460e4 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -18,7 +18,7 @@ import xiangshan.backend.fu.NewCSR.CSRDefines.PrivMode
+ import xiangshan.frontend.FtqPtr
+ 
+ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+-  with HasCircularQueuePtrHelper
++  with HasCircularQueuePtrHelper with HasCriticalErrors
+ {
+   val csrIn = io.csrio.get
+   val csrOut = io.csrio.get
+@@ -289,6 +289,9 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+ 
+   connectNonPipedCtrlSingalForCSR
+ 
++  override val criticalErrors = csrMod.getCriticalErrors
++  generateCriticalErrors()
++
+   // Todo: summerize all difftest skip condition
+   csrOut.isPerfCnt  := io.out.valid && csrMod.io.out.bits.isPerfCnt && DataHoldBypass(func =/= CSROpType.jmp, false.B, io.in.fire)
+   csrOut.fpu.frm    := csrMod.io.status.fpState.frm.asUInt
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index 04df1879142..783f2e5487f 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -47,7 +47,7 @@ class Rob(params: BackendParams)(implicit p: Parameters) extends LazyModule with
+ }
+ 
+ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendParams) extends LazyModuleImp(wrapper)
+-  with HasXSParameter with HasCircularQueuePtrHelper with HasPerfEvents {
++  with HasXSParameter with HasCircularQueuePtrHelper with HasPerfEvents with HasCriticalErrors {
+ 
+   private val LduCnt = params.LduCnt
+   private val StaCnt = params.StaCnt
+@@ -99,6 +99,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+       val logicPhyRegMap = Vec(RabCommitWidth, ValidIO(new RegWriteFromRab))
+       val excpInfo = ValidIO(new VecExcpInfo)
+     })
++    val criticalError = Input(Bool())
+     val debug_ls = Flipped(new DebugLSIO)
+     val debugRobHead = Output(new DynInst)
+     val debugEnqLsq = Input(new LsqEnqIO)
+@@ -712,6 +713,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   val deqFlushBlock = deqFlushBlockCounter(0)
+   val deqHasCommitted = io.commits.isCommit && io.commits.commitValid(0)
+   val deqHitRedirectReg = RegNext(io.redirect.valid && io.redirect.bits.robIdx === deqPtr)
++  val criticalErrorState = RegEnable(true.B, false.B, io.criticalError)
+   when(deqNeedFlush && deqHitRedirectReg){
+     deqFlushBlockCounter := "b111".U
+   }.otherwise{
+@@ -722,7 +724,8 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   }.elsewhen(deqNeedFlush && io.flushOut.valid && !io.flushOut.bits.flushItself()){
+     deqHasFlushed := true.B
+   }
+-  val blockCommit = misPredBlock || lastCycleFlush || hasWFI || io.redirect.valid || (deqNeedFlush && !deqHasFlushed) || deqFlushBlock
++  val blockCommit = misPredBlock || lastCycleFlush || hasWFI || io.redirect.valid ||
++    (deqNeedFlush && !deqHasFlushed) || deqFlushBlock || criticalErrorState
+ 
+   io.commits.isWalk := state === s_walk
+   io.commits.isCommit := state === s_idle && !blockCommit
+@@ -1518,6 +1521,11 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+       difftest.code := trapCode
+       difftest.pc := trapPC
+     }
++
++    val diffCriticalErrorEvent = DifftestModule(new DiffCriticalErrorEvent)
++    diffCriticalErrorEvent.valid := io.criticalError && !RegNext(io.criticalError)
++    diffCriticalErrorEvent.coreid := io.hartId
++    diffCriticalErrorEvent.criticalError := io.criticalError
+   }
+ 
+   val commitMoveVec = VecInit(io.commits.commitValid.zip(commitIsMove).map { case (v, m) => v && m })
+@@ -1547,6 +1555,23 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   )
+   generatePerfEvent()
+ 
++  // max commit-stuck cycle
++  val deqismmio = Mux(robEntries(deqPtr.value).valid, robEntries(deqPtr.value).mmio, false.B)
++  val commitStuck = (!io.commits.commitValid.reduce(_ || _) || !io.commits.isCommit) && !deqismmio
++  val commitStuckCycle = RegInit(0.U(log2Up(maxCommitStuck).W))
++  when(commitStuck) {
++    commitStuckCycle := commitStuckCycle + 1.U
++  }.elsewhen(!commitStuck && RegNext(commitStuck)) {
++    commitStuckCycle := 0.U
++  }
++  // check if stuck > 2^maxCommitStuckCycle
++  val commitStuck_overflow = commitStuckCycle.andR
++  val criticalErrors = Seq(
++    ("rob_commit_stuck  ", commitStuck_overflow),
++  )
++  generateCriticalErrors()
++
++
+   // dontTouch for debug
+   if (backendParams.debugEn) {
+     dontTouch(enqPtrVec)
+diff --git a/utility b/utility
+index 051d07961ce..dca69bda5ca 160000
+--- a/utility
++++ b/utility
+@@ -1 +1 @@
+-Subproject commit 051d07961ce1679891b2ea7f1ea2f19c0a00a3fd
++Subproject commit dca69bda5caf0e21d576bcb2caf977adc4805ca1

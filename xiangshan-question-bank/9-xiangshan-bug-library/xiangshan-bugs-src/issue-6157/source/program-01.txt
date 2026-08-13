@@ -1,0 +1,10 @@
+li t0, 0x82000000
+ld t1, 0(t0)
+addi t1, t1, 1
+.rept 96
+  jal ra, 1f
+1:
+.endr
+jalr x0, 0(ra)
+done:
+  j done

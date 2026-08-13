@@ -1,0 +1,7 @@
+.section .text
+.globl _start
+_start:
+   
+     li     t0, 0x8000000a0014a00     
+     csrw    mstatus, t0
+     .word 0x6781

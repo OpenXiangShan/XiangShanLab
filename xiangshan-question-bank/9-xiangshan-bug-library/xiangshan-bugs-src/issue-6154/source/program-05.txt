@@ -1,0 +1,7 @@
+./rf_bitline_exact_recovery.py \
+  --zero-template train_secret0_8000_8500.monitor.json \
+  --attack train_hw1_value1_8000_8500.monitor.json=0x1 \
+  --attack train_hw8_attack_alt_8000_8500.monitor.json=0x55aa \
+  --attack train_hw16_attack_alt_8000_8500.monitor.json=0x5555aaaa \
+  --attack train_hw32_low32_8000_8500.monitor.json=0xffffffff \
+  --attack train_bitline_attack_deadbeef_8000_8500.monitor.json=0xdeadbeefcafebabe

@@ -1,0 +1,2 @@
+gadget0 = 0x800000c4, pruned target = 0x40000062
+gadget1 = 0x80000084, pruned target = 0x40000042

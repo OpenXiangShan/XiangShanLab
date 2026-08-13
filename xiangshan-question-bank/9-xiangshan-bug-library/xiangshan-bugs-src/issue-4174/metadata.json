@@ -1,0 +1,21 @@
+{
+  "number": 4174,
+  "title": "fix(PTWRepeater): use PriorityMux for not one-hot vector",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4174",
+  "state": "closed",
+  "labels": [],
+  "author": "good-circle",
+  "created_at": "2025-01-14T09:46:07Z",
+  "updated_at": "2025-01-15T11:13:43Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4174/commit-log.md"
+  ],
+  "submitted_at": "2025-01-14",
+  "branch": "",
+  "rtl_commit": ""
+}

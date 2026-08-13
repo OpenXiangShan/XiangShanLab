@@ -1,0 +1,8 @@
+cd xiangshan-same-ftq-wrongpath-bpu-secret-poc
+
+EMU=/path/to/emu \
+RISCV_GCC=/path/to/riscv64-unknown-elf-gcc \
+RISCV_OBJCOPY=/path/to/riscv64-unknown-elf-objcopy \
+RISCV_OBJDUMP=/path/to/riscv64-unknown-elf-objdump \
+RISCV_NM=/path/to/riscv64-unknown-elf-nm \
+bash ./run_secret_probe.sh

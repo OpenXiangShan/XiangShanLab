@@ -1,0 +1,21 @@
+{
+  "number": 3812,
+  "title": "fix(intr): set the sequence of interrupt in different mode",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3812",
+  "state": "closed",
+  "labels": [],
+  "author": "sinceforYy",
+  "created_at": "2024-10-30T02:21:58Z",
+  "updated_at": "2024-11-08T07:50:02Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3812/commit-log.md"
+  ],
+  "submitted_at": "2024-10-30",
+  "branch": "",
+  "rtl_commit": ""
+}

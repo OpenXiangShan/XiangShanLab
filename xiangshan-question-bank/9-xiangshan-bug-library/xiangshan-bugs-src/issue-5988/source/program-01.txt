@@ -1,0 +1,2 @@
+  setIdx          = addr[15:8]
+  replacerSetIdx  = addr[13:6]

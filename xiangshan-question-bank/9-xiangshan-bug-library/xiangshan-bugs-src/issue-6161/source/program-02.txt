@@ -1,0 +1,5 @@
+smode_probe:
+    li      t0, DATA_VA
+    sd      s3, 0(t0)
+    li      a0, 10
+    ecall

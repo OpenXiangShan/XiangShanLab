@@ -1,0 +1,8 @@
+warning: tohost and fromhost symbols not in ELF; can't communicate with target
+(spike) until pc 0 801466d4
+(spike) r 1
+core   0: 0x00000000801466d4 (0x02b165bb) remw    a1, sp, a1
+(spike) reg 0 a5
+0x000000008012ecd0
+(spike) mem 0 0x000000008012ecd0
+0x0000000000000000

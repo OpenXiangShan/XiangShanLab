@@ -1,0 +1,28 @@
+{
+  "number": 5536,
+  "title": "fix(pmu): adjust condition logic for specific performance counters",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5536",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "topic: verification"
+  ],
+  "author": "my-mayfly",
+  "created_at": "2026-01-15T04:43:32Z",
+  "updated_at": "2026-01-21T08:42:24Z",
+  "submitted_at": "2026-01-15",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5536/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

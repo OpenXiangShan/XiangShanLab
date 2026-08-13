@@ -1,0 +1,22 @@
+{
+  "number": 6211,
+  "title": "Cross-Page Instruction Page Fault Reports Wrong mepc and mtval",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6211",
+  "state": "closed",
+  "labels": [
+    "type: bug/confirmed",
+    "module: frontend"
+  ],
+  "author": "jf-cc727",
+  "created_at": "2026-07-09T07:25:21Z",
+  "updated_at": "2026-07-10T08:05:31Z",
+  "source_files": [
+    "issue-6211/source/XS-3.zip",
+    "issue-6211/source/program-01.txt",
+    "issue-6211/source/program-02.S"
+  ],
+  "archive_files": [
+    "issue-6211/source/XS-3.zip"
+  ],
+  "has_comments": true
+}

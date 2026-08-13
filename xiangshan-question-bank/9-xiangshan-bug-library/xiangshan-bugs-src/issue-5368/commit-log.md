@@ -1,0 +1,2954 @@
+# Commit Log
+- Issue: #5368
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5368
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5368
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5368
+- Changed files: 45
+- Additions: 701
+- Deletions: 356
+
+## Files
+- `src/main/scala/xiangshan/Bundle.scala`
+- `src/main/scala/xiangshan/Parameters.scala`
+- `src/main/scala/xiangshan/backend/Backend.scala`
+- `src/main/scala/xiangshan/backend/BackendParams.scala`
+- `src/main/scala/xiangshan/backend/Bundles.scala`
+- `src/main/scala/xiangshan/backend/CtrlBlock.scala`
+- `src/main/scala/xiangshan/backend/Region.scala`
+- `src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala`
+- `src/main/scala/xiangshan/backend/datapath/DataPath.scala`
+- `src/main/scala/xiangshan/backend/datapath/RFReadArbiter.scala`
+- `src/main/scala/xiangshan/backend/datapath/WbFuBusyTable.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnit.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala`
+- `src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala`
+- `src/main/scala/xiangshan/backend/exu/ExeUnit.scala`
+- `src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala`
+- `src/main/scala/xiangshan/backend/fu/CSR.scala`
+- `src/main/scala/xiangshan/backend/fu/FuConfig.scala`
+- `src/main/scala/xiangshan/backend/fu/FuncUnit.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/fu/vector/VecNonPipedFuncUnit.scala`
+- `src/main/scala/xiangshan/backend/fu/vector/VecPipedFuncUnit.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/VIMacU.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/VIPU.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/VPPU.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/VSet.scala`
+- `src/main/scala/xiangshan/backend/issue/EnqEntry.scala`
+- `src/main/scala/xiangshan/backend/issue/EntryBundles.scala`
+- `src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala`
+- `src/main/scala/xiangshan/backend/issue/IssueQueue.scala`
+- `src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala`
+- `src/main/scala/xiangshan/backend/rename/Rename.scala`
+- `src/main/scala/xiangshan/backend/rename/RenameTable.scala`
+- `src/main/scala/xiangshan/backend/rename/freelist/BaseFreeList.scala`
+- `src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala`
+- `src/main/scala/xiangshan/backend/rename/freelist/StdFreeList.scala`
+- `src/main/scala/xiangshan/backend/rob/Rab.scala`
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+- `src/main/scala/xiangshan/backend/rob/RobBundles.scala`
+- `src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala`
+- `src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala`
+- `src/main/scala/xiangshan/mem/vector/VSplit.scala`
+- `src/main/scala/xiangshan/mem/vector/VecCommon.scala`
+- `src/main/scala/xiangshan/mem/vector/VfofBuffer.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/Bundle.scala b/src/main/scala/xiangshan/Bundle.scala
+index 0a51523c1bd..6320ae14291 100644
+--- a/src/main/scala/xiangshan/Bundle.scala
++++ b/src/main/scala/xiangshan/Bundle.scala
+@@ -341,6 +341,11 @@ class DiffCommitIO(implicit p: Parameters) extends XSBundle {
+   val info = Vec(CommitWidth * MaxUopSize, new RabCommitInfo)
+ }
+ 
++class DiffVlCommitBundle(commitWidth: Int)(implicit p: Parameters) extends XSBundle {
++  val commitValid = Vec(commitWidth, Bool())
++  val pdestVl = Vec(commitWidth, UInt(VlPhyRegIdxWidth.W))
++}
++
+ class RobCommitInfo(implicit p: Parameters) extends RobCommitEntryBundle
+ 
+ class RobCommitIO(implicit p: Parameters) extends XSBundle {
+@@ -384,6 +389,20 @@ class RabCommitIO(implicit p: Parameters) extends XSBundle {
+   def hasCommitInstr: Bool = isCommit && commitValid.asUInt.orR
+ }
+ 
++/**
++ * This bundle is used to pass commit and walk vl preg info to RAT
++ */
++class VlCommitBundle(commitWidth: Int)(implicit p: Parameters) extends XSBundle {
++  val isCommit = Bool()
++  val commitValid = Vec(commitWidth, Bool())
++
++  val isWalk = Bool()
++  // valid bits optimized for walk
++  val walkValid = Vec(commitWidth, Bool())
++
++  val pdestVl = Vec(commitWidth, UInt(VlPhyRegIdxWidth.W))
++}
++
+ class SnapshotPort(implicit p: Parameters) extends XSBundle {
+   val snptEnq = Bool()
+   val snptDeq = Bool()
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 440d036ec22..832c0c1dc0a 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -327,7 +327,15 @@ case class XSCoreParameters
+         ExeUnitParams("BJU1", Seq(BrhCfg, JmpCfg), Seq(), Seq(Seq(IntRD(1, 1)), Seq(IntRD(10, 1))))
+       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
+       IssueBlockParams(Seq(
+-        ExeUnitParams("ALU2", Seq(AluCfg, I2fCfg, VSetRiWiCfg, VSetRiWvfCfg, I2vCfg), Seq(IntWB(port = 2, 0), VfWB(4, 0), V0WB(port = 2, 0), VlWB(port = intSchdVlWbPort, 0), FpWB(port = 0, 1)), Seq(Seq(IntRD(2, 0)), Seq(IntRD(11, 0))), true, 2),
++        ExeUnitParams(
++          "ALU2",
++          Seq(AluCfg, I2fCfg, VSetRiWiCfg, VSetRiWvfCfg, I2vCfg),
++          Seq(IntWB(port = 2, 0), VfWB(4, 0), V0WB(port = 2, 0), FpWB(port = 0, 1)),
++          Seq(Seq(IntRD(2, 0)), Seq(IntRD(11, 0))),
++          true,
++          2,
++          vlWB = VlWB(port = intSchdVlWbPort, 0),
++        ),
+         ExeUnitParams("BJU2", Seq(BrhCfg, JmpCfg), Seq(), Seq(Seq(IntRD(2, 1)), Seq(IntRD(11, 1))))
+       ), numEntries = IssueQueueSize, numEnq = 2, numComp = IssueQueueCompEntrySize),
+       IssueBlockParams(Seq(
+@@ -396,16 +404,43 @@ case class XSCoreParameters
+     implicit val schdType: SchedulerType = VecScheduler()
+     SchdBlockParams(Seq(
+       IssueBlockParams(Seq(
+-        ExeUnitParams("VFEX0", Seq(VialuCfg, VfaluCfg, VfmaCfg, VimacCfg, VppuCfg, VipuCfg, VfcvtCfg, VSetRvfWvfCfg, VmoveCfg), Seq(VfWB(port = 0, 0), V0WB(port = 0, 0), VlWB(port = vfSchdVlWbPort, 0), IntWB(port = 4, 1), FpWB(port = 6, 0)), Seq(Seq(VfRD(0, 0)), Seq(VfRD(1, 0)), Seq(VfRD(2, 0)), Seq(V0RD(0, 0)), Seq(VlRD(0, 0)))),
++        ExeUnitParams(
++          "VFEX0",
++          Seq(VialuCfg, VfaluCfg, VfmaCfg, VimacCfg, VppuCfg, VipuCfg, VfcvtCfg, VSetRvfWvfCfg, VmoveCfg),
++          Seq(VfWB(port = 0, 0), V0WB(port = 0, 0), IntWB(port = 4, 1), FpWB(port = 6, 0)),
++          Seq(Seq(VfRD(0, 0)), Seq(VfRD(1, 0)), Seq(VfRD(2, 0)), Seq(V0RD(0, 0))),
++          vlWB = VlWB(port = vfSchdVlWbPort, 0),
++          vlRD = VlRD(0, 0),
++        ),
+       ), numEntries = 16, numEnq = 2, numComp = 12),
+       IssueBlockParams(Seq(
+-        ExeUnitParams("VFEX1", Seq(VialuCfg, VfaluCfg, VfmaCfg, VfdivCfg, VidivCfg), Seq(VfWB(port = 1, 0), V0WB(port = 1, 0), FpWB(port = 7, 0)), Seq(Seq(VfRD(3, 0)), Seq(VfRD(4, 0)), Seq(VfRD(5, 0)), Seq(V0RD(1, 0)), Seq(VlRD(1, 0)))),
++        ExeUnitParams(
++          "VFEX1",
++          Seq(VialuCfg, VfaluCfg, VfmaCfg, VfdivCfg, VidivCfg),
++          Seq(VfWB(port = 1, 0), V0WB(port = 1, 0), FpWB(port = 7, 0)),
++          Seq(Seq(VfRD(3, 0)), Seq(VfRD(4, 0)), Seq(VfRD(5, 0)), Seq(V0RD(1, 0))),
++          vlRD = VlRD(1, 0),
++        ),
+       ), numEntries = 16, numEnq = 2, numComp = 12),
+       IssueBlockParams(Seq(
+-        ExeUnitParams("VLSU0", Seq(VlduCfg, VstuCfg, VseglduCfg, VsegstuCfg), Seq(VfWB(2, 0), V0WB(2, 0), VlWB(port = 2, 0)), Seq(Seq(VfRD(6, 0)), Seq(VfRD(7, 0)), Seq(VfRD(8, 0)), Seq(V0RD(2, 0)), Seq(VlRD(2, 0)))),
++        ExeUnitParams(
++          "VLSU0",
++          Seq(VlduCfg, VstuCfg, VseglduCfg, VsegstuCfg),
++          Seq(VfWB(2, 0), V0WB(2, 0)),
++          Seq(Seq(VfRD(6, 0)), Seq(VfRD(7, 0)), Seq(VfRD(8, 0)), Seq(V0RD(2, 0))),
++          vlWB = VlWB(port = 2, 0),
++          vlRD = VlRD(2, 0),
++        ),
+       ), numEntries = 16, numEnq = 2, numComp = 12),
+       IssueBlockParams(Seq(
+-        ExeUnitParams("VLSU1", Seq(VlduCfg, VstuCfg), Seq(VfWB(3, 0), V0WB(3, 0), VlWB(port = 3, 0)), Seq(Seq(VfRD(9, 0)), Seq(VfRD(10, 0)), Seq(VfRD(11, 0)), Seq(V0RD(3, 0)), Seq(VlRD(3, 0)))),
++        ExeUnitParams(
++          "VLSU1",
++          Seq(VlduCfg, VstuCfg),
++          Seq(VfWB(3, 0), V0WB(3, 0)),
++          Seq(Seq(VfRD(9, 0)), Seq(VfRD(10, 0)), Seq(VfRD(11, 0)), Seq(V0RD(3, 0))),
++          vlWB = VlWB(port = 3, 0),
++          vlRD = VlRD(3, 0),
++        ),
+       ), numEntries = 16, numEnq = 2, numComp = 12),
+     ),
+       numPregs = vfPreg.numEntries,
+diff --git a/src/main/scala/xiangshan/backend/Backend.scala b/src/main/scala/xiangshan/backend/Backend.scala
+index c60dc5a8788..84683d209ac 100644
+--- a/src/main/scala/xiangshan/backend/Backend.scala
++++ b/src/main/scala/xiangshan/backend/Backend.scala
+@@ -33,10 +33,11 @@ import utility.sram.SramBroadcastBundle
+ import xiangshan._
+ import xiangshan.backend.Bundles._
+ import xiangshan.backend.ctrlblock.{DebugLSIO, LsTopdownInfo}
+-import xiangshan.backend.datapath.DataConfig.{IntData, VecData, FpData}
++import xiangshan.backend.datapath.DataConfig.{FpData, IntData, VecData}
+ import xiangshan.backend.datapath.WbConfig._
+ import xiangshan.backend.datapath.DataConfig._
+ import xiangshan.backend.dispatch.CoreDispatchTopDownIO
++import xiangshan.backend.exu.ExeUnitParams
+ import xiangshan.backend.fu.vector.Bundles.VType
+ import xiangshan.backend.fu.{FenceIO, FuConfig, PerfCounterIO}
+ import xiangshan.backend.fu.NewCSR.PFEvent
+@@ -66,6 +67,17 @@ class BackendInlined(val params: BackendParams)(implicit p: Parameters) extends
+ 
+   override def shouldBeInlined: Boolean = true
+ 
++  /**
++   * updateExuIdx should be executed before the use of {{{
++   *   ExeUnitParams.exuIdx
++   * }}}
++   */
++  for ((exuCfg: ExeUnitParams, i) <- params.allExuParams.zipWithIndex) {
++    exuCfg.bindBackendParam(params)
++    exuCfg.updateIQWakeUpConfigs(params.iqWakeUpParams)
++    exuCfg.updateExuIdx(i)
++  }
++
+   // check read & write port config
+   params.configChecks
+ 
+@@ -80,11 +92,6 @@ class BackendInlined(val params: BackendParams)(implicit p: Parameters) extends
+     iqCfg.exuBlockParams.map(_.bindIssueBlockParam(iqCfg))
+   }
+ 
+-  for ((exuCfg, i) <- params.allExuParams.zipWithIndex) {
+-    exuCfg.bindBackendParam(params)
+-    exuCfg.updateIQWakeUpConfigs(params.iqWakeUpParams)
+-    exuCfg.updateExuIdx(i)
+-  }
+ 
+   println(s"[Backend] debugEn:${backendParams.debugEn}")
+   println(s"[Backend] basicDebugEn:${backendParams.basicDebugEn}")
+@@ -278,7 +285,11 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+     sink.bits.srcType.zip(source.bits.srcType).map(x => x._1 := x._2)
+     sink.bits.psrc.zip(source.bits.psrc).map(x => x._1 := x._2)
+     sink.bits.srcState.zip(source.bits.srcState).map(x => x._1 := x._2)
++    // only the IQ contains VSET uop will use psrcVl and srcStateVl
++    sink.bits.psrcVl.foreach(_ := source.bits.psrcVl)
++    sink.bits.srcStateVl.foreach(_ := source.bits.srcStateVl)
+     sink.bits.srcLoadDependency.zip(source.bits.srcLoadDependency).map(x => x._1 := x._2)
++    sink.bits.pdestVl.foreach(_ := source.bits.pdestVl)
+   }}
+   println(s"[Backend] intRegion.io.memWriteback.size = ${intRegion.io.memWriteback.size}")
+ 
+@@ -314,7 +325,7 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+ 
+   fpRegion.io.hartId := io.fromTop.hartId
+   fpRegion.io.flush := ctrlBlock.io.toIssueBlock.flush
+-  fpRegion.io.fromDispatch.flatten.zip(ctrlBlock.io.toIssueBlock.fpUops).map{ case (sink, source) => {
++  fpRegion.io.fromDispatch.flatten.zip(ctrlBlock.io.toIssueBlock.fpUops).map{ case (sink, source) =>
+     sink.valid := source.valid
+     connectSamePort(sink.bits, source.bits)
+     source.ready := sink.ready
+@@ -324,17 +335,18 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+     sink.bits.srcState.zip(source.bits.srcState).map(x => x._1 := x._2)
+     sink.bits.srcLoadDependency.zip(source.bits.srcLoadDependency).map(x => x._1 := x._2)
+   }
+-  }
+   fpRegion.io.ldCancel := io.mem.ldCancel
+   fpRegion.io.vlWriteBackInfoIn := 0.U.asTypeOf(intRegion.io.vlWriteBackInfoIn)
+ 
+   vecRegion.io.hartId := io.fromTop.hartId
+   vecRegion.io.flush := ctrlBlock.io.toIssueBlock.flush
+-  vecRegion.io.fromDispatch.flatten.zip(ctrlBlock.io.toIssueBlock.vfUops).map { case (sink, source) => {
++  vecRegion.io.fromDispatch.flatten.zip(ctrlBlock.io.toIssueBlock.vfUops).foreach { case (sink, source) =>
+     sink.valid := source.valid
+     connectSamePort(sink.bits, source.bits)
+     source.ready := sink.ready
+-  }
++    sink.bits.srcStateVl.get := source.bits.srcStateVl
++    sink.bits.psrcVl.get := source.bits.psrcVl
++    sink.bits.pdestVl.foreach(_ := source.bits.pdestVl)
+   }
+   vecRegion.io.memWriteback <> io.mem.vecWriteback
+   vecRegion.io.ldCancel := io.mem.ldCancel
+@@ -404,11 +416,6 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+   val hasVsetvl = ctrlBlock.io.robio.commitVType.hasVsetvl
+   val vtype = VType.toVtypeStruct(Mux(hasVsetvl, vsetvlVType, commitVType.bits)).asUInt
+ 
+-  // csr not store the value of vl, so when using difftest we assign the value of vl to debugVl
+-  val debugVl_s0 = WireInit(UInt(VlData().dataWidth.W), 0.U)
+-  val debugVl_s1 = WireInit(UInt(VlData().dataWidth.W), 0.U)
+-  debugVl_s0 := vecRegion.io.diffVl.getOrElse(0.U.asTypeOf(UInt(VlData().dataWidth.W)))
+-  debugVl_s1 := RegNext(debugVl_s0)
+   csrio.vpu.set_vxsat := ctrlBlock.io.robio.csr.vxsat
+   csrio.vpu.set_vstart.valid := ctrlBlock.io.robio.csr.vstart.valid
+   csrio.vpu.set_vstart.bits := ctrlBlock.io.robio.csr.vstart.bits
+@@ -416,7 +423,7 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+   //Todo here need change design
+   csrio.vpu.set_vtype.valid := commitVType.valid
+   csrio.vpu.set_vtype.bits := ZeroExt(vtype, XLEN)
+-  csrio.vpu.vl := ZeroExt(debugVl_s1, XLEN)
++  csrio.vpu.vl := vecRegion.io.diffVl.getOrElse(0.U.asTypeOf(UInt(VlData().dataWidth.W)))
+   csrio.vpu.dirty_vs := ctrlBlock.io.robio.csr.dirty_vs
+   csrio.exception := ctrlBlock.io.robio.exception
+   csrio.robDeqPtr := ctrlBlock.io.robio.robDeqPtr
+diff --git a/src/main/scala/xiangshan/backend/BackendParams.scala b/src/main/scala/xiangshan/backend/BackendParams.scala
+index c3800d276c5..74c6cf63328 100644
+--- a/src/main/scala/xiangshan/backend/BackendParams.scala
++++ b/src/main/scala/xiangshan/backend/BackendParams.scala
+@@ -185,7 +185,7 @@ case class BackendParams(
+   }
+ 
+   def getVlWbArbiterParams: WbArbiterParams = {
+-    val vlWbCfgs: Seq[VlWB] = allSchdParams.flatMap(_.getWbCfgs.flatten.flatten.filter(x => x.writeVl)).map(_.asInstanceOf[VlWB])
++    val vlWbCfgs: Seq[VlWB] = allIssueParams.flatMap(_.exuBlockParams.filter(_.writeVlRf).map(_.vlWB))
+     datapath.WbArbiterParams(vlWbCfgs, vlPregParams, this)
+   }
+ 
+@@ -208,6 +208,22 @@ case class BackendParams(
+     cfgs
+   }
+ 
++  def getVlRdPortParams: Seq[(Int, Seq[(Int, Int)])] = {
++    allRealExuParams
++      .filter(_.vlRD != null)
++      .map(x => (x.vlRD, x.exuIdx))
++      .groupBy { case (rdCfg, exuIdx) => rdCfg.port }
++      .map {
++        case (port, cfgExuIdxSeq) =>
++          port ->
++            cfgExuIdxSeq
++              .map { case (vlRd, exuIdx) => (exuIdx, vlRd.priority) }
++              .sortBy { case (exuIdx, prio) => prio }
++      }
++      .toSeq
++      .sortBy { case (port, _) => port }
++  }
++
+   /**
+     * Get regfile write back port params
+     *
+@@ -226,12 +242,36 @@ case class BackendParams(
+     cfgs
+   }
+ 
++  /**
++   * Get vl regfile write back port params
++   *
++   * @return Seq[port -> Seq[(exuIdx, priority)] ]
++   */
++  def getVlWbPortParams = {
++    allRealExuParams
++      .filter(_.vlWB != null)
++      .map(exuParams => exuParams.vlWB -> exuParams.exuIdx)
++      .groupBy{ case (vlwb, exuIdx) => vlwb.port }
++      .map{
++        case (port, wbIdxSeq) =>
++          port -> wbIdxSeq.map { case (wb, exuIdx) => (exuIdx, wb.priority) }
++      }
++      .toSeq
++      .sortBy { case (port, _) => port }
++  }
++
+   def getRdPortIndices(dataCfg: DataConfig) = {
+-    this.getRdPortParams(dataCfg).map(_._1)
++    dataCfg match {
++      case VlData() => this.getVlRdPortParams.map(_._1)
++      case _ => this.getRdPortParams(dataCfg).map(_._1)
++    }
+   }
+ 
+   def getWbPortIndices(dataCfg: DataConfig) = {
+-    this.getWbPortParams(dataCfg).map(_._1)
++    dataCfg match {
++      case VlData() => this.getVlWbPortParams.map(_._1)
++      case _ => this.getWbPortParams(dataCfg).map(_._1)
++    }
+   }
+ 
+   def getRdCfgs[T <: RdConfig](implicit tag: ClassTag[T]): Seq[Seq[Seq[RdConfig]]] = {
+@@ -246,8 +286,16 @@ case class BackendParams(
+     rdCfgs
+   }
+ 
++  def getVlRdCfgs: Seq[Seq[Seq[VlRD]]] = {
++    allIssueParams.map(
++      _.exuBlockParams.map(
++        x => Option(x.vlRD).toSeq
++      )
++    )
++  }
++
+   def getAllWbCfgs: Seq[Seq[Set[PregWB]]] = {
+-    allIssueParams.map(_.exuBlockParams.map(_.wbPortConfigs.toSet))
++    allIssueParams.map(_.exuBlockParams.map(x => x.wbPortConfigs.toSet ++ x.getVlWBPort))
+   }
+ 
+   def getWbCfgs[T <: PregWB](implicit tag: ClassTag[T]): Seq[Seq[PregWB]] = {
+@@ -310,11 +358,7 @@ case class BackendParams(
+ 
+   def getRfReadSize(dataCfg: DataConfig) = {
+     dataCfg match{
+-      case IntData() => this.getPregParams(dataCfg).numRead.getOrElse(this.getRdPortIndices(dataCfg).size)
+-      case FpData()  => this.getPregParams(dataCfg).numRead.getOrElse(this.getRdPortIndices(dataCfg).size)
+-      case VecData() => this.getPregParams(dataCfg).numRead.getOrElse(this.getRdPortIndices(dataCfg).size)
+-      case V0Data() => this.getPregParams(dataCfg).numRead.getOrElse(this.getRdPortIndices(dataCfg).size)
+-      case VlData() => this.getPregParams(dataCfg).numRead.getOrElse(this.getRdPortIndices(dataCfg).size)
++      case IntData() | FpData() | VecData() | V0Data() | VlData() => this.getPregParams(dataCfg).numRead.getOrElse(this.getRdPortIndices(dataCfg).size)
+       case _ => throw new IllegalArgumentException(s"DataConfig ${dataCfg} can not get RfReadSize")
+     }
+   }
+@@ -385,11 +429,11 @@ case class BackendParams(
+     ldExuParams.indexOf(exu)
+   }
+ 
+-  def getIntWBExeGroup: Map[Int, Seq[ExeUnitParams]] = allRealExuParams.groupBy(x => x.getIntWBPort.getOrElse(IntWB(port = -1)).port).filter(_._1 != -1)
+-  def getFpWBExeGroup: Map[Int, Seq[ExeUnitParams]] = allRealExuParams.groupBy(x => x.getFpWBPort.getOrElse(FpWB(port = -1)).port).filter(_._1 != -1)
+-  def getVfWBExeGroup: Map[Int, Seq[ExeUnitParams]] = allRealExuParams.groupBy(x => x.getVfWBPort.getOrElse(VfWB(port = -1)).port).filter(_._1 != -1)
+-  def getV0WBExeGroup: Map[Int, Seq[ExeUnitParams]] = allRealExuParams.groupBy(x => x.getV0WBPort.getOrElse(V0WB(port = -1)).port).filter(_._1 != -1)
+-  def getVlWBExeGroup: Map[Int, Seq[ExeUnitParams]] = allRealExuParams.groupBy(x => x.getVlWBPort.getOrElse(VlWB(port = -1)).port).filter(_._1 != -1)
++  def getIntWBExeGroup: Map[Int, Seq[ExeUnitParams]] = allRealExuParams.filter(_.getIntWBPort.nonEmpty).groupBy(_.getIntWBPort.get.port)
++  def getFpWBExeGroup : Map[Int, Seq[ExeUnitParams]] = allRealExuParams.filter(_.getFpWBPort .nonEmpty).groupBy(_.getFpWBPort.get.port)
++  def getVfWBExeGroup : Map[Int, Seq[ExeUnitParams]] = allRealExuParams.filter(_.getVfWBPort .nonEmpty).groupBy(_.getVfWBPort.get.port)
++  def getV0WBExeGroup : Map[Int, Seq[ExeUnitParams]] = allRealExuParams.filter(_.getV0WBPort .nonEmpty).groupBy(_.getV0WBPort.get.port)
++  def getVlWBExeGroup : Map[Int, Seq[ExeUnitParams]] = allRealExuParams.filter(_.getVlWBPort .nonEmpty).groupBy(_.getVlWBPort.get.port)
+ 
+   private def isContinuous(portIndices: Seq[Int]): Boolean = {
+     val portIndicesSet = portIndices.toSet
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index b6fca914521..9e555178c40 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -102,6 +102,7 @@ object Bundles {
+     val commitType = CommitType()
+     def numSrc = backendParams.numSrc
+     val srcType = Vec(numSrc, SrcType())
++    val vlRen = Bool()
+     val lsrc = Vec(numSrc, UInt(LogicRegsWidth.W))
+     val ldest = UInt(LogicRegsWidth.W)
+     val fuType = FuType()
+@@ -199,6 +200,7 @@ object Bundles {
+     val vecWen = Bool()
+     val v0Wen = Bool()
+     val vlWen = Bool()
++    val vlRen = Bool()
+     val waitForward = Bool() // no speculate execution
+     val blockBackward = Bool()
+     val flushPipe = Bool() // This inst will flush all the pipe when commit, like exception but can commit
+@@ -216,7 +218,9 @@ object Bundles {
+     val numWB = UInt(log2Up(MaxUopSize).W) // rob need this
+     // rename
+     val psrc = Vec(numSrc, UInt(PhyRegIdxWidth.W))
++    val psrcVl = UInt(VlPhyRegIdxWidth.W)
+     val pdest = UInt(PhyRegIdxWidth.W)
++    val pdestVl = UInt(VlPhyRegIdxWidth.W)
+     val robIdx = new RobPtr
+     val dirtyFs = Bool()
+     val dirtyVs = Bool()
+@@ -279,7 +283,9 @@ object Bundles {
+     val lastUop = Bool()
+     // from rename
+     val psrc = Vec(numSrc, UInt(PhyRegIdxWidth.W))
++    val psrcVl = UInt(VlPhyRegIdxWidth.W)
+     val pdest = UInt(PhyRegIdxWidth.W)
++    val pdestVl = UInt(VlPhyRegIdxWidth.W)
+     val robIdx = new RobPtr
+     val numLsElem = NumLsElem()
+     val rasAction = BranchAttribute.RasAction()
+@@ -290,6 +296,7 @@ object Bundles {
+     val loadWaitStrict = Bool()
+     val ssid = UInt(SSIDWidth.W)
+     val srcState = Vec(numSrc, SrcState())
++    val srcStateVl = SrcState()
+     val srcLoadDependency = Vec(numSrc, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))
+     val useRegCache = Vec(backendParams.numIntRegSrc, Bool())
+     val regCacheIdx = Vec(backendParams.numIntRegSrc, UInt(RegCacheIdxWidth.W))
+@@ -337,7 +344,9 @@ object Bundles {
+     // from rename
+     val robIdx    = new RobPtr
+     val psrc      = Vec(numSrc, UInt(PhyRegIdxWidth.W))
++    val psrcVl    = Option.when(params.readVlRf)(UInt(VlPhyRegIdxWidth.W))
+     val pdest     = UInt(PhyRegIdxWidth.W)
++    val pdestVl   = Option.when(params.writeVlRf)(UInt(VlPhyRegIdxWidth.W)) // Todo: reuse psrc to store it
+     val numLsElem = Option.when(params.isVecMemIQ)(NumLsElem())
+     val rasAction = Option.when(params.needRasAction)(BranchAttribute.RasAction())
+     // for mdp
+@@ -351,6 +360,7 @@ object Bundles {
+     val srcLoadDependency = Vec(numSrc, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))
+     val useRegCache       = Vec(backendParams.numIntRegSrc, Bool())
+     val regCacheIdx       = Vec(backendParams.numIntRegSrc, UInt(RegCacheIdxWidth.W))
++    val srcStateVl        = Option.when(params.readVlRf)(SrcState())
+     val lqIdx             = Option.when(params.isLdAddrIQ || params.isVecMemIQ)(new LqPtr)
+     val sqIdx             = Option.when(params.isLdAddrIQ || params.isStAddrIQ || params.isStdIQ || params.isVecMemIQ)(new SqPtr) // load unit need sqIdx
+     // cas ctrl
+@@ -385,6 +395,7 @@ object Bundles {
+     // from rename
+     val psrc      = Vec(numSrc, UInt(PhyRegIdxWidth.W))
+     val pdest     = UInt(PhyRegIdxWidth.W)
++    val pdestVl   = Option.when(params.writeVlRf)(UInt(VlPhyRegIdxWidth.W))
+     val numLsElem = Option.when(params.isVecMemIQ)(NumLsElem())
+     val rasAction = Option.when(params.needRasAction)(BranchAttribute.RasAction())
+     // for mdp
+@@ -473,6 +484,7 @@ object Bundles {
+     val srcLoadDependency  = Vec(numSrc, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))
+     val psrc            = Vec(numSrc, UInt(PhyRegIdxWidth.W))
+     val pdest           = UInt(PhyRegIdxWidth.W)
++    val pdestVl         = UInt(VlPhyRegIdxWidth.W)
+     val rasAction       = BranchAttribute.RasAction()
+     // reg cache
+     val useRegCache     = Vec(backendParams.numIntRegSrc, Bool())
+@@ -532,7 +544,7 @@ object Bundles {
+       })
+     }
+ 
+-    def needWriteRf: Bool = rfWen || fpWen || vecWen || v0Wen || vlWen
++    def needEnqRab: Bool = rfWen || fpWen || vecWen || v0Wen
+ 
+     def connectRenameOutUop(source: RenameOutUop): Unit = {
+       this := 0.U.asTypeOf(this)
+@@ -579,6 +591,7 @@ object Bundles {
+     val v0Wen = Bool()
+     val vlWen = Bool()
+     val pdest = UInt(pregIdxWidth.W)
++    val pdestVl = UInt(VlPhyRegIdxWidth.W)
+ 
+     /**
+       * @param successor Seq[(psrc, srcType)]
+@@ -603,7 +616,7 @@ object Bundles {
+     }
+     def wakeUpVl(successor: (UInt, UInt), valid: Bool): Bool = {
+       val (thatPsrc, srcType) = successor
+-      val pdestMatch = pdest === thatPsrc
++      val pdestMatch = pdestVl === thatPsrc
+       pdestMatch && (
+         SrcType.isVp(srcType) && this.vlWen
+       ) && valid
+@@ -627,7 +640,7 @@ object Bundles {
+     }
+     def wakeUpVlFromIQ(successor: (UInt, UInt)): Bool = {
+       val (thatPsrc, srcType) = successor
+-      val pdestMatch = pdest === thatPsrc
++      val pdestMatch = pdestVl === thatPsrc
+       pdestMatch && (
+         SrcType.isVp(srcType) && this.vlWen
+       )
+@@ -647,7 +660,11 @@ object Bundles {
+     }
+   }
+ 
+-  class IssueQueueWBWakeUpBundle(exuIndices: Seq[Int], backendParams: BackendParams)(implicit p: Parameters) extends IssueQueueWakeUpBaseBundle(backendParams.pregIdxWidth, exuIndices) {
++  class IssueQueueWBWakeUpBundle(
++    exuIndices: Seq[Int],
++    backendParams: BackendParams,
++    val dataConfig: DataConfig,
++  )(implicit p: Parameters) extends IssueQueueWakeUpBaseBundle(backendParams.pregIdxWidth, exuIndices) {
+ 
+   }
+ 
+@@ -676,6 +693,7 @@ object Bundles {
+       this.v0Wen := exuInput.v0Wen.getOrElse(false.B)
+       this.vlWen := exuInput.vlWen.getOrElse(false.B)
+       this.pdest := exuInput.pdest
++      this.pdestVl := exuInput.pdestVl.getOrElse(0.U)
+     }
+   }
+ 
+@@ -782,6 +800,8 @@ object Bundles {
+       )
+     ))
+ 
++    val rfVl = Option.when(exuParams.readVlRf)(new RfReadPortWithConfig(VlData(), iqParams.backendParam.getPregParams(VlData()).addrWidth))
++
+     val srcType = Vec(exuParams.numRegSrc, SrcType()) // used to select imm or reg data
+     val rcIdx = OptionWrapper(exuParams.needReadRegCache, Vec(exuParams.numRegSrc, UInt(RegCacheIdxWidth.W))) // used to select regcache data
+     val immType = SelImm()                         // used to select imm extractor
+@@ -797,6 +817,10 @@ object Bundles {
+           makeValid(issueValid, rfRd.head)
+       }.toSeq
+     }
++
++    def genVlRdReadValidBundle(issueValid: Bool): Option[ValidIO[RfReadPortWithConfig]] = {
++      rfVl.map(x => makeValid(issueValid, x))
++    }
+   }
+ 
+   class OGRespBundle(implicit p:Parameters, params: IssueBlockParams) extends XSBundle {
+@@ -872,6 +896,7 @@ object Bundles {
+     val fuType        = FuType()
+     val fuOpType      = FuOpType()
+     val src           = Vec(params.numRegSrc, UInt(params.srcDataBitsMax.W))
++    val vl            = Option.when(params.readVlRf)(Vl())
+     val copySrc       = if(hasCopySrc) Some(Vec(params.numCopySrc, Vec(if(params.numRegSrc < 2) 1 else 2, UInt(params.srcDataBitsMax.W)))) else None
+     val imm           = UInt(64.W)
+     val nextPcOffset  = OptionWrapper(params.hasBrhFu, UInt((FetchBlockInstOffsetWidth + 2).W))
+@@ -886,6 +911,7 @@ object Bundles {
+     val vlWenCopy  = OptionWrapper(copyWakeupOut && params.needVlWen, Vec(copyNum, Bool()))
+     val loadDependencyCopy = OptionWrapper(copyWakeupOut && params.isIQWakeUpSink, Vec(copyNum, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W))))
+     val pdest         = UInt(params.wbPregIdxWidth.W)
++    val pdestVl       = Option.when(params.writeVlRf)(UInt(VlPhyRegIdxWidth.W))
+     val rfWen         = if (params.needIntWen)    Some(Bool())                        else None
+     val fpWen         = if (params.needFpWen)     Some(Bool())                        else None
+     val vecWen        = if (params.needVecWen)    Some(Bool())                        else None
+@@ -947,6 +973,7 @@ object Bundles {
+       this.iqIdx         := source.common.iqIdx        // Only used by mem feedback
+       this.dataSources   := source.common.dataSources
+       this.debug_seqNum  .foreach(_ := source.common.debug_seqNum.get)
++      this.pdestVl       .foreach(_ := source.common.pdestVl.get)
+       this.exuSources    .foreach(_ := source.common.exuSources.get)
+       this.rfWen         .foreach(_ := source.common.rfWen.get)
+       this.fpWen         .foreach(_ := source.common.fpWen.get)
+@@ -983,6 +1010,7 @@ object Bundles {
+       uop.imm            := this.imm
+       uop.robIdx         := this.robIdx
+       uop.pdest          := this.pdest
++      uop.pdestVl        := this.pdestVl.getOrElse(0.U)
+       uop.rfWen          := this.rfWen.getOrElse(false.B)
+       uop.fpWen          := this.fpWen.getOrElse(false.B)
+       uop.vecWen         := this.vecWen.getOrElse(false.B)
+@@ -1017,6 +1045,7 @@ object Bundles {
+   ) extends Bundle with BundleSource with HasXSParameter {
+     val data         = Vec(params.wbPathNum, UInt(params.destDataBitsMax.W))
+     val pdest        = UInt(params.wbPregIdxWidth.W)
++    val pdestVl      = Option.when(params.writeVlRf)(UInt(VlPhyRegIdxWidth.W))
+     val robIdx       = new RobPtr
+     val intWen       = if (params.needIntWen)   Some(Bool())                  else None
+     val fpWen        = if (params.needFpWen)    Some(Bool())                  else None
+@@ -1086,7 +1115,7 @@ object Bundles {
+       this.vecWen := source.vecWen.getOrElse(false.B)
+       this.v0Wen  := source.v0Wen.getOrElse(false.B)
+       this.vlWen  := source.vlWen.getOrElse(false.B)
+-      this.pdest  := source.pdest
++      this.pdest  := (if (wbType == "vl") source.pdestVl.get else source.pdest)
+       println(s"[fromExuOutput]: ${source.params.wbIndex(typeMap(wbType))}, exuName = ${source.params.name}")
+       this.data   := source.data(source.params.wbIndex(typeMap(wbType)))
+       this.robIdx := source.robIdx
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index 185855a820f..4b99930be38 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -639,7 +639,9 @@ class CtrlBlockImp(
+   rat.io.hartId := io.fromTop.hartId
+   rat.io.redirect := s1_s3_redirect.valid
+   rat.io.rabCommits := rob.io.rabCommits
++  rat.io.vlCommits := rob.io.vlCommits
+   rat.io.diffCommits.foreach(_ := rob.io.diffCommits.get)
++  rat.io.diffVlCommits.foreach(_ := rob.io.diffVlCommits.get)
+   rat.io.intRenamePorts := rename.io.intRenamePorts
+   rat.io.fpRenamePorts := rename.io.fpRenamePorts
+   rat.io.vecRenamePorts := rename.io.vecRenamePorts
+@@ -648,6 +650,7 @@ class CtrlBlockImp(
+ 
+   rename.io.redirect := s1_s3_redirect
+   rename.io.rabCommits := rob.io.rabCommits
++  rename.io.vlCommits := rob.io.vlCommits
+   rename.io.singleStep := GatedValidRegNext(io.csrCtrl.singlestep)
+   rename.io.waittable := (memCtrl.io.waitTable2Rename zip decode.io.out).map{ case(waittable2rename, decodeOut) =>
+     RegEnable(waittable2rename, decodeOut.fire)
+diff --git a/src/main/scala/xiangshan/backend/Region.scala b/src/main/scala/xiangshan/backend/Region.scala
+index 01c2d9f08a9..38d34cde500 100644
+--- a/src/main/scala/xiangshan/backend/Region.scala
++++ b/src/main/scala/xiangshan/backend/Region.scala
+@@ -209,6 +209,7 @@ class Region(val params: SchdBlockParams)(implicit p: Parameters) extends XSModu
+     sink.bits.v0Wen := source.v0Wen
+     sink.bits.vlWen := source.vlWen
+     sink.bits.pdest := source.pdest
++    sink.bits.pdestVl := source.pdest
+   }
+ 
+   if (params.isIntSchd) {
+diff --git a/src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala b/src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala
+index f360f930f8a..387310fe69c 100644
+--- a/src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala
++++ b/src/main/scala/xiangshan/backend/datapath/BypassNetwork.scala
+@@ -245,6 +245,7 @@ class BypassNetwork()(implicit p: Parameters, params: BackendParams) extends XSM
+         }
+       }
+     }
++    exuInput.bits.vl.foreach { _ := fromDPs(exuIdx).bits.vl.get }
+ 
+     if (exuParm.hasAluFu) {
+       when(isAlu) {
+diff --git a/src/main/scala/xiangshan/backend/datapath/DataPath.scala b/src/main/scala/xiangshan/backend/datapath/DataPath.scala
+index 3a084c0ef9c..87e154b4d69 100644
+--- a/src/main/scala/xiangshan/backend/datapath/DataPath.scala
++++ b/src/main/scala/xiangshan/backend/datapath/DataPath.scala
+@@ -66,7 +66,7 @@ class DataPath(implicit p: Parameters, params: BackendParams, param: SchdBlockPa
+   private val fpRdArbWinner: Seq2[MixedVec[Bool]] = fpRFReadArbiter.io.in.map(_.map(x => MixedVecInit(x.map(_.ready).toSeq)).toSeq).toSeq
+   private val vfRdArbWinner: Seq2[MixedVec[Bool]] = vfRFReadArbiter.io.in.map(_.map(x => MixedVecInit(x.map(_.ready).toSeq)).toSeq).toSeq
+   private val v0RdArbWinner: Seq2[MixedVec[Bool]] = v0RFReadArbiter.io.in.map(_.map(x => MixedVecInit(x.map(_.ready).toSeq)).toSeq).toSeq
+-  private val vlRdArbWinner: Seq2[MixedVec[Bool]] = vlRFReadArbiter.io.in.map(_.map(x => MixedVecInit(x.map(_.ready).toSeq)).toSeq).toSeq
++  private val vlRdArbWinner: Seq2[Option[Bool]] = vlRFReadArbiter.io.in.map(_.map(x => x.headOption.map(_.ready)))
+ 
+   private val intWbNotBlock: Seq[MixedVec[Bool]] = intWbBusyArbiter.io.in.map(x => MixedVecInit(x.map(_.ready).toSeq)).toSeq
+   private val fpWbNotBlock: Seq[MixedVec[Bool]] = fpWbBusyArbiter.io.in.map(x => MixedVecInit(x.map(_.ready).toSeq)).toSeq
+@@ -74,17 +74,30 @@ class DataPath(implicit p: Parameters, params: BackendParams, param: SchdBlockPa
+   private val v0WbNotBlock: Seq[MixedVec[Bool]] = v0WbBusyArbiter.io.in.map(x => MixedVecInit(x.map(_.ready).toSeq)).toSeq
+   private val vlWbNotBlock: Seq[MixedVec[Bool]] = vlWbBusyArbiter.io.in.map(x => MixedVecInit(x.map(_.ready).toSeq)).toSeq
+ 
++  // rdSrcsNotBlock(i)(j)(k): IQ(i).exu(j).src(k) is not blocked
++  private val rdSrcsNotBlock: MixedVec[MixedVec[Vec[Bool]]] = Wire(MixedVec(
++    fromIQ.map(x => MixedVec(
++      x.map(xx => Vec(xx.bits.exuParams.numRegSrc, Bool()))
++    ))
++  ))
++
++  // rdNotBlock(i)(j): all srcs of IQ(i).exu(j) are not blocked
++  private val rdNotBlock: MixedVec[MixedVec[Bool]] = Wire(MixedVec(
++    fromIQ.map(x => MixedVec(
++      x.map(xx => Bool())
++    ))
++  ))
++
+   private val intRdNotBlock: Seq2[Bool] = intRdArbWinner.map(_.map(_.asUInt.andR))
+   private val fpRdNotBlock: Seq2[Bool] = fpRdArbWinner.map(_.map(_.asUInt.andR))
+   private val vfRdNotBlock: Seq2[Bool] = vfRdArbWinner.map(_.map(_.asUInt.andR))
+   private val v0RdNotBlock: Seq2[Bool] = v0RdArbWinner.map(_.map(_.asUInt.andR))
+-  private val vlRdNotBlock: Seq2[Bool] = vlRdArbWinner.map(_.map(_.asUInt.andR))
+ 
+   private val intRFReadReq: Seq3[ValidIO[RfReadPortWithConfig]] = fromIQ.map(x => x.map(xx => xx.bits.getRfReadValidBundle(xx.valid)).toSeq).toSeq
+   private val fpRFReadReq: Seq3[ValidIO[RfReadPortWithConfig]] = fromIQ.map(x => x.map(xx => xx.bits.getRfReadValidBundle(xx.valid)).toSeq).toSeq
+   private val vfRFReadReq: Seq3[ValidIO[RfReadPortWithConfig]] = fromIQ.map(x => x.map(xx => xx.bits.getRfReadValidBundle(xx.valid)).toSeq).toSeq
+   private val v0RFReadReq: Seq3[ValidIO[RfReadPortWithConfig]] = fromIQ.map(x => x.map(xx => xx.bits.getRfReadValidBundle(xx.valid)).toSeq).toSeq
+-  private val vlRFReadReq: Seq3[ValidIO[RfReadPortWithConfig]] = fromIQ.map(x => x.map(xx => xx.bits.getRfReadValidBundle(xx.valid)).toSeq).toSeq
++  private val vlRFReadReq: Seq2[Option[ValidIO[RfReadPortWithConfig]]] = fromIQ.map(x => x.map(xx => xx.bits.genVlRdReadValidBundle(xx.valid)).toSeq).toSeq
+ 
+   private val allDataSources: Seq[Seq[Vec[DataSource]]] = fromIQ.map(x => x.map(xx => xx.bits.common.dataSources).toSeq)
+   private val allNumRegSrcs: Seq[Seq[Int]] = fromIQ.map(x => x.map(xx => xx.bits.exuParams.numRegSrc).toSeq)
+@@ -156,20 +169,12 @@ class DataPath(implicit p: Parameters, params: BackendParams, param: SchdBlockPa
+     }
+   }
+ 
+-  vlRFReadArbiter.io.in.zip(vlRFReadReq).zipWithIndex.foreach { case ((arbInSeq2, inRFReadReqSeq2), iqIdx) =>
+-    arbInSeq2.zip(inRFReadReqSeq2).zipWithIndex.foreach { case ((arbInSeq, inRFReadReqSeq), exuIdx) =>
+-      val srcIndices: Seq[Int] = VlRegSrcDataSet.flatMap(data => fromIQ(iqIdx)(exuIdx).bits.exuParams.getRfReadSrcIdx(data)).toSeq.sorted
+-      for (srcIdx <- 0 until fromIQ(iqIdx)(exuIdx).bits.exuParams.numRegSrc) {
+-        if (srcIndices.contains(srcIdx) && inRFReadReqSeq.isDefinedAt(srcIdx)) {
+-          arbInSeq(srcIdx).valid := inRFReadReqSeq(srcIdx).valid && allDataSources(iqIdx)(exuIdx)(srcIdx).readReg
+-          arbInSeq(srcIdx).bits.addr := inRFReadReqSeq(srcIdx).bits.addr
+-          arbInSeq(srcIdx).bits.robIdx := inRFReadReqSeq(srcIdx).bits.robIdx
+-          arbInSeq(srcIdx).bits.issueValid := inRFReadReqSeq(srcIdx).valid
+-        } else {
+-          arbInSeq(srcIdx).valid := false.B
+-          arbInSeq(srcIdx).bits := 0.U.asTypeOf(arbInSeq(srcIdx).bits)
+-        }
+-      }
++  vlRFReadArbiter.io.in.zip(vlRFReadReq).zipWithIndex.foreach { case ((arbInSeq2, inRFReadReqSeq), iqIdx) =>
++    arbInSeq2.zip(inRFReadReqSeq).zipWithIndex.foreach { case ((arbInSeq, inRFReadReq), exuIdx) =>
++      arbInSeq.headOption.foreach(_.valid := inRFReadReq.map(_.valid).get)
++      arbInSeq.headOption.foreach(_.bits.addr := inRFReadReq.map(_.bits.addr).get)
++      arbInSeq.headOption.foreach(_.bits.robIdx := inRFReadReq.map(_.bits.robIdx).get)
++      arbInSeq.headOption.foreach(_.bits.issueValid := inRFReadReq.map(_.valid).get)
+     }
+   }
+ 
+@@ -517,54 +522,58 @@ class DataPath(implicit p: Parameters, params: BackendParams, param: SchdBlockPa
+   val s1_fpPregRData: MixedVec[MixedVec[Vec[UInt]]] = Wire(MixedVec(toExu.map(x => MixedVec(x.map(_.bits.src.cloneType).toSeq))))
+   val s1_vfPregRData: MixedVec[MixedVec[Vec[UInt]]] = Wire(MixedVec(toExu.map(x => MixedVec(x.map(_.bits.src.cloneType).toSeq))))
+   val s1_v0PregRData: MixedVec[MixedVec[Vec[UInt]]] = Wire(MixedVec(toExu.map(x => MixedVec(x.map(_.bits.src.cloneType).toSeq))))
+-  val s1_vlPregRData: MixedVec[MixedVec[Vec[UInt]]] = Wire(MixedVec(toExu.map(x => MixedVec(x.map(_.bits.src.cloneType).toSeq))))
++  // one uop only use one vl at most
++  val s1_vlPregRData: MixedVec[MixedVec[UInt]] = Wire(MixedVec(toExu.map(x => MixedVec(x.flatMap(_.bits.vl.map(chiselTypeOf(_)).toSeq)))))
+ 
+   val rfrPortConfigs = schdParams.map(_.issueBlockParams).flatten.map(_.exuBlockParams.map(_.rfrPortConfigs))
++  // (i)(j): IQ(i), EXU(j)
++  val vlRdPortConfigs: Seq[Seq[VlRD]] = schdParams.flatMap(_.issueBlockParams).map(_.exuBlockParams.map(_.vlRD))
+ 
+-  val allRData = (s1_intPregRData ++ s1_fpPregRData ++ s1_vfPregRData ++ s1_v0PregRData ++ s1_vlPregRData)
++  val allRData = (s1_intPregRData ++ s1_fpPregRData ++ s1_vfPregRData ++ s1_v0PregRData)
+   allRData.foreach(_.foreach(_.foreach(_ := 0.U)))
+   if (param.isIntSchd) {
+-  s1_intPregRData.zip(rfrPortConfigs).foreach { case (iqRdata, iqCfg) =>
++    s1_intPregRData.zip(rfrPortConfigs).foreach { case (iqRdata, iqCfg) =>
+       iqRdata.zip(iqCfg).foreach { case (iuRdata, iuCfg) =>
+         iuRdata.zip(iuCfg)
+           .filter { case (_, cfg) => cfg.count(_.isInstanceOf[IntRD]) > 0 }
+           .foreach { case (sink, cfg) => sink := intRfRdata.get(cfg.find(_.isInstanceOf[IntRD]).get.port) }
+       }
+     }
++    s1_vlPregRData.foreach(_.foreach(_ := 0.U))
+   }
+   if (param.isIntSchd || param.isFpSchd) {
+-   val fpRfRdataFinal = if (param.isIntSchd) io.fpRfRdataIn.get else fpRfRdata.get
+-     io.fpRfRdataOut.foreach(_ := fpRfRdata.get)
+-     s1_fpPregRData.foreach(_.foreach(_.foreach(_ := 0.U)))
+-     s1_fpPregRData.zip(rfrPortConfigs).foreach { case (iqRdata, iqCfg) =>
+-       iqRdata.zip(iqCfg).foreach { case (iuRdata, iuCfg) =>
+-         iuRdata.zip(iuCfg)
+-           .filter { case (_, cfg) => cfg.count(_.isInstanceOf[FpRD]) > 0 }
+-           .foreach { case (sink, cfg) => sink := fpRfRdataFinal(cfg.find(_.isInstanceOf[FpRD]).get.port) }
+-       }
+-     }
++    val fpRfRdataFinal = if (param.isIntSchd) io.fpRfRdataIn.get else fpRfRdata.get
++    io.fpRfRdataOut.foreach(_ := fpRfRdata.get)
++    s1_fpPregRData.foreach(_.foreach(_.foreach(_ := 0.U)))
++    s1_fpPregRData.zip(rfrPortConfigs).foreach { case (iqRdata, iqCfg) =>
++      iqRdata.zip(iqCfg).foreach { case (iuRdata, iuCfg) =>
++        iuRdata.zip(iuCfg)
++          .filter { case (_, cfg) => cfg.count(_.isInstanceOf[FpRD]) > 0 }
++          .foreach { case (sink, cfg) => sink := fpRfRdataFinal(cfg.find(_.isInstanceOf[FpRD]).get.port) }
++      }
++    }
++    s1_vlPregRData.foreach(_.foreach(_ := 0.U))
+   }
+   if (param.isVecSchd) {
+-   s1_vfPregRData.zip(rfrPortConfigs).foreach{ case(iqRdata, iqCfg) =>
+-     iqRdata.zip(iqCfg).foreach{ case(iuRdata, iuCfg) =>
+-       iuRdata.zip(iuCfg)
+-         .filter { case (_, cfg) => cfg.count(_.isInstanceOf[VfRD]) > 0 }
+-         .foreach { case (sink, cfg) => sink := vfRfRdata.get(cfg.find(_.isInstanceOf[VfRD]).get.port) }
+-     }
+-    }
+-   s1_v0PregRData.zip(rfrPortConfigs).foreach{ case(iqRdata, iqCfg) =>
+-     iqRdata.zip(iqCfg).foreach{ case(iuRdata, iuCfg) =>
+-       iuRdata.zip(iuCfg)
+-         .filter { case (_, cfg) => cfg.count(_.isInstanceOf[V0RD]) > 0 }
+-         .foreach { case (sink, cfg) => sink := v0RfRdata.get(cfg.find(_.isInstanceOf[V0RD]).get.port) }
+-     }
+-    }
+-   s1_vlPregRData.zip(rfrPortConfigs).foreach{ case(iqRdata, iqCfg) =>
+-     iqRdata.zip(iqCfg).foreach{ case(iuRdata, iuCfg) =>
+-       iuRdata.zip(iuCfg)
+-         .filter { case (_, cfg) => cfg.count(_.isInstanceOf[VlRD]) > 0 }
+-         .foreach { case (sink, cfg) => sink := vlRfRdata.get(cfg.find(_.isInstanceOf[VlRD]).get.port) }
+-     }
++    s1_vfPregRData.zip(rfrPortConfigs).foreach { case (iqRdata, iqCfg) =>
++      iqRdata.zip(iqCfg).foreach { case (iuRdata, iuCfg) =>
++        iuRdata.zip(iuCfg)
++          .filter { case (_, cfg) => cfg.count(_.isInstanceOf[VfRD]) > 0 }
++          .foreach { case (sink, cfg) => sink := vfRfRdata.get(cfg.find(_.isInstanceOf[VfRD]).get.port) }
++      }
++    }
++    s1_v0PregRData.zip(rfrPortConfigs).foreach { case (iqRdata, iqCfg) =>
++      iqRdata.zip(iqCfg).foreach { case (iuRdata, iuCfg) =>
++        iuRdata.zip(iuCfg)
++          .filter { case (_, cfg) => cfg.count(_.isInstanceOf[V0RD]) > 0 }
++          .foreach { case (sink, cfg) => sink := v0RfRdata.get(cfg.find(_.isInstanceOf[V0RD]).get.port) }
++      }
++    }
++    s1_vlPregRData.zip(vlRdPortConfigs).foreach { case (iqRdata, iqCfg: Seq[VlRD]) =>
++      iqRdata.zip(iqCfg).foreach { case (exuRData: UInt, exuCfg: VlRD) =>
++
++        exuRData := vlRfRdata.get(exuCfg.port)
++      }
+     }
+   }
+ 
+@@ -587,12 +596,14 @@ class DataPath(implicit p: Parameters, params: BackendParams, param: SchdBlockPa
+       s0.bits.common.debug_seqNum.foreach(x => PerfCCT.updateInstPos(x, PerfCCT.InstPos.AtIssueArb.id.U, s0.valid, clock, reset))
+       s1_data.debug_seqNum.foreach(x => PerfCCT.updateInstPos(x, PerfCCT.InstPos.AtIssueReadReg.id.U, s1_valid, clock, reset))
+ 
+-      val srcNotBlock = Wire(Bool())
+-      srcNotBlock := s0.bits.common.dataSources.zip(intRdArbWinner(i)(j) zip fpRdArbWinner(i)(j) zip vfRdArbWinner(i)(j) zip v0RdArbWinner(i)(j) zip vlRdArbWinner(i)(j)).map {
+-        case (source, ((((win_int, win_fp), win_vf), win_v0), win_vl)) =>
+-        !source.readReg || win_int && win_fp && win_vf && win_v0 && win_vl
++      for (k <- s0.bits.common.dataSources.indices) {
++        rdSrcsNotBlock(i)(j)(k) := intRdArbWinner(i)(j)(k) && fpRdArbWinner(i)(j)(k) && vfRdArbWinner(i)(j)(k) && v0RdArbWinner(i)(j)(k)
++      }
++      rdNotBlock(i)(j) := (s0.bits.common.dataSources zip rdSrcsNotBlock(i)(j)).map {
++        case (source, srcNotBlock) =>
++          !source.readReg || srcNotBlock && vlRdArbWinner(i)(j).getOrElse(true.B)
+       }.fold(true.B)(_ && _)
+-      val notBlock = srcNotBlock && intWbNotBlock(i)(j) && fpWbNotBlock(i)(j) && vfWbNotBlock(i)(j) && v0WbNotBlock(i)(j) && vlWbNotBlock(i)(j)
++      val notBlock = rdNotBlock(i)(j) && intWbNotBlock(i)(j) && fpWbNotBlock(i)(j) && vfWbNotBlock(i)(j) && v0WbNotBlock(i)(j) && vlWbNotBlock(i)(j)
+       val s1_flush = s0.bits.common.robIdx.needFlush(Seq(io.flush, flushReg))
+       val s1_cancel = og1FailedVec2(i)(j)
+       val s0_cancel = Wire(Bool())
+@@ -697,12 +708,6 @@ class DataPath(implicit p: Parameters, params: BackendParams, param: SchdBlockPa
+             OptionWrapper(s1_v0PregRData(i)(j).isDefinedAt(k) && srcDataTypeSet.intersect(V0RegSrcDataSet).nonEmpty, 
+               (SrcType.isV0(s1_srcType(i)(j)(k)) -> s1_v0PregRData(i)(j)(k)))
+           )}
+-          else if (k == 4) {(
+-            Seq(None)
+-            :+
+-            OptionWrapper(s1_vlPregRData(i)(j).isDefinedAt(k) && srcDataTypeSet.intersect(VlRegSrcDataSet).nonEmpty, 
+-              (SrcType.isVp(s1_srcType(i)(j)(k)) -> s1_vlPregRData(i)(j)(k)))
+-          )}
+           else {(
+             Seq(None)
+             :+
+@@ -720,6 +725,10 @@ class DataPath(implicit p: Parameters, params: BackendParams, param: SchdBlockPa
+         if (readRfMap.nonEmpty)
+           sinkData.src(k) := Mux1H(readRfMap)
+       }
++      // There is no Mux1H in vl read data, since it always use seperated data path
++      sinkData.vl.foreach {
++        x => x := s1_vlPregRData(i)(j)
++      }
+       if (sinkData.params.hasJmpFu || sinkData.params.hasLoadFu) {
+         val index = pcReadFtqPtrFormIQ.map(_.bits.exuParams).indexOf(sinkData.params)
+         sinkData.pc.get := pcRdata(index)
+diff --git a/src/main/scala/xiangshan/backend/datapath/RFReadArbiter.scala b/src/main/scala/xiangshan/backend/datapath/RFReadArbiter.scala
+index 5a50d8208dc..05e52dfc70e 100644
+--- a/src/main/scala/xiangshan/backend/datapath/RFReadArbiter.scala
++++ b/src/main/scala/xiangshan/backend/datapath/RFReadArbiter.scala
+@@ -202,6 +202,6 @@ class VlRFReadArbiter(
+   backendParams: BackendParams
+ )(implicit
+   p: Parameters
+-) extends RFReadArbiterBase(RFRdArbParams(backendParams.getRdCfgs[VlRD], backendParams.vlPregParams)) {
++) extends RFReadArbiterBase(RFRdArbParams(backendParams.getVlRdCfgs, backendParams.vlPregParams)) {
+   override protected def portRange: Range = 0 to backendParams.getRdPortIndices(VlData()).max
+ }
+diff --git a/src/main/scala/xiangshan/backend/datapath/WbFuBusyTable.scala b/src/main/scala/xiangshan/backend/datapath/WbFuBusyTable.scala
+index 5319eea0b85..d5659992284 100644
+--- a/src/main/scala/xiangshan/backend/datapath/WbFuBusyTable.scala
++++ b/src/main/scala/xiangshan/backend/datapath/WbFuBusyTable.scala
+@@ -83,7 +83,7 @@ class WbFuBusyTable(implicit  p: Parameters, params: BackendParams) extends XSMo
+       case FpWB(_, _) => p.wbPortConfigs.collectFirst { case x: FpWB => x.port }.getOrElse(-1) == portId && source.nonEmpty
+       case VfWB(_, _) => p.wbPortConfigs.collectFirst { case x: VfWB => x.port }.getOrElse(-1) == portId && source.nonEmpty
+       case V0WB(_, _) => p.wbPortConfigs.collectFirst { case x: V0WB => x.port }.getOrElse(-1) == portId && source.nonEmpty
+-      case VlWB(_, _) => p.wbPortConfigs.collectFirst { case x: VlWB => x.port }.getOrElse(-1) == portId && source.nonEmpty
++      case VlWB(_, _) => p.getVlWBPort.map(_.port).getOrElse(-1) == portId && source.nonEmpty
+       case _ => throw new IllegalArgumentException(s"WbConfig ${wbType} is not permitted")
+     }
+   }
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index afdd6fa06cf..0be062b29a3 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -867,7 +867,6 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   // src(2) of fma is fs3, src(2) of vector inst is old vd
+   decodedInst.lsrc(2) := Mux(isFMA, inst.FS3, inst.VD)
+   decodedInst.lsrc(3) := V0_IDX.U
+-  decodedInst.lsrc(4) := Vl_IDX.U
+ 
+   // read dest location
+   decodedInst.ldest := inst.RD
+@@ -1095,7 +1094,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   decodedInst.vlsInstr := isVls
+ 
+   decodedInst.srcType(3) := Mux(inst.VM === 0.U, SrcType.vp, SrcType.DC) // mask src
+-  decodedInst.srcType(4) := SrcType.vp // vconfig
++  decodedInst.vlRen := true.B
+ 
+   val uopInfoGen = Module(new UopInfoGen)
+   uopInfoGen.io.in.preInfo.isVecArith := inst.isVecArith
+@@ -1129,8 +1128,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+     decodedInst.srcType(1) := SrcType.no
+     decodedInst.srcType(2) := SrcType.no
+     decodedInst.srcType(3) := SrcType.no
+-    decodedInst.srcType(4) := SrcType.vp
+-    decodedInst.lsrc(4)    := Vl_IDX.U
++    decodedInst.vlRen := true.B
+     decodedInst.waitForward   := false.B
+     decodedInst.blockBackward := false.B
+   }.elsewhen (isCsrrVlenb) {
+@@ -1139,7 +1137,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+     decodedInst.srcType(1) := SrcType.imm
+     decodedInst.srcType(2) := SrcType.no
+     decodedInst.srcType(3) := SrcType.no
+-    decodedInst.srcType(4) := SrcType.no
++    decodedInst.vlRen := false.B
+     decodedInst.selImm := SelImm.IMM_I
+     decodedInst.waitForward := false.B
+     decodedInst.blockBackward := false.B
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala
+index e5630541dfa..313ecb4be16 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala
+@@ -300,8 +300,7 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
+           csBundle(1).srcType(0) := SrcType.no
+           csBundle(1).srcType(2) := SrcType.no
+           csBundle(1).srcType(3) := SrcType.no
+-          csBundle(1).srcType(4) := SrcType.vp
+-          csBundle(1).lsrc(4) := Vl_IDX.U
++          csBundle(1).vlRen := true.B
+         }.elsewhen(VSETOpType.isVsetvl(latchedInst.fuOpType) && dest === 0.U && src1 === 0.U) {
+           // uop0: mv vtype gpr to vector region
+           csBundle(0).srcType(0) := SrcType.xp
+@@ -321,8 +320,7 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
+           csBundle(1).srcType(0) := SrcType.no
+           csBundle(1).srcType(2) := SrcType.no
+           csBundle(1).srcType(3) := SrcType.no
+-          csBundle(1).srcType(4) := SrcType.vp
+-          csBundle(1).lsrc(4) := Vl_IDX.U
++          csBundle(1).vlRen := true.B
+           // vtype
+           csBundle(1).srcType(1) := SrcType.vp
+           csBundle(1).lsrc(1) := VECTOR_TMP_REG_LMUL.U
+@@ -1788,8 +1786,7 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
+       csBundle(numOfWB - 1.U).srcType(1) := SrcType.no
+       csBundle(numOfWB - 1.U).srcType(2) := SrcType.no
+       csBundle(numOfWB - 1.U).srcType(3) := SrcType.no
+-      csBundle(numOfWB - 1.U).srcType(4) := SrcType.vp
+-      csBundle(numOfWB - 1.U).lsrc(4) := Vl_IDX.U
++      csBundle(numOfWB - 1.U).vlRen := true.B
+       // vtype
+       csBundle(numOfWB - 1.U).vecWen := false.B
+       csBundle(numOfWB - 1.U).vlWen := true.B
+diff --git a/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala b/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
+index 6b54f9741b3..42b4a211c5f 100644
+--- a/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
++++ b/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
+@@ -111,7 +111,7 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+     val wbPregsFp = Vec(backendParams.numPregWb(FpData()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W))))
+     val wbPregsVec = Vec(backendParams.numPregWb(VecData()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W))))
+     val wbPregsV0 = Vec(backendParams.numPregWb(V0Data()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W))))
+-    val wbPregsVl = Vec(backendParams.numPregWb(VlData()), Flipped(ValidIO(UInt(PhyRegIdxWidth.W))))
++    val wbPregsVl = Vec(backendParams.numPregWb(VlData()), Flipped(ValidIO(UInt(VlPhyRegIdxWidth.W))))
+     val wakeUpAll = new Bundle {
+       val wakeUpInt: MixedVec[ValidIO[IssueQueueIQWakeUpBundle]] = Flipped(backendParams.intSchdParams.get.genIQWakeUpOutValidBundle)
+       val wakeUpFp: MixedVec[ValidIO[IssueQueueIQWakeUpBundle]] = Flipped(backendParams.fpSchdParams.get.genIQWakeUpOutValidBundle)
+@@ -170,10 +170,10 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+   // update isrvc to dispatch: branch need last isrvc, rob need first isrvc as rob should attach interrupt to first uop
+   for (i <- 0 until RenameWidth) {
+     fromRenameUpdate(i).valid := fromRename(i).valid
+-    // v0 and vl don't need srcLoadDependency, srcState unpdated with allSrcState
++    // v0 don't need srcLoadDependency, srcState unpdated with allSrcState
+     fromRenameUpdate(i).bits.srcLoadDependency(3) := 0.U.asTypeOf(fromRenameUpdate(i).bits.srcLoadDependency(3))
+-    fromRenameUpdate(i).bits.srcLoadDependency(4) := 0.U.asTypeOf(fromRenameUpdate(i).bits.srcLoadDependency(4))
+     fromRenameUpdate(i).bits.srcState := 0.U.asTypeOf(fromRenameUpdate(i).bits.srcState)
++    fromRenameUpdate(i).bits.srcStateVl := 0.U // dontCare this
+     connectSamePort(fromRenameUpdate(i).bits, fromRename(i).bits)
+     fromRenameUpdate(i).bits.debug.foreach(connectSamePort(_, fromRename(i).bits.debug.get))
+     fromRenameUpdate(i).bits.ftqOffset := fromRename(i).bits.ftqLastOffset
+@@ -186,8 +186,8 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+   val renameWidth = io.fromRename.size
+   val issueQueueCount = io.IQValidNumVec
+   val issueQueueNum = allIssueParams.size
+-  // int fp vec v0 vl
+-  val numRegType = 5
++  // int fp vec v0
++  val numRegType = 4
+   val idxRegTypeInt = allFuConfigs.map(x => {
+     x.srcData.map(xx => {
+       xx.zipWithIndex.filter(y => IntRegSrcDataSet.contains(y._1)).map(_._2)
+@@ -249,16 +249,15 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+   val vecBusyTable = Module(new BusyTable(numRegSrcVf * renameWidth, backendParams.numPregWb(VecData()), VfPhyRegs, VfWB()))
+   val v0BusyTable = Module(new BusyTable(numRegSrcV0 * renameWidth, backendParams.numPregWb(V0Data()), V0PhyRegs, V0WB()))
+   val vlBusyTable = Module(new VlBusyTable(numRegSrcVl * renameWidth, backendParams.numPregWb(VlData()), VlPhyRegs, VlWB()))
+-  vlBusyTable.io_vl_Wb.vlWriteBackInfo := io.vlWriteBackInfo
+-  val busyTables = Seq(intBusyTable, fpBusyTable, vecBusyTable, v0BusyTable, vlBusyTable)
+-  val wbPregs = Seq(io.wbPregsInt, io.wbPregsFp, io.wbPregsVec, io.wbPregsV0, io.wbPregsVl)
+-  val idxRegType = Seq(idxRegTypeInt, idxRegTypeFp, idxRegTypeVec, idxRegTypeV0, idxRegTypeVl)
++
++  val busyTables = Seq(intBusyTable, fpBusyTable, vecBusyTable, v0BusyTable)
++  val wbPregs = Seq(io.wbPregsInt, io.wbPregsFp, io.wbPregsVec, io.wbPregsV0)
++  val idxRegType = Seq(idxRegTypeInt, idxRegTypeFp, idxRegTypeVec, idxRegTypeV0)
+   val allocPregsValid = Wire(Vec(busyTables.size, Vec(RenameWidth, Bool())))
+   allocPregsValid(0) := VecInit(fromRename.map(x => x.valid && x.bits.rfWen && !x.bits.isMove))
+   allocPregsValid(1) := VecInit(fromRename.map(x => x.valid && x.bits.fpWen))
+   allocPregsValid(2) := VecInit(fromRename.map(x => x.valid && x.bits.vecWen))
+   allocPregsValid(3) := VecInit(fromRename.map(x => x.valid && x.bits.v0Wen))
+-  allocPregsValid(4) := VecInit(fromRename.map(x => x.valid && x.bits.vlWen))
+   val allocPregs = Wire(Vec(busyTables.size, Vec(RenameWidth, ValidIO(UInt(PhyRegIdxWidth.W)))))
+   allocPregs.zip(allocPregsValid).map(x =>{
+     x._1.zip(x._2).zipWithIndex.map{case ((sink, source), i) => {
+@@ -276,6 +275,25 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+     b.io.wbPregs := w
+     b.io.allocPregs := a
+   }}
++
++  vlBusyTable.io match {
++    case in =>
++      in.wakeUpInt := 0.U.asTypeOf(in.wakeUpInt)
++      in.wakeUpFp := 0.U.asTypeOf(in.wakeUpFp)
++      in.wakeUpVec := 0.U.asTypeOf(in.wakeUpVec)
++      in.og0Cancel := 0.U.asTypeOf(in.og0Cancel)
++      in.ldCancel := 0.U.asTypeOf(in.ldCancel)
++      for (i <- in.read.indices) {
++        in.read(i).req := fromRename(i).bits.psrcVl
++      }
++      in.wbPregs := io.wbPregsVl
++      for (i <- in.allocPregs.indices) {
++        in.allocPregs(i).valid := fromRename(i).valid && fromRename(i).bits.vlWen
++        in.allocPregs(i).bits := fromRename(i).bits.pdestVl
++      }
++  }
++  vlBusyTable.io_vl_Wb.vlWriteBackInfo := io.vlWriteBackInfo
++
+   rcTagTable.io.allocPregs.zip(allocPregs(0)).map(x => x._1 := x._2)
+   println(s"rcTagTable.io.wakeupFromIQ.length: ${rcTagTable.io.wakeupFromIQ.length}")
+   println(s"io.wakeUpAll.wakeUpInt.length: ${io.wakeUpAll.wakeUpInt.length}")
+@@ -321,6 +339,8 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+     }
+   }}
+   val allSrcState = Wire(Vec(renameWidth, Vec(numRegSrc, Vec(numRegType, Bool()))))
++  // only one vl src is needed for one uop
++  val allSrcStateVl = Wire(Vec(renameWidth, Bool()))
+   for (i <- 0 until renameWidth){
+     for (j <- 0 until numRegSrc){
+       for (k <- 0 until numRegType){
+@@ -334,12 +354,12 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+             case 1 => SrcType.isFp(fromRename(i).bits.srcType(j))
+             case 2 => SrcType.isVp(fromRename(i).bits.srcType(j))
+             case 3 => SrcType.isV0(fromRename(i).bits.srcType(j))
+-            case 4 => true.B
+           }
+           allSrcState(i)(j)(k) := readEn && busyTables(k).io.read(readidx).resp || SrcType.isImm(fromRename(i).bits.srcType(j))
+         }
+       }
+     }
++    allSrcStateVl(i) := vlBusyTable.io.read(i).resp || !fromRename(i).bits.vlRen
+   }
+ 
+   // eliminate old vd
+@@ -510,10 +530,10 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+         val thisSrcHasFp  = allFuThisIQ.map(x => {x.srcData.map(xx => {if (j < xx.size) FpRegSrcDataSet.contains(xx(j))  else false}).reduce(_ || _)}).reduce(_ || _)
+         val thisSrcHasVec = allFuThisIQ.map(x => {x.srcData.map(xx => {if (j < xx.size) VecRegSrcDataSet.contains(xx(j)) else false}).reduce(_ || _)}).reduce(_ || _)
+         val thisSrcHasV0  = allFuThisIQ.map(x => {x.srcData.map(xx => {if (j < xx.size) V0RegSrcDataSet.contains(xx(j))  else false}).reduce(_ || _)}).reduce(_ || _)
+-        val thisSrcHasVl  = allFuThisIQ.map(x => {x.srcData.map(xx => {if (j < xx.size) VlRegSrcDataSet.contains(xx(j))  else false}).reduce(_ || _)}).reduce(_ || _)
+-        val selSrcState = Seq(thisSrcHasInt || maskForStd, thisSrcHasFp || maskForStd, thisSrcHasVec, thisSrcHasV0, thisSrcHasVl)
++        val selSrcState = Seq(thisSrcHasInt || maskForStd, thisSrcHasFp || maskForStd, thisSrcHasVec, thisSrcHasV0)
+         IQSelUop(temp).bits.srcState(j) := PriorityMux(oh, allSrcState)(j).zip(selSrcState).filter(_._2 == true).map(_._1).foldLeft(false.B)(_ || _).asUInt
+       }
++      IQSelUop(temp).bits.srcStateVl := PriorityMux(oh, allSrcStateVl)
+       temp = temp + 1
+       if (backendParams.debugEn){
+         dontTouch(oh)
+diff --git a/src/main/scala/xiangshan/backend/exu/ExeUnit.scala b/src/main/scala/xiangshan/backend/exu/ExeUnit.scala
+index 534d14490fa..37119abf94d 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExeUnit.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExeUnit.scala
+@@ -46,9 +46,9 @@ class ExeUnitIO(params: ExeUnitParams)(implicit p: Parameters) extends XSBundle
+   val fenceio = Option.when(params.hasFence)(new FenceIO)
+   val frm = Option.when(params.needSrcFrm)(Input(Frm()))
+   val vxrm = Option.when(params.needSrcVxrm)(Input(Vxrm()))
+-  val vtype = Option.when(params.writeVConfig)((Valid(new VType)))
+-  val vlIsZero = Option.when(params.writeVConfig)(Output(Bool()))
+-  val vlIsVlmax = Option.when(params.writeVConfig)(Output(Bool()))
++  val vtype = Option.when(params.writeVlRf)((Valid(new VType)))
++  val vlIsZero = Option.when(params.writeVlRf)(Output(Bool()))
++  val vlIsVlmax = Option.when(params.writeVlRf)(Output(Bool()))
+   val instrAddrTransType = Option.when(params.hasJmpFu || params.hasBrhFu || params.hasAluFu)(Input(new AddrTransType))
+ }
+ 
+@@ -180,6 +180,7 @@ class ExeUnitImp(implicit p: Parameters, val exuParams: ExeUnitParams) extends X
+       sink.bits.ctrl.fuOpType    := source.bits.fuOpType
+       sink.bits.ctrl.robIdx      := source.bits.robIdx
+       sink.bits.ctrl.pdest       := source.bits.pdest
++      sink.bits.ctrl.pdestVl     .foreach(x => x := source.bits.pdestVl.get)
+       sink.bits.ctrl.rfWen       .foreach(x => x := source.bits.rfWen.get)
+       sink.bits.ctrl.fpWen       .foreach(x => x := source.bits.fpWen.get)
+       sink.bits.ctrl.vecWen      .foreach(x => x := source.bits.vecWen.get)
+@@ -211,6 +212,7 @@ class ExeUnitImp(implicit p: Parameters, val exuParams: ExeUnitParams) extends X
+       sink.fuOpType := source.fuOpType
+       sink.robIdx := source.robIdx
+       sink.pdest := source.pdest
++      sink.pdestVl.foreach(_ := source.pdestVl.get)
+       sink.rfWen.foreach(x => x := source.rfWen.get)
+       sink.fpWen.foreach(x => x := source.fpWen.get)
+       sink.vecWen.foreach(x => x := source.vecWen.get)
+@@ -230,6 +232,7 @@ class ExeUnitImp(implicit p: Parameters, val exuParams: ExeUnitParams) extends X
+       val sinkData = fu.io.in.bits.dataPipe.get(i)
+       val sourceData = inPipe._1(i)
+       sinkData.src.zip(sourceData.src).foreach { case (fuSrc, exuSrc) => fuSrc := exuSrc }
++      sinkData.vl.foreach(_ := sourceData.vl.get)
+       sinkData.pc.foreach(x => x := sourceData.pc.get)
+       sinkData.nextPcOffset.foreach(x => x := sourceData.nextPcOffset.get)
+       sinkData.imm := sourceData.imm
+@@ -241,6 +244,7 @@ class ExeUnitImp(implicit p: Parameters, val exuParams: ExeUnitParams) extends X
+     if(fu.cfg.srcNeedCopy) {
+       (fu.io.in.bits.data.src).zip(io.in.bits.copySrc.get(idx)).foreach { case(fuSrc, copySrc) => fuSrc := copySrc }
+     }
++    fu.io.in.bits.data.vl.foreach(_ := io.in.bits.vl.get)
+   }
+ 
+   private val OutresVecs = funcUnits.map { fu =>
+@@ -369,6 +373,7 @@ class ExeUnitImp(implicit p: Parameters, val exuParams: ExeUnitParams) extends X
+       outBits(0).ctrl.v0Wen.foreach(x =>  out.bits.v0Wen  := Mux1H(outOH, outBits.map(_.ctrl.v0Wen .get)))
+       outBits(0).ctrl.vlWen.foreach(x =>  out.bits.vlWen  := Mux1H(outOH, outBits.map(_.ctrl.vlWen .get)))
+       out.bits.pdest := Mux1H(outOH, outBits.map(_.ctrl.pdest))
++      out.bits.pdestVl := Mux1H(outOH, outBits.map(_.ctrl.pdestVl.getOrElse(0.U)))
+     }
+   }
+   }
+@@ -376,6 +381,7 @@ class ExeUnitImp(implicit p: Parameters, val exuParams: ExeUnitParams) extends X
+   io.out.bits.data := VecInit(outDataVec.zip(outDataValidOH).map{ case(data, validOH) => Mux1H(validOH, data)})
+   io.out.bits.robIdx := Mux1H(fuOutValidOH, fuOutBitsVec.map(_.ctrl.robIdx))
+   io.out.bits.pdest := Mux1H(fuOutValidOH, fuOutBitsVec.map(_.ctrl.pdest))
++  io.out.bits.pdestVl.foreach(_ := Mux1H(fuOutValidOH, funcUnits.map(_.io.out.bits.ctrl.pdestVl.getOrElse(0.U))))
+   val F2IIntWen = io.F2IDataIn.getOrElse(0.U.asTypeOf(ValidIO(UInt(XLEN.W)))).valid
+   io.out.bits.intWen.foreach(x => x := Mux1H(fuOutValidOH, fuIntWenVec) || F2IIntWen)
+   io.out.bits.fpWen.foreach(x => x := Mux1H(fuOutValidOH, fuFpWenVec))
+diff --git a/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala b/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
+index 3a8301eb45f..748d93da1fc 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
+@@ -23,10 +23,15 @@ case class ExeUnitParams(
+   copyWakeupOut: Boolean = false,
+   copyDistance: Int = 1,
+   fakeUnit      : Boolean = false,
++  vlRD          : VlRD = null,
++  vlWB          : VlWB = null,
+ )(
+   implicit
+   val schdType: SchedulerType,
+ ) {
++  require(rfrPortConfigs.forall(!_.exists(_.isInstanceOf[VlRD])), "VlRD should not appear in rfrPortConfigs")
++  require(!wbPortConfigs.exists(_.isInstanceOf[VlWB]), "VlWB should not appear in wbPortConfigs")
++
+   // calculated configs
+   var iqWakeUpSourcePairs: Seq[WakeUpConfig] = Seq()
+   var iqWakeUpSinkPairs: Seq[WakeUpConfig] = Seq()
+@@ -50,7 +55,7 @@ case class ExeUnitParams(
+   val readFpRf: Boolean = numFpSrc > 0
+   val readVecRf: Boolean = numVecSrc > 0
+   val readVfRf: Boolean = numVfSrc > 0
+-  val readVlRf: Boolean = numVlSrc > 0
++  val readVlRf: Boolean = fuConfigs.exists(_.readVl)
+   val writeIntRf: Boolean = fuConfigs.map(_.writeIntRf).reduce(_ || _)
+   val writeFpRf: Boolean = fuConfigs.map(_.writeFpRf).reduce(_ || _)
+   val writeVecRf: Boolean = fuConfigs.map(_.writeVecRf).reduce(_ || _)
+@@ -85,7 +90,6 @@ case class ExeUnitParams(
+   val needSrcVxrm: Boolean = fuConfigs.map(_.needSrcVxrm).reduce(_ || _)
+   val needFPUCtrl: Boolean = fuConfigs.map(_.needFPUCtrl).reduce(_ || _)
+   val needVPUCtrl: Boolean = fuConfigs.map(_.needVecCtrl).reduce(_ || _)
+-  val writeVConfig: Boolean = fuConfigs.map(_.writeVlRf).reduce(_ || _)
+   val writeVType: Boolean = fuConfigs.map(_.writeVType).reduce(_ || _)
+   val needCriticalErrors: Boolean = fuConfigs.map(_.needCriticalErrors).reduce(_ || _)
+   val isHighestWBPriority: Boolean = wbPortConfigs.forall(_.priority == 0)
+@@ -410,10 +414,8 @@ case class ExeUnitParams(
+     }
+   }
+ 
+-  def getVlWBPort = {
+-    wbPortConfigs.collectFirst {
+-      case x: VlWB => x
+-    }
++  def getVlWBPort: Option[VlWB] = {
++    Option(vlWB)
+   }
+ 
+   /**
+@@ -444,12 +446,11 @@ case class ExeUnitParams(
+     *
+     * @example
+     * {{{
+-    *   fuCfg.srcData = Seq(VecData(), VecData(), VecData(), V0Data(), VlData())
++    *   fuCfg.srcData = Seq(VecData(), VecData(), VecData(), V0Data())
+     *   getRfReadSrcIdx(VecData()) = Seq(0, 1, 2)
+     *   getRfReadSrcIdx(V0Data()) = Seq(3)
+-    *   getRfReadSrcIdx(VlData()) = Seq(4)
+     * }}}
+-    * @return Map[DataConfig -> Seq[indices]]
++    * @return Map[DataConfig -> Seq[indices] ]
+     */
+   def getRfReadSrcIdx: Map[DataConfig, Seq[Int]] = {
+     val dataCfgs = DataConfig.RegSrcDataSet
+diff --git a/src/main/scala/xiangshan/backend/fu/CSR.scala b/src/main/scala/xiangshan/backend/fu/CSR.scala
+index beaf7a6dedd..f9081fa49d0 100644
+--- a/src/main/scala/xiangshan/backend/fu/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/CSR.scala
+@@ -35,7 +35,7 @@ import xiangshan.backend.rob.RobPtr
+ import utils.MathUtils.{BigIntGenMask, BigIntNot}
+ import xiangshan.backend.trace._
+ 
+-import xiangshan.backend.fu.vector.Bundles.Vstart
++import xiangshan.backend.fu.vector.Bundles.{Vl, Vstart}
+ 
+ class FpuCsrIO extends Bundle {
+   val fflags = Output(Valid(UInt(5.W)))
+@@ -48,7 +48,7 @@ class VpuCsrIO(implicit p: Parameters) extends XSBundle {
+   val vstart = Input(Vstart())
+   val vxrm = Input(UInt(2.W))
+ 
+-  val vl = Output(UInt(XLEN.W))
++  val vl = Output(Vl())
+ 
+   val set_vstart = Output(Valid(UInt(XLEN.W)))
+   val set_vtype = Output(Valid(UInt(XLEN.W)))
+diff --git a/src/main/scala/xiangshan/backend/fu/FuConfig.scala b/src/main/scala/xiangshan/backend/fu/FuConfig.scala
+index ff2629f6ea5..c46786936ed 100644
+--- a/src/main/scala/xiangshan/backend/fu/FuConfig.scala
++++ b/src/main/scala/xiangshan/backend/fu/FuConfig.scala
+@@ -38,8 +38,9 @@ import xiangshan.mem.Std
+   * @param needSrcFrm if the $fu need float rounding mode signal
+   * @param needSrcVxrm if the $fu need vector fixed-point rounding mode signal
+   * @param immType the immediate type of this $fu
+-  * @param vconfigWakeUp
++  * @param vlWakeUp
+   * @param maskWakeUp
++  * @param readVl if the $fu need read vl
+   *
+   * @define fu function unit
+   */
+@@ -61,7 +62,7 @@ case class FuConfig (
+   destDataBits  : Int = 64,
+   srcDataBits   : Option[Int] = None,
+   srcNeedCopy   : Boolean = false,
+-  latency       : HasFuLatency = CertainLatency(0),// two field (base latency, extra latency(option))
++  latency       : HasFuLatency = CertainLatency(0), // two field (base latency, extra latency(option))
+   hasInputBuffer: (Boolean, Int, Boolean) = (false, 0, false),
+   exceptionOut  : Seq[Int] = Seq(),
+   hasLoadError  : Boolean = false,
+@@ -72,26 +73,20 @@ case class FuConfig (
+   needSrcVxrm   : Boolean = false,
+   writeVType    : Boolean = false,
+   immType       : Set[UInt] = Set(),
+-  // vector
+-  vconfigWakeUp : Boolean = false,
++  vlWakeUp      : Boolean = false,
+   maskWakeUp    : Boolean = false,
++  readVl        : Boolean = false,
+ ) {
++  require(srcData.forall(!_.contains(VlData())), s"VlData() should not appear in srcData args")
++
+   def needIntWen: Boolean = writeIntRf || writeFakeIntRf
+   def needFpWen:  Boolean = writeFpRf
+   def needVecWen: Boolean = writeVecRf
+   def needV0Wen:  Boolean = writeV0Rf
+   def needVlWen:  Boolean = writeVlRf
+-  var vconfigIdx = -1
+-  var maskSrcIdx = -1
+-  if (vconfigWakeUp) {
+-    vconfigIdx = getSpecialSrcIdx(VlData(), "when vconfigWakeUp is true, srcData must always contains VlData()")
+-  }
+-  if (maskWakeUp) {
+-    maskSrcIdx = getSpecialSrcIdx(V0Data(), "when maskWakeUp is true, srcData must always contains V0Data()")
+-  }
++  lazy val maskSrcIdx: Int = this.getV0SrcIdx
+ 
+   require(!piped || piped && latency.latencyVal.isDefined, "The latency value must be set when piped is enable")
+-  require(!vconfigWakeUp || vconfigWakeUp && vconfigIdx >= 0, "The index of vl src must be set when vlWakeUp is enable")
+   require(!maskWakeUp || maskWakeUp && maskSrcIdx >= 0, "The index of mask src must be set when vlWakeUp is enable")
+ 
+   def numIntSrc : Int = srcData.map(_.count(x => IntRegSrcDataSet.contains(x))).fold(0)(_ max _)
+@@ -99,7 +94,7 @@ case class FuConfig (
+   def numVecSrc : Int = srcData.map(_.count(x => VecRegSrcDataSet.contains(x))).fold(0)(_ max _)
+   def numVfSrc  : Int = srcData.map(_.count(x => VecRegSrcDataSet.contains(x))).fold(0)(_ max _)
+   def numV0Src  : Int = srcData.map(_.count(x => V0RegSrcDataSet.contains(x))).fold(0)(_ max _)
+-  def numVlSrc  : Int = srcData.map(_.count(x => VlRegSrcDataSet.contains(x))).fold(0)(_ max _)
++  def numVlSrc  : Int = if (this.readVl) 1 else 0
+   def numRegSrc : Int = srcData.map(_.count(x => RegSrcDataSet.contains(x))).fold(0)(_ max _)
+   def numSrc    : Int = (if (isSta) 2 else srcData.map(_.length).fold(0)(_ max _))
+ 
+@@ -205,24 +200,20 @@ case class FuConfig (
+   def ckAlwaysEn: Boolean = isCsr || isFence
+ 
+   /**
+-    * Get index of special src data, like [[VlData]], [[V0Data]]
+-   *
+-    * @param data [[DataConfig]]
+-    * @param tips tips if get failed
+-    * @return the index of special src data
+-    */
+-  protected def getSpecialSrcIdx(data: DataConfig, tips: String): Int = {
+-    val srcIdxVec = srcData.map(x => x.indexOf(data))
+-    val idx0 = srcIdxVec.head
+-    for (idx <- srcIdxVec) {
+-      require(idx >= 0 && idx == idx0, tips + ", and at the same index.")
++   * Get index of [[V0Data]]
++   * @return [[Int]] the index of [[V0Data]]
++   */
++  protected def getV0SrcIdx: Int = {
++    val v0SrcIdxVec = srcData.map(x => x.indexOf(V0Data()))
++    val idx0 = v0SrcIdxVec.head
++    for (idx <- v0SrcIdxVec) {
++      require(idx >= 0 && idx == idx0, "V0Data should at the same index.")
+     }
+     idx0
+   }
+ 
+   override def toString: String = {
+     var str = s"${this.name}: "
+-    if (vconfigWakeUp) str += s"vconfigIdx($vconfigIdx), "
+     if (maskWakeUp) str += s"maskSrcIdx($maskSrcIdx), "
+     str += s"latency($latency)"
+     str += s"src($srcData)"
+@@ -396,7 +387,7 @@ object FuConfig {
+     fuType = FuType.vsetfwf,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VSetRvfWvf(cfg)(p).suggestName("VSetRvfWvf")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  // vs1, vs2, vd_old, v0, vtype&vl
++      Seq(VecData(), VecData(), VecData(), V0Data()),  // vs1, vs2, vd_old, v0
+     ),
+     piped = true,
+     writeVlRf = true,
+@@ -404,6 +395,7 @@ object FuConfig {
+     writeIntRf = true,
+     latency = CertainLatency(0),
+     immType = Set(SelImm.IMM_VSETVLI, SelImm.IMM_VSETIVLI),
++    readVl = true,
+   )
+ 
+   val VSetRiWvfCfg: FuConfig = FuConfig(
+@@ -551,7 +543,7 @@ object FuConfig {
+     fuType = FuType.vialuF,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VIAluFix(cfg)(p).suggestName("VialuFix")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  // vs1, vs2, vd_old, v0, vtype&vl
++      Seq(VecData(), VecData(), VecData(), V0Data()),  // vs1, vs2, vd_old, v0
+     ),
+     piped = true,
+     writeVecRf = true,
+@@ -559,10 +551,11 @@ object FuConfig {
+     writeVxsat = true,
+     needSrcVxrm = true,
+     latency = CertainLatency(1),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
+     exceptionOut = Seq(illegalInstr),
++    readVl = true,
+   )
+ 
+   val VimacCfg = FuConfig (
+@@ -570,7 +563,7 @@ object FuConfig {
+     fuType = FuType.vimac,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VIMacU(cfg)(p).suggestName("Vimac")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
++      Seq(VecData(), VecData(), VecData(), V0Data()), // vs1, vs2, vd_old, v0
+     ),
+     piped = true,
+     writeVecRf = true,
+@@ -578,10 +571,11 @@ object FuConfig {
+     writeVxsat = true,
+     needSrcVxrm = true,
+     latency = CertainLatency(2),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
+     exceptionOut = Seq(illegalInstr),
++    readVl = true,
+   )
+ 
+   val VidivCfg = FuConfig (
+@@ -589,16 +583,17 @@ object FuConfig {
+     fuType = FuType.vidiv,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VIDiv(cfg)(p).suggestName("Vidiv")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
++      Seq(VecData(), VecData(), VecData(), V0Data()), // vs1, vs2, vd_old, v0
+     ),
+     piped = false,
+     writeVecRf = true,
+     writeV0Rf = true,
+     latency = UncertainLatency(),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
+     exceptionOut = Seq(illegalInstr),
++    readVl = true,
+   )
+ 
+   val VppuCfg = FuConfig (
+@@ -606,16 +601,17 @@ object FuConfig {
+     fuType = FuType.vppu,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VPPU(cfg)(p).suggestName("Vppu")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  // vs1, vs2, vd_old, v0, vtype&vl
++      Seq(VecData(), VecData(), VecData(), V0Data()),  // vs1, vs2, vd_old, v0
+     ),
+     piped = true,
+     writeVecRf = true,
+     writeV0Rf = true,
+     latency = CertainLatency(2),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
+     exceptionOut = Seq(illegalInstr),
++    readVl = true,
+   )
+ 
+   val VipuCfg: FuConfig = FuConfig (
+@@ -623,17 +619,18 @@ object FuConfig {
+     fuType = FuType.vipu,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VIPU(cfg)(p).suggestName("Vipu")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  // vs1, vs2, vd_old, v0
++      Seq(VecData(), VecData(), VecData(), V0Data()),  // vs1, vs2, vd_old, v0
+     ),
+     piped = true,
+     writeIntRf = true,
+     writeVecRf = true,
+     writeV0Rf = true,
+     latency = CertainLatency(2),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
+     exceptionOut = Seq(illegalInstr),
++    readVl = true,
+   )
+ 
+   val VmoveCfg = FuConfig (
+@@ -641,7 +638,7 @@ object FuConfig {
+     fuType = FuType.vmove,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VMove(cfg)(p).suggestName("Vmove")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype & vl
++      Seq(VecData(), VecData(), VecData(), V0Data()), // vs1, vs2, vd_old, v0
+     ),
+     piped = true,
+     writeIntRf = true,
+@@ -649,9 +646,10 @@ object FuConfig {
+     writeVecRf = true,
+     writeV0Rf = true,
+     latency = CertainLatency(0, extraValue = 3),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
++    readVl = true,
+   )
+ 
+   val VfaluCfg = FuConfig (
+@@ -659,7 +657,7 @@ object FuConfig {
+     fuType = FuType.vfalu,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VFAlu(cfg)(p).suggestName("Vfalu")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
++      Seq(VecData(), VecData(), VecData(), V0Data()), // vs1, vs2, vd_old, v0
+     ),
+     piped = true,
+     writeVecRf = true,
+@@ -667,11 +665,12 @@ object FuConfig {
+     writeFpRf = true,
+     writeFflags = true,
+     latency = CertainLatency(1),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
+     exceptionOut = Seq(illegalInstr),
+     needSrcFrm = true,
++    readVl = true,
+   )
+ 
+   val VfmaCfg = FuConfig (
+@@ -679,18 +678,19 @@ object FuConfig {
+     fuType = FuType.vfma,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VFMA(cfg)(p).suggestName("Vfma")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
++      Seq(VecData(), VecData(), VecData(), V0Data()), // vs1, vs2, vd_old, v0
+     ),
+     piped = true,
+     writeVecRf = true,
+     writeV0Rf = true,
+     writeFflags = true,
+     latency = CertainLatency(3),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
+     exceptionOut = Seq(illegalInstr),
+     needSrcFrm = true,
++    readVl = true,
+   )
+ 
+   val VfdivCfg = FuConfig(
+@@ -698,18 +698,19 @@ object FuConfig {
+     fuType = FuType.vfdiv,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VFDivSqrt(cfg)(p).suggestName("Vfdiv")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
++      Seq(VecData(), VecData(), VecData(), V0Data()), // vs1, vs2, vd_old, v0
+     ),
+     piped = false,
+     writeVecRf = true,
+     writeV0Rf = true,
+     writeFflags = true,
+     latency = UncertainLatency(),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
+     exceptionOut = Seq(illegalInstr),
+     needSrcFrm = true,
++    readVl = true,
+   )
+ 
+   val VfcvtCfg = FuConfig(
+@@ -717,18 +718,19 @@ object FuConfig {
+     fuType = FuType.vfcvt,
+     fuGen = (p: Parameters, cfg: FuConfig) => Module(new VCVT(cfg)(p).suggestName("Vfcvt")),
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), // vs1, vs2, vd_old, v0, vtype&vl
++      Seq(VecData(), VecData(), VecData(), V0Data()), // vs1, vs2, vd_old, v0
+     ),
+     piped = true,
+     writeVecRf = true,
+     writeV0Rf = true,
+     writeFflags = true,
+     latency = CertainLatency(2),
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
+     exceptionOut = Seq(illegalInstr),
+     needSrcFrm = true,
++    readVl = true,
+   )
+ 
+   val FaluCfg = FuConfig(
+@@ -797,7 +799,7 @@ object FuConfig {
+     fuType = FuType.vldu,
+     fuGen = null,
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  //vs1, vs2, vd_old, v0, vconfig
++      Seq(VecData(), VecData(), VecData(), V0Data()),  //vs1, vs2, vd_old, v0
+     ),
+     piped = false, // Todo: check it
+     writeVecRf = true,
+@@ -809,9 +811,10 @@ object FuConfig {
+     replayInst = true,
+     trigger = true,
+     hasLoadError = true,
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
++    readVl = true,
+   )
+ 
+   val VstuCfg: FuConfig = FuConfig (
+@@ -819,7 +822,7 @@ object FuConfig {
+     fuType = FuType.vstu,
+     fuGen = null,
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()),  //vs1, vs2, vd_old, v0, vconfig
++      Seq(VecData(), VecData(), VecData(), V0Data()),  //vs1, vs2, vd_old, v0
+     ),
+     piped = false,
+     latency = UncertainLatency(),
+@@ -828,9 +831,10 @@ object FuConfig {
+     replayInst = true,
+     trigger = true,
+     hasLoadError = true,
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
++    readVl = true,
+   )
+ 
+   val VseglduCfg: FuConfig = FuConfig (
+@@ -838,7 +842,7 @@ object FuConfig {
+     fuType = FuType.vsegldu,
+     fuGen = null,
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), //vs1, vs2, vd_old, v0, vconfig
++      Seq(VecData(), VecData(), VecData(), V0Data()), //vs1, vs2, vd_old, v0
+     ),
+     piped = false, // Todo: check it
+     writeVecRf = true,
+@@ -850,9 +854,10 @@ object FuConfig {
+     replayInst = true,
+     trigger = true,
+     hasLoadError = true,
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
++    readVl = true,
+   )
+ 
+   val VsegstuCfg: FuConfig = FuConfig(
+@@ -860,7 +865,7 @@ object FuConfig {
+     fuType = FuType.vsegstu,
+     fuGen = null,
+     srcData = Seq(
+-      Seq(VecData(), VecData(), VecData(), V0Data(), VlData()), //vs1, vs2, vd_old, v0, vconfig
++      Seq(VecData(), VecData(), VecData(), V0Data()), //vs1, vs2, vd_old, v0
+     ),
+     piped = false,
+     latency = UncertainLatency(),
+@@ -869,9 +874,10 @@ object FuConfig {
+     replayInst = true,
+     trigger = true,
+     hasLoadError = true,
+-    vconfigWakeUp = true,
++    vlWakeUp = true,
+     maskWakeUp = true,
+     destDataBits = 128,
++    readVl = true,
+   )
+ 
+   def allConfigs = Seq(
+diff --git a/src/main/scala/xiangshan/backend/fu/FuncUnit.scala b/src/main/scala/xiangshan/backend/fu/FuncUnit.scala
+index 87f1032efa6..a2f8984bafe 100644
+--- a/src/main/scala/xiangshan/backend/fu/FuncUnit.scala
++++ b/src/main/scala/xiangshan/backend/fu/FuncUnit.scala
+@@ -10,11 +10,10 @@ import xiangshan.backend.Bundles.VPUCtrlSignals
+ import xiangshan.backend.rob.RobPtr
+ import xiangshan.frontend.ftq.FtqPtr
+ import xiangshan.backend.datapath.DataConfig._
+-import xiangshan.backend.fu.vector.Bundles.Vxsat
++import xiangshan.backend.fu.vector.Bundles.{VType, Vl, Vxsat}
+ import xiangshan.ExceptionNO.illegalInstr
+-import xiangshan.backend.fu.vector.Bundles.VType
+ import xiangshan.backend.fu.wrapper.{CSRInput, CSRToDecode}
+-import xiangshan.frontend.bpu.{BranchInfo, BranchAttribute}
++import xiangshan.frontend.bpu.{BranchAttribute, BranchInfo}
+ 
+ trait HasFuLatency {
+   val latencyVal: Option[Int]
+@@ -49,6 +48,7 @@ class FuncUnitCtrlInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle
+   val fuOpType    = FuOpType()
+   val robIdx      = new RobPtr
+   val pdest       = UInt(PhyRegIdxWidth.W)
++  val pdestVl     = Option.when(cfg.writeVlRf)(UInt(VlPhyRegIdxWidth.W))
+   val rfWen       = OptionWrapper(cfg.needIntWen, Bool())
+   val fpWen       = OptionWrapper(cfg.needFpWen,  Bool())
+   val vecWen      = OptionWrapper(cfg.needVecWen, Bool())
+@@ -71,6 +71,7 @@ class FuncUnitCtrlInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle
+ class FuncUnitCtrlOutput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+   val robIdx        = new RobPtr
+   val pdest         = UInt(PhyRegIdxWidth.W) // Todo: use maximum of pregIdxWidth of different pregs
++  val pdestVl       = Option.when(cfg.writeVlRf)(UInt(VlPhyRegIdxWidth.W))
+   val rfWen         = OptionWrapper(cfg.needIntWen, Bool())
+   val fpWen         = OptionWrapper(cfg.needFpWen,  Bool())
+   val vecWen        = OptionWrapper(cfg.needVecWen, Bool())
+@@ -86,11 +87,11 @@ class FuncUnitCtrlOutput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle
+ 
+ class FuncUnitDataInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+   val src       = MixedVec(cfg.genSrcDataVec)
++  val vl        = Option.when(cfg.readVl)(Vl())
+   val imm       = UInt(cfg.destDataBits.W)
+   val pc        = OptionWrapper(cfg.needPc || cfg.aluNeedPc, UInt(VAddrData().dataWidth.W))
+   val nextPcOffset = OptionWrapper(cfg.needPc, UInt((FetchBlockInstOffsetWidth + 2).W))
+ 
+-  def getSrcVConfig : UInt = src(cfg.vconfigIdx)
+   def getSrcMask    : UInt = src(cfg.maskSrcIdx)
+ }
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 9bc598c519f..9d4348b02e7 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -598,7 +598,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+         m.robCommit.vsDirty := GatedValidRegNext(io.fromRob.commit.vsDirty)
+         m.robCommit.vxsat   := RegNextWithEnable(io.fromRob.commit.vxsat)
+         m.robCommit.vtype   := RegNextWithEnable(io.fromRob.commit.vtype)
+-        m.robCommit.vl      := RegNext          (io.fromRob.commit.vl)
++        m.robCommit.vl      := DelayN           (io.fromRob.commit.vl, 2) // not used yet
+         m.robCommit.vstart  := RegNextWithEnable(io.fromRob.commit.vstart)
+         m.writeFCSR         := writeFpLegal
+         m.writeVCSR         := writeVecLegal
+@@ -1593,7 +1593,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+     diffVecCSRState.vxsat := vcsr.vxsat.asUInt
+     diffVecCSRState.vxrm := vcsr.vxrm.asUInt
+     diffVecCSRState.vcsr := vcsr.rdata.asUInt
+-    diffVecCSRState.vl := RegNext(io.fromRob.commit.vl)
++    diffVecCSRState.vl := DelayN(io.fromRob.commit.vl, 2)
+     diffVecCSRState.vtype := vtype.rdata.asUInt
+     diffVecCSRState.vlenb := vlenb.rdata.asUInt
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/vector/VecNonPipedFuncUnit.scala b/src/main/scala/xiangshan/backend/fu/vector/VecNonPipedFuncUnit.scala
+index be2e00f002d..62b2d76d008 100644
+--- a/src/main/scala/xiangshan/backend/fu/vector/VecNonPipedFuncUnit.scala
++++ b/src/main/scala/xiangshan/backend/fu/vector/VecNonPipedFuncUnit.scala
+@@ -29,8 +29,7 @@ class VecNonPipedFuncUnit(cfg: FuConfig)(implicit p: Parameters) extends FuncUni
+   // vadc.vv, vsbc.vv need this
+   protected val outNeedClearMask: Bool = VialuFixType.needClearMask(outCtrl.fuOpType)
+ 
+-  protected val outVConfig  = if(!cfg.vconfigWakeUp) outCtrl.vpu.get.vconfig else outData.getSrcVConfig.asTypeOf(new VConfig)
+-  protected val outVl       = outVConfig.vl
++  protected val outVl       = outData.vl.get
+   protected val outVstart   = outVecCtrl.vstart
+   protected val outOldVd    = outData.src(2)
+   // There is no difference between control-dependency or data-dependency for function unit,
+diff --git a/src/main/scala/xiangshan/backend/fu/vector/VecPipedFuncUnit.scala b/src/main/scala/xiangshan/backend/fu/vector/VecPipedFuncUnit.scala
+index 38f573b3d0e..459b32a4372 100644
+--- a/src/main/scala/xiangshan/backend/fu/vector/VecPipedFuncUnit.scala
++++ b/src/main/scala/xiangshan/backend/fu/vector/VecPipedFuncUnit.scala
+@@ -51,8 +51,7 @@ trait VecFuncUnitAlias { this: FuncUnit =>
+       vm -> allMaskTrue
+     ))
+   }
+-  protected val srcVConfig: VConfig = if(!cfg.vconfigWakeUp) inCtrl.vpu.get.vconfig else inData.getSrcVConfig.asTypeOf(new VConfig)
+-  protected val vl = srcVConfig.vl
++  protected val vl = inData.vl.get
+ }
+ 
+ class VecPipedFuncUnit(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+@@ -73,8 +72,7 @@ class VecPipedFuncUnit(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(c
+ 
+   // vadc.vv, vsbc.vv need this
+   protected val outNeedClearMask: Bool = if(cfg == VialuCfg) VialuFixType.needClearMask(outCtrl.fuOpType) else false.B
+-  protected val outVConfig  = if(!cfg.vconfigWakeUp) outCtrl.vpu.get.vconfig else outData.getSrcVConfig.asTypeOf(new VConfig)
+-  protected val outVl       = outVConfig.vl
++  protected val outVl       = outData.vl.get
+   protected val outVstart   = outVecCtrl.vstart
+   protected val outOldVd    = outData.src(2)
+   protected val outVlmul    = outCtrl.vpu.get.vlmul
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala b/src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala
+index 6b7d4568e1a..3d7c2c9cdf0 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala
+@@ -339,8 +339,7 @@ class VFAlu(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg)
+     outCtrl_s0.fuOpType === VfaluType.vfredmin ||
+     outCtrl_s0.fuOpType === VfaluType.vfredosum ||
+     outCtrl_s0.fuOpType === VfaluType.vfwredosum
+-  val outVConfig_s0  = if(!cfg.vconfigWakeUp) outVecCtrl_s0.vconfig else dataVec.head.getSrcVConfig.asTypeOf(new VConfig)
+-  val outVl_s0       = outVConfig_s0.vl
++  val outVl_s0       = dataVec.head.vl.get
+   val outVlFix_s0 = Mux(
+     outVecCtrl_s0.fpu.isFpToVecInst || (outCtrl_s0.fuOpType === VfaluType.vfmv_f_s),
+     1.U,
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/VIMacU.scala b/src/main/scala/xiangshan/backend/fu/wrapper/VIMacU.scala
+index 27eb8012e59..e12afb65a19 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/VIMacU.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/VIMacU.scala
+@@ -103,7 +103,7 @@ class VIMacU(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg
+       mod.io.info.ma     := vma
+       mod.io.info.ta     := vta
+       mod.io.info.vlmul  := vlmul
+-      mod.io.info.vl     := srcVConfig.vl
++      mod.io.info.vl     := vl
+       mod.io.info.vstart := vstart
+       mod.io.info.uopIdx := vuopIdx
+       mod.io.info.vxrm   := vxrm
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/VIPU.scala b/src/main/scala/xiangshan/backend/fu/wrapper/VIPU.scala
+index 01346b645d9..2d6490faa50 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/VIPU.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/VIPU.scala
+@@ -131,7 +131,7 @@ class VIPU(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg)
+       subIO.in.bits.info.ma     := vma
+       subIO.in.bits.info.ta     := vta
+       subIO.in.bits.info.vlmul  := vlmul
+-      subIO.in.bits.info.vl     := srcVConfig.vl
++      subIO.in.bits.info.vl     := vl
+       subIO.in.bits.info.vstart := vstart
+       subIO.in.bits.info.uopIdx := vuopIdx
+       subIO.in.bits.info.vxrm   := vxrm
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/VPPU.scala b/src/main/scala/xiangshan/backend/fu/wrapper/VPPU.scala
+index c3d7df3da0e..9dedf3da3ca 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/VPPU.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/VPPU.scala
+@@ -67,7 +67,7 @@ class VPPU(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg)
+       subIO.in.bits.info.ma     := vma
+       subIO.in.bits.info.ta     := vta
+       subIO.in.bits.info.vlmul  := Mux(isVmvnr, emul, vlmul)
+-      subIO.in.bits.info.vl     := srcVConfig.vl
++      subIO.in.bits.info.vl     := vl
+       subIO.in.bits.info.vstart := vstart
+       subIO.in.bits.info.uopIdx := vuopIdx
+       subIO.in.bits.info.vxrm   := vxrm
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/VSet.scala b/src/main/scala/xiangshan/backend/fu/wrapper/VSet.scala
+index 7be2ed4cdf3..4dcf81317e0 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/VSet.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/VSet.scala
+@@ -76,6 +76,7 @@ class VSetRiWvf(cfg: FuConfig)(implicit p: Parameters) extends VSetBase(cfg) {
+   val isVsetvl = VSETOpType.isVsetvl(in.ctrl.fuOpType)
+ 
+   out.res.data := vl
++  out.ctrl.pdestVl.get := in.ctrl.pdestVl.get
+ 
+   if (cfg.writeVlRf) io.vtype.get.bits := vsetModule.io.out.vconfig.vtype
+   if (cfg.writeVlRf) io.vtype.get.valid := io.out.valid && isVsetvl
+@@ -95,7 +96,7 @@ class VSetRiWvf(cfg: FuConfig)(implicit p: Parameters) extends VSetBase(cfg) {
+   * @param p [[Parameters]]
+   */
+ class VSetRvfWvf(cfg: FuConfig)(implicit p: Parameters) extends VSetBase(cfg) {
+-  val oldVL = in.data.src(4).asTypeOf(VConfig()).vl
++  val oldVL = in.data.vl.get
+   vsetModule.io.in.avl := oldVL
+   vsetModule.io.in.vtype := vtype
+ 
+@@ -106,6 +107,7 @@ class VSetRvfWvf(cfg: FuConfig)(implicit p: Parameters) extends VSetBase(cfg) {
+ 
+   // csrr vl instruction will use this exu to read vl
+   out.res.data := Mux(isReadVl, oldVL, vl)
++  out.ctrl.pdestVl.get := in.ctrl.pdestVl.get
+ 
+   if (cfg.writeVlRf) io.vtype.get.bits := vsetModule.io.out.vconfig.vtype
+   if (cfg.writeVlRf) io.vtype.get.valid := isVsetvl && io.out.valid
+diff --git a/src/main/scala/xiangshan/backend/issue/EnqEntry.scala b/src/main/scala/xiangshan/backend/issue/EnqEntry.scala
+index e06e182e2fc..8bae9906012 100644
+--- a/src/main/scala/xiangshan/backend/issue/EnqEntry.scala
++++ b/src/main/scala/xiangshan/backend/issue/EnqEntry.scala
+@@ -132,6 +132,10 @@ class EnqEntry(isComp: Boolean)(implicit p: Parameters, params: IssueBlockParams
+       srcStatus.useRegCache.foreach(_       := enqDelayUseRegCache.get(srcIdx))
+       srcStatus.regCacheIdx.foreach(_       := enqDelayRegCacheIdx.get(srcIdx))
+     }
++    currentStatus.srcStatusVl.foreach { case srcStatusVl =>
++      srcStatusVl.srcState := entryReg.status.srcStatusVl.get.srcState | enqDelayOut1.srcVlWakeUpByWB.get
++      srcStatusVl.dataSource.value := DataSource.reg // change it when support fast wakeup.
++    }
+   }
+ 
+   if (params.hasIQWakeUp) {
+diff --git a/src/main/scala/xiangshan/backend/issue/EntryBundles.scala b/src/main/scala/xiangshan/backend/issue/EntryBundles.scala
+index 9d4d839b786..26692094e57 100644
+--- a/src/main/scala/xiangshan/backend/issue/EntryBundles.scala
++++ b/src/main/scala/xiangshan/backend/issue/EntryBundles.scala
+@@ -7,6 +7,7 @@ import utils.MathUtils
+ import utility.HasCircularQueuePtrHelper
+ import xiangshan._
+ import xiangshan.backend.Bundles._
++import xiangshan.backend.datapath.DataConfig.VlData
+ import xiangshan.backend.datapath.DataSource
+ import xiangshan.backend.fu.FuType
+ import xiangshan.backend.fu.vector.Bundles.NumLsElem
+@@ -21,6 +22,7 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+     val fuType                = IQFuType()
+     //src status
+     val srcStatus             = Vec(params.numRegSrc, new SrcStatus)
++    val srcStatusVl           = Option.when(params.readVlRf)(new VlSrcStatus)
+     //issue status
+     val blocked               = Bool()
+     val issued                = Bool()
+@@ -31,7 +33,8 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+     val vecMem                = Option.when(params.isVecMemIQ)(new StatusVecMemPart)
+ 
+     def srcReady: Bool        = {
+-      VecInit(srcStatus.map(_.srcState).map(SrcState.isReady)).asUInt.andR
++      VecInit(srcStatus.map(_.srcState).map(SrcState.isReady)).asUInt.andR &&
++        srcStatusVl.map(_.srcState).map(SrcState.isReady).getOrElse(true.B)
+     }
+ 
+     def canIssue: Bool        = {
+@@ -57,6 +60,12 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+     val regCacheIdx           = Option.when(params.needReadRegCache)(UInt(RegCacheIdxWidth.W))
+   }
+ 
++  class VlSrcStatus(implicit p: Parameters, params: IssueBlockParams) extends XSBundle {
++    val psrc = UInt(backendParams.getPregParams(VlData()).addrWidth.W)
++    val srcState = SrcState()
++    val dataSource = DataSource()
++  }
++
+   class StatusVecMemPart(implicit p:Parameters, params: IssueBlockParams) extends Bundle {
+     val sqIdx                 = new SqPtr
+     val lqIdx                 = new LqPtr
+@@ -176,10 +185,9 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+       commonIn.issueResp.valid && RespType.succeed(commonIn.issueResp.bits.resp) && !common.srcLoadCancelVec.asUInt.orR
+     common.srcWakeupByWB      := commonIn.wakeUpFromWB.map{ bundle =>
+                                     val psrcSrcTypeVec = status.srcStatus.map(_.psrc) zip status.srcStatus.map(_.srcType)
+-                                    if (params.numRegSrc == 5) {
++                                    if (params.numRegSrc == 4) {
+                                       bundle.bits.wakeUp(psrcSrcTypeVec.take(3), bundle.valid) :+
+-                                      bundle.bits.wakeUpV0(psrcSrcTypeVec(3), bundle.valid) :+
+-                                      bundle.bits.wakeUpVl(psrcSrcTypeVec(4), bundle.valid)
++                                      bundle.bits.wakeUpV0(psrcSrcTypeVec(3), bundle.valid)
+                                     }
+                                     else
+                                       bundle.bits.wakeUp(psrcSrcTypeVec, bundle.valid)
+@@ -200,20 +208,17 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+     } else {
+       common.validRegNext     := Mux(commonIn.enq.valid, true.B, Mux(common.clear, false.B, validReg))
+     }
+-    if (params.numRegSrc == 5) {
+-      // only when numRegSrc == 5 need vl
+-      val wakeUpFromVl = VecInit(commonIn.wakeUpFromWB.map{ bundle =>
+-        val psrcSrcTypeVec = status.srcStatus.map(_.psrc) zip status.srcStatus.map(_.srcType)
+-        bundle.bits.wakeUpVl(psrcSrcTypeVec(4), bundle.valid)
++
++    if (params.readVlRf) {
++      val wakeUpFromVl = VecInit(commonIn.wakeUpFromWB.filter(_.bits.dataConfig.isInstanceOf[VlData]).map{ bundle =>
++        bundle.bits.wakeUpVl((status.srcStatusVl.get.psrc, SrcType.vp), bundle.valid)
+       })
+-      var numVecWb = params.backendParam.getVfWBExeGroup.size
+-      var numV0Wb = params.backendParam.getV0WBExeGroup.size
+       var intSchdVlWbPort = p(XSCoreParamsKey).intSchdVlWbPort
+       var vfSchdVlWbPort = p(XSCoreParamsKey).vfSchdVlWbPort
+       // int wb is first bit of vlwb, which is after vfwb and v0wb
+-      common.vlWakeupByIntWb  := wakeUpFromVl(numVecWb + numV0Wb + intSchdVlWbPort)
++      common.vlWakeupByIntWb  := wakeUpFromVl(intSchdVlWbPort)
+       // vf wb is second bit of wb
+-      common.vlWakeupByVfWb   := wakeUpFromVl(numVecWb + numV0Wb + vfSchdVlWbPort)
++      common.vlWakeupByVfWb   := wakeUpFromVl(vfSchdVlWbPort)
+     } else {
+       common.vlWakeupByIntWb  := false.B
+       common.vlWakeupByVfWb   := false.B
+@@ -233,10 +238,10 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+   def CommonIQWakeupConnect(common: CommonWireBundle, hasIQWakeupGet: CommonIQWakeupBundle, validReg: Bool, status: Status, commonIn: CommonInBundle, isEnq: Boolean)(implicit p: Parameters, params: IssueBlockParams) = {
+     val wakeupVec: Seq[Seq[Bool]] = commonIn.wakeUpFromIQ.map{(bundle: ValidIO[IssueQueueIQWakeUpBundle]) =>
+       val psrcSrcTypeVec = status.srcStatus.map(_.psrc) zip status.srcStatus.map(_.srcType)
+-      if (params.numRegSrc == 5) {
++      if (params.readVecRf) {
+         bundle.bits.wakeUpFromIQ(psrcSrcTypeVec.take(3)) :+
+         bundle.bits.wakeUpV0FromIQ(psrcSrcTypeVec(3)) :+
+-        bundle.bits.wakeUpVlFromIQ(psrcSrcTypeVec(4))
++        bundle.bits.wakeUpVlFromIQ((status.srcStatusVl.get.psrc, SrcType.vp))
+       }
+       else
+         bundle.bits.wakeUpFromIQ(psrcSrcTypeVec)
+@@ -246,10 +251,10 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+       val hasUncertain = params.backendParam.allExuParams(bundle.bits.exuIdx).needUncertainWakeup
+       val psrcSrcTypeVec = status.srcStatus.map(_.psrc) zip status.srcStatus.map(_.srcType)
+       (VecInit(
+-        if (params.numRegSrc == 5) {
+-        bundle.bits.wakeUpFromIQ(psrcSrcTypeVec.take(3)) :+
++        if (params.readVecRf) {
++          bundle.bits.wakeUpFromIQ(psrcSrcTypeVec.take(3)) :+
+           bundle.bits.wakeUpV0FromIQ(psrcSrcTypeVec(3)) :+
+-          bundle.bits.wakeUpVlFromIQ(psrcSrcTypeVec(4))
++          bundle.bits.wakeUpVlFromIQ((status.srcStatusVl.get.psrc, SrcType.vp))
+         }
+         else {
+           bundle.bits.wakeUpFromIQ(psrcSrcTypeVec)
+@@ -380,6 +385,18 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+         srcStatusNext.regCacheIdx.get                 := Mux(wakeupRC, wakeupRCIdx, srcStatus.regCacheIdx.get)
+       }
+     }
++    entryUpdate.status.srcStatusVl.zip(status.srcStatusVl).foreach {
++      case (srcStatusVlNext, srcStatusVl) =>
++        val wakeupVlByWB = common.vlWakeupByVfWb || common.vlWakeupByIntWb
++        srcStatusVlNext.psrc     := srcStatusVl.psrc
++        srcStatusVlNext.srcState := srcStatusVl.srcState | wakeupVlByWB
++        srcStatusVlNext.dataSource.value := MuxCase(
++          srcStatusVl.dataSource.value,
++          // no IQ wakeup here, so make it unchange since enq
++          Seq(
++          ),
++        )
++    }
+     entryUpdate.status.blocked                        := false.B
+     entryUpdate.status.issued                         := MuxCase(status.issued, Seq(
+                                                           (commonIn.deqSel && !cancelBypassVec.asUInt.orR)  -> true.B,
+@@ -525,6 +542,7 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+ 
+   class EnqDelayOutBundle(implicit p: Parameters, params: IssueBlockParams) extends XSBundle {
+     val srcWakeUpByWB: Vec[UInt]                            = Vec(params.numRegSrc, SrcState())
++    val srcVlWakeUpByWB: Option[UInt]                       = Option.when(params.readVlRf)(SrcState())
+     val srcWakeUpByIQ: Vec[UInt]                            = Vec(params.numRegSrc, SrcState())
+     val srcWakeUpByIQVec: Vec[Vec[Bool]]                    = Vec(params.numRegSrc, Vec(params.numWakeupFromIQ, Bool()))
+     val srcCancelByLoad: Vec[Bool]                          = Vec(params.numRegSrc, Bool())
+@@ -536,20 +554,24 @@ object EntryBundles extends HasCircularQueuePtrHelper {
+       wakeup := enqDelayIn.wakeUpFromWB.map{ x =>
+         if (i == 3)
+           x.bits.wakeUpV0((status.srcStatus(i).psrc, status.srcStatus(i).srcType), x.valid)
+-        else if (i == 4)
+-          x.bits.wakeUpVl((status.srcStatus(i).psrc, status.srcStatus(i).srcType), x.valid)
+         else
+           x.bits.wakeUp(Seq((status.srcStatus(i).psrc, status.srcStatus(i).srcType)), x.valid).head
+       }.reduce(_ || _)
+     }
++    enqDelayOut.srcVlWakeUpByWB.foreach(
++      _ := enqDelayIn.wakeUpFromWB.filter(_.bits.dataConfig.isInstanceOf[VlData]).map {
++        wakeup =>
++          wakeup.bits.wakeUpVl((status.srcStatusVl.map(_.psrc).getOrElse(0.U), SrcType.vp), wakeup.valid)
++      }.fold(false.B)(_ || _)
++    )
+ 
+     if (params.hasIQWakeUp) {
+       val wakeupVec: IndexedSeq[IndexedSeq[Bool]] = enqDelayIn.wakeUpFromIQ.map{ x =>
+         val psrcSrcTypeVec = status.srcStatus.map(_.psrc) zip status.srcStatus.map(_.srcType)
+-        if (params.numRegSrc == 5) {
++        if (params.readVecRf) {
+           x.bits.wakeUpFromIQ(psrcSrcTypeVec.take(3)) :+
+           x.bits.wakeUpV0FromIQ(psrcSrcTypeVec(3)) :+
+-          x.bits.wakeUpVlFromIQ(psrcSrcTypeVec(4))
++          x.bits.wakeUpVlFromIQ((status.srcStatusVl.get.psrc, SrcType.vp))
+         }
+         else
+           x.bits.wakeUpFromIQ(psrcSrcTypeVec)
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+index f854b4ae0d3..0c80463905c 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+@@ -6,7 +6,7 @@ import chisel3.util._
+ import utils.SeqUtils
+ import xiangshan.backend.BackendParams
+ import xiangshan.backend.Bundles._
+-import xiangshan.backend.datapath.DataConfig.DataConfig
++import xiangshan.backend.datapath.DataConfig.{DataConfig, FpData, IntData, V0Data, VecData, VlData}
+ import xiangshan.backend.datapath.WbConfig._
+ import xiangshan.backend.datapath.{WakeUpConfig, WakeUpSource}
+ import xiangshan.backend.exu.ExeUnitParams
+@@ -142,7 +142,7 @@ case class IssueBlockParams(
+ 
+   def needSrcVxrm: Boolean = exuBlockParams.map(_.needSrcVxrm).reduce(_ || _)
+ 
+-  def writeVConfig: Boolean = exuBlockParams.map(_.writeVConfig).reduce(_ || _)
++  def writeVConfig: Boolean = exuBlockParams.map(_.writeVlRf).reduce(_ || _)
+   
+   def writeVType: Boolean = exuBlockParams.map(_.writeVType).reduce(_ || _)
+ 
+@@ -409,23 +409,23 @@ case class IssueBlockParams(
+ 
+   def genWBWakeUpSinkValidBundle(implicit p: Parameters): MixedVec[ValidIO[IssueQueueWBWakeUpBundle]] = {
+     val intBundle: Seq[ValidIO[IssueQueueWBWakeUpBundle]] = schdType match {
+-      case IntScheduler() => needWakeupFromIntWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case IntScheduler() => needWakeupFromIntWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, IntData()))).toSeq
+       case _ => Seq()
+     }
+     val fpBundle = schdType match {
+-      case FpScheduler() => needWakeupFromFpWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case FpScheduler() => needWakeupFromFpWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, FpData()))).toSeq
+       case _ => Seq()
+     }
+     val vfBundle = schdType match {
+-      case VecScheduler() => needWakeupFromVfWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case VecScheduler() => needWakeupFromVfWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, VecData()))).toSeq
+       case _ => Seq()
+     }
+     val v0Bundle = schdType match {
+-      case VecScheduler() => needWakeupFromV0WBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case VecScheduler() => needWakeupFromV0WBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, V0Data()))).toSeq
+       case _ => Seq()
+     }
+     val vlBundle = schdType match {
+-      case VecScheduler() => needWakeupFromVlWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case VecScheduler() => needWakeupFromVlWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, VlData()))).toSeq
+       case _ => Seq()
+     }
+     MixedVec(intBundle ++ fpBundle ++ vfBundle ++ v0Bundle ++ vlBundle)
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+index be209b2c6ac..6ccee843c65 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+@@ -327,6 +327,12 @@ class IssueQueueImp(implicit p: Parameters, params: IssueBlockParams) extends XS
+         enq.bits.status.srcStatus(j).useRegCache.foreach(_      := s0_enqBits(enqIdx).useRegCache(j))
+         enq.bits.status.srcStatus(j).regCacheIdx.foreach(_      := s0_enqBits(enqIdx).regCacheIdx(j))
+       }
++      enq.bits.status.srcStatusVl.foreach {
++        vlSrcStatus =>
++          vlSrcStatus.srcState                                  := s0_enqBits(enqIdx).srcStateVl.get
++          vlSrcStatus.psrc                                      := s0_enqBits(enqIdx).psrcVl.get
++          vlSrcStatus.dataSource.value                          := DataSource.reg // Todo: update when support vl wake up
++      }
+       enq.bits.status.blocked                                   := false.B
+       enq.bits.status.issued                                    := false.B
+       enq.bits.status.firstIssue                                := false.B
+@@ -875,6 +881,7 @@ class IssueQueueImp(implicit p: Parameters, params: IssueBlockParams) extends XS
+     deq.bits.common.vlWen.foreach(_ := deqEntryVec(i).bits.payload.vlWen.get)
+     deq.bits.common.flushPipe.foreach(_ := false.B)
+     deq.bits.common.pdest := deqEntryVec(i).bits.payload.pdest
++    deq.bits.common.pdestVl.foreach(_ := deqEntryVec(i).bits.payload.pdestVl.get)
+     deq.bits.common.robIdx := deqEntryVec(i).bits.status.robIdx
+ 
+     require(deq.bits.common.dataSources.size <= finalDataSources(i).size)
+@@ -895,6 +902,7 @@ class IssueQueueImp(implicit p: Parameters, params: IssueBlockParams) extends XS
+       }
+     }
+     deq.bits.common.src := DontCare
++    deq.bits.common.vl.foreach(_ := DontCare) // will connect it in datapath, DontCare here
+     deq.bits.common.isRVC.foreach(_ := deqEntryVec(i).bits.payload.isRVC.getOrElse(false.B))
+     deq.bits.common.rasAction.foreach(_ := deqEntryVec(i).bits.payload.rasAction.getOrElse(0.U))
+ 
+@@ -905,6 +913,13 @@ class IssueQueueImp(implicit p: Parameters, params: IssueBlockParams) extends XS
+       rf.foreach(_.robIdx := deqEntryVec(i).bits.status.robIdx)
+       rf.foreach(_.issueValid := deqEntryVec(i).valid)
+     }
++    deq.bits.rfVl lazyZip deqEntryVec(i).bits.status.srcStatusVl.map(_.psrc) foreach {
++      case (rf, psrc) =>
++        rf.addr := psrc
++        rf.srcType := SrcType.vp // this is vl
++        rf.robIdx := deqEntryVec(i).bits.status.robIdx
++        rf.issueValid := deqEntryVec(i).valid
++    }
+     deq.bits.srcType.zip(deqEntryVec(i).bits.status.srcStatus.map(_.srcType)).foreach { case (sink, source) =>
+       sink := source
+     }
+diff --git a/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala b/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
+index 112d1769969..1831961076e 100644
+--- a/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
+@@ -4,6 +4,7 @@ import org.chipsalliance.cde.config.Parameters
+ import chisel3.util._
+ import xiangshan.backend.BackendParams
+ import xiangshan.backend.Bundles._
++import xiangshan.backend.datapath.DataConfig._
+ import xiangshan.backend.datapath.WakeUpSource
+ import xiangshan.backend.datapath.WbConfig.PregWB
+ 
+@@ -201,23 +202,23 @@ case class SchdBlockParams(
+ 
+   def genWBWakeUpSinkValidBundle(implicit p: Parameters): MixedVec[ValidIO[IssueQueueWBWakeUpBundle]] = {
+     val intBundle: Seq[ValidIO[IssueQueueWBWakeUpBundle]] = schdType match {
+-      case IntScheduler() => backendParam.getIntWBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case IntScheduler() => backendParam.getIntWBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, IntData()))).toSeq
+       case _ => Seq()
+     }
+     val fpBundle: Seq[ValidIO[IssueQueueWBWakeUpBundle]] = schdType match {
+-      case FpScheduler() => backendParam.getIntWBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case FpScheduler() => backendParam.getIntWBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, FpData()))).toSeq
+       case _ => Seq()
+     }
+     val vfBundle = schdType match {
+-      case VecScheduler() => backendParam.getVfWBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case VecScheduler() => backendParam.getVfWBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, VecData()))).toSeq
+       case _ => Seq()
+     }
+     val v0Bundle = schdType match {
+-      case VecScheduler() => backendParam.getV0WBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case VecScheduler() => backendParam.getV0WBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, V0Data()))).toSeq
+       case _ => Seq()
+     }
+     val vlBundle = schdType match {
+-      case VecScheduler() => backendParam.getVlWBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
++      case VecScheduler() => backendParam.getVlWBExeGroup.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam, VlData()))).toSeq
+       case _ => Seq()
+     }
+     MixedVec(intBundle ++ fpBundle ++ vfBundle ++ v0Bundle ++ vlBundle)
+diff --git a/src/main/scala/xiangshan/backend/rename/Rename.scala b/src/main/scala/xiangshan/backend/rename/Rename.scala
+index af4f7a882ce..0928a297184 100644
+--- a/src/main/scala/xiangshan/backend/rename/Rename.scala
++++ b/src/main/scala/xiangshan/backend/rename/Rename.scala
+@@ -50,6 +50,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+   val io = IO(new Bundle() {
+     val redirect = Flipped(ValidIO(new Redirect))
+     val rabCommits = Input(new RabCommitIO)
++    val vlCommits = Input(new VlCommitBundle(CommitWidth))
+     // from csr
+     val singleStep = Input(Bool())
+     // from decode
+@@ -111,23 +112,58 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+ 
+   val compressUnit = Module(new CompressUnit())
+   // create free list and rat
+-  val intFreeList = Module(new MEFreeList(IntPhyRegs))
+-  val fpFreeList = Module(new StdFreeList(FpPhyRegs - FpLogicRegs, FpLogicRegs, Reg_F))
+-  val vecFreeList = Module(new StdFreeList(VfPhyRegs - VecLogicRegs, VecLogicRegs, Reg_V, 31))
+-  val v0FreeList = Module(new StdFreeList(V0PhyRegs - V0LogicRegs, V0LogicRegs, Reg_V0, 1))
+-  val vlFreeList = Module(new StdFreeList(VlPhyRegs - VlLogicRegs, VlLogicRegs, Reg_Vl, 1))
+-
+-
+-  intFreeList.io.commit    <> io.rabCommits
+-  intFreeList.io.debug_rat.foreach(_ <> io.debug_int_rat.get)
+-  fpFreeList.io.commit     <> io.rabCommits
+-  fpFreeList.io.debug_rat.foreach(_ <> io.debug_fp_rat.get)
+-  vecFreeList.io.commit    <> io.rabCommits
+-  vecFreeList.io.debug_rat.foreach(_ <> io.debug_vec_rat.get)
+-  v0FreeList.io.commit <> io.rabCommits
+-  v0FreeList.io.debug_rat.foreach(_ <> io.debug_v0_rat.get)
+-  vlFreeList.io.commit <> io.rabCommits
+-  vlFreeList.io.debug_rat.foreach(_ <> io.debug_vl_rat.get)
++  val intFreeList = Module(new MEFreeList(IntPhyRegs, RabCommitWidth))
++  val fpFreeList = Module(new StdFreeList(FpPhyRegs - FpLogicRegs, FpLogicRegs, Reg_F, RabCommitWidth))
++  val vecFreeList = Module(new StdFreeList(VfPhyRegs - VecLogicRegs, VecLogicRegs, Reg_V, RabCommitWidth, 31))
++  val v0FreeList = Module(new StdFreeList(V0PhyRegs - V0LogicRegs, V0LogicRegs, Reg_V0, RabCommitWidth, 1))
++  val vlFreeList = Module(new StdFreeList(VlPhyRegs - VlLogicRegs, VlLogicRegs, Reg_Vl, CommitWidth, 1))
++
++
++  intFreeList.io.commit match {
++    case commit =>
++      commit.doCommit := io.rabCommits.isCommit
++      commit.archAlloc := io.rabCommits.commitValid zip io.rabCommits.info map {
++        case (valid, info) => valid && info.rfWen && !info.isMove
++      }
++  }
++  intFreeList.io.debug_rat.foreach(_ := io.debug_int_rat.get)
++
++  fpFreeList.io.commit match {
++    case commit =>
++      commit.doCommit := io.rabCommits.isCommit
++      commit.archAlloc := io.rabCommits.commitValid zip io.rabCommits.info map {
++        case (valid, info) =>
++          valid && info.fpWen
++      }
++  }
++  fpFreeList.io.debug_rat.foreach(_ := io.debug_fp_rat.get)
++
++  vecFreeList.io.commit match {
++    case commit =>
++      commit.doCommit := io.rabCommits.isCommit
++      commit.archAlloc := io.rabCommits.commitValid zip io.rabCommits.info map {
++        case (valid, info) =>
++          valid && info.vecWen
++      }
++  }
++  vecFreeList.io.debug_rat.foreach(_ := io.debug_vec_rat.get)
++
++  v0FreeList.io.commit match {
++    case commit =>
++      commit.doCommit := io.rabCommits.isCommit
++      commit.archAlloc := io.rabCommits.commitValid zip io.rabCommits.info map {
++        case (valid, info) =>
++          valid && info.v0Wen
++      }
++  }
++  v0FreeList.io.debug_rat.foreach(_ := io.debug_v0_rat.get)
++
++  vlFreeList.io.commit match {
++    case commit =>
++      commit.doCommit := io.vlCommits.isCommit
++      commit.archAlloc := io.vlCommits.commitValid
++  }
++  vlFreeList.io.debug_rat.foreach(_ := io.debug_vl_rat.get)
+ 
+   // decide if given instruction needs allocating a new physical register (CfCtrl: from decode; RobCommitInfo: from rob)
+   def needDestReg[T <: DecodeOutUop](reg_t: RegType, x: T): Bool = reg_t match {
+@@ -143,7 +179,6 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+       case Reg_F => x.fpWen
+       case Reg_V => x.vecWen
+       case Reg_V0 => x.v0Wen
+-      case Reg_Vl => x.vlWen
+     }
+   }
+   def needDestRegWalk[T <: RabCommitInfo](reg_t: RegType, x: T): Bool = {
+@@ -152,7 +187,6 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+       case Reg_F => x.fpWen
+       case Reg_V => x.vecWen
+       case Reg_V0 => x.v0Wen
+-      case Reg_Vl => x.vlWen
+     }
+   }
+ 
+@@ -323,7 +357,8 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+       walkNeedFpDest(i) := io.rabCommits.walkValid(i) && needDestRegWalk(Reg_F, io.rabCommits.info(i))
+       walkNeedVecDest(i) := io.rabCommits.walkValid(i) && needDestRegWalk(Reg_V, io.rabCommits.info(i))
+       walkNeedV0Dest(i) := io.rabCommits.walkValid(i) && needDestRegWalk(Reg_V0, io.rabCommits.info(i))
+-      walkNeedVlDest(i) := io.rabCommits.walkValid(i) && needDestRegWalk(Reg_Vl, io.rabCommits.info(i))
++      // Need no vlwen here, since walkValid only assert when there are some vl regs needed to walk.
++      walkNeedVlDest(i) := io.vlCommits.walkValid(i)
+       walkIsMove(i) := io.rabCommits.info(i).isMove
+     }
+     fpFreeList.io.allocateReq(i) := needFpDest(i)
+@@ -400,7 +435,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     uops(i).psrc(1) := Mux1H(uops(i).srcType(1)(2, 0), Seq(io.intReadPorts(i)(1), io.fpReadPorts(i)(1), io.vecReadPorts(i)(1)))
+     uops(i).psrc(2) := Mux1H(uops(i).srcType(2)(2, 1), Seq(io.fpReadPorts(i)(2), io.vecReadPorts(i)(2)))
+     uops(i).psrc(3) := io.v0ReadPorts(i)(0)
+-    uops(i).psrc(4) := io.vlReadPorts(i)(0)
++    uops(i).psrcVl := io.vlReadPorts(i).head
+ 
+     // int psrc2 should be bypassed from next instruction if it is fused
+     if (i < RenameWidth - 1) {
+@@ -418,9 +453,10 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+       needFpDest(i)     ->  fpFreeList.io.allocatePhyReg(i),
+       needVecDest(i)    ->  vecFreeList.io.allocatePhyReg(i),
+       needV0Dest(i)    ->  v0FreeList.io.allocatePhyReg(i),
+-      needVlDest(i)    ->  vlFreeList.io.allocatePhyReg(i),
+     ))
+ 
++    uops(i).pdestVl := vlFreeList.io.allocatePhyReg(i)
++
+     // Assign performance counters
+     uops(i).debug.foreach(_.perfDebugInfo.renameTime := GTimer())
+ 
+@@ -562,7 +598,10 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+   io.out(0).bits.pdest := Mux(isMove(0), uops(0).psrc.head, uops(0).pdest)
+ 
+   // psrc(n) + pdest(1)
++  // bypassCond(j)(i)(k): src(j) of uop(i) depends on dest of uop(k)
+   val bypassCond: Vec[MixedVec[UInt]] = Wire(Vec(numRegSrc, MixedVec(List.tabulate(RenameWidth-1)(i => UInt((i+1).W)))))
++  // bypassCondVl(i)(k): vl of uop(i) depends on dest of uop(k)
++  val bypassCondVl: MixedVec[UInt] = Wire(MixedVec(Seq.tabulate(RenameWidth - 1)(i => UInt((i + 1).W))))
+   require(io.in(0).bits.srcType.size == io.in(0).bits.numSrc)
+   private val pdestLoc = io.in.head.bits.srcType.size // 2 vector src: v0, vl&vtype
+   println(s"[Rename] idx of pdest in bypassCond $pdestLoc")
+@@ -571,23 +610,25 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+       if (i == 3) (s === SrcType.vp) || (s === SrcType.v0)
+       else false.B
+     }
+-    val vlCond = io.in(i).bits.srcType.zipWithIndex.map{ case (s, i) =>
+-      if (i == 4) s === SrcType.vp
+-      else false.B
+-    }
++    val vlCond = io.in(i).bits.vlRen
+     val vecCond = io.in(i).bits.srcType.map(_ === SrcType.vp)
+     val fpCond  = io.in(i).bits.srcType.map(_ === SrcType.fp)
+     val intCond = io.in(i).bits.srcType.map(_ === SrcType.xp)
+-    val target = io.in(i).bits.lsrc
+-    for ((((((cond1, (condV0, condVl)), cond2), cond3), t), j) <- vecCond.zip(v0Cond.zip(vlCond)).zip(fpCond).zip(intCond).zip(target).zipWithIndex) {
++    val lsrcVec = io.in(i).bits.lsrc
++
++    for ((
++      (intRen, fpRen, vecRen, v0Ren),
++      (lsrc, j)
++    ) <- (intCond lazyZip fpCond lazyZip vecCond lazyZip v0Cond) lazyZip lsrcVec.zipWithIndex) {
+       val destToSrc = io.in.take(i).zipWithIndex.map { case (in, j) =>
+-        val indexMatch = in.bits.ldest === t
+-        val writeMatch =  cond3 && needIntDest(j) || cond2 && needFpDest(j) || cond1 && needVecDest(j)
+-        val v0vlMatch = condV0 && needV0Dest(j) || condVl && needVlDest(j)
+-        indexMatch && writeMatch || v0vlMatch
++        val indexMatch = in.bits.ldest === lsrc
++        val writeMatch = intRen && needIntDest(j) || fpRen && needFpDest(j) || vecRen && needVecDest(j)
++        val v0Match = v0Ren && needV0Dest(j)
++        indexMatch && writeMatch || v0Match
+       }
+       bypassCond(j)(i - 1) := VecInit(destToSrc).asUInt
+     }
++    bypassCondVl(i - 1) := VecInit(io.in.take(i).map(_.bits.vlWen && io.in(i).bits.vlRen)).asUInt
+     // For the LUI instruction: psrc(0) is from register file and should always be zero.
+     io.out(i).bits.psrc(0) := Mux(io.out(i).bits.isLUI, 0.U, io.out.take(i).map(_.bits.pdest).zip(bypassCond(0)(i-1).asBools).foldLeft(uops(i).psrc(0)) {
+       (z, next) => Mux(next._2, next._1, z)
+@@ -601,9 +642,10 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     io.out(i).bits.psrc(3) := io.out.take(i).map(_.bits.pdest).zip(bypassCond(3)(i-1).asBools).foldLeft(uops(i).psrc(3)) {
+       (z, next) => Mux(next._2, next._1, z)
+     }
+-    io.out(i).bits.psrc(4) := io.out.take(i).map(_.bits.pdest).zip(bypassCond(4)(i-1).asBools).foldLeft(uops(i).psrc(4)) {
+-      (z, next) => Mux(next._2, next._1, z)
+-    }
++    io.out(i).bits.psrcVl := MuxCase(
++      uops(i).psrcVl,
++      (bypassCondVl(i-1).asBools zip io.out.take(i).map(_.bits.pdest)).reverse
++    )
+     io.out(i).bits.pdest := Mux(isMove(i), io.out(i).bits.psrc(0), uops(i).pdest)
+ 
+     // Todo: better implementation for fields reuse
+@@ -620,7 +662,6 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+       io.out(i).bits.srcType(0) := SrcType.imm
+       io.out(i).bits.imm := Cat(lui_imm, ld_imm)
+     }
+-
+   }
+ 
+   val genSnapshot = Cat(io.out.map(out => out.fire && out.bits.snapshot)).orR
+@@ -679,7 +720,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     io.v0RenamePorts(i).data := v0FreeList.io.allocatePhyReg(i)
+ 
+     io.vlRenamePorts(i).wen := vlSpecWen(i)
+-    io.vlRenamePorts(i).addr := inVec(i).ldest(log2Ceil(VlLogicRegs) - 1, 0)
++    io.vlRenamePorts(i).addr := 0.U // only one vl reg
+     io.vlRenamePorts(i).data := vlFreeList.io.allocatePhyReg(i)
+ 
+     // II. Free List Update
+@@ -691,7 +732,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     vecFreeList.io.freePhyReg(i) := io.vec_old_pdest(i)
+     v0FreeList.io.freeReq(i) := GatedValidRegNext(commitValid && needDestRegCommit(Reg_V0, io.rabCommits.info(i)))
+     v0FreeList.io.freePhyReg(i) := io.v0_old_pdest(i)
+-    vlFreeList.io.freeReq(i) := GatedValidRegNext(commitValid && needDestRegCommit(Reg_Vl, io.rabCommits.info(i)))
++    vlFreeList.io.freeReq(i) := GatedValidRegNext(io.vlCommits.isCommit && io.vlCommits.commitValid(i))
+     vlFreeList.io.freePhyReg(i) := io.vl_old_pdest(i)
+   }
+ 
+@@ -767,7 +808,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+   for (i <- 0 until RabCommitWidth) {
+     val info = io.rabCommits.info(i)
+     XSDebug(io.rabCommits.isWalk && io.rabCommits.walkValid(i), p"[#$i walk info] " +
+-      p"ldest:${info.ldest} rfWen:${info.rfWen} fpWen:${info.fpWen} vecWen:${info.vecWen} v0Wen:${info.v0Wen} vlWen:${info.vlWen}")
++      p"ldest:${info.ldest} rfWen:${info.rfWen} fpWen:${info.fpWen} vecWen:${info.vecWen} v0Wen:${info.v0Wen}")
+   }
+ 
+   XSDebug(p"inValidVec: ${Binary(Cat(io.in.map(_.valid)))}\n")
+diff --git a/src/main/scala/xiangshan/backend/rename/RenameTable.scala b/src/main/scala/xiangshan/backend/rename/RenameTable.scala
+index aee8409235c..cd8792d14c4 100644
+--- a/src/main/scala/xiangshan/backend/rename/RenameTable.scala
++++ b/src/main/scala/xiangshan/backend/rename/RenameTable.scala
+@@ -45,7 +45,7 @@ class RatWritePort(ratAddrWidth: Int)(implicit p: Parameters) extends XSBundle {
+   val data = UInt(PhyRegIdxWidth.W)
+ }
+ 
+-class RenameTable(reg_t: RegType)(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelper {
++class RenameTable(reg_t: RegType, numDiffWritePorts: Int)(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelper {
+ 
+   // params alias
+   private val numVecRegSrc = backendParams.numVecRegSrc
+@@ -81,7 +81,7 @@ class RenameTable(reg_t: RegType)(implicit p: Parameters) extends XSModule with
+     val old_pdest = Vec(RabCommitWidth, Output(UInt(PhyRegIdxWidth.W)))
+     val need_free = Vec(RabCommitWidth, Output(Bool()))
+     val snpt = Input(new SnapshotPort)
+-    val diffWritePorts = if (backendParams.basicDebugEn) Some(Vec(RabCommitWidth * MaxUopSize, Input(new RatWritePort(renameTableWidth)))) else None
++    val diffWritePorts = Option.when(backendParams.basicDebugEn)(Input(Vec(numDiffWritePorts, new RatWritePort(renameTableWidth))))
+     val debug_rdata = if (backendParams.debugEn) Some(Vec(rdataNums, Output(UInt(PhyRegIdxWidth.W)))) else None
+     val diff_rdata = if (backendParams.basicDebugEn) Some(Vec(rdataNums, Output(UInt(PhyRegIdxWidth.W)))) else None
+     val debug_v0 = if (backendParams.debugEn) reg_t match {
+@@ -218,7 +218,9 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
+     val hartId = Input(UInt(8.W))
+     val redirect = Input(Bool())
+     val rabCommits = Input(new RabCommitIO)
++    val vlCommits = Input(new VlCommitBundle(CommitWidth))
+     val diffCommits = if (backendParams.basicDebugEn) Some(Input(new DiffCommitIO)) else None
++    val diffVlCommits = Option.when(backendParams.basicDebugEn)(Input(new DiffVlCommitBundle(CommitWidth)))
+     val intReadPorts = Vec(RenameWidth, Vec(2, new RatReadPort(log2Ceil(IntLogicRegs))))
+     val intRenamePorts = Vec(RenameWidth, Input(new RatWritePort(log2Ceil(IntLogicRegs))))
+     val fpReadPorts = Vec(RenameWidth, Vec(3, new RatReadPort(log2Ceil(FpLogicRegs))))
+@@ -249,11 +251,11 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
+     val diff_vl_rat  = if (backendParams.basicDebugEn) Some(Vec(1,Output(UInt(PhyRegIdxWidth.W)))) else None
+   })
+ 
+-  val intRat = Module(new RenameTable(Reg_I))
+-  val fpRat  = Module(new RenameTable(Reg_F))
+-  val vecRat = Module(new RenameTable(Reg_V))
+-  val v0Rat  = Module(new RenameTable(Reg_V0))
+-  val vlRat  = Module(new RenameTable(Reg_Vl))
++  val intRat = Module(new RenameTable(Reg_I, RabCommitWidth * MaxUopSize))
++  val fpRat  = Module(new RenameTable(Reg_F, RabCommitWidth * MaxUopSize))
++  val vecRat = Module(new RenameTable(Reg_V, RabCommitWidth * MaxUopSize))
++  val v0Rat  = Module(new RenameTable(Reg_V0, RabCommitWidth * MaxUopSize))
++  val vlRat  = Module(new RenameTable(Reg_Vl, CommitWidth))
+ 
+   io.debug_int_rat .foreach(_ := intRat.io.debug_rdata.get)
+   if (env.AlwaysBasicDiff || env.EnableDifftest) {
+@@ -427,14 +429,14 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
+     dontTouch(vlRat.io)
+   }
+   for ((arch, i) <- vlRat.io.archWritePorts.zipWithIndex) {
+-    arch.wen := io.rabCommits.isCommit && io.rabCommits.commitValid(i) && io.rabCommits.info(i).vlWen
+-    arch.addr := io.rabCommits.info(i).ldest
+-    arch.data := io.rabCommits.info(i).pdest
++    arch.wen := io.vlCommits.isCommit && io.vlCommits.commitValid(i)
++    arch.addr := 0.U // only use one vl register
++    arch.data := io.vlCommits.pdestVl(i)
+   }
+   for ((spec, i) <- vlRat.io.specWritePorts.zipWithIndex) {
+-    spec.wen := io.rabCommits.isWalk && io.rabCommits.walkValid(i) && io.rabCommits.info(i).vlWen
+-    spec.addr := io.rabCommits.info(i).ldest
+-    spec.data := io.rabCommits.info(i).pdest
++    spec.wen := io.vlCommits.isWalk && io.vlCommits.walkValid(i)
++    spec.addr := 0.U
++    spec.data := io.vlCommits.pdestVl(i)
+   }
+   for ((spec, rename) <- vlRat.io.specWritePorts.zip(io.vlRenamePorts)) {
+     when(rename.wen) {
+@@ -445,9 +447,9 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
+   }
+   if (backendParams.basicDebugEn) {
+     for ((diff, i) <- vlRat.io.diffWritePorts.get.zipWithIndex) {
+-      diff.wen := io.diffCommits.get.isCommit && io.diffCommits.get.commitValid(i) && io.diffCommits.get.info(i).vlWen
+-      diff.addr := io.diffCommits.get.info(i).ldest
+-      diff.data := io.diffCommits.get.info(i).pdest
++      diff.wen := io.diffVlCommits.get.commitValid(i)
++      diff.addr := 0.U
++      diff.data := io.diffVlCommits.get.pdestVl(i)
+     }
+   }
+ }
+diff --git a/src/main/scala/xiangshan/backend/rename/freelist/BaseFreeList.scala b/src/main/scala/xiangshan/backend/rename/freelist/BaseFreeList.scala
+index 130570386a4..40a23e3e3e0 100644
+--- a/src/main/scala/xiangshan/backend/rename/freelist/BaseFreeList.scala
++++ b/src/main/scala/xiangshan/backend/rename/freelist/BaseFreeList.scala
+@@ -25,21 +25,25 @@ import utils._
+ import utility._
+ 
+ 
+-abstract class BaseFreeList(size: Int, numLogicRegs:Int = 32)(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelper {
++abstract class BaseFreeList(
++  size: Int,
++  commitWidth: Int,
++  numLogicRegs:Int = 32,
++)(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelper {
+   val io = IO(new Bundle {
+     val redirect = Input(Bool())
+     val walk = Input(Bool())
+ 
+     val allocateReq = Input(Vec(RenameWidth, Bool()))
+-    val walkReq = Input(Vec(RabCommitWidth, Bool()))
++    val walkReq = Input(Vec(commitWidth, Bool()))
+     val allocatePhyReg = Output(Vec(RenameWidth, UInt(PhyRegIdxWidth.W)))
+     val canAllocate = Output(Bool())
+     val doAllocate = Input(Bool())
+ 
+-    val freeReq = Input(Vec(RabCommitWidth, Bool()))
+-    val freePhyReg = Input(Vec(RabCommitWidth, UInt(PhyRegIdxWidth.W)))
++    val freeReq = Input(Vec(commitWidth, Bool()))
++    val freePhyReg = Input(Vec(commitWidth, UInt(PhyRegIdxWidth.W)))
+ 
+-    val commit = Input(new RabCommitIO)
++    val commit = Input(new FreeListCommitBundle(commitWidth))
+ 
+     val snpt = Input(new SnapshotPort)
+ 
+@@ -81,3 +85,8 @@ abstract class BaseFreeList(size: Int, numLogicRegs:Int = 32)(implicit p: Parame
+     (archHeadPtr + PopCount(io.walkReq)).toOH
+   )
+ }
++
++class FreeListCommitBundle(commitWidth: Int) extends Bundle {
++  val doCommit = Bool()
++  val archAlloc = Vec(commitWidth, Bool())
++}
+diff --git a/src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala b/src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala
+index 08f29fc42ce..9438b365f1b 100644
+--- a/src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala
++++ b/src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala
+@@ -24,7 +24,7 @@ import utils._
+ import utility._
+ 
+ 
+-class MEFreeList(size: Int)(implicit p: Parameters) extends BaseFreeList(size) with HasPerfEvents {
++class MEFreeList(size: Int, commitWidth: Int)(implicit p: Parameters) extends BaseFreeList(size, commitWidth) with HasPerfEvents {
+   val freeList = RegInit(VecInit(
+     // originally {1, 2, ..., size - 1} are free. Register 0-31 are mapped to x0.
+     Seq.tabulate(size - 1)(i => (i + 1).U(PhyRegIdxWidth.W)) :+ 0.U(PhyRegIdxWidth.W)))
+@@ -34,7 +34,7 @@ class MEFreeList(size: Int)(implicit p: Parameters) extends BaseFreeList(size) w
+   val doWalkRename = io.walk && io.doAllocate && !io.redirect
+   val doNormalRename = io.canAllocate && io.doAllocate && !io.redirect
+   val doRename = doWalkRename || doNormalRename
+-  val doCommit = io.commit.isCommit
++  val doCommit = io.commit.doCommit
+ 
+   /**
+     * Allocation: from freelist (same as StdFreelist)
+@@ -45,9 +45,8 @@ class MEFreeList(size: Int)(implicit p: Parameters) extends BaseFreeList(size) w
+     io.allocatePhyReg(i) := phyRegCandidates(PopCount(io.allocateReq.take(i)))
+   }
+   // update arch head pointer
+-  val archAlloc = io.commit.commitValid zip io.commit.info map {
+-    case (valid, info) => valid && info.rfWen && !info.isMove
+-  }
++  val archAlloc = io.commit.archAlloc
++
+   val numArchAllocate = PopCount(archAlloc)
+   val archHeadPtrNew  = archHeadPtr + numArchAllocate
+   val archHeadPtrNext = Mux(doCommit, archHeadPtrNew, archHeadPtr)
+@@ -65,7 +64,7 @@ class MEFreeList(size: Int)(implicit p: Parameters) extends BaseFreeList(size) w
+   /**
+     * Deallocation: when refCounter becomes zero, the register can be released to freelist
+     */
+-  for (i <- 0 until RabCommitWidth) {
++  for (i <- 0 until commitWidth) {
+     when (io.freeReq(i)) {
+       val freePtr = tailPtr + PopCount(io.freeReq.take(i))
+       freeList(freePtr.value) := io.freePhyReg(i)
+diff --git a/src/main/scala/xiangshan/backend/rename/freelist/StdFreeList.scala b/src/main/scala/xiangshan/backend/rename/freelist/StdFreeList.scala
+index a4957f92edf..a15977a2dc5 100644
+--- a/src/main/scala/xiangshan/backend/rename/freelist/StdFreeList.scala
++++ b/src/main/scala/xiangshan/backend/rename/freelist/StdFreeList.scala
+@@ -25,7 +25,13 @@ import utils._
+ import utility._
+ 
+ 
+-class StdFreeList(freeListSize: Int, numLogicRegs: Int, regType: RegType, realNumLogicRegs: Int = 32)(implicit p: Parameters) extends BaseFreeList(freeListSize, realNumLogicRegs) with HasPerfEvents {
++class StdFreeList(
++  freeListSize: Int,
++  numLogicRegs: Int,
++  regType: RegType,
++  commitWidth: Int,
++  realNumLogicRegs: Int = 32,
++)(implicit p: Parameters) extends BaseFreeList(freeListSize, commitWidth, realNumLogicRegs) with HasPerfEvents {
+ 
+   val freeList = RegInit(VecInit(Seq.tabulate(freeListSize)( i => (i + numLogicRegs).U(PhyRegIdxWidth.W) )))
+   val lastTailPtr = RegInit(FreeListPtr(true, 0)) // tailPtr in the last cycle (need to add freeReqReg)
+@@ -36,7 +42,7 @@ class StdFreeList(freeListSize: Int, numLogicRegs: Int, regType: RegType, realNu
+   // free committed instructions' `old_pdest` reg
+   //
+   val freeReqReg = io.freeReq
+-  for (i <- 0 until RabCommitWidth) {
++  for (i <- 0 until commitWidth) {
+     val offset = if (i == 0) 0.U else PopCount(freeReqReg.take(i))
+     val enqPtr = lastTailPtr + offset
+ 
+@@ -65,15 +71,8 @@ class StdFreeList(freeListSize: Int, numLogicRegs: Int, regType: RegType, realNu
+     io.allocatePhyReg(i) := phyRegCandidates(PopCount(io.allocateReq.take(i)))
+     XSDebug(p"req:${io.allocateReq(i)} canAllocate:${io.canAllocate} pdest:${io.allocatePhyReg(i)}\n")
+   }
+-  val doCommit = io.commit.isCommit
+-  val archAlloc = io.commit.commitValid zip io.commit.info map { case (valid, info) =>
+-    valid && (regType match {
+-      case Reg_F => info.fpWen
+-      case Reg_V => info.vecWen
+-      case Reg_V0 => info.v0Wen
+-      case Reg_Vl => info.vlWen
+-    })
+-  }
++  val doCommit = io.commit.doCommit
++  val archAlloc = io.commit.archAlloc
+   val numArchAllocate = PopCount(archAlloc)
+   val archHeadPtrNew  = archHeadPtr + numArchAllocate
+   val archHeadPtrNext = Mux(doCommit, archHeadPtrNew, archHeadPtr)
+diff --git a/src/main/scala/xiangshan/backend/rob/Rab.scala b/src/main/scala/xiangshan/backend/rob/Rab.scala
+index ff1b236ec47..89061048d1b 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rab.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rab.scala
+@@ -120,7 +120,9 @@ class RenameBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasC
+     robWalkEndReg := true.B
+   }
+ 
+-  val realNeedAlloc = io.req.map(req => req.valid && req.bits.needWriteRf)
++  // only handle int, fp, vec and v0 wen, while vl is handled in VTypeBuffer
++  val mayNeedAlloc = WireInit(VecInit(io.req.map(x => x.bits.needEnqRab)))
++  val realNeedAlloc = io.req.zip(mayNeedAlloc).map { case (req, alloc) => req.valid && alloc }
+   val enqCount    = PopCount(realNeedAlloc)
+   val commitNum = Wire(UInt(RabCommitWidth.U.getWidth.W))
+   val walkNum = Wire(UInt(RabCommitWidth.U.getWidth.W))
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index 5dfadded8b5..a7e5dda9653 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -79,7 +79,9 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+       val traceCommitInfo = new TraceBundle(hasIaddr = false, CommitWidth, IretireWidthCommited)
+     }
+     val rabCommits = Output(new RabCommitIO)
++    val vlCommits = Output(new VlCommitBundle(CommitWidth))
+     val diffCommits = if (backendParams.basicDebugEn) Some(Output(new DiffCommitIO)) else None
++    val diffVlCommits = Option.when(backendParams.basicDebugEn)(new DiffVlCommitBundle(CommitWidth))
+     val isVsetFlushPipe = Output(Bool())
+     val lsq = new RobLsqIO
+     val robDeqPtr = Output(new RobPtr)
+@@ -395,7 +397,9 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+ 
+   // pipe rab commits for better timing and area
+   io.rabCommits := RegNext(rab.io.commits)
++  io.vlCommits := RegNext(vtypeBuffer.io.commits)
+   io.diffCommits.foreach(_ := rab.io.diffCommits.get)
++  io.diffVlCommits.foreach(_ := vtypeBuffer.io.diffCommits.get)
+ 
+   /**
+    * connection of [[vtypeBuffer]]
+@@ -408,8 +412,8 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     sink.bits := source.bits
+   }
+ 
+-  private val commitIsVTypeVec = VecInit(io.commits.commitValid.zip(io.commits.info).map { case (valid, info) => io.commits.isCommit && valid && info.isVset })
+-  private val walkIsVTypeVec = VecInit(io.commits.walkValid.zip(walkInfo).map { case (valid, info) => io.commits.isWalk && valid && info.isVset })
++  private val commitIsVTypeVec = VecInit(io.commits.commitValid.zip(io.commits.info).map { case (valid, info) => io.commits.isCommit && valid && info.needVTB })
++  private val walkIsVTypeVec = VecInit(io.commits.walkValid.zip(walkInfo).map { case (valid, info) => io.commits.isWalk && valid && info.needVTB })
+   vtypeBuffer.io.fromRob.commitSize := PopCount(commitIsVTypeVec)
+   vtypeBuffer.io.fromRob.walkSize := PopCount(walkIsVTypeVec)
+   vtypeBuffer.io.snpt := io.snpt
+@@ -1004,7 +1008,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   // if the first uop of an instruction is valid , write writebackedCounter
+   val uopEnqValidSeq = io.enq.req.map(req => io.enq.canAccept && req.valid)
+   val instEnqValidSeq = io.enq.req.map(req => io.enq.canAccept && req.valid && req.bits.firstUop)
+-  val enqNeedWriteRFSeq = io.enq.req.map(_.bits.needWriteRf)
++  val enqNeedWriteRFSeq = io.enq.req.map(_.bits.needEnqRab)
+   val enqHasExcpSeq = io.enq.req.map(_.bits.hasException)
+   val enqRobIdxSeq = io.enq.req.map(req => req.bits.robIdx.value)
+   val enqUopNumVec = VecInit(io.enq.req.map(req => req.bits.numUops))
+diff --git a/src/main/scala/xiangshan/backend/rob/RobBundles.scala b/src/main/scala/xiangshan/backend/rob/RobBundles.scala
+index 801eedcd19a..8c3085d6d7e 100644
+--- a/src/main/scala/xiangshan/backend/rob/RobBundles.scala
++++ b/src/main/scala/xiangshan/backend/rob/RobBundles.scala
+@@ -58,7 +58,8 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val ftqIdx = new FtqPtr
+     val ftqOffset = UInt(FetchBlockInstOffsetWidth.W)
+     val isRVC = Bool()
+-    val isVset = Bool()
++    // VTypeBuffer
++    val needVTB = Bool()
+     val isHls = Bool()
+     // data end
+     
+@@ -99,7 +100,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val fflags = UInt(5.W)
+     val vxsat = Bool()
+     val isRVC = Bool()
+-    val isVset = Bool()
++    val needVTB = Bool()
+     val isHls = Bool()
+     val isVls = Bool()
+     val vls = Bool()
+@@ -132,7 +133,8 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     robEntry.ftqIdx := robEnq.ftqPtr
+     robEntry.ftqOffset := robEnq.ftqOffset
+     robEntry.isRVC := robEnq.isRVC
+-    robEntry.isVset := robEnq.isVset
++    // robEntry.needVTB will be asserted by the first uop, so set it false here
++    robEntry.needVTB := robEnq.isVset || robEnq.vpu.isVleff
+     robEntry.isHls := robEnq.isHls
+     robEntry.rfWen := robEnq.rfWen
+     robEntry.fpWen := robEnq.dirtyFs
+@@ -162,7 +164,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     robCommitEntry.wflags := robEntry.wflags
+     robCommitEntry.vxsat := robEntry.vxsat
+     robCommitEntry.isRVC := robEntry.isRVC
+-    robCommitEntry.isVset := robEntry.isVset
++    robCommitEntry.needVTB := robEntry.needVTB
+     robCommitEntry.isHls := robEntry.isHls
+     robCommitEntry.isVls := robEntry.vls
+     robCommitEntry.vls := robEntry.vls
+diff --git a/src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala b/src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala
+index 2cd67a72d79..9bbe32f2a43 100644
+--- a/src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala
++++ b/src/main/scala/xiangshan/backend/rob/VTypeBuffer.scala
+@@ -3,13 +3,11 @@ package xiangshan.backend.rob
+ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+-import utility.{CircularQueuePtr, CircularShift, HasCircularQueuePtrHelper, OneHot, SyncDataModuleTemplate, GatedValidRegNext}
+-import utility.{QueuePerf, XSError, XSPerfAccumulate}
++import utility._
+ import xiangshan.backend.Bundles.DynInst
+ import xiangshan.backend.fu.vector.Bundles.VType
+ import xiangshan.backend.rename.SnapshotGenerator
+-import xiangshan.{SnapshotPort, XSBundle, XSCoreParamsKey, XSModule}
+-import xiangshan.VSETOpType
++import xiangshan._
+ 
+ class VTypeBufferPtr(size: Int) extends CircularQueuePtr[VTypeBufferPtr](size) {
+   def this()(implicit p: Parameters) = this(p(XSCoreParamsKey).VTypeBufferSize)
+@@ -24,9 +22,11 @@ object VTypeBufferPtr {
+   }
+ }
+ 
+-class VTypeBufferEntry(implicit p: Parameters) extends Bundle {
++class VTypeBufferEntry(implicit p: Parameters) extends XSBundle {
+   val vtype = new VType()
+   val isVsetvl = Bool()
++  val vlWen = Bool()
++  val pdestVl = UInt(VlPhyRegIdxWidth.W)
+ }
+ 
+ class VTypeBufferIO(size: Int)(implicit p: Parameters) extends XSBundle {
+@@ -45,6 +45,9 @@ class VTypeBufferIO(size: Int)(implicit p: Parameters) extends XSBundle {
+   val canEnq = Output(Bool())
+   val canEnqForDispatch = Output(Bool())
+ 
++  val commits = Output(new VlCommitBundle(CommitWidth))
++  val diffCommits = Option.when(backendParams.basicDebugEn)(Output(new DiffVlCommitBundle(CommitWidth)))
++
+   val toDecode = Output(new Bundle {
+     val isResumeVType = Bool()
+     val walkToArchVType = Bool()
+@@ -74,12 +77,46 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+   private val stateLastCycle = RegNext(state)
+ 
+   // +1 read port to get walk initial state
+-  private val vtypeBuffer = Module(new SyncDataModuleTemplate(new VTypeBufferEntry(), size, numWrite = RenameWidth, numRead = CommitWidth))
+-  private val vtypeBufferReadAddrVec = vtypeBuffer.io.raddr
+-  private val vtypeBufferReadDataVec = vtypeBuffer.io.rdata
+-  private val vtypeBufferWriteEnVec = vtypeBuffer.io.wen
+-  private val vtypeBufferWriteAddrVec = vtypeBuffer.io.waddr
+-  private val vtypeBufferWriteDataVec = vtypeBuffer.io.wdata
++  private val vtypeBuffer = Reg(Vec(size, new VTypeBufferEntry()))
++//  private val vtypeBuffer = Module(new SyncDataModuleTemplate(new VTypeBufferEntry(), size, numWrite = RenameWidth, numRead = CommitWidth))
++
++  private val vtypeBufferReadAddrVec = Wire(Vec(CommitWidth, UInt(log2Ceil(size).W)))
++  private val vtypeBufferReadDataVec = Wire(Vec(CommitWidth, new VTypeBufferEntry()))
++  private val vtypeBufferWriteEnVec = Wire(Vec(RenameWidth, Bool()))
++  private val vtypeBufferWriteAddrVec = Wire(Vec(RenameWidth, UInt(log2Ceil(size).W)))
++  private val vtypeBufferWriteDataVec = Wire(Vec(RenameWidth, new VTypeBufferEntry()))
++
++  private val vtypeBufferWenVec: Vec[Bool] = VecInit(vtypeBuffer.indices.map {
++    case i =>
++      Mux1H(vtypeBufferWriteEnVec zip vtypeBufferWriteAddrVec map {
++        case (wen, waddr) =>
++          wen -> (waddr === i.U)
++      })
++  })
++
++  private val commitValidVec = Wire(Vec(CommitWidth, Bool()))
++  private val walkValidVec = Wire(Vec(CommitWidth, Bool()))
++  private val infoVec = Wire(Vec(CommitWidth, VType()))
++  private val hasVsetvlVec = Wire(Vec(CommitWidth, Bool()))
++  private val pdestVlVec = Wire(Vec(CommitWidth, UInt(VlPhyRegIdxWidth.W)))
++
++  private val vtypeBufferWdataVec: Vec[VTypeBufferEntry] = VecInit(vtypeBuffer.indices.map {
++    case i =>
++      Mux1H(vtypeBufferWriteEnVec zip vtypeBufferWriteAddrVec zip vtypeBufferWriteDataVec map {
++        case ((wen, waddr), wdata) =>
++          (wen && (waddr === i.U)) -> wdata
++      })
++  })
++
++  for (i <- vtypeBuffer.indices) {
++    when (vtypeBufferWenVec(i)) {
++      vtypeBuffer(i) := vtypeBufferWdataVec(i)
++    }
++  }
++
++  for (i <- vtypeBufferReadDataVec.indices) {
++    vtypeBufferReadDataVec(i) := vtypeBuffer(vtypeBufferReadAddrVec(i))
++  }
+ 
+   // pointer
+   private val enqPtrVec = RegInit(VecInit.tabulate(RenameWidth)(idx => VTypeBufferPtr(flag = false, idx)))
+@@ -105,6 +142,9 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+   private val walkPtrNext = Wire(new VTypeBufferPtr)
+   private val walkPtrVecNext = VecInit((0 until CommitWidth).map(x => walkPtrNext + x.U))
+ 
++  private val diffPtr = RegInit(VTypeBufferPtr())
++  private val diffPtrNext = Wire(chiselTypeOf(diffPtr))
++
+   // get enque vtypes in io.req
+   private val enqVTypes = VecInit(io.req.map(req => req.bits.vpu.specVType))
+   private val enqValids = VecInit(io.req.map(_.valid))
+@@ -124,7 +164,7 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+ 
+   // There are two uops mapped to one vset inst.
+   // Only record the last here.
+-  private val needAllocVec = VecInit(io.req.map(req => req.valid && req.bits.isVset && req.bits.lastUop))
++  private val needAllocVec = VecInit(io.req.map(req => req.valid && req.bits.vlWen))
+   private val enqCount = PopCount(needAllocVec)
+ 
+   private val commitCount   = Wire(UInt(CommitWidth.U.getWidth.W))
+@@ -160,6 +200,9 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+ 
+   walkPtr := walkPtrNext
+ 
++  diffPtr := diffPtrNext
++  diffPtrNext := diffPtr + newCommitSize
++
+   private val useSnapshotNext = WireInit(false.B)
+ 
+   useSnapshotNext := (state === s_idle && stateNext === s_walk) || (state === s_walk && io.snpt.useSnpt && io.redirect.valid)
+@@ -210,13 +253,17 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+   vtypeBufferWriteDataVec.zip(io.req.map(_.bits)).foreach { case (entry: VTypeBufferEntry, inst) =>
+     entry.vtype := inst.vpu.vtype
+     entry.isVsetvl := VSETOpType.isVsetvl(inst.fuOpType)
++    entry.vlWen := inst.vlWen
++    entry.pdestVl := inst.pdestVl
++  }
++
++  for (i <- vtypeBufferReadAddrVec.indices) {
++    vtypeBufferReadAddrVec(i) := RegEnable(
++      vtypeBufferReadPtrVecNext(i).value,
++      commitValidVec(i) || walkValidVec(i) || io.fromRob.commitSize =/= 0.U || io.fromRob.walkSize =/= 0.U
++    )
+   }
+-  vtypeBufferReadAddrVec := vtypeBufferReadPtrVecNext.map(_.value)
+ 
+-  private val commitValidVec = Wire(Vec(CommitWidth, Bool()))
+-  private val walkValidVec = Wire(Vec(CommitWidth, Bool()))
+-  private val infoVec = Wire(Vec(CommitWidth, VType()))
+-  private val hasVsetvlVec = Wire(Vec(CommitWidth, Bool()))
+ 
+   for (i <- 0 until CommitWidth) {
+     commitValidVec(i) := state === s_idle && i.U < commitSize || state === s_spcl_walk && i.U < spclWalkSize
+@@ -224,6 +271,7 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+ 
+     infoVec(i) := vtypeBufferReadDataVec(i).vtype
+     hasVsetvlVec(i) := vtypeBufferReadDataVec(i).isVsetvl
++    pdestVlVec(i) := vtypeBufferReadDataVec(i).pdestVl
+   }
+ 
+   commitCount   := Mux(state === s_idle,      PopCount(commitValidVec), 0.U)
+@@ -298,6 +346,29 @@ class VTypeBuffer(size: Int)(implicit p: Parameters) extends XSModule with HasCi
+ 
+   io.canEnq := allowEnqueue && state === s_idle
+   io.canEnqForDispatch := allowEnqueueForDispatch && state === s_idle
++
++  io.commits.isCommit := state === s_idle || state === s_spcl_walk
++  io.commits.isWalk := state === s_walk || state === s_spcl_walk
++  for (i <- 0 until CommitWidth) {
++    io.commits.commitValid(i) := Mux1H(Seq(
++      (state === s_idle) -> (i.U < commitSize),
++      (state === s_spcl_walk) -> (i.U < spclWalkSize),
++    ))
++    io.commits.walkValid(i) := Mux1H(Seq(
++      (state === s_walk) -> (i.U < walkSize),
++      (state === s_spcl_walk) -> (i.U < spclWalkSize),
++    ))
++    io.commits.pdestVl(i) := pdestVlVec(i)
++  }
++
++  io.diffCommits.foreach {
++    diffCommits =>
++      for (i <- diffCommits.commitValid.indices) {
++        diffCommits.commitValid(i) := i.U < newCommitSize
++        diffCommits.pdestVl(i) := vtypeBuffer((diffPtr + i.U).value).pdestVl
++      }
++  }
++
+   io.status.walkEnd := walkEndNext
+   // update vtype in decode when VTypeBuffer resumes from walk state
+   // note that VTypeBuffer can still send resuming request in the first cycle of s_idle
+diff --git a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+index 3eb406b947c..557bd55ca11 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+@@ -396,9 +396,9 @@ class VSegmentUnit(val param: ExeUnitParams)(implicit p: Parameters) extends VLS
+     instMicroOp.vstart                := 0.U
+     instMicroOp.uopFlowNum            := uopFlowNum
+     instMicroOp.uopFlowNumMask        := GenVlMaxMask(uopFlowNum, elemIdxBits) // for merge data
+-    instMicroOp.vl                    := io.in.bits.src(vlIndice).asTypeOf(Vl())
++    instMicroOp.vl                    := io.in.bits.vl.get
+     instMicroOp.exceptionVl.valid     := false.B
+-    instMicroOp.exceptionVl.bits      := io.in.bits.src(vlIndice).asTypeOf(Vl())
++    instMicroOp.exceptionVl.bits      := io.in.bits.vl.get
+     segmentOffset                     := 0.U
+     instMicroOp.isFof                 := (fuOpType === VlduType.vleff) && FuType.isVSegLoad(io.in.bits.fuType)
+     instMicroOp.isVSegLoad            := FuType.isVSegLoad(io.in.bits.fuType)
+diff --git a/src/main/scala/xiangshan/mem/vector/VSplit.scala b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+index 3cad41d2b6c..0ef9eb8cb1c 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSplit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+@@ -97,7 +97,7 @@ class VSplitPipeline(param: ExeUnitParams, isVStore: Boolean = false)(implicit p
+     (s0_nf +& 1.U) << emulLog2Pos
+   )
+ 
+-  val vvl = io.in.bits.src(vlIndice).asTypeOf(Vl())
++  val vvl = io.in.bits.vl.get
+   val evl = Mux(isUsWholeReg,
+                 GenUSWholeRegVL(io.in.bits.vpu.get.nf +& 1.U, s0_eew),
+                 Mux(isMaskReg,
+diff --git a/src/main/scala/xiangshan/mem/vector/VecCommon.scala b/src/main/scala/xiangshan/mem/vector/VecCommon.scala
+index a7e7e876740..dcc0f082941 100644
+--- a/src/main/scala/xiangshan/mem/vector/VecCommon.scala
++++ b/src/main/scala/xiangshan/mem/vector/VecCommon.scala
+@@ -95,7 +95,6 @@ trait HasVLSUParameters extends HasMemBlockParameters with VLSUConstants {
+   def isSegment(instType: UInt) = instType(2) === "b1".U
+   def is128Bit(alignedType: UInt) = alignedType(2) === "b1".U
+ 
+-  def vlIndice(implicit param: ExeUnitParams): Int = param.getRfReadSrcIdx(VlData()).head
+   def v0Indice(implicit param: ExeUnitParams): Int = param.getRfReadSrcIdx(V0Data()).head
+   def vecDataIndices(implicit param: ExeUnitParams): Seq[Int] = param.getRfReadSrcIdx(VecData())
+   def rs1Indice(implicit param: ExeUnitParams): Int = vecDataIndices apply 0
+diff --git a/src/main/scala/xiangshan/mem/vector/VfofBuffer.scala b/src/main/scala/xiangshan/mem/vector/VfofBuffer.scala
+index 9cf4576a1bb..2b6911f2ee0 100644
+--- a/src/main/scala/xiangshan/mem/vector/VfofBuffer.scala
++++ b/src/main/scala/xiangshan/mem/vector/VfofBuffer.scala
+@@ -63,7 +63,7 @@ class VfofBuffer(val param: ExeUnitParams)(implicit p: Parameters) extends VLSUM
+   when(enqValid && !enqNeedCancel) {
+     when(!valid){
+       entries.uop           := enqBits.toDynInst()
+-      entries.vl            := enqBits.src(vlIndice).asTypeOf(Vl())
++      entries.vl            := enqBits.vl.get
+       entries.hasException  := false.B
+     }.elsewhen(valid && enqIsFixVl){
+       entries.uop     := enqBits.toDynInst()
+@@ -140,7 +140,7 @@ class VfofBuffer(val param: ExeUnitParams)(implicit p: Parameters) extends VLSUM
+   io.uopWriteback.valid := valid && entries.uop.vpu.lastUop && entries.uop.vpu.isVleff && !needRedirect
+   io.uopWriteback.bits := 0.U.asTypeOf(new ExuOutput(param))
+   io.uopWriteback.bits.data := VecInit(Seq.fill(param.wbPathNum)(entries.vl))
+-  io.uopWriteback.bits.pdest := entries.uop.pdest
++  io.uopWriteback.bits.pdestVl.get := entries.uop.pdestVl
+   io.uopWriteback.bits.robIdx := entries.uop.robIdx
+   io.uopWriteback.bits.intWen.foreach(_ := entries.uop.rfWen)
+   io.uopWriteback.bits.fpWen.foreach(_ := entries.uop.fpWen)
+```

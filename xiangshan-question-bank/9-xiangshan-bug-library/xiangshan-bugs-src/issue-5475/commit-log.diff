@@ -1,0 +1,343 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+index 1947045c906..c2612a9e6c2 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+@@ -143,8 +143,6 @@ class TrapEntryEventInput(implicit val p: Parameters) extends Bundle with HasXSP
+   val menvcfg = Input(new MEnvCfg)
+   val henvcfg = Input(new HEnvCfg)
+ 
+-  val pcFromXtvec = Flipped(ValidIO(UInt(XLEN.W)))
+-
+   val satp = Input(new SatpBundle)
+   val vsatp = Input(new SatpBundle)
+   val hgatp = Input(new HgatpBundle)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
+index 176d6957612..2ff1bf3d3d9 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
+@@ -81,7 +81,7 @@ class TrapEntryDEventModule(implicit val p: Parameters) extends Module with CSRE
+   out.dcsr.valid              := valid
+   out.dpc.valid               := valid
+   // !debugMode trap || debugMode hasExp
+-  out.targetPc.valid          := GatedValidRegNext(valid || hasExceptionInDmode)
++  out.targetPc.valid          := RegNext(valid || hasExceptionInDmode)
+   out.debugMode.valid         := valid
+   out.privState.valid         := valid
+   out.debugIntrEnable.valid   := valid
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+index bbb6670ca08..6021d4c3594 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+@@ -22,7 +22,6 @@ class TrapEntryHSEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val stval   = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val htval   = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val htinst  = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+-  val targetPc  = ValidIO(new TargetPCBundle)
+ }
+ 
+ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSREventBase {
+@@ -98,14 +97,6 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+     (isLSGuestExcp                                         ) -> trapMemGPA,
+   ))
+ 
+-  private val instrAddrTransType = AddrTransType(
+-    bare = satp.MODE === SatpMode.Bare,
+-    sv39 = satp.MODE === SatpMode.Sv39,
+-    sv48 = satp.MODE === SatpMode.Sv48,
+-    sv39x4 = false.B,
+-    sv48x4 = false.B
+-  )
+-
+   out := DontCare
+ 
+   out.privState.valid := valid
+@@ -116,7 +107,6 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+   out.stval    .valid := valid
+   out.htval    .valid := valid
+   out.htinst   .valid := valid
+-  out.targetPc .valid := in.pcFromXtvec.valid
+ 
+   out.privState.bits            := PrivState.ModeHS
+   // mstatus
+@@ -135,10 +125,6 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+   out.stval.bits.ALL            := Mux(isFetchMalAddrExcp, in.fetchMalTval, tval)
+   out.htval.bits.ALL            := tval2 >> 2
+   out.htinst.bits.ALL           := Mux(isFetchGuestExcp && in.trapIsForVSnonLeafPTE || isLSGuestExcp && in.memExceptionIsForVSnonLeafPTE, 0x3000.U, 0.U)
+-  out.targetPc.bits.pc          := in.pcFromXtvec.bits
+-  out.targetPc.bits.raiseIPF    := instrAddrTransType.checkPageFault(in.pcFromXtvec.bits)
+-  out.targetPc.bits.raiseIAF    := instrAddrTransType.checkAccessFault(in.pcFromXtvec.bits)
+-  out.targetPc.bits.raiseIGPF   := false.B
+ 
+   dontTouch(isLSGuestExcp)
+   dontTouch(tvalFillGVA)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+index 87cfdf3dee6..4d041efab8c 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+@@ -19,7 +19,6 @@ class TrapEntryMEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val mtval     = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val mtval2    = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val mtinst    = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+-  val targetPc  = ValidIO(new TargetPCBundle)
+ }
+ 
+ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSREventBase {
+@@ -107,7 +106,6 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   out.mtval    .valid := valid
+   out.mtval2   .valid := valid
+   out.mtinst   .valid := valid
+-  out.targetPc .valid := in.pcFromXtvec.valid
+ 
+   out.privState.bits            := PrivState.ModeM
+   out.mstatus.bits.MPV          := current.privState.V
+@@ -122,10 +120,6 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   out.mtval.bits.ALL            := Mux(isFetchMalAddrExcp, in.fetchMalTval, tval)
+   out.mtval2.bits.ALL           := Mux(isDTExcp, precause, tval2 >> 2)
+   out.mtinst.bits.ALL           := Mux(isFetchGuestExcp && in.trapIsForVSnonLeafPTE || isLSGuestExcp && in.memExceptionIsForVSnonLeafPTE, 0x3000.U, 0.U)
+-  out.targetPc.bits.pc          := in.pcFromXtvec.bits
+-  out.targetPc.bits.raiseIPF    := false.B
+-  out.targetPc.bits.raiseIAF    := AddrTransType(bare = true).checkAccessFault(in.pcFromXtvec.bits)
+-  out.targetPc.bits.raiseIGPF   := false.B
+ 
+   dontTouch(isLSGuestExcp)
+   dontTouch(tvalFillGVA)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMNEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMNEvent.scala
+index a8b366559d6..a60d3fdc5af 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMNEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMNEvent.scala
+@@ -14,7 +14,6 @@ class TrapEntryMNEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val mnstatus = ValidIO((new MnstatusBundle ).addInEvent(_.MNPP, _.MNPV, _.NMIE))
+   val mnepc    = ValidIO((new Epc           ).addInEvent(_.epc))
+   val mncause  = ValidIO((new CauseBundle   ).addInEvent(_.Interrupt, _.ExceptionCode))
+-  val targetPc = ValidIO(new TargetPCBundle)
+ }
+ 
+ class TrapEntryMNEventModule(implicit val p: Parameters) extends Module with CSREventBase {
+@@ -45,7 +44,6 @@ class TrapEntryMNEventModule(implicit val p: Parameters) extends Module with CSR
+   out.mnstatus.valid  := valid
+   out.mnepc.valid     := valid
+   out.mncause.valid   := valid
+-  out.targetPc.valid  := in.pcFromXtvec.valid
+ 
+   out.privState.bits             := PrivState.ModeM
+   out.mnstatus.bits.MNPP         := current.privState.PRVM
+@@ -54,10 +52,6 @@ class TrapEntryMNEventModule(implicit val p: Parameters) extends Module with CSR
+   out.mnepc.bits.epc             := Mux(isFetchMalAddr, in.fetchMalTval(63, 1), trapPC(63, 1))
+   out.mncause.bits.Interrupt     := isInterrupt
+   out.mncause.bits.ExceptionCode := highPrioTrapNO
+-  out.targetPc.bits.pc           := in.pcFromXtvec.bits
+-  out.targetPc.bits.raiseIPF     := false.B
+-  out.targetPc.bits.raiseIAF     := AddrTransType(bare = true).checkAccessFault(in.pcFromXtvec.bits)
+-  out.targetPc.bits.raiseIGPF    := false.B
+ 
+ }
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+index cbb7ec804c4..a89be860285 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+@@ -18,7 +18,6 @@ class TrapEntryVSEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val vsepc    = ValidIO((new Epc           ).addInEvent(_.epc))
+   val vscause  = ValidIO((new CauseBundle   ).addInEvent(_.Interrupt, _.ExceptionCode))
+   val vstval   = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+-  val targetPc = ValidIO(new TargetPCBundle)
+ }
+ 
+ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSREventBase {
+@@ -99,14 +98,6 @@ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSR
+     tvalFillInst     -> trapInst,
+   ))
+ 
+-  private val instrAddrTransType = AddrTransType(
+-    bare = vsatp.MODE === SatpMode.Bare && hgatp.MODE === HgatpMode.Bare,
+-    sv39 = vsatp.MODE === SatpMode.Sv39,
+-    sv48 = vsatp.MODE === SatpMode.Sv48,
+-    sv39x4 = vsatp.MODE === SatpMode.Bare && hgatp.MODE === HgatpMode.Sv39x4,
+-    sv48x4 = vsatp.MODE === SatpMode.Bare && hgatp.MODE === HgatpMode.Sv48x4
+-  )
+-
+   out := DontCare
+ 
+   out.privState.valid := valid
+@@ -115,7 +106,6 @@ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSR
+   out.vsepc    .valid := valid
+   out.vscause  .valid := valid
+   out.vstval   .valid := valid
+-  out.targetPc .valid := in.pcFromXtvec.valid
+ 
+   out.privState.bits             := PrivState.ModeVS
+   // vsstatus
+@@ -128,10 +118,6 @@ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSR
+   out.vscause.bits.Interrupt     := isInterrupt
+   out.vscause.bits.ExceptionCode := Mux(virtualInterruptIsHvictlInject, hvictlIID, highPrioTrapNO)
+   out.vstval.bits.ALL            := Mux(isFetchMalAddrExcp, in.fetchMalTval, tval)
+-  out.targetPc.bits.pc           := in.pcFromXtvec.bits
+-  out.targetPc.bits.raiseIPF     := instrAddrTransType.checkPageFault(in.pcFromXtvec.bits)
+-  out.targetPc.bits.raiseIAF     := instrAddrTransType.checkAccessFault(in.pcFromXtvec.bits)
+-  out.targetPc.bits.raiseIGPF    := instrAddrTransType.checkGuestPageFault(in.pcFromXtvec.bits)
+ 
+   dontTouch(tvalFillGVA)
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 9bc598c519f..ef79b632740 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -90,8 +90,6 @@ class NewCSROutput(implicit p: Parameters) extends Bundle {
+   val EX_VI = Bool()
+   val flushPipe = Bool()
+   val rData = UInt(64.W)
+-  val targetPcUpdate = Bool()
+-  val targetPc = new TargetPCBundle
+   val regOut = UInt(64.W)
+   // perf
+   val isPerfCnt = Bool()
+@@ -227,6 +225,9 @@ class NewCSR(implicit val p: Parameters) extends Module
+     val fetchMalTval = Input(UInt(XLEN.W))
+ 
+     val distributedWenLegal = Output(Bool())
++
++    val trapTargetPc = ValidIO(new TargetPCBundle)
++    val xretTargetPc = ValidIO(new TargetPCBundle)
+   })
+ 
+   val toAIA   = IO(Output(new CSRToAIABundle))
+@@ -786,19 +787,11 @@ class NewCSR(implicit val p: Parameters) extends Module
+     println(mod.dumpFields)
+   }
+ 
+-  private val trapEventValid = Seq(trapEntryMEvent, trapEntryMNEvent, trapEntryHSEvent, trapEntryVSEvent).map(_.valid).reduce(_ || _)
+-  private val delayedPcFromXtvec = RegEnable(trapHandleMod.io.out.pcFromXtvec, trapEventValid)
+   trapEntryMNEvent.valid  := ((hasTrap && nmi) || dbltrpToMN) && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE
+   trapEntryMEvent .valid  := hasTrap && entryPrivState.isModeM && !dbltrpToMN && !entryDebugMode && !debugMode && !nmi && mnstatus.regOut.NMIE
+   trapEntryHSEvent.valid  := hasTrap && entryPrivState.isModeHS && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE
+   trapEntryVSEvent.valid  := hasTrap && entryPrivState.isModeVS && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE
+ 
+-  trapEntryDEvent .in.pcFromXtvec.valid  := false.B
+-  trapEntryMNEvent.in.pcFromXtvec.valid  := GatedValidRegNext(trapEntryMNEvent.valid)
+-  trapEntryMEvent .in.pcFromXtvec.valid  := GatedValidRegNext(trapEntryMEvent .valid)
+-  trapEntryHSEvent.in.pcFromXtvec.valid  := GatedValidRegNext(trapEntryHSEvent.valid)
+-  trapEntryVSEvent.in.pcFromXtvec.valid  := GatedValidRegNext(trapEntryVSEvent.valid)
+-
+   Seq(trapEntryMEvent, trapEntryMNEvent, trapEntryHSEvent, trapEntryVSEvent, trapEntryDEvent).foreach { eMod =>
+     eMod.in match {
+       case in: TrapEntryEventInput =>
+@@ -825,7 +818,6 @@ class NewCSR(implicit val p: Parameters) extends Module
+         in.hstatus := hstatus.regOut
+         in.sstatus := mstatus.sstatus
+         in.vsstatus := vsstatus.regOut
+-        in.pcFromXtvec.bits  := delayedPcFromXtvec
+ 
+         in.menvcfg := menvcfg.regOut
+         in.henvcfg := henvcfg.regOut
+@@ -1022,11 +1014,6 @@ class NewCSR(implicit val p: Parameters) extends Module
+     }
+   })
+ 
+-  private val xretTargetUpdate = mnretEvent.out.targetPc.valid || mretEvent.out.targetPc.valid || sretEvent.out.targetPc.valid || dretEvent.out.targetPc.valid
+-  private val trapTargetUpdate = trapEntryMEvent.out.targetPc.valid || trapEntryMNEvent.out.targetPc.valid || 
+-    trapEntryHSEvent.out.targetPc.valid || trapEntryVSEvent.out.targetPc.valid || trapEntryDEvent.out.targetPc.valid
+-  private val needTargetUpdate = xretTargetUpdate || trapTargetUpdate
+-
+   private val noCSRIllegal = (ren || wen) && Cat(csrRwMap.keys.toSeq.sorted.map(csrAddr => !(addr === csrAddr.U))).andR
+ 
+   private val noCSRIllegalReg = RegEnable(noCSRIllegal, ren || wen)
+@@ -1116,22 +1103,6 @@ class NewCSR(implicit val p: Parameters) extends Module
+       fromAIA.rdata.valid -> fromAIA.rdata.bits.data
+     )), 0.U(64.W), io.in.fire || fromAIA.rdata.valid || claimAIA)
+   io.out.bits.regOut := regOut
+-  io.out.bits.targetPc := DataHoldBypass(
+-    Mux(trapEntryDEvent.out.targetPc.valid,
+-      trapEntryDEvent.out.targetPc.bits,
+-      Mux1H(Seq(
+-        mnretEvent.out.targetPc.valid -> mnretEvent.out.targetPc.bits,
+-        mretEvent.out.targetPc.valid  -> mretEvent.out.targetPc.bits,
+-        sretEvent.out.targetPc.valid  -> sretEvent.out.targetPc.bits,
+-        dretEvent.out.targetPc.valid  -> dretEvent.out.targetPc.bits,
+-        trapEntryMEvent.out.targetPc.valid -> trapEntryMEvent.out.targetPc.bits,
+-        trapEntryMNEvent.out.targetPc.valid -> trapEntryMNEvent.out.targetPc.bits,
+-        trapEntryHSEvent.out.targetPc.valid -> trapEntryHSEvent.out.targetPc.bits,
+-        trapEntryVSEvent.out.targetPc.valid -> trapEntryVSEvent.out.targetPc.bits)
+-      )
+-    ),
+-  needTargetUpdate)
+-  io.out.bits.targetPcUpdate := trapTargetUpdate
+   io.out.bits.isPerfCnt := DataHoldBypass(addrInPerfCnt, false.B, io.in.fire)
+ 
+   io.status.privState := privState
+@@ -1150,6 +1121,37 @@ class NewCSR(implicit val p: Parameters) extends Module
+   io.status.debugMode := debugMode
+   io.status.singleStepFlag := !debugMode && dcsr.regOut.STEP
+ 
++  private val nonDebugTrapEventValid = Cat(Seq(trapEntryMEvent, trapEntryMNEvent, trapEntryHSEvent, trapEntryVSEvent).map(_.valid)).asUInt.orR
++  private val delayedPcFromXtvec = RegEnable(trapHandleMod.io.out.pcFromXtvec, nonDebugTrapEventValid)
++  private val nonDebugTrapTargetPc = Wire(new TargetPCBundle)
++  nonDebugTrapTargetPc.pc        := delayedPcFromXtvec
++  nonDebugTrapTargetPc.raiseIPF  := io.status.instrAddrTransType.checkPageFault(delayedPcFromXtvec)
++  nonDebugTrapTargetPc.raiseIAF  := io.status.instrAddrTransType.checkAccessFault(delayedPcFromXtvec)
++  nonDebugTrapTargetPc.raiseIGPF := io.status.instrAddrTransType.checkGuestPageFault(delayedPcFromXtvec)
++  
++  private val trapTargetUpdate = RegNext(nonDebugTrapEventValid || trapEntryDEvent.valid, false.B)
++  io.trapTargetPc.valid := trapTargetUpdate
++  io.trapTargetPc.bits := DataHoldBypass(
++    Mux(
++      trapEntryDEvent.out.targetPc.valid,
++      trapEntryDEvent.out.targetPc.bits,
++      nonDebugTrapTargetPc,
++    ),
++    trapTargetUpdate
++  )
++
++  private val xretTargetUpdate = mnretEvent.out.targetPc.valid || mretEvent.out.targetPc.valid || sretEvent.out.targetPc.valid || dretEvent.out.targetPc.valid
++  io.xretTargetPc.valid := xretTargetUpdate
++  io.xretTargetPc.bits := DataHoldBypass(
++    Mux1H(Seq(
++      mnretEvent.out.targetPc.valid -> mnretEvent.out.targetPc.bits,
++      mretEvent.out.targetPc.valid  -> mretEvent.out.targetPc.bits,
++      sretEvent.out.targetPc.valid  -> sretEvent.out.targetPc.bits,
++      dretEvent.out.targetPc.valid  -> dretEvent.out.targetPc.bits,
++    )),
++    xretTargetUpdate
++  )
++
+   /**
+    * debug_begin
+    */
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index e1214cb1d8e..6aefcf69046 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -197,8 +197,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+       t.valid && !t.bits.isInterrupt && (t.bits.trapVec(EX_II) || t.bits.trapVec(EX_VI))
+   })
+ 
+-  trapTvalMod.io.targetPc.valid := csrMod.io.out.bits.targetPcUpdate
+-  trapTvalMod.io.targetPc.bits := csrMod.io.out.bits.targetPc
++  trapTvalMod.io.targetPc := csrMod.io.trapTargetPc
+   trapTvalMod.io.clear := csrIn.exception.valid && csrIn.exception.bits.isFetchMalAddr
+   trapTvalMod.io.fromCtrlBlock.flush := io.flush
+   trapTvalMod.io.fromCtrlBlock.robDeqPtr := io.csrio.get.robDeqPtr
+@@ -302,11 +301,11 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   redirect.ftqIdx := RegEnable(io.in.bits.ctrl.ftqIdx.get, io.in.fire)
+   redirect.ftqOffset := RegEnable(io.in.bits.ctrl.ftqOffset.get, io.in.fire)
+   redirect.taken := true.B
+-  redirect.fullTarget := csrMod.io.out.bits.targetPc.pc
+-  redirect.target := csrMod.io.out.bits.targetPc.pc
+-  redirect.backendIPF := csrMod.io.out.bits.targetPc.raiseIPF
+-  redirect.backendIAF := csrMod.io.out.bits.targetPc.raiseIAF
+-  redirect.backendIGPF := csrMod.io.out.bits.targetPc.raiseIGPF
++  redirect.fullTarget := csrMod.io.xretTargetPc.bits.pc
++  redirect.target := csrMod.io.xretTargetPc.bits.pc
++  redirect.backendIPF := csrMod.io.xretTargetPc.bits.raiseIPF
++  redirect.backendIAF := csrMod.io.xretTargetPc.bits.raiseIAF
++  redirect.backendIGPF := csrMod.io.xretTargetPc.bits.raiseIGPF
+   // Only mispred will send redirect to frontend
+   redirect.isMisPred := true.B
+ 
+@@ -335,7 +334,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+ 
+   csrOut.isXRet := isXRet
+ 
+-  csrOut.trapTarget := csrMod.io.out.bits.targetPc
++  csrOut.trapTarget := csrMod.io.trapTargetPc.bits
+   csrOut.interrupt := csrMod.io.status.interrupt
+   csrOut.wfi_event := csrMod.io.status.wfiEvent

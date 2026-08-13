@@ -1,0 +1,6 @@
+[difftest enabled]
+log: /tmp/xs_native_case12_20260325_203752/emu.log
+
+11:The first instruction of core 0 has commited. Difftest enabled.
+78:v1_high different at pc = 0x0080000028, right = 0x74873cf3e0e18a53, wrong = 0xffffffffffffffff
+79:Core 0: ABORT at pc = 0xdc5a043a8197

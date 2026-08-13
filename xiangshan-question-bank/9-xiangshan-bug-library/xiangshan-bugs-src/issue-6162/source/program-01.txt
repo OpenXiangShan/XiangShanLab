@@ -1,0 +1,6 @@
+access_probe:
+    sd      s3, 0(s0)
+    la      t0, observed_reg
+    sd      s2, 0(t0)
+    li      a0, 10
+    ecall

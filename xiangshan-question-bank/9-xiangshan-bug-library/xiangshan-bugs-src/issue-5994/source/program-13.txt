@@ -1,0 +1,1 @@
+gtkwave ./cbnez_redirect_fulltrace_8000_9000.vcd

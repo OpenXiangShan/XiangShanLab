@@ -1,0 +1,163 @@
+emu compiled at Aug 25 2025, 19:57:26
+Using simulated 32768B flash
+Core  0's Commit SHA is: 5adaa47ba5, dirty: 0
+Using simulated 8386560MB RAM
+The image is ./errors/6e491f5ce5f2b87469418a09cd0a4420
+The reference model is /home/xuyinan/xs2/NEMU/build/riscv64-nemu-interpreter-so
+The first instruction of core 0 has commited. Difftest enabled. 
+[1;34m[src/memory/paddr.c:230,check_paddr] isa pmp check failed[0m
+
+==============  In the last commit group  ==============
+the first commit instr pc of DUT is 0x000000008001a000
+the first commit instr pc of REF is 0x000000008001a000
+
+============== Commit Group Trace (Core 0) ==============
+commit group [00]: pc 008000016a cmtcnt 3
+commit group [01]: pc 0080000172 cmtcnt 1
+commit group [02]: pc 0080000176 cmtcnt 1
+commit group [03]: pc 0080000178 cmtcnt 2
+commit group [04]: pc 008000017e cmtcnt 1
+commit group [05]: pc 0080000182 cmtcnt 1
+commit group [06]: pc 0080000186 cmtcnt 5
+commit group [07]: pc 0080000194 cmtcnt 1
+commit group [08]: pc 0080000196 cmtcnt 1
+commit group [09]: pc 008000019a cmtcnt 2
+commit group [10]: pc 00800001a2 cmtcnt 1
+commit group [11]: pc 00800001a4 cmtcnt 1
+commit group [12]: pc 00800001a8 cmtcnt 1
+commit group [13]: pc 00800001aa cmtcnt 1
+commit group [14]: pc 00800001ae cmtcnt 1
+commit group [15]: pc 008001a000 cmtcnt 3 <--
+
+============== Commit Instr Trace ==============
+[00] commit pc 000000008000015e inst fef6d9e3 wen 0 dst 19 data 0000000000000000 idx 07f bge     a3, a5, pc - 14
+[01] commit pc 0000000080000150 inst 0007b303 wen 1 dst 06 data ad5e059ebcfb408b idx 080 (12) ld      t1, 0(a5)
+[02] commit pc 0000000080000154 inst 01837333 wen 1 dst 06 data ad5e059ebcfb408b idx 081 and     t1, t1, s8
+[03] commit pc 0000000080000158 inst 0067b023 wen 0 dst 00 data 0000000000000000 idx 082 (12) sd      t1, 0(a5)
+[04] commit pc 000000008000015c inst 00878793 wen 1 dst 15 data 00000000800217a0 idx 083 addi    a5, a5, 8
+[05] commit pc 000000008000015e inst fef6d9e3 wen 0 dst 19 data 0000000000000000 idx 084 bge     a3, a5, pc - 14
+[06] commit pc 0000000080000150 inst 0007b303 wen 1 dst 06 data 3c662b9072945e14 idx 085 (13) ld      t1, 0(a5)
+[07] commit pc 0000000080000154 inst 01837333 wen 1 dst 06 data 3c662b9072945e04 idx 086 and     t1, t1, s8
+[08] commit pc 0000000080000158 inst 0067b023 wen 0 dst 00 data 0000000000000000 idx 087 (13) sd      t1, 0(a5)
+[09] commit pc 000000008000015c inst 00878793 wen 1 dst 15 data 00000000800217a8 idx 088 addi    a5, a5, 8
+[10] commit pc 000000008000015e inst fef6d9e3 wen 0 dst 19 data 0000000000000000 idx 089 bge     a3, a5, pc - 14
+[11] commit pc 0000000080000162 inst 12000073 wen 0 dst 00 data 0000000000000000 idx 08a sfence.vma zero, zero
+[12] commit pc 0000000080000166 inst 00000797 wen 1 dst 15 data 0000000080000166 idx 08b auipc   a5, 0x0
+[13] commit pc 000000008000016a inst 04c78793 wen 1 dst 15 data 00000000800001b2 idx 08c addi    a5, a5, 76
+[14] commit pc 0000000080000172 inst 34179073 wen 0 dst 00 data 0000000000000000 idx 08d csrw    mepc, a5
+[15] commit pc 0000000080000176 inst 00000013 wen 0 dst 00 data 0000000000000000 idx 08e nop
+[16] commit pc 0000000080000178 inst fff0079b wen 1 dst 15 data ffffffffffffffff idx 08f addiw   a5, zero, -1
+[17] commit pc 000000008000017e inst 18079073 wen 0 dst 00 data 0000000000000000 idx 090 csrw    satp, a5
+[18] commit pc 0000000080000182 inst 0001e797 wen 1 dst 15 data 000000008001e182 idx 091 auipc   a5, 0x1e
+[19] commit pc 0000000080000186 inst e7e78793 wen 1 dst 15 data 000000008001e000 idx 092 addi    a5, a5, -386
+[20] commit pc 0000000080000194 inst 00d7f7b3 wen 1 dst 15 data 000000000008001e idx 093 and     a5, a5, a3
+[21] commit pc 0000000080000196 inst 1807a073 wen 0 dst 00 data 0000000000000000 idx 094 csrs    satp, a5
+[22] commit pc 000000008000019a inst 005007b7 wen 1 dst 15 data 0000000000500021 idx 095 lui     a5, 0x500
+[23] commit pc 00000000800001a2 inst 00d79793 wen 1 dst 15 data 0000000a00042000 idx 096 slli    a5, a5, 13
+[24] commit pc 00000000800001a4 inst 30079073 wen 0 dst 00 data 0000000000000000 idx 097 csrw    mstatus, a5
+[25] commit pc 00000000800001a8 inst 00000793 wen 1 dst 15 data 0000000000000000 idx 098 li      a5, 0
+[26] commit pc 00000000800001aa inst 30479073 wen 0 dst 00 data 0000000000000000 idx 099 csrw    mie, a5
+[27] commit pc 00000000800001ae inst 30200073 wen 0 dst 00 data 0000000000000000 idx 09a mret
+[28] exception pc 00000000000001b2 inst 004fe7b7 cause 0000000000000001 lui     a5, 0x4fe
+[29] commit pc 000000008001a000 inst 1e813687 wen 1 dst 13 data 0000000000000000 idx 09b (14) (S) fld     fa3, 488(sp)
+[30] commit pc 000000008001a002 inst 8545f2b7 wen 1 dst 05 data ffffffff8545f000 idx 09c lui     t0, 0x8545f
+[31] commit pc 000000008001a006 inst 9f9ff06f wen 0 dst 00 data 0000000000000000 idx 09d j       pc - 0x608 <--
+
+==============  REF Regs  ==============
+---------------- Intger Registers ----------------
+  $0: 0x0000000000000000   ra: 0x0000000000000000   sp: 0x0000000000000000   gp: 0x0000000000000000 
+  tp: 0x0000000000000000   t0: 0xffffffff8545f000   t1: 0x3c662b9072945e04   t2: 0x0000000000000000 
+  s0: 0x0000000000000000   s1: 0x0000000000000000   a0: 0x0000000000000000   a1: 0x0000000000000000 
+  a2: 0x0000000000000000   a3: 0x00000fffffffffff   a4: 0x0000000000000000   a5: 0x0000000000000000 
+  a6: 0x0000000000000000   a7: 0x0000000000000000   s2: 0x0000000000000000   s3: 0x0000000000000000 
+  s4: 0x0000000000000000   s5: 0x0000000000000000   s6: 0x0000000000000000   s7: 0x0000000080000016 
+  s8: 0xffffffffffffffef   s9: 0x0000000000000000  s10: 0x000000008004acf8  s11: 0x0000000000000000 
+  t3: 0x0000000000000000   t4: 0x0000000000000000   t5: 0x0000000000000000   t6: 0x0000000000000000 
+---------------- Float Registers ----------------
+ ft0: 0x83720928b14f7ede  ft1: 0x06e02a1b9ad95e1a  ft2: 0x0c6d91c161353d9d  ft3: 0x05bc7aba82c679d0 
+ ft4: 0x2ab3fcde459dae4f  ft5: 0x7c68394e98cce9fb  ft6: 0x932424c2e84bdbda  ft7: 0x851107f32494b32d 
+ fs0: 0x68bbeb876e327430  fs1: 0x8b6dac8280448a62  fa0: 0xf72ac676c6eaf24e  fa1: 0x2ff97251189f6b2b 
+ fa2: 0xdcc4e347dc327d80  fa3: 0x0000000000000000  fa4: 0xbe1f6612f6c63f99  fa5: 0x7d886c5e19c30c8c 
+ fa6: 0x7be5468818d23360  fa7: 0xde5b10ac25491097  fs2: 0xadf066e1bb240882  fs3: 0x6345eddcff7b5cca 
+ fs4: 0xbac25b1fa93eccaa  fs5: 0x5e827755d5e29523  fs6: 0xb6fd9c38870fcc27  fs7: 0xb2cded3c50a4037e 
+ fs8: 0xdc05d41ba91a6f1c  fs9: 0xe88ee5eef3674f19 fs10: 0x0000000000000000 fs11: 0xb1b119ca0bbd1a9b 
+ ft8: 0xdc536ea7ee9bb03d  ft9: 0x8e0844084359ba56 ft10: 0xeab2f59456a27122 ft11: 0x847591c49bc71b70 
+ fcsr: 0x0000000000000000 fflags: 0x0000000000000000 frm: 0x0000000000000000
+---------------- Privileged CSRs ----------------
+pc: 0x00000000800199fe  privilege mode: M (mode: 3  v: 0  debug: 0)
+   mstatus: 0x0000040a00042000   sstatus: 0x0000000200042000  vsstatus: 0x0000000200000000
+   hstatus: 0x0000000200000000  mnstatus: 0x0000000000000008
+    mcause: 0x0000000000000001      mepc: 0x00000000000001b2     mtval: 0x00000000000001b2
+    scause: 0x0000000000000000      sepc: 0x0000000000000000     stval: 0x0000000000000000
+   vscause: 0x0000000000000000     vsepc: 0x0000000000000000    vstval: 0x0000000000000000
+   mncause: 0x0000000000000000     mnepc: 0x0000000000000000 mnscratch: 0x0000000000000000
+    mtval2: 0x0000000000000000     htval: 0x0000000000000000
+    mtinst: 0x0000000000000000    htinst: 0x0000000000000000
+  mscratch: 0xb31f54078bf0a73c  sscratch: 0xd57a0802bea3589e vsscratch: 0xc6ef3d8452df952f
+     mtvec: 0x000000008001a001     stvec: 0x0000000000019001    vstvec: 0x0000000000000000
+       mip: 0x0000000000000000       mie: 0x0000000000000000
+   mideleg: 0x0000000000001444   medeleg: 0x0000000000000000
+   hideleg: 0x0000000000000000   hedeleg: 0x0000000000000000
+      satp: 0x800000000008001e     hgatp: 0x0000000000000000     vsatp: 0x0000000000000000
+ mcounteren: 0x0000000000000000 scounteren: 0x0000000000000000 hcounteren: 0x0000000000000000
+  miselect: 0x0000000000000000  siselect: 0x0000000000000000 vsiselect: 0x0000000000000000
+     mireg: 0x0000000000000000     sireg: 0x0000000000000000    vsireg: 0x0000000000000000
+     mtopi: 0x0000000000000000     stopi: 0x0000000000000000    vstopi: 0x0000000000000000
+     mvien: 0x0000000000000000     hvien: 0x0000000000000000      mvip: 0x0000000000000000
+    mtopei: 0x0000000000000000    stopei: 0x0000000000000000   vstopei: 0x0000000000000000
+    hvictl: 0x0000000000000000  hviprio1: 0x0000000000000000  hviprio2: 0x0000000000000000
+---------------- PMP CSRs ----------------
+pmp: 16 entries active, details:
+ 0: cfg:0x00 addr:0x0000000000000000| 1: cfg:0x00 addr:0x0000000000000000
+ 2: cfg:0x00 addr:0x0000000000000000| 3: cfg:0x00 addr:0x0000000000000000
+ 4: cfg:0x00 addr:0x0000000000000000| 5: cfg:0x00 addr:0x0000000000000000
+ 6: cfg:0x00 addr:0x0000000000000000| 7: cfg:0x00 addr:0x0000000000000000
+ 8: cfg:0x00 addr:0x0000000000000000| 9: cfg:0x00 addr:0x0000000000000000
+10: cfg:0x00 addr:0x0000000000000000|11: cfg:0x00 addr:0x0000000000000000
+12: cfg:0x00 addr:0x0000000000000000|13: cfg:0x00 addr:0x0000000000000000
+14: cfg:0x00 addr:0x0000000000000000|15: cfg:0x00 addr:0x0000000000000000
+---------------- PMA CSRs ----------------
+pma: 16 entries active, details:
+ 0: cfg:0x00 addr:0x0000000000000000| 1: cfg:0x00 addr:0x0000000000000000
+ 2: cfg:0x00 addr:0x0000000000000000| 3: cfg:0x0b addr:0x0000000004000000
+ 4: cfg:0x0f addr:0x0000000008000000| 5: cfg:0x0b addr:0x000000000c004000
+ 6: cfg:0x0b addr:0x000000000c014000| 7: cfg:0x0b addr:0x000000000e008000
+ 8: cfg:0x0f addr:0x000000000e008400| 9: cfg:0x0b addr:0x000000000e008800
+10: cfg:0x0b addr:0x000000000e400000|11: cfg:0x0b addr:0x000000000e400800
+12: cfg:0x08 addr:0x000000000e800000|13: cfg:0x0b addr:0x0000000020000000
+14: cfg:0x6f addr:0x0000020000000000|15: cfg:0x18 addr:0x00001fffffffffff
+---------------- Vector Registers ----------------
+v0 : 0xd65b578b62ebb4ee_97441b635158b255  v1 : 0x3193c904f8a8fd27_9cf33081b5f52dc7  
+v2 : 0x5d9384479f8ebf13_489c4012299b5df5  v3 : 0x2d2e6ed100dfc61c_5e0f06217c56e448  
+v4 : 0xee8b177098867afe_fb80a977f16f9361  v5 : 0xde819994a5fcb1fa_5b1ab0b54f262737  
+v6 : 0x95659d6091464778_9efd67261798c1c7  v7 : 0x4ec948f70ccfb300_b68cbbf0c422036e  
+v8 : 0x2442135de09ca5ae_68ef43d1ff008526  v9 : 0xce84913ad0812913_c4e4e436a3cdeedf  
+v10: 0xa4749f6e6a00457b_eb8ae87d0e8b3904  v11: 0xa3fbeccbc2388a92_00d61ce2c8d0be4b  
+v12: 0x958c831edc3d18f7_b2ce521d12bdc3dc  v13: 0xf67eea2184e2c3d1_0dfcc4854b3cfa32  
+v14: 0x37ff3c4fa0317cb8_23acce7aa7646e75  v15: 0xe245998903c440d7_91352d2fdc1c66e9  
+v16: 0x6cf9a9a8546b726a_d9a4c8fd3741201b  v17: 0x9ec317e69fb2ebc6_d104c8b51f4b6e19  
+v18: 0x678b2c18d4f3ab64_2da17e845935e699  v19: 0x4958133840951633_3f73dec71c5efabf  
+v20: 0x081d800b91fc5716_43357f6460f78c67  v21: 0xe603a4e118757114_44da037028a626a9  
+v22: 0x43dc16d80c1b0c3e_85e674dd227d92d3  v23: 0x8f6bee861874485c_948c165e2db27ad1  
+v24: 0x16cd070497a28ca8_7ff4db1d1e33ecbb  v25: 0xdc54cc960598462d_13644d0a7af88037  
+v26: 0x9ee76ff3582816f6_d549ed4f9d988cc6  v27: 0xcd6ef43b0b11f331_3311d31c7ac8bff5  
+v28: 0xbd2e62b391017f05_46daae6dc9bee4b0  v29: 0x22a56c685fe7d3f4_2f9a4752e6b6a18d  
+v30: 0xb82fd02bea44893d_2fa2ae7ed37cd259  v31: 0xd5c291d1c93eabff_dbe4abc4f86821a9  
+  vtype: 0x8000000000000000 vstart: 0x0000000000000000  vxsat: 0x0000000000000001
+   vxrm: 0x0000000000000002     vl: 0x0000000000000000   vcsr: 0x0000000000000005
+---------------- Triggers ----------------
+ tselect: 0x0000000000000000
+ 0: tdata1: 0xf000000000000000 tdata2: 0x0000000000000000
+ 1: tdata1: 0xf000000000000000 tdata2: 0x0000000000000000
+ 2: tdata1: 0xf000000000000000 tdata2: 0x0000000000000000
+ 3: tdata1: 0xf000000000000000 tdata2: 0x0000000000000000
+ 4: tdata1: 0x0000000000000000 tdata2: 0x0000000000000000
+privilegeMode: 3
+mstatus different at pc = 0x008001a000, right= 0x0000040a00042000, wrong = 0x8000040a00046000
+sstatus different at pc = 0x008001a000, right= 0x0000000200042000, wrong = 0x8000000200046000
+Core 0: [31mABORT at pc = 0x80019a12
+[0m[35mCore-0 instrCnt = 194, cycleCnt = 4,787, IPC = 0.040526
+[0mSimMemory: img_size 41772, req_all 416, req_in_range 416
+[34mSeed=0 Guest cycle spent: 4,791 (this will be different from cycleCnt if emu loads a snapshot)
+[0m[34mHost time spent: 1,775ms
+[0m

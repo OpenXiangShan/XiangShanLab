@@ -1,0 +1,1 @@
+* Sbuffer write and Atomics should not report errors, but refill from L2 should report ecc error, but requests in MissQueue carry `isAmo` or `isStore` and `req.miss` in a request, hence `(s2_req.isAMO || s2_req.isStore)` includes the refill, so the missing request of  `isAmo` or `isStore` will not report an error

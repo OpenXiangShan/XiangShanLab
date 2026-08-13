@@ -1,0 +1,2 @@
+  $XS_HOME/build/emu
+  $XS_HOME/build/verilator-compile/emu

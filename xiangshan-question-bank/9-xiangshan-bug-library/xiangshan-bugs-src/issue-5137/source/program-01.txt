@@ -1,0 +1,2 @@
+riscv64-unknown-elf-gcc -march=rv64imafdc -mabi=lp64d -nostartfiles -nostdlib -Wl,-e,_start -T link.ld -o test.elf test.S
+./emu -i test.elf --diff=nemu

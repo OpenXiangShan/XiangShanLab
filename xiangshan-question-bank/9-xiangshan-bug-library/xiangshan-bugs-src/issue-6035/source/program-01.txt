@@ -1,0 +1,6 @@
+   mode different at pc = 0xffffa81ef9122bd8, right = 0x3, wrong = 0x0
+mstatus different at pc = 0xffffa81ef9122bd8, right = 0x8000040a00506680, wrong = 0x8000000a00506688
+   mepc different at pc = 0xffffa81ef9122bd8, right = 0x800010ac, wrong = 0x80001090
+  mtval different at pc = 0xffffa81ef9122bd8, right = 0xffffffff9c3e9268, wrong = 0x0422b373
+ mcause different at pc = 0xffffa81ef9122bd8, right = 0x5, wrong = 0x2
+Core 0: ABORT at pc = 0xffffa81ef9122bd8

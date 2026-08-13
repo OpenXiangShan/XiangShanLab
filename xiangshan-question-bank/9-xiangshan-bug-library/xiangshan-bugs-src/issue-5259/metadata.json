@@ -1,0 +1,28 @@
+{
+  "number": 5259,
+  "title": "fix(wakeup): fix bug of csr wakeup",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5259",
+  "state": "closed",
+  "labels": [
+    "module: backend",
+    "topic: functionality"
+  ],
+  "author": "xiaofeibao-xjtu",
+  "created_at": "2025-11-26T04:54:19Z",
+  "updated_at": "2025-12-01T01:28:41Z",
+  "submitted_at": "2025-11-26",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5259/commit-log.md"
+  ],
+  "bug_categories": [
+    "backend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

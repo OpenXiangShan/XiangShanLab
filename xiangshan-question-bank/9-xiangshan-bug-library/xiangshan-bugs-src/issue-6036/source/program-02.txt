@@ -1,0 +1,1 @@
+evl = NREG * VLEN / SEW = VLEN / 64 = vlenb / 8

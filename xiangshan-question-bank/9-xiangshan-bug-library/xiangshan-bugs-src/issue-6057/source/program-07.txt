@@ -1,0 +1,4 @@
+cd /path/to/XiangShan
+./build/emu -b 0 -e 0 \
+  -i /path/to/mtval_wrong_instruction_repro.img \
+  --diff /path/to/ready-to-run/riscv64-spike-so

@@ -1,0 +1,25 @@
+{
+  "number": 5830,
+  "title": "[BUG] `vfmv.f.s` fails to NaN-box 32-bit values when writing to a 64-bit floating-point registe",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5830",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: unknown"
+  ],
+  "author": "jimmymtest",
+  "created_at": "2026-04-20T06:29:03Z",
+  "updated_at": "2026-04-20T07:17:00Z",
+  "source_files": [
+    "issue-5830/source/diff.log",
+    "issue-5830/source/bug-report.tar.gz",
+    "issue-5830/source/program-01.S",
+    "issue-5830/source/program-02.txt",
+    "issue-5830/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-5830/source/diff.log",
+    "issue-5830/source/bug-report.tar.gz"
+  ],
+  "has_comments": true
+}

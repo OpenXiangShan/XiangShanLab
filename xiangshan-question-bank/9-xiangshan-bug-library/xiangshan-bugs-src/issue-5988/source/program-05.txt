@@ -1,0 +1,2 @@
+unzip xiangshan-mainbtb-replacer-alias-poc.zip
+bash poc.sh

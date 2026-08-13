@@ -1,0 +1,18 @@
+time 1227:
+  ldin_fuop=10
+  tlb_is_prefetch=1
+  s0_req_cmd=2
+  s0_req_vaddr=0x80001000
+
+time 1227:
+  top_req_valid=1
+  top_req_ready=1
+  top_req_cmd=2
+  top_req_vaddr=0x80001000
+
+time 1229:
+  s2_pipein_fuop=10
+  s2_pipein_vaddr=0x80001000
+  s2_pmp_ld=0
+  s2_pmp_unaccessable=0
+  s2_dcache_kill=0

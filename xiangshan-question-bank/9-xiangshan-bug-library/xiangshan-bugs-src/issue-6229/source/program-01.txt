@@ -1,0 +1,5 @@
+// asm
+# a0 == sp, sp = 0x…e610e7   (8-byte-misaligned)
+sd  t0, 280(sp)     # writes 0x0f to VA sp+280 -> PA 0x800611ff (spans …ff..06, crosses 0x80061200)
+...
+ld  a1, 280(a0)     # reads the SAME address; must return 0x0f; XiangShan returns stale 0x0c

@@ -1,0 +1,3 @@
+disabled_try_write              = 10
+disabled_blocked_write          = 9
+disabled_samebank_blocked_write = 9

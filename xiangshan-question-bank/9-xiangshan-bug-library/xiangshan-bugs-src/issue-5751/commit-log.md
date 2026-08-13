@@ -1,0 +1,191 @@
+# Commit Log
+- Issue: #5751
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5751
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5751
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5751
+- Changed files: 4
+- Additions: 42
+- Deletions: 20
+
+## Files
+- `src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LSQCommon.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala`
+- `src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala
+index 445759d3c57..4c8b24129f9 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala
+@@ -107,6 +107,7 @@ class StoreAddrIO(implicit p: Parameters) extends MemBlockBundle {
+   val memBackTypeMM   = Bool() // 1: main memory, 0: IO.
+   val hasException    = Bool() // indicate request has exception.
+   val af              = Bool() // indicate access fault.
++  val isHyper         = Bool()
+ 
+ 
+   /* only use in cmo.zero
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQCommon.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQCommon.scala
+index a2289d06c4f..49684f15b02 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQCommon.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQCommon.scala
+@@ -30,18 +30,20 @@ abstract class LSQModule(implicit p: Parameters) extends XSModule
+ 
+ 
+ object MemoryType {
+-  def cacheable: UInt     = "b00".U
+-  def pbmtNc: UInt        = "b01".U
+-  def pbmtIo: UInt        = "b10".U
+-  def io: UInt            = "b11".U // IO device
++  def cacheable: UInt     = "b000".U
++  def memoryPbmtNc: UInt  = "b001".U
++  def memoryPbmtIo: UInt  = "b010".U
++  def devicePbmtNc: UInt  = "b101".U
++  def deviceIo: UInt      = "b111".U // device IO & pbmt device IO
+ 
+-  def isPMPIO(in: UInt):  Bool = in(0) && in(1)
+-  def isMMIO(in: UInt):   Bool = in(1) // pbmt io and device io
++  def isDeviceRegion(in: UInt): Bool = in(2) // device region
++  def isMemoryRegion(in: UInt): Bool = !isDeviceRegion(in) // memory region
+   def isPbmtIO(in: UInt): Bool = !in(0) && in(1)
+   def isPbmtNC(in: UInt): Bool = in(0) && !in(1)
+   def isCacheable(in: UInt): Bool = !in(0) && !in(1)
++  def isMMIO(in: UInt):   Bool = in(1) // pbmt io and device io
+ 
+-  def width: Int = 2
++  def width: Int = 3
+   def apply() = UInt(width.W)
+ }
+ 
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+index c4f3cdece84..ee8d3eb55e5 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+@@ -105,6 +105,7 @@ class SQDataEntryBundle(implicit p: Parameters) extends MemBlockBundle {
+   val memoryType               = MemoryType()
+   val cboType                  = CboType()
+   val prefetch                 = Bool() //TODO: need it ?
++  val isHyper                  = Bool()
+ 
+   // debug signal
+   val debugPaddr               = Option.when(debugEn)(UInt((PAddrBits).W))
+@@ -178,6 +179,10 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+     require(in.getWidth == MemoryType.width)
+     MemoryType.isCacheable(in)
+   }
++  def isMemory(in: UInt): Bool = {
++    require(in.getWidth == MemoryType.width)
++    MemoryType.isMemoryRegion(in)
++  }
+   // is cbo zero
+   def isCboZero(in: UInt): Bool = {
+     require(in.getWidth == CboType.width)
+@@ -914,6 +919,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+ 
+     private val isNC             = isPbmtNC(headDataEntry.memoryType)
+     private val isPBMTIO         = isPbmtIO(headDataEntry.memoryType)
++    private val isMemoryRegion   = isMemory(headDataEntry.memoryType)
+     private val uncacheCanHandle = !isCacheable(headDataEntry.memoryType) && !headCtrlEntry.isCbo &&
+       headCtrlEntry.allValid && !headCtrlEntry.hasException && headCtrlEntry.allocated && headCtrlEntry.committed
+ 
+@@ -962,7 +968,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+     io.toUncacheBuffer.req.bits.data          := Mux(headDataEntry.vaddr(3), outData.head(VLEN - 1, 64), outData.head(63,0))
+     io.toUncacheBuffer.req.bits.mask          := Mux(headDataEntry.vaddr(3), outMask.head(VLENB - 1 , 8), outMask.head(7,0))
+     io.toUncacheBuffer.req.bits.robIdx        := headDataEntry.uop.robIdx
+-    io.toUncacheBuffer.req.bits.memBackTypeMM := isNC || isPBMTIO
++    io.toUncacheBuffer.req.bits.memBackTypeMM := isMemoryRegion
+     io.toUncacheBuffer.req.bits.nc            := isNC //TODO: remove it, why not use memBackTypeMM ?!
+     io.toUncacheBuffer.req.bits.id            := brodenId
+ 
+@@ -1023,7 +1029,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+     io.exceptionInfo.bits.uopIdx       := 0.U.asTypeOf(io.exceptionInfo.bits.uopIdx)
+     io.exceptionInfo.bits.vl           := 0.U.asTypeOf(io.exceptionInfo.bits.vl)
+     io.exceptionInfo.bits.vstart       := 0.U.asTypeOf(io.exceptionInfo.bits.vstart)
+-    io.exceptionInfo.bits.isHyper      := false.B
++    io.exceptionInfo.bits.isHyper      := dataEntries.head.isHyper
+ 
+     /*============================================ cacheable handle ==================================================*/
+     /**
+@@ -1583,6 +1589,9 @@ class NewStoreQueue(implicit p: Parameters) extends NewStoreQueueBase with HasPe
+       LSUOpType.isCboAll(port.bits.uop.fuOpType) && staValidSetVec(j)
+     }
+     val isCboSet = cboSetVec.reduce(_ || _)
++    val isHyperSet = io.fromStoreUnit.storeAddrIn.zipWithIndex.map { case (port, j) =>
++      port.bits.isHyper && staValidSetVec(j)
++    }.reduce(_ || _)
+ 
+     when(staSetValid) {
+       ctrlEntries(i).addrValid    := addrValidSet // need hasException?
+@@ -1608,6 +1617,10 @@ class NewStoreQueue(implicit p: Parameters) extends NewStoreQueueBase with HasPe
+       }
+     }
+ 
++    when(staSetValid) {
++      dataEntries(i).isHyper := isHyperSet
++    }
++
+ 
+     if(debugEn) {
+       val unalignWithin16BSet = io.fromStoreUnit.storeAddrIn.zipWithIndex.map { case (port, j) =>
+@@ -1671,21 +1684,25 @@ class NewStoreQueue(implicit p: Parameters) extends NewStoreQueueBase with HasPe
+          pbmtIo:    "10".U
+          io:        "11".U // IO device
+       */
+-      dataEntries(i).memoryType := Cat(mmioSet, ncSet || !memBackTypeSet)
++      dataEntries(i).memoryType := Cat(!memBackTypeSet, mmioSet, ncSet || !memBackTypeSet)
+       /*
+        * [NOTE]: To explain the logical operations above, the truth table is as follows:
+        * The signal of [memBackTypeMM] means request is main memory region.
+        *
+-       *           |  memBackTypeSet | !memBackTypeSet | ncSet | mmioSet | memoryType[1] | memoryType[0] |
+-       * Cacheable |       1         |       0         |   0   |    0    |        0      |       0       |
+-       * NC        |       1         |       0         |   1   |    0    |        0      |       1       |
+-       * PbmtIO    |       1         |       0         |   0   |    1    |        1      |       0       |
+-       * IO        |       0         |       1         |   0   |    1    |        1      |       1       |
+-       *                                     |             |        |             ^              ^
+-       *                                     |             |        +-------------+              |
+-       *                                     +----- or ----+                                     |
+-       *                                            |                                            |
+-       *                                            +--------------------------------------------+
++       *                                     +-----------------------------------+
++       *                                     |                                   v
++       *              |  memBackTypeSet | !memBackTypeSet | ncSet | mmioSet | memoryType[2] | memoryType[1] | memoryType[0] |
++       * Cacheable    |       1         |       0         |   0   |    0    |       0       |       0       |       0       |
++       * MemoryNC     |       1         |       0         |   1   |    0    |       0       |       0       |       1       |
++       * MemoryPbmtIO |       1         |       0         |   0   |    1    |       0       |       1       |       0       |
++       * DeviceNC     |       0         |       1         |   1   |    0    |       1       |       0       |       1       |
++       * DevicePbmtIO |       0         |       1         |   0   |    1    |       1       |       1       |       1       |
++       * IO           |       0         |       1         |   0   |    1    |       1       |       1       |       1       |
++       *                                        |             |        |                            ^               ^
++       *                                        |             |        +----------------------------+               |
++       *                                        +----- or ----+                                                     |
++       *                                               |                                                            |
++       *                                               +------------------------------------------------------------+
+        * */
+     }//  don't need to set false for low power, it will be set every instruction.
+ 
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index ff81c9b0bd8..f00e00d11cd 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -425,6 +425,7 @@ class StoreUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSModu
+   io.toLsq.bits.uop.ftqOffset := s1_out.uop.ftqOffset
+   io.toLsq.bits.uop.isRVC     := s1_out.uop.isRVC
+   io.toLsq.bits.uop.isFirstIssue := s1_out.isFirstIssue
++  io.toLsq.bits.isHyper       := s1_out.isHyper
+   io.toLsq.bits.nc            := DontCare // will be set in stage 2
+   io.toLsq.bits.mmio          := DontCare // will be set in stage 2
+   io.toLsq.bits.memBackTypeMM := DontCare // will be set in stage 2
+@@ -575,6 +576,7 @@ class StoreUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSModu
+   io.toLsqRe.mask                := DontCare
+   io.toLsqRe.size                := DontCare
+   io.toLsqRe.uop                 := DontCare
++  io.toLsqRe.isHyper             := DontCare
+   io.toLsqRe.cross4KPage         := false.B
+   io.toLsqRe.unalignWithin16Byte := s2_out.misalignWith16Byte && !s2_frm_mabuf
+   io.toLsqRe.isUnalign          := s2_out.isMisalign || s2_frm_mabuf
+```

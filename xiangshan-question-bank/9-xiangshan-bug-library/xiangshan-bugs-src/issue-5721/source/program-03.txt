@@ -1,0 +1,1 @@
+(sleep 1; echo "halt"; sleep 5; echo "bp 0x80002000 4 hw"; sleep 3; echo "bp 0x8000012a 4 hw"; sleep 3; echo "rbp 0x80002000"; sleep 3; echo "resume"; sleep 60; echo "exit") | nc localhost 4444

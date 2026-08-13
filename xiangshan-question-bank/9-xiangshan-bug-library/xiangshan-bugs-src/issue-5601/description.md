@@ -1,0 +1,1 @@
+Previously,there was no restriction of the provider signal output to SC through MBTB hit,and t1_branchesScIdxHitVec,t1_branchesScIdxVec in SC is used without mbtb hit.This may cause wrong train of SC.

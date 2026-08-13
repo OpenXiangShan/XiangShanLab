@@ -1,0 +1,10 @@
+cycle                 = 8717
+s2_pbmt               = 2
+s2_pmp_mmio           = 0
+s3_use_uncache        = 1
+s3_pmp_mmio           = 0
+backend_empty         = 0
+ibuffer_empty         = 1
+is_first_instr        = 0
+ifu_uncache_state     = 2
+to_uncache_full_addr  = 0x80000114

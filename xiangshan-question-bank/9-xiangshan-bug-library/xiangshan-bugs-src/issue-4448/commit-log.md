@@ -1,0 +1,88 @@
+# Commit Log
+- Issue: #4448
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4448
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4448
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4448
+- Changed files: 2
+- Additions: 7
+- Deletions: 7
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/PageTableCache.scala`
+- `src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+index 3f01f4d384b..09fa9691475 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+@@ -869,7 +869,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+       !flush_dup(2) &&
+       refill.levelOH.l3.get &&
+       !memPte(2).isLeaf() &&
+-      memPte(2).canRefill(refill.level_dup(2), refill.req_info_dup(2).s2xlate, pbmte, io.csr_dup(2).vsatp.mode)
++      memPte(2).canRefill(refill.level_dup(2), refill.req_info_dup(2).s2xlate, pbmte, io.csr_dup(2).hgatp.mode)
+     val l3RefillIdx = replaceWrapper(l3v.get, ptwl3replace.get.way).suggestName(s"l3_refillIdx")
+     val l3RfOH = UIntToOH(l3RefillIdx).asUInt.suggestName(s"l3_rfOH")
+     when (l3Refill) {
+@@ -899,7 +899,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     !flush_dup(2) &&
+     refill.levelOH.l2 &&
+     !memPte(2).isLeaf() &&
+-    memPte(2).canRefill(refill.level_dup(2), refill.req_info_dup(2).s2xlate, pbmte, io.csr_dup(2).vsatp.mode)
++    memPte(2).canRefill(refill.level_dup(2), refill.req_info_dup(2).s2xlate, pbmte, io.csr_dup(2).hgatp.mode)
+   val l2RefillIdx = replaceWrapper(l2v, ptwl2replace.way).suggestName(s"l2_refillIdx")
+   val l2RfOH = UIntToOH(l2RefillIdx).asUInt.suggestName(s"l2_rfOH")
+   when (
+@@ -943,7 +943,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     refill_prefetch_dup(1),
+     refill.req_info_dup(1).s2xlate,
+     pbmte,
+-    io.csr_dup(1).vsatp.mode
++    io.csr_dup(1).hgatp.mode
+   )
+   when (l1Refill) {
+     l1.io.w.apply(
+@@ -990,7 +990,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     refill_prefetch_dup(0),
+     refill.req_info_dup(0).s2xlate,
+     pbmte,
+-    io.csr_dup(0).vsatp.mode
++    io.csr_dup(0).hgatp.mode
+   )
+   when (l0Refill) {
+     l0.io.w.apply(
+@@ -1022,7 +1022,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+   val spRefill =
+     !flush_dup(0) &&
+     (refill.levelOH.sp || (refill.levelOH.l0 && memPte(0).isNapot(refill.level_dup(0)))) &&
+-    ((memPte(0).isLeaf() && memPte(0).canRefill(refill.level_dup(0), refill.req_info_dup(0).s2xlate, pbmte, io.csr_dup(0).vsatp.mode)) ||
++    ((memPte(0).isLeaf() && memPte(0).canRefill(refill.level_dup(0), refill.req_info_dup(0).s2xlate, pbmte, io.csr_dup(0).hgatp.mode)) ||
+     memPte(0).onlyPf(refill.level_dup(0), refill.req_info_dup(0).s2xlate, pbmte))
+   val spRefillIdx = spreplace.way.suggestName(s"sp_refillIdx") // LFSR64()(log2Up(l2tlbParams.spSize)-1,0) // TODO: may be LRU
+   val spRfOH = UIntToOH(spRefillIdx).asUInt.suggestName(s"sp_rfOH")
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+index f542f663cb3..18f481f6335 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+@@ -877,14 +877,14 @@ class LLPTW(implicit p: Parameters) extends XSModule with HasPtwConst with HasPe
+         val req_paddr = MakeAddr(entries(i).ppn, getVpnn(entries(i).req_info.vpn, 0))
+         val req_hpaddr = MakeAddr(entries(i).hptw_resp.genPPNS2(get_pn(req_paddr)), getVpnn(entries(i).req_info.vpn, 0))
+         val index =  Mux(entries(i).req_info.s2xlate === allStage, req_hpaddr, req_paddr)(log2Up(l2tlbParams.blockBytes)-1, log2Up(XLEN/8))
+-        val allStageExcp = ptes(index).isPf(0.U, s1Pbmte) || !ptes(index).isLeaf() || ptes(index).isStage1Gpf(io.csr.vsatp.mode)
++        val allStageExcp = ptes(index).isPf(0.U, s1Pbmte) || !ptes(index).isLeaf() || ptes(index).isStage1Gpf(io.csr.hgatp.mode)
+         state(i) := Mux((entries(i).req_info.s2xlate === allStage && !allStageExcp),
+                         state_last_hptw_req,
+                         Mux(bitmap_enable, state_bitmap_check, state_mem_out))
+         mem_resp_hit(i) := true.B
+         entries(i).ppn := ptes(index).getPPN() // for last stage 2 translation
+         // af will be judged in L2 TLB `contiguous_pte_to_merge_ptwResp`
+-        entries(i).hptw_resp.gpf := Mux(entries(i).req_info.s2xlate === allStage, ptes(index).isStage1Gpf(io.csr.vsatp.mode), false.B)
++        entries(i).hptw_resp.gpf := Mux(entries(i).req_info.s2xlate === allStage, ptes(index).isStage1Gpf(io.csr.hgatp.mode), false.B)
+       }
+     }
+   }
+```

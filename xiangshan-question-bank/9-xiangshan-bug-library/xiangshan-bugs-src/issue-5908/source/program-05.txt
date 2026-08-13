@@ -1,0 +1,4 @@
+riscv64-unknown-elf-gcc -nostdlib -nostartfiles -static \
+    -march=rv64g -mabi=lp64 -T link.ld \
+    -o unalignq_enqptr_deqptr.elf unalignq_enqptr_deqptr.S
+riscv64-unknown-elf-objcopy -O binary unalignq_enqptr_deqptr.elf unalignq_enqptr_deqptr.bin

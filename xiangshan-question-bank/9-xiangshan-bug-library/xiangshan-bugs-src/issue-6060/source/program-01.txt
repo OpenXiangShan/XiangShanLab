@@ -1,0 +1,1 @@
+cbo.flush (a0), with a0 = 0x80002000

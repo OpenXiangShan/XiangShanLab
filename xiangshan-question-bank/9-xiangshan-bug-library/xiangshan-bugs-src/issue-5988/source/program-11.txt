@@ -1,0 +1,3 @@
+  private val t1_setIdx = getSetIndex(t1_startPc)
+  b.io.writeEntry.req.bits.setIdx := t1_setIdx
+  b.io.writeCounter.req.bits.setIdx := t1_setIdx

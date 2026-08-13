@@ -1,0 +1,10 @@
+s2Valid        = 1
+s2Resp_valid   = 1
+s2ForwardValid = 1
+s2MultiMatch   = 1
+s2LoadMaskEnd  = 0x00ff
+s2OutMask      = 0x000f
+s2SafeForward  = 1
+forwardInvalid = 0
+s2LoadPaddr    = 0x800000d
+s2LoadStart    = 0

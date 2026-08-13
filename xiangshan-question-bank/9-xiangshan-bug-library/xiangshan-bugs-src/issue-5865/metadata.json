@@ -1,0 +1,26 @@
+{
+  "number": 5865,
+  "title": "XiangShan misses illegal-instruction trap for reserved masked `vmerge.vvm` with vd = v0",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5865",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: unknown"
+  ],
+  "author": "KnightGOKU",
+  "created_at": "2026-04-27T06:35:54Z",
+  "updated_at": "2026-04-27T10:59:52Z",
+  "source_files": [
+    "issue-5865/source/diff.log",
+    "issue-5865/source/bug-report.tar.gz",
+    "issue-5865/source/program-01.S",
+    "issue-5865/source/program-02.S",
+    "issue-5865/source/program-03.S",
+    "issue-5865/source/program-04.txt"
+  ],
+  "archive_files": [
+    "issue-5865/source/diff.log",
+    "issue-5865/source/bug-report.tar.gz"
+  ],
+  "has_comments": true
+}

@@ -1,0 +1,52 @@
+# Commit Log
+- Issue: #5059
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5059
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5059
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5059
+- Changed files: 2
+- Additions: 4
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala`
+- `src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala
+index a9fd7f06228..0197fdd31f6 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala
+@@ -267,14 +267,16 @@ class MemTrigger(memType: Boolean = MemType.LOAD)(override implicit val p: Param
+ 
+   class MemTriggerIO extends BaseTriggerIO{
+     val isCbo = OptionWrapper(memType == MemType.STORE, Input(Bool()))
++    val isPrf = OptionWrapper(memType == MemType.LOAD,  Input(Bool()))
+   }
+ 
+   override lazy val io = IO(new MemTriggerIO)
+ 
+   override def getTriggerHitVec(): Vec[Bool] = {
+     val triggerHitVec = WireInit(VecInit(Seq.fill(TriggerNum)(false.B)))
++    val isPrf = io.isPrf.getOrElse(false.B)
+     for (i <- 0 until TriggerNum) {
+-      triggerHitVec(i) := !tdataVec(i).select && !debugMode && TriggerCmp(
++      triggerHitVec(i) := !tdataVec(i).select && !debugMode && !isPrf && TriggerCmp(
+       vaddr,
+       tdataVec(i).tdata2,
+       tdataVec(i).matchType,
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 3339ab2c606..b9933c80e9c 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -1132,6 +1132,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   loadTrigger.io.fromLoadStore.vaddr                 := s1_vaddr
+   loadTrigger.io.fromLoadStore.isVectorUnitStride    := s1_in.isvec && s1_in.is128bit
+   loadTrigger.io.fromLoadStore.mask                  := s1_in.mask
++  loadTrigger.io.isPrf.get                           := s1_prf
+ 
+   val s1_trigger_action = loadTrigger.io.toLoadStore.triggerAction
+   val s1_trigger_debug_mode = TriggerAction.isDmode(s1_trigger_action)
+```

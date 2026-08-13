@@ -1,0 +1,5 @@
+In certain cases where a `pageFault` or `guestFault` occurs, `accessFault` signal might still be true; however, it is actually invalid and should not be reported. We fixed this bug in commit https://github.com/OpenXiangShan/XiangShan/pull/4540.
+
+However, in the previous design, the level field of the PTW response was defined as: `Mux(accessFault, af_level, Mux(guestFault, gpf_level, level))`. As a result, although we fixed the false accessFault reporting in https://github.com/OpenXiangShan/XiangShan/pull/4540, the level in the PTW response was still incorrectly set to `af_level`. This commit fixes that issue.
+
+Additionally, this commit extracts the arguments in `ptw_resp.apply` into separate variables to improve code readability. Previously, it was incorrectly assumed that `pte_valid` was a required condition for `guestFault`, using the condition: `!(pte_valid && (pageFault || guestFault))`. In fact, only `pageFault` needs to consider `pte_valid`; `guestFault` does not depend on it. This bug is also fixed in this commit.

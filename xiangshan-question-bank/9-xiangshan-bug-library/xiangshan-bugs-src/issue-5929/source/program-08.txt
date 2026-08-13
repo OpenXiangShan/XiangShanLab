@@ -1,0 +1,1 @@
+./build/emu --image program.elf --diff ./ready-to-run/riscv64-spike-so -I 500 -C 200000

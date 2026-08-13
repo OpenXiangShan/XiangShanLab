@@ -1,0 +1,3 @@
+ABORT at pc = 0x80000258
+Core-0 instrCnt = 5361, cycleCnt = 7468
+LoadQueueReplay: vector load, should not have replay entry 8 when commit or flush.

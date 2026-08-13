@@ -1,0 +1,19 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
+index 7f774905b3d..349f36e9755 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
+@@ -22,7 +22,13 @@ import scala.collection.immutable.SeqMap
+ 
+ 
+ trait DebugLevel { self: NewCSR =>
+-  val tselect = Module(new CSRModule("Tselect", new TselectBundle(TriggerNum)))
++  val tselect = Module(new CSRModule("Tselect", new TselectBundle(TriggerNum)) {
++    when (this.w.wen && this.w.wdata < TriggerNum.U) {
++      reg := this.w.wdata
++    }.otherwise {
++      reg := reg
++    }
++  })
+     .setAddr(CSRs.tselect)
+ 
+   val tdata1 = Module(new CSRModule("Tdata1") with HasTdataSink {

@@ -1,0 +1,14 @@
+{
+  "predicate_result": "reproduced",
+  "fetch_side_effect_result": "reproduced",
+  "frontend_to_backend_result": "not_reproduced",
+  "backend_lsq_result": "not_reproduced",
+  "data_side_effect_result": "not_reproduced",
+  "controlled_wb_count": 1,
+  "controlled_ftq_count": 12,
+  "post_illegal_fetch_req_count": 11,
+  "post_illegal_icache_resp_count": 3,
+  "post_illegal_victim_frontend_cf_count": 0,
+  "post_illegal_secret_load_lsq_req_count": 0,
+  "post_illegal_probe_load_lsq_req_count": 0
+}

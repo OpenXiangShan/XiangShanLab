@@ -1,0 +1,3 @@
+timeout 120 ./build/verilator-compile/emu \
+  -i program.elf \
+  --no-diff -C 500000

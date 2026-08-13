@@ -1,0 +1,5 @@
+when(f3_flush && !f3_req_is_mmio)(f3_valid := false.B)
+    .elsewhen(mmioF3Flush && f3_req_is_mmio && !f3_need_not_flush)(f3_valid := false.B)
+    .elsewhen(f2_fire && !f2_flush)(f3_valid := true.B)
+    .elsewhen(io.toIbuffer.fire && !f3_req_is_mmio)(f3_valid := false.B)
+    .elsewhen(f3_req_is_mmio && f3_mmio_req_commit)(f3_valid := false.B)

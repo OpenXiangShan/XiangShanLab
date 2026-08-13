@@ -1,0 +1,2 @@
+cycle        = 8718
+tl_a_address = 0x80000110

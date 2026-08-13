@@ -1,0 +1,4 @@
+python3 ./parse_cbnez_vcd.py \
+  ./cbnez_redirect_fulltrace_8000_9000.vcd \
+  ./poc.objdump \
+  ./vcd_result_fulltrace_8000_9000.json

@@ -1,0 +1,8 @@
+8000266e: 37 7f 1f 81   lui     t5, 0x811f7
+80002672: 1b 0f bf b2   addiw   t5, t5, -0x4d5
+80002676: 3b 0f 0f 08   zext.w  t5, t5
+8000267a: 13 0a 90 40   li      s4, 0x409
+8000267e: 56 0a         slli    s4, s4, 0x15
+80002680: 13 0a 0a 20   addi    s4, s4, 0x200
+80002684: 87 02 8a 02   vl1r.v  v5, (s4)
+80002688: 27 0c 5f c4   vsuxseg7ei8.v   v24, (t5), v5, v0.t   // <-- First instruction after trace end (where assertion occured)

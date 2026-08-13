@@ -1,0 +1,51 @@
+# Commit Log
+- Issue: #4119
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4119
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4119
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4119
+- Changed files: 1
+- Additions: 6
+- Deletions: 3
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index e3f6ed0985b..465edd33bfc 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -90,6 +90,9 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+     CSROpType.isCSRRSorRC(func)
+   )
+ 
++  private val waddrReg = RegEnable(addr, 0.U(12.W), io.in.fire)
++  private val wdataReg = RegEnable(wdata, 0.U(64.W), io.in.fire)
++  
+   private val robIdxReg = RegEnable(io.in.bits.ctrl.robIdx, io.in.fire)
+   private val thisRobIdx = Wire(new RobPtr)
+   when (io.in.valid) {
+@@ -107,7 +110,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+       in.bits.op  := CSROpType.getCSROp(func)
+       in.bits.addr := addr
+       in.bits.src := src
+-      in.bits.wdata := wdata
++      in.bits.wdata := wdataReg
+       in.bits.mret := isMret
+       in.bits.mnret := isMNret
+       in.bits.sret := isSret
+@@ -352,8 +355,8 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+       // distribute csr write signal
+       // write to frontend and memory
+       custom.distribute_csr.w.valid := csrMod.io.distributedWenLegal
+-      custom.distribute_csr.w.bits.addr := addr
+-      custom.distribute_csr.w.bits.data := wdata
++      custom.distribute_csr.w.bits.addr := waddrReg
++      custom.distribute_csr.w.bits.data := wdataReg
+       // rename single step
+       custom.singlestep := csrMod.io.status.singleStepFlag
+       // trigger
+```

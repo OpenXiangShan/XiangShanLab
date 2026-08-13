@@ -1,0 +1,1 @@
+redirect.isRVC := isRVC

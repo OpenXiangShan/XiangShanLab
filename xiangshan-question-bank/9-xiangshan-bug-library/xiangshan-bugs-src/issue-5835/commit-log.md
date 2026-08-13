@@ -1,0 +1,68 @@
+# Commit Log
+- Issue: #5835
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5835
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5835
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5835
+- Changed files: 1
+- Additions: 19
+- Deletions: 7
+
+## Files
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 6712e03a2d9..caaa160991f 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -49,6 +49,7 @@ import xiangshan.frontend.bpu.BpuCommitMeta
+ import xiangshan.frontend.bpu.BpuPredictionSource
+ import xiangshan.frontend.bpu.BpuRedirectMeta
+ import xiangshan.frontend.bpu.BpuResolveMeta
++import xiangshan.frontend.bpu.BpuTrain
+ import xiangshan.frontend.bpu.HalfAlignHelper
+ 
+ class Ftq(implicit p: Parameters) extends FtqModule
+@@ -114,7 +115,8 @@ class Ftq(implicit p: Parameters) extends FtqModule
+ 
+   private val (backendRedirectFtqIdx, backendRedirect) = receiveBackendRedirect(io.fromBackend)
+ 
+-  private val redirect     = Mux(backendRedirect.valid, backendRedirect, ifuRedirect)
++  // Delay one cycle for timing considerations
++  private val redirect     = RegNext(Mux(backendRedirect.valid, backendRedirect, ifuRedirect))
+   private val redirectNext = RegNext(redirect)
+ 
+   // Instruction page fault and instruction access fault are sent from backend with redirect requests.
+@@ -315,12 +317,22 @@ class Ftq(implicit p: Parameters) extends FtqModule
+ 
+   resolveQueue.io.backendResolve := io.fromBackend.resolve
+ 
+-  io.toBpu.train.valid           := resolveQueue.io.bpuTrain.valid
+-  resolveQueue.io.bpuTrain.ready := io.toBpu.train.ready
+-  io.toBpu.train.bits.meta       := metaQueueResolve(resolveQueue.io.bpuTrain.bits.ftqIdx.value)
+-  io.toBpu.train.bits.startPc    := resolveQueue.io.bpuTrain.bits.startPc
+-  io.toBpu.train.bits.branches   := resolveQueue.io.bpuTrain.bits.branches
+-  io.toBpu.train.bits.perfMeta   := perfQueue(resolveQueue.io.bpuTrain.bits.ftqIdx.value).bpuPerf
++  private val trainCache = RegInit(0.U.asTypeOf(Valid(new BpuTrain)))
++
++  resolveQueue.io.bpuTrain.ready := !trainCache.valid || io.toBpu.train.fire
++
++  when(resolveQueue.io.bpuTrain.fire) {
++    trainCache.bits.meta     := metaQueueResolve(resolveQueue.io.bpuTrain.bits.ftqIdx.value)
++    trainCache.bits.startPc  := resolveQueue.io.bpuTrain.bits.startPc
++    trainCache.bits.branches := resolveQueue.io.bpuTrain.bits.branches
++    trainCache.bits.perfMeta := perfQueue(resolveQueue.io.bpuTrain.bits.ftqIdx.value).bpuPerf
++    trainCache.valid         := true.B
++  }.elsewhen(io.toBpu.train.fire) {
++    trainCache.valid := false.B
++  }
++
++  io.toBpu.train.valid := trainCache.valid
++  io.toBpu.train.bits  := trainCache.bits
+ 
+   io.fromBackend.resolve.foreach { branch =>
+     val ftqIdx      = branch.bits.ftqIdx.value
+```

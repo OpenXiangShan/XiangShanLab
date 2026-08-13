@@ -1,0 +1,241 @@
+# Commit Log
+- Issue: #4369
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4369
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4369
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4369
+- Changed files: 6
+- Additions: 36
+- Deletions: 5
+
+## Files
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala`
+- `src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index a3ad7c6d9ea..003a4ba1ef4 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -802,11 +802,22 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     vSegmentFlag := false.B
+   }
+ 
++  val misalign_allow_spec = RegInit(true.B)
++  val ldu_rollback_with_misalign_nack = loadUnits.map(ldu =>
++    ldu.io.lsq.ldin.bits.isFrmMisAlignBuf && ldu.io.lsq.ldin.bits.rep_info.rar_nack && ldu.io.rollback.valid
++  ).reduce(_ || _)
++  when (ldu_rollback_with_misalign_nack) {
++    misalign_allow_spec := false.B
++  } .elsewhen(lsq.io.rarValidCount < (LoadQueueRARSize - 4).U) {
++    misalign_allow_spec := true.B
++  }
++
+   // LoadUnit
+   val correctMissTrain = Constantin.createRecord(s"CorrectMissTrain$hartId", initValue = false)
+ 
+   for (i <- 0 until LduCnt) {
+     loadUnits(i).io.redirect <> redirect
++    loadUnits(i).io.misalign_allow_spec := misalign_allow_spec
+ 
+     // get input form dispatch
+     loadUnits(i).io.ldin <> io.ooo_to_mem.issueLda(i)
+@@ -879,6 +890,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     // ld-ld violation check
+     loadUnits(i).io.lsq.ldld_nuke_query <> lsq.io.ldu.ldld_nuke_query(i)
+     loadUnits(i).io.lsq.stld_nuke_query <> lsq.io.ldu.stld_nuke_query(i)
++    // loadqueue old ptr
++    loadUnits(i).io.lsq.lqDeqPtr := lsq.io.lqDeqPtr
+     loadUnits(i).io.csrCtrl       <> csrCtrl
+     // dcache refill req
+   // loadUnits(i).io.refill           <> delayedDcacheRefill
+@@ -1143,6 +1156,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   loadMisalignBuffer.io.rob.pendingPtrNext      := io.ooo_to_mem.lsqio.pendingPtrNext
+ 
+   lsq.io.loadMisalignFull                       := loadMisalignBuffer.io.loadMisalignFull
++  lsq.io.misalignAllowSpec                      := misalign_allow_spec
+ 
+   storeMisalignBuffer.io.redirect               <> redirect
+   storeMisalignBuffer.io.rob.lcommit            := io.ooo_to_mem.lsqio.lcommit
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+index 14d9bbdc443..eca1c75db8f 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+@@ -118,6 +118,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
+     val sqDeqPtr = Output(new SqPtr)
+     val exceptionAddr = new ExceptionAddrIO
+     val loadMisalignFull = Input(Bool())
++    val misalignAllowSpec = Input(Bool())
+     val issuePtrExt = Output(new SqPtr)
+     val l2_hint = Input(Valid(new L2ToL1Hint()))
+     val tlb_hint = Flipped(new TlbHintIO)
+@@ -126,6 +127,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
+     val flushSbuffer = new SbufferFlushBundle
+     val force_write = Output(Bool())
+     val lqEmpty = Output(Bool())
++    val rarValidCount = Output(UInt())
+ 
+     // top-down
+     val debugTopDown = new LoadQueueTopDownIO
+@@ -154,6 +156,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
+   storeQueue.io.enq.lqCanAccept := loadQueue.io.enq.canAccept
+   io.lqDeqPtr := loadQueue.io.lqDeqPtr
+   io.sqDeqPtr := storeQueue.io.sqDeqPtr
++  io.rarValidCount := loadQueue.io.rarValidCount
+   for (i <- io.enq.req.indices) {
+     loadQueue.io.enq.needAlloc(i)      := io.enq.needAlloc(i)(0)
+     loadQueue.io.enq.req(i).valid      := io.enq.needAlloc(i)(0) && io.enq.req(i).valid
+@@ -212,6 +215,7 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
+   loadQueue.io.release             <> io.release
+   loadQueue.io.exceptionAddr.isStore := DontCare
+   loadQueue.io.loadMisalignFull    := io.loadMisalignFull
++  loadQueue.io.misalignAllowSpec   := io.misalignAllowSpec
+   loadQueue.io.lqCancelCnt         <> io.lqCancelCnt
+   loadQueue.io.sq.stAddrReadySqPtr <> storeQueue.io.stAddrReadySqPtr
+   loadQueue.io.sq.stAddrReadyVec   <> storeQueue.io.stAddrReadyVec
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala
+index d4fd0323e8e..38ee289c370 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala
+@@ -193,6 +193,7 @@ class LoadQueue(implicit p: Parameters) extends XSModule
+     val uncache = new UncacheWordIO
+     val exceptionAddr = new ExceptionAddrIO
+     val loadMisalignFull = Input(Bool())
++    val misalignAllowSpec = Input(Bool())
+     val lqFull = Output(Bool())
+     val lqDeq = Output(UInt(log2Up(CommitWidth + 1).W))
+     val lqCancelCnt = Output(UInt(log2Up(VirtualLoadQueueSize+1).W))
+@@ -204,6 +205,8 @@ class LoadQueue(implicit p: Parameters) extends XSModule
+ 
+     val lqDeqPtr = Output(new LqPtr)
+ 
++    val rarValidCount = Output(UInt())
++
+     val debugTopDown = new LoadQueueTopDownIO
+     val noUopsIssed = Input(Bool())
+   })
+@@ -220,6 +223,7 @@ class LoadQueue(implicit p: Parameters) extends XSModule
+   loadQueueRAR.io.redirect  <> io.redirect
+   loadQueueRAR.io.release   <> io.release
+   loadQueueRAR.io.ldWbPtr   <> virtualLoadQueue.io.ldWbPtr
++  loadQueueRAR.io.validCount<> io.rarValidCount
+   for (w <- 0 until LoadPipelineWidth) {
+     loadQueueRAR.io.query(w).req    <> io.ldu.ldld_nuke_query(w).req // from load_s1
+     loadQueueRAR.io.query(w).resp   <> io.ldu.ldld_nuke_query(w).resp // to load_s2
+@@ -279,6 +283,7 @@ class LoadQueue(implicit p: Parameters) extends XSModule
+   exceptionBuffer.io.req(LoadPipelineWidth + VecLoadPipelineWidth).bits.vaNeedExt := true.B
+ 
+   loadQueueReplay.io.loadMisalignFull := io.loadMisalignFull
++  loadQueueReplay.io.misalignAllowSpec := io.misalignAllowSpec
+ 
+   io.exceptionAddr <> exceptionBuffer.io.exceptionAddr
+ 
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala
+index ce09f91b252..4de1ee3c33a 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala
+@@ -47,6 +47,8 @@ class LoadQueueRAR(implicit p: Parameters) extends XSModule
+ 
+     // global
+     val lqFull = Output(Bool())
++
++    val validCount = Output(UInt())
+   })
+ 
+   private val PartialPAddrStride: Int = 6
+@@ -267,6 +269,7 @@ class LoadQueueRAR(implicit p: Parameters) extends XSModule
+   })
+ 
+   io.lqFull := freeList.io.empty
++  io.validCount := freeList.io.validCount
+ 
+   // perf cnt
+   val canEnqCount = PopCount(io.query.map(_.req.fire))
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala
+index e560edbed1d..97b12a7061e 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala
+@@ -206,6 +206,7 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
+     val rarFull = Input(Bool())
+     val rawFull = Input(Bool())
+     val loadMisalignFull = Input(Bool())
++    val misalignAllowSpec = Input(Bool())
+     val l2_hint  = Input(Valid(new L2ToL1Hint()))
+     val tlb_hint = Flipped(new TlbHintIO)
+     val tlbReplayDelayCycleCtrl = Vec(4, Input(UInt(ReSelectLen.W)))
+@@ -364,7 +365,7 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
+     }
+     // case C_MF
+     when (cause(i)(LoadReplayCauses.C_MF)) {
+-      blocking(i) := Mux(!io.loadMisalignFull, false.B, blocking(i))
++      blocking(i) := Mux(!io.loadMisalignFull && (io.misalignAllowSpec || !isAfter(uop(i).lqIdx, io.ldWbPtr)), false.B, blocking(i))
+     }
+   })
+ 
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 3d0f1fe60d8..8f87a0d4593 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -92,6 +92,8 @@ class LoadToLsqIO(implicit p: Parameters) extends XSBundle {
+   val stld_nuke_query = new LoadNukeQueryIO
+   // ldu -> lsq LQRAR
+   val ldld_nuke_query = new LoadNukeQueryIO
++  // lq -> ldu for misalign
++  val lqDeqPtr = Input(new LqPtr)
+ }
+ 
+ class LoadToLoadIO(implicit p: Parameters) extends XSBundle {
+@@ -198,6 +200,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+ 
+     // to misalign buffer
+     val misalign_buf = Decoupled(new LqWriteBundle)
++    val misalign_allow_spec = Input(Bool())
+ 
+     // Load RAR rollback
+     val rollback = Valid(new Redirect)
+@@ -1505,6 +1508,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   val s3_safe_writeback = RegEnable(s2_safe_writeback, s2_fire) || s3_hw_err
+   val s3_exception = RegEnable(s2_real_exception, s2_fire)
+   val s3_mis_align = RegEnable(s2_mis_align, s2_fire)
++  val s3_misalign_can_go = RegEnable(!isAfter(s2_out.uop.lqIdx, io.lsq.lqDeqPtr) || io.misalign_allow_spec, s2_fire)
+   val s3_trigger_debug_mode = RegEnable(s2_trigger_debug_mode, false.B, s2_fire)
+ 
+   // TODO: Fix vector load merge buffer nack
+@@ -1527,7 +1531,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+ 
+   // connect to misalignBuffer
+   val toMisalignBufferValid = s3_can_enter_lsq_valid && s3_mis_align && !s3_frm_mabuf
+-  io.misalign_buf.valid := toMisalignBufferValid
++  io.misalign_buf.valid := toMisalignBufferValid && s3_misalign_can_go
+   io.misalign_buf.bits  := s3_in
+ 
+   /* <------- DANGEROUS: Don't change sequence here ! -------> */
+@@ -1550,10 +1554,9 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   val s3_flushPipe = s3_ldld_rep_inst
+ 
+   val s3_lrq_rep_info = WireInit(s3_in.rep_info)
+-  s3_lrq_rep_info.misalign_nack := toMisalignBufferValid && !io.misalign_buf.ready
++  s3_lrq_rep_info.misalign_nack := toMisalignBufferValid && !(io.misalign_buf.ready && s3_misalign_can_go)
+   val s3_lrq_sel_rep_cause = PriorityEncoderOH(s3_lrq_rep_info.cause.asUInt)
+   val s3_replayqueue_rep_cause = WireInit(0.U.asTypeOf(s3_in.rep_info.cause))
+-  s3_replayqueue_rep_cause(LoadReplayCauses.C_MF) := s3_mis_align && s3_lrq_rep_info.misalign_nack
+ 
+   val s3_mab_rep_info = WireInit(s3_in.rep_info)
+   val s3_mab_sel_rep_cause = PriorityEncoderOH(s3_mab_rep_info.cause.asUInt)
+@@ -1608,7 +1611,8 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   val s3_usSecondInv          = s3_in.usSecondInv
+ 
+   val s3_frm_mis_flush     = s3_frm_mabuf &&
+-    (io.misalign_ldout.bits.rep_info.fwd_fail || io.misalign_ldout.bits.rep_info.mem_amb || io.misalign_ldout.bits.rep_info.nuke)
++    (io.misalign_ldout.bits.rep_info.fwd_fail || io.misalign_ldout.bits.rep_info.mem_amb || io.misalign_ldout.bits.rep_info.nuke
++      || io.misalign_ldout.bits.rep_info.rar_nack)
+ 
+   io.rollback.valid := s3_valid && (s3_rep_frm_fetch || s3_flushPipe || s3_frm_mis_flush) && !s3_exception
+   io.rollback.bits             := DontCare
+```

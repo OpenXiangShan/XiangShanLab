@@ -1,0 +1,11 @@
+python3 validate_pbmt_ifu_vcd.py \
+  validation_pbmt_ifu_8div_7000_12000.vcd \
+  > validation_monitor_8div_7000_12000.json
+
+python3 prove_pbmt_attack_chain.py \
+  validation_pbmt_ifu_8div_7000_12000.vcd \
+  > attack_chain_monitor.json
+
+python3 prove_pbmt_external_timing.py \
+  validation_pbmt_ifu_8div_7000_12000.vcd \
+  > external_timing_monitor.json

@@ -1,0 +1,3 @@
+fa2=0x91d2805f
+ft7=0x8069010b
+ft6=0x7f7fffff    # notably, this represents the largest positive number, not NaN

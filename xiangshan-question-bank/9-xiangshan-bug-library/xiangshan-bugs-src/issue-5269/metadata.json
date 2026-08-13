@@ -1,0 +1,27 @@
+{
+  "number": 5269,
+  "title": "fix(MemBlock): adjust the logic where tilelink error generate exception",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5269",
+  "state": "closed",
+  "labels": [
+    "module: memory"
+  ],
+  "author": "Anzooooo",
+  "created_at": "2025-11-27T16:50:35Z",
+  "updated_at": "2025-12-01T08:50:09Z",
+  "submitted_at": "2025-11-27",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5269/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

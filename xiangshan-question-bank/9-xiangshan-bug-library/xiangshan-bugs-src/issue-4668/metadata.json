@@ -1,0 +1,19 @@
+{
+  "number": 4668,
+  "title": "`mtval` Should Contain the `Illegal Instruction Encoding` on Illegal Instruction Exception",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4668",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported"
+  ],
+  "author": "LuLuji04",
+  "created_at": "2025-05-07T19:08:03Z",
+  "updated_at": "2025-05-09T18:32:17Z",
+  "source_files": [
+    "issue-4668/source/test.zip"
+  ],
+  "archive_files": [
+    "issue-4668/source/test.zip"
+  ],
+  "has_comments": true
+}

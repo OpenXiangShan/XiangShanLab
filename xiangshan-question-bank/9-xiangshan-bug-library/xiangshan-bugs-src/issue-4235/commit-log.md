@@ -1,0 +1,44 @@
+# Commit Log
+- Issue: #4235
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4235
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4235
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4235
+- Changed files: 2
+- Additions: 4
+- Deletions: 0
+
+## Files
+- `src/main/resources/config/Default.yml`
+- `src/main/scala/system/SoC.scala`
+
+## Diff
+```diff
+diff --git a/src/main/resources/config/Default.yml b/src/main/resources/config/Default.yml
+index a46c2aafd88..6f83ddfb1df 100644
+--- a/src/main/resources/config/Default.yml
++++ b/src/main/resources/config/Default.yml
+@@ -6,6 +6,8 @@ PMAConfigs:
+   - { base_addr: 0x80000000000, c: true, atomic: true, a: 1, x: true, w: true, r: true }
+   - { base_addr: 0x80000000, a: 1, w: true, r: true }
+   - { base_addr: 0x3A000000, a: 1 }
++  - { base_addr: 0x39002000, a: 1, w: true, r: true }
++  - { base_addr: 0x39000000, a: 1, w: true, r: true }
+   - { base_addr: 0x38022000, a: 1, w: true, r: true }
+   - { base_addr: 0x38021000, a: 1, x: true, w: true, r: true }
+   - { base_addr: 0x30010000, a: 1, w: true, r: true }
+diff --git a/src/main/scala/system/SoC.scala b/src/main/scala/system/SoC.scala
+index fe6a35a4810..68cd14377a7 100644
+--- a/src/main/scala/system/SoC.scala
++++ b/src/main/scala/system/SoC.scala
+@@ -49,6 +49,8 @@ case class SoCParameters
+     PMAConfigEntry(0x80000000000L, c = true, atomic = true, a = 1, x = true, w = true, r = true),
+     PMAConfigEntry(0x80000000L, a = 1, w = true, r = true),
+     PMAConfigEntry(0x3A000000L, a = 1),
++    PMAConfigEntry(0x39002000L, a = 1, w = true, r = true),
++    PMAConfigEntry(0x39000000L, a = 1, w = true, r = true),
+     PMAConfigEntry(0x38022000L, a = 1, w = true, r = true),
+     PMAConfigEntry(0x38021000L, a = 1, x = true, w = true, r = true),
+     PMAConfigEntry(0x38020000L, a = 1, w = true, r = true),
+```

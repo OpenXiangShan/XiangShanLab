@@ -1,0 +1,2687 @@
+# Commit Log
+- Issue: #4288
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4288
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4288
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4288
+- Changed files: 15
+- Additions: 7
+- Deletions: 2424
+
+## Files
+- `scripts/top-down/configs.py`
+- `src/main/scala/top/Configs.scala`
+- `src/main/scala/xiangshan/Parameters.scala`
+- `src/main/scala/xiangshan/backend/BackendParams.scala`
+- `src/main/scala/xiangshan/backend/CtrlBlock.scala`
+- `src/main/scala/xiangshan/backend/Scheduler.scala`
+- `src/main/scala/xiangshan/backend/dispatch/Dispatch.scala`
+- `src/main/scala/xiangshan/backend/dispatch/Dispatch2IqFpImp.scala`
+- `src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala`
+- `src/main/scala/xiangshan/backend/dispatch/IndexMapping.scala`
+- `src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala`
+- `src/main/scala/xiangshan/backend/issue/Dispatch2Iq.scala`
+- `src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala`
+- `src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala`
+- `src/main/scala/xiangshan/package.scala`
+
+## Diff
+```diff
+diff --git a/scripts/top-down/configs.py b/scripts/top-down/configs.py
+index 7fa286ef66d..466f550c4e3 100644
+--- a/scripts/top-down/configs.py
++++ b/scripts/top-down/configs.py
+@@ -28,10 +28,6 @@
+     'IntFlStall': 'MergeFreelistStall',
+     'FpFlStall': 'MergeFreelistStall',
+ 
+-    'IntDqStall': 'MergeCoreDQStall',
+-    'FpDqStall': 'MergeCoreDQStall',
+-    'LsDqStall': 'MergeMemDQStall',
+-
+     'LoadTLBStall': 'MergeLoad',
+     'LoadL1Stall': 'MergeLoad',
+     'LoadL2Stall': 'MergeLoad',
+@@ -82,10 +78,6 @@
+     'IntFlStall': 'MergeFreelistStall',
+     'FpFlStall': 'MergeFreelistStall',
+ 
+-    'IntDqStall': 'MergeDispatchQueueStall',
+-    'FpDqStall': 'MergeDispatchQueueStall',
+-    'LsDqStall': 'MergeDispatchQueueStall',
+-
+     'LoadTLBStall': 'DTlbStall',
+     'LoadL1Stall': 'LoadL1Bound',
+     'LoadL2Stall': 'LoadL2Bound',
+@@ -142,10 +134,6 @@
+     'IntFlStall': fr'{XS_CORE_PREFIX}.backend.ctrlBlock\.dispatch: IntFlStall,\s+(\d+)',
+     'FpFlStall': fr'{XS_CORE_PREFIX}.backend.ctrlBlock\.dispatch: FpFlStall,\s+(\d+)',
+ 
+-    'IntDqStall': fr'{XS_CORE_PREFIX}.backend.ctrlBlock\.dispatch: IntDqStall,\s+(\d+)',
+-    'FpDqStall': fr'{XS_CORE_PREFIX}.backend.ctrlBlock\.dispatch: FpDqStall,\s+(\d+)',
+-    'LsDqStall': fr'{XS_CORE_PREFIX}.backend.ctrlBlock\.dispatch: LsDqStall,\s+(\d+)',
+-
+     'LoadTLBStall': fr'{XS_CORE_PREFIX}.backend.ctrlBlock\.dispatch: LoadTLBStall,\s+(\d+)',
+     'LoadL1Stall': fr'{XS_CORE_PREFIX}.backend.ctrlBlock\.dispatch: LoadL1Stall,\s+(\d+)',
+     'LoadL2Stall': fr'{XS_CORE_PREFIX}.backend.ctrlBlock\.dispatch: LoadL2Stall,\s+(\d+)',
+diff --git a/src/main/scala/top/Configs.scala b/src/main/scala/top/Configs.scala
+index 22aefc26e77..e863f36202d 100644
+--- a/src/main/scala/top/Configs.scala
++++ b/src/main/scala/top/Configs.scala
+@@ -29,7 +29,6 @@ import xiangshan.frontend.icache.ICacheParameters
+ import freechips.rocketchip.devices.debug._
+ import openLLC.OpenLLCParam
+ import freechips.rocketchip.diplomacy._
+-import xiangshan.backend.dispatch.DispatchParameters
+ import xiangshan.backend.regfile.{IntPregParams, VfPregParams}
+ import xiangshan.cache.DCacheParameters
+ import xiangshan.cache.mmu.{L2TLBParameters, TLBParameters}
+@@ -96,15 +95,6 @@ class MinimalConfig(n: Int = 1) extends Config(
+         StoreBufferThreshold = 3,
+         IssueQueueSize = 10,
+         IssueQueueCompEntrySize = 4,
+-        dpParams = DispatchParameters(
+-          IntDqSize = 12,
+-          FpDqSize = 12,
+-          LsDqSize = 12,
+-          IntDqDeqWidth = 8,
+-          FpDqDeqWidth = 6,
+-          VecDqDeqWidth = 6,
+-          LsDqDeqWidth = 6
+-        ),
+         intPreg = IntPregParams(
+           numEntries = 64,
+           numRead = None,
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 111fb85195f..665a0a1c453 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -23,7 +23,6 @@ import huancun._
+ import system.SoCParamsKey
+ import xiangshan.backend.datapath.RdConfig._
+ import xiangshan.backend.datapath.WbConfig._
+-import xiangshan.backend.dispatch.DispatchParameters
+ import xiangshan.backend.exu.ExeUnitParams
+ import xiangshan.backend.fu.FuConfig._
+ import xiangshan.backend.issue.{IntScheduler, IssueBlockParams, MemScheduler, SchdBlockParams, SchedulerType, VfScheduler, FpScheduler}
+@@ -179,15 +178,6 @@ case class XSCoreParameters
+   VTypeBufferSize: Int = 64, // used to reorder vtype
+   IssueQueueSize: Int = 24,
+   IssueQueueCompEntrySize: Int = 16,
+-  dpParams: DispatchParameters = DispatchParameters(
+-    IntDqSize = 16,
+-    FpDqSize = 16,
+-    LsDqSize = 18,
+-    IntDqDeqWidth = 8,
+-    FpDqDeqWidth = 6,
+-    VecDqDeqWidth = 6,
+-    LsDqDeqWidth = 6,
+-  ),
+   intPreg: PregParams = IntPregParams(
+     numEntries = 224,
+     numRead = None,
+@@ -421,7 +411,6 @@ case class XSCoreParameters
+       numDeqOutside = 0,
+       schdType = schdType,
+       rfDataWidth = intPreg.dataCfg.dataWidth,
+-      numUopIn = dpParams.IntDqDeqWidth,
+     )
+   }
+ 
+@@ -444,7 +433,6 @@ case class XSCoreParameters
+       numDeqOutside = 0,
+       schdType = schdType,
+       rfDataWidth = fpPreg.dataCfg.dataWidth,
+-      numUopIn = dpParams.FpDqDeqWidth,
+     )
+   }
+ 
+@@ -467,7 +455,6 @@ case class XSCoreParameters
+       numDeqOutside = 0,
+       schdType = schdType,
+       rfDataWidth = vfPreg.dataCfg.dataWidth,
+-      numUopIn = dpParams.VecDqDeqWidth,
+     )
+   }
+ 
+@@ -508,7 +495,6 @@ case class XSCoreParameters
+       numDeqOutside = 0,
+       schdType = schdType,
+       rfDataWidth = rfDataWidth,
+-      numUopIn = dpParams.LsDqDeqWidth,
+     )
+   }
+ 
+@@ -771,7 +757,7 @@ trait HasXSParameter {
+   def maxElemPerVreg: Int = coreParams.maxElemPerVreg
+ 
+   def IntRefCounterWidth = log2Ceil(RobSize)
+-  def LSQEnqWidth = coreParams.dpParams.LsDqDeqWidth
++  def LSQEnqWidth = RenameWidth
+   def LSQLdEnqWidth = LSQEnqWidth min backendParams.numLoadDp
+   def LSQStEnqWidth = LSQEnqWidth min backendParams.numStoreDp
+   def VirtualLoadQueueSize = coreParams.VirtualLoadQueueSize
+@@ -786,7 +772,6 @@ trait HasXSParameter {
+   def StoreQueueNWriteBanks = coreParams.StoreQueueNWriteBanks
+   def StoreQueueForwardWithMask = coreParams.StoreQueueForwardWithMask
+   def VlsQueueSize = coreParams.VlsQueueSize
+-  def dpParams = coreParams.dpParams
+ 
+   def MemIQSizeMax = backendParams.memSchdParams.get.issueBlockParams.map(_.numEntries).max
+   def IQSizeMax = backendParams.allSchdParams.map(_.issueBlockParams.map(_.numEntries).max).max
+diff --git a/src/main/scala/xiangshan/backend/BackendParams.scala b/src/main/scala/xiangshan/backend/BackendParams.scala
+index 1a8ae146e1a..0e1d2e936a1 100644
+--- a/src/main/scala/xiangshan/backend/BackendParams.scala
++++ b/src/main/scala/xiangshan/backend/BackendParams.scala
+@@ -113,7 +113,6 @@ case class BackendParams(
+   def CsrCnt = allSchdParams.map(_.CsrCnt).sum
+   def IqCnt = allSchdParams.map(_.issueBlockParams.length).sum
+ 
+-  def numPcReadPort = allSchdParams.map(_.numPcReadPort).sum
+   def numPcMemReadPort = allExuParams.filter(_.needPc).size
+   def numTargetReadPort = allRealExuParams.count(x => x.needTarget)
+ 
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index 6d3aed5674c..78c137cfed8 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -28,7 +28,7 @@ import xiangshan.backend.Bundles.{DecodedInst, DynInst, ExceptionInfo, ExuOutput
+ import xiangshan.backend.ctrlblock.{DebugLSIO, DebugLsInfoBundle, LsTopdownInfo, MemCtrl, RedirectGenerator}
+ import xiangshan.backend.datapath.DataConfig.{FpData, IntData, V0Data, VAddrData, VecData, VlData}
+ import xiangshan.backend.decode.{DecodeStage, FusionDecoder}
+-import xiangshan.backend.dispatch.{CoreDispatchTopDownIO, Dispatch, DispatchQueue}
++import xiangshan.backend.dispatch.{CoreDispatchTopDownIO}
+ import xiangshan.backend.dispatch.NewDispatch
+ import xiangshan.backend.fu.PFEvent
+ import xiangshan.backend.fu.vector.Bundles.{VType, Vl}
+@@ -80,12 +80,10 @@ class CtrlBlockImp(
+     "trace"     -> TraceGroupNum
+   ))
+ 
+-  private val numPcMemReadForExu = params.numPcReadPort
+   private val numPcMemRead = pcMemRdIndexes.maxIdx
+ 
+   // now pcMem read for exu is moved to PcTargetMem (OG0)
+   println(s"pcMem read num: $numPcMemRead")
+-  println(s"pcMem read num for exu: $numPcMemReadForExu")
+ 
+   val io = IO(new CtrlBlockIO())
+ 
+diff --git a/src/main/scala/xiangshan/backend/Scheduler.scala b/src/main/scala/xiangshan/backend/Scheduler.scala
+deleted file mode 100644
+index e69de29bb2d..00000000000
+diff --git a/src/main/scala/xiangshan/backend/dispatch/Dispatch.scala b/src/main/scala/xiangshan/backend/dispatch/Dispatch.scala
+deleted file mode 100644
+index 1053b4725c6..00000000000
+--- a/src/main/scala/xiangshan/backend/dispatch/Dispatch.scala
++++ /dev/null
+@@ -1,536 +0,0 @@
+-/***************************************************************************************
+-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+-* Copyright (c) 2020-2021 Peng Cheng Laboratory
+-*
+-* XiangShan is licensed under Mulan PSL v2.
+-* You can use this software according to the terms and conditions of the Mulan PSL v2.
+-* You may obtain a copy of Mulan PSL v2 at:
+-*          http://license.coscl.org.cn/MulanPSL2
+-*
+-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+-*
+-* See the Mulan PSL v2 for more details.
+-***************************************************************************************/
+-
+-package xiangshan.backend.dispatch
+-
+-import org.chipsalliance.cde.config.Parameters
+-import chisel3._
+-import chisel3.util._
+-import difftest._
+-import utils._
+-import utility._
+-import xiangshan._
+-import xiangshan.ExceptionNO._
+-import xiangshan.backend.rob.{RobDispatchTopDownIO, RobEnqIO}
+-import xiangshan.backend.Bundles.DynInst
+-import xiangshan.backend.fu.FuType
+-import xiangshan.mem.mdp._
+-import xiangshan.mem.MemCoreTopDownIO
+-
+-case class DispatchParameters
+-(
+-  IntDqSize: Int,
+-  FpDqSize: Int,
+-  LsDqSize: Int,
+-  IntDqDeqWidth: Int,
+-  FpDqDeqWidth: Int,
+-  VecDqDeqWidth: Int,
+-  LsDqDeqWidth: Int
+-)
+-
+-class CoreDispatchTopDownIO extends Bundle {
+-  val l2MissMatch = Input(Bool())
+-  val l3MissMatch = Input(Bool())
+-  val fromMem = Flipped(new MemCoreTopDownIO)
+-}
+-
+-// read rob and enqueue
+-class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
+-  val io = IO(new Bundle() {
+-    val hartId = Input(UInt(hartIdLen.W))
+-    // from rename
+-    val fromRename = Vec(RenameWidth, Flipped(DecoupledIO(new DynInst)))
+-    val toRenameAllFire = Output(Bool())
+-    // enq Rob
+-    val enqRob = Flipped(new RobEnqIO)
+-    // enq Lsq
+-    val allocPregs = Vec(RenameWidth, Output(new ResetPregStateReq))
+-    // to dispatch queue
+-    val toIntDq0 = new Bundle {
+-      val canAccept = Input(Bool())
+-      val needAlloc = Vec(RenameWidth, Output(Bool()))
+-      val req = Vec(RenameWidth, ValidIO(new DynInst))
+-    }
+-    val toIntDq1 = new Bundle {
+-      val canAccept = Input(Bool())
+-      val needAlloc = Vec(RenameWidth, Output(Bool()))
+-      val req = Vec(RenameWidth, ValidIO(new DynInst))
+-    }
+-    val intIQValidNumVec = Input(MixedVec(backendParams.genIntIQValidNumBundle))
+-    val fpIQValidNumVec = Input(MixedVec(backendParams.genFpIQValidNumBundle))
+-    val fromIntDQ = new Bundle {
+-      val intDQ0ValidDeq0Num = Input(UInt(dpParams.IntDqSize.U.getWidth.W))
+-      val intDQ0ValidDeq1Num = Input(UInt(dpParams.IntDqSize.U.getWidth.W))
+-      val intDQ1ValidDeq0Num = Input(UInt(dpParams.IntDqSize.U.getWidth.W))
+-      val intDQ1ValidDeq1Num = Input(UInt(dpParams.IntDqSize.U.getWidth.W))
+-    }
+-    val toFpDq = new Bundle {
+-      val canAccept = Input(Bool())
+-      val needAlloc = Vec(RenameWidth, Output(Bool()))
+-      val req = Vec(RenameWidth, ValidIO(new DynInst))
+-    }
+-    val toVecDq = new Bundle {
+-      val canAccept = Input(Bool())
+-      val needAlloc = Vec(RenameWidth, Output(Bool()))
+-      val req = Vec(RenameWidth, ValidIO(new DynInst))
+-    }
+-    val toLsDq = new Bundle {
+-      val canAccept = Input(Bool())
+-      val needAlloc = Vec(RenameWidth, Output(Bool()))
+-      val req = Vec(RenameWidth, ValidIO(new DynInst))
+-    }
+-    val redirect = Flipped(ValidIO(new Redirect))
+-    // singleStep
+-    val singleStep = Input(Bool())
+-    // lfst
+-    val lfst = new DispatchLFSTIO
+-    // perf only
+-    val robHead = Input(new DynInst)
+-    val stallReason = Flipped(new StallReasonIO(RenameWidth))
+-    val lqCanAccept = Input(Bool())
+-    val sqCanAccept = Input(Bool())
+-    val robHeadNotReady = Input(Bool())
+-    val robFull = Input(Bool())
+-    val debugTopDown = new Bundle {
+-      val fromRob = Flipped(new RobDispatchTopDownIO)
+-      val fromCore = new CoreDispatchTopDownIO
+-    }
+-
+-    def toDq = Seq(toIntDq0, toIntDq1, toFpDq, toVecDq, toLsDq)
+-  })
+-
+-  /**
+-    * Part 1: choose the target dispatch queue and the corresponding write ports
+-    */
+-  // valid bits for different dispatch queues
+-  val isInt = VecInit(io.fromRename.map(req => req.valid && FuType.isInt(req.bits.fuType)))
+-  val isIntDq0 = VecInit(io.fromRename.map(req => req.valid && FuType.isIntDq0(req.bits.fuType)))
+-  val isIntDq1 = VecInit(io.fromRename.map(req => req.valid && FuType.isIntDq1(req.bits.fuType)))
+-  val isAlu = VecInit(io.fromRename.map(req => req.valid && FuType.isBothDeq0(req.bits.fuType)))
+-  val isBrh = VecInit(io.fromRename.map(req => req.valid && (FuType.isBrh(req.bits.fuType) || FuType.isJump(req.bits.fuType))))
+-  val popAlu = isAlu.zipWithIndex.map { case (_, i) => PopCount(isAlu.take(i + 1)) }
+-  val popBrh = isBrh.zipWithIndex.map { case (_, i) => PopCount(isBrh.take(i + 1)) }
+-  val isOnlyDq0 = VecInit(isIntDq0.zip(isIntDq1).map { case (dq0, dq1) => dq0 && !dq1 })
+-  val isOnlyDq1 = VecInit(isIntDq0.zip(isIntDq1).map { case (dq0, dq1) => dq1 && !dq0 })
+-  val isBothDq01 = VecInit(isIntDq0.zip(isIntDq1).map { case (dq0, dq1) => dq0 || dq1 }) // alu,brh
+-  val IQ0Deq0Num = io.intIQValidNumVec(0)(0)
+-  val IQ0Deq1Num = io.intIQValidNumVec(0)(1)
+-  val IQ1Deq0Num = io.intIQValidNumVec(1)(0)
+-  val IQ1Deq1Num = io.intIQValidNumVec(1)(1)
+-  val IQ2Deq0Num = io.intIQValidNumVec(2)(0)
+-  val IQ2Deq1Num = io.intIQValidNumVec(2)(1)
+-  val IQ3Deq0Num = io.intIQValidNumVec(3)(0)
+-  val IQ3Deq1Num = io.intIQValidNumVec(3)(1)
+-  val DQ0Deq0 = io.fromIntDQ.intDQ0ValidDeq0Num
+-  val DQ0Deq1 = io.fromIntDQ.intDQ0ValidDeq1Num
+-  val DQ1Deq0 = io.fromIntDQ.intDQ1ValidDeq0Num
+-  val DQ1Deq1 = io.fromIntDQ.intDQ1ValidDeq1Num
+-  val IQ01Deq0 = IQ0Deq0Num +& IQ1Deq0Num
+-  val IQ01Deq1 = IQ0Deq1Num +& IQ1Deq1Num
+-  val IQ23Deq0 = IQ2Deq0Num +& IQ3Deq0Num
+-  val IQ23Deq1 = IQ2Deq1Num +& IQ3Deq1Num
+-  val Dq0EnqDeq0 = PopCount(isOnlyDq0)
+-  val Dq1EnqDeq1 = PopCount(isOnlyDq1)
+-  val Dq0SumDeq0 = DQ0Deq0 +& IQ01Deq0 +& Dq0EnqDeq0
+-  val Dq0SumDeq1 = DQ0Deq1 +& IQ01Deq1
+-  val Dq1SumDeq0 = DQ1Deq0 +& IQ23Deq0
+-  val Dq1SumDeq1 = DQ1Deq1 +& IQ23Deq1 +& Dq1EnqDeq1
+-  val lessDeq0IsDq0 = Dq1SumDeq0 > Dq0SumDeq0
+-  val lessDeq1IsDq0 = (Dq1SumDeq1 << 1).asUInt > Dq0SumDeq1
+-  val equalDeq0IsDq0 = Dq1SumDeq0 === Dq0SumDeq0
+-  val equalDeq1IsDq0 = (Dq1SumDeq1 << 1).asUInt  === Dq0SumDeq1
+-  // val diffDeq0 = Mux(lessDeq0IsDq0, Dq1SumDeq0 - Dq0SumDeq0, Dq0SumDeq0 - Dq1SumDeq0)
+-  // val diffDeq1 = Mux(lessDeq1IsDq0, Dq1SumDeq1 - Dq0SumDeq1, Dq0SumDeq1 - Dq1SumDeq1)
+-  // val popAluIsMore = popAlu.map(_ > diffDeq0)
+-  // val popBrhIsMore = popBrh.map(_ > diffDeq1)
+-  val lastLastAluSelectDq0 = RegInit(false.B)
+-  val lastLastBrhSelectDq0 = RegInit(false.B)
+-  // val aluSelectLessDq = isAlu.zip(popAluIsMore).zip(popAlu).map { case ((i, pm), p) => i && (!pm || (pm && p(0).asBool) ^ lastLastAluSelectDq0) }
+-  // val brhSelectLessDq = isBrh.zip(popBrhIsMore).zip(popBrh).map { case ((i, pm), p) => i && (!pm || (pm && p(0).asBool) ^ lastLastBrhSelectDq0) }
+-  val aluSelectDq0 = isAlu.zip(popAlu).map { case (i, p) => i && (p(0).asBool ^ lastLastAluSelectDq0) }
+-  //val brhSelectDq0 = isBrh.zip(popBrh).map { case (i, p) => i && (p(0).asBool ^ lastLastBrhSelectDq0) }
+-  val brhSelectDq0 = isBrh.zip(popBrh).map { case (i, p) => i && !(lastLastBrhSelectDq0 && (p === 1.U || p === 4.U) || !lastLastBrhSelectDq0 && (p === 3.U || p === 6.U))}
+-  val lastAluSelectDq0 = PriorityMuxDefault(isAlu.reverse.zip(aluSelectDq0.reverse), lastLastAluSelectDq0)
+-  val lastBrhSelectDq0 = PriorityMuxDefault(isBrh.reverse.zip(brhSelectDq0.reverse), lastLastBrhSelectDq0)
+-  when(isAlu.asUInt.orR && io.toIntDq0.canAccept && io.toIntDq1.canAccept){
+-    lastLastAluSelectDq0 := Mux(equalDeq0IsDq0, lastAluSelectDq0, !lessDeq0IsDq0)
+-  }
+-  when(isBrh.asUInt.orR && io.toIntDq0.canAccept && io.toIntDq1.canAccept){
+-    lastLastBrhSelectDq0 := Mux(equalDeq1IsDq0, lastBrhSelectDq0, !lessDeq1IsDq0)
+-  }
+-  val toIntDq0Valid = Wire(Vec(RenameWidth, Bool()))
+-  val toIntDq1Valid = Wire(Vec(RenameWidth, Bool()))
+-  toIntDq0Valid.indices.map { case i =>
+-    toIntDq0Valid(i) := Mux(!io.toIntDq0.canAccept, false.B, Mux(!io.toIntDq1.canAccept, isOnlyDq0(i) || isBothDq01(i), isOnlyDq0(i) || aluSelectDq0(i) || brhSelectDq0(i)))
+-  }
+-  toIntDq1Valid.indices.map { case i =>
+-    toIntDq1Valid(i) := Mux(!io.toIntDq1.canAccept, false.B, Mux(!io.toIntDq0.canAccept, isOnlyDq1(i) || isBothDq01(i), isOnlyDq1(i) || (isAlu(i) ^ aluSelectDq0(i)) || (isBrh(i) && !brhSelectDq0(i))))
+-  }
+-  val isBranch = VecInit(io.fromRename.map(req =>
+-    // cover auipc (a fake branch)
+-    !req.bits.preDecodeInfo.notCFI || FuType.isJump(req.bits.fuType)
+-  ))
+-  val isFp = VecInit(io.fromRename.map(req => FuType.isFArith(req.bits.fuType)))
+-  val isVec     = VecInit(io.fromRename.map(req => FuType.isVArith (req.bits.fuType) ||
+-                                                  FuType.isVsetRvfWvf(req.bits.fuType)))
+-  val isMem    = VecInit(io.fromRename.map(req => FuType.isMem(req.bits.fuType) ||
+-                                                  FuType.isVls (req.bits.fuType)))
+-  val isLs     = VecInit(io.fromRename.map(req => FuType.isLoadStore(req.bits.fuType)))
+-  val isVls    = VecInit(io.fromRename.map(req => FuType.isVls (req.bits.fuType)))
+-  val isStore  = VecInit(io.fromRename.map(req => FuType.isStore(req.bits.fuType)))
+-  val isVStore = VecInit(io.fromRename.map(req => FuType.isVStore(req.bits.fuType)))
+-  val isAMO    = VecInit(io.fromRename.map(req => FuType.isAMO(req.bits.fuType)))
+-  val isBlockBackward  = VecInit(io.fromRename.map(x => x.valid && x.bits.blockBackward))
+-  val isWaitForward    = VecInit(io.fromRename.map(x => x.valid && x.bits.waitForward))
+-
+-  // Singlestep should only commit one machine instruction after dret, and then hart enter debugMode according to singlestep exception.
+-  val s_holdRobidx :: s_updateRobidx :: Nil = Enum(2)
+-  val singleStepState = RegInit(s_updateRobidx)
+-
+-  val robidxStepHold  = WireInit(0.U.asTypeOf(io.fromRename(0).bits.robIdx))
+-  val robidxStepReg   = RegInit(0.U.asTypeOf(io.fromRename(0).bits.robIdx))
+-  val robidxCanCommitStepping = WireInit(0.U.asTypeOf(io.fromRename(0).bits.robIdx))
+-  robidxStepReg := robidxCanCommitStepping
+-
+-  when(!io.singleStep) {
+-    singleStepState := s_updateRobidx
+-  }.elsewhen(io.singleStep && io.fromRename(0).fire && io.enqRob.req(0).valid) {
+-    singleStepState := s_holdRobidx
+-    robidxStepHold := io.fromRename(0).bits.robIdx
+-  }
+-
+-  when(singleStepState === s_updateRobidx) {
+-    robidxCanCommitStepping := robidxStepHold
+-  }.elsewhen(singleStepState === s_holdRobidx) {
+-    when(io.redirect.valid){
+-      robidxCanCommitStepping.flag := !robidxStepReg.flag
+-    }.otherwise {
+-      robidxCanCommitStepping := robidxStepReg
+-    }
+-  }
+-
+-  val updatedUop = Wire(Vec(RenameWidth, new DynInst))
+-  val checkpoint_id = RegInit(0.U(64.W))
+-  checkpoint_id := checkpoint_id + PopCount((0 until RenameWidth).map(i =>
+-    io.fromRename(i).fire
+-  ))
+-
+-
+-  for (i <- 0 until RenameWidth) {
+-
+-    updatedUop(i) := io.fromRename(i).bits
+-    updatedUop(i).debugInfo.eliminatedMove := io.fromRename(i).bits.eliminatedMove
+-    // For the LUI instruction: psrc(0) is from register file and should always be zero.
+-    when (io.fromRename(i).bits.isLUI) {
+-      updatedUop(i).psrc(0) := 0.U
+-    }
+-    //TODO: vec ls mdp
+-    io.lfst.req(i).valid := io.fromRename(i).fire && updatedUop(i).storeSetHit
+-    io.lfst.req(i).bits.isstore := isStore(i)
+-    io.lfst.req(i).bits.ssid := updatedUop(i).ssid
+-    io.lfst.req(i).bits.robIdx := updatedUop(i).robIdx // speculatively assigned in rename
+-
+-    // override load delay ctrl signal with store set result
+-    if(StoreSetEnable) {
+-      updatedUop(i).loadWaitBit := io.lfst.resp(i).bits.shouldWait
+-      updatedUop(i).waitForRobIdx := io.lfst.resp(i).bits.robIdx
+-    } else {
+-      updatedUop(i).loadWaitBit := isLs(i) && !isStore(i) && io.fromRename(i).bits.loadWaitBit
+-    }
+-    // update singleStep, singleStep exception only enable in next machine instruction.
+-    updatedUop(i).singleStep := io.singleStep && (io.fromRename(i).bits.robIdx =/= robidxCanCommitStepping)
+-    XSDebug(io.fromRename(i).fire &&
+-              (TriggerAction.isDmode(updatedUop(i).trigger) || updatedUop(i).exceptionVec(breakPoint)),
+-            s"Debug Mode: inst ${i} has frontend trigger exception\n")
+-    XSDebug(io.fromRename(i).fire &&
+-              updatedUop(i).singleStep,
+-            s"Debug Mode: inst ${i} has single step exception\n")
+-    if (env.EnableDifftest) {
+-      // debug runahead hint
+-      val debug_runahead_checkpoint_id = Wire(checkpoint_id.cloneType)
+-      if(i == 0){
+-        debug_runahead_checkpoint_id := checkpoint_id
+-      } else {
+-        debug_runahead_checkpoint_id := checkpoint_id + PopCount((0 until i).map(i =>
+-          io.fromRename(i).fire
+-        ))
+-      }
+-    }
+-  }
+-
+-  // store set perf count
+-  XSPerfAccumulate("waittable_load_wait", PopCount((0 until RenameWidth).map(i =>
+-    io.fromRename(i).fire && io.fromRename(i).bits.loadWaitBit && !isStore(i) && isLs(i)
+-  )))
+-  XSPerfAccumulate("storeset_load_wait", PopCount((0 until RenameWidth).map(i =>
+-    io.fromRename(i).fire && updatedUop(i).loadWaitBit && !isStore(i) && isLs(i)
+-  )))
+-  XSPerfAccumulate("storeset_load_strict_wait", PopCount((0 until RenameWidth).map(i =>
+-    io.fromRename(i).fire && updatedUop(i).loadWaitBit && updatedUop(i).loadWaitStrict && !isStore(i) && isLs(i)
+-  )))
+-  XSPerfAccumulate("storeset_store_wait", PopCount((0 until RenameWidth).map(i =>
+-    io.fromRename(i).fire && updatedUop(i).loadWaitBit && isStore(i)
+-  )))
+-
+-  /**
+-    * Part 3:
+-    *   acquire ROB (all), LSQ (load/store only) and dispatch queue slots
+-    *   only set valid when all of them provides enough entries
+-    */
+-  val toIntDqCanAccept = io.toIntDq0.canAccept && io.toIntDq1.canAccept
+-  val allResourceReady = io.enqRob.canAccept && toIntDqCanAccept && io.toFpDq.canAccept && io.toVecDq.canAccept && io.toLsDq.canAccept
+-
+-  // Instructions should enter dispatch queues in order.
+-  // blockedByWaitForward: this instruction is blocked by itself (based on waitForward)
+-  // nextCanOut: next instructions can out (based on blockBackward)
+-  // notBlockedByPrevious: previous instructions can enqueue
+-  val hasException = VecInit(io.fromRename.zip(updatedUop).map {
+-    case (fromRename: DecoupledIO[DynInst], uop: DynInst) =>
+-      fromRename.bits.hasException || uop.singleStep
+-  })
+-
+-  private val blockedByWaitForward = Wire(Vec(RenameWidth, Bool()))
+-  blockedByWaitForward(0) := !io.enqRob.isEmpty && isWaitForward(0)
+-  for (i <- 1 until RenameWidth) {
+-    blockedByWaitForward(i) := blockedByWaitForward(i - 1) || (!io.enqRob.isEmpty || Cat(io.fromRename.take(i).map(_.valid)).orR) && isWaitForward(i)
+-  }
+-  if(backendParams.debugEn){
+-    dontTouch(toIntDq0Valid)
+-    dontTouch(toIntDq1Valid)
+-    dontTouch(blockedByWaitForward)
+-  }
+-
+-  // Only the uop with block backward flag will block the next uop
+-  val nextCanOut = VecInit((0 until RenameWidth).map(i =>
+-    !isBlockBackward(i)
+-  ))
+-  val notBlockedByPrevious = VecInit((0 until RenameWidth).map(i =>
+-    if (i == 0) true.B
+-    else Cat((0 until i).map(j => nextCanOut(j))).andR
+-  ))
+-
+-  // for noSpecExec: (robEmpty || !this.noSpecExec) && !previous.noSpecExec
+-  // For blockBackward:
+-  // this instruction can actually dequeue: 3 conditions
+-  // (1) resources are ready
+-  // (2) previous instructions are ready
+-  val thisCanActualOut = (0 until RenameWidth).map(i => !blockedByWaitForward(i) && notBlockedByPrevious(i))
+-  val thisActualOut = (0 until RenameWidth).map(i => io.enqRob.req(i).valid && io.enqRob.canAccept)
+-  val hasValidException = io.fromRename.zip(hasException).map(x => x._1.valid && x._2)
+-
+-  // All dispatch queues can accept new RenameWidth uops
+-  // A possibly better implementation is as follows. We need block all uops when some one DispatchQueue is full.
+-  //   However, dispatch stage cannot rely on the infos from rename stage, since the `rename.io.out.valid` relies on its
+-  // ready which is assigned from `dispatch.io.recv`. This would cause a combinational loop:
+-  //   dispatch.io.recv <- dispatch.io.fromRename.valid <- rename.io.out.valid <- rename.io.out.ready <- dispatch.io.recv
+-  // val dqCanAccept = !((isOnlyDq0.asUInt.orR && !io.toIntDq0.canAccept) || (isOnlyDq1.asUInt.orR && !io.toIntDq1.canAccept) ||
+-  //   (isBothDq01.asUInt.orR && !io.toIntDq0.canAccept && !io.toIntDq1.canAccept) ||
+-  //   (isFp.asUInt.orR && !io.toVecDq.canAccept) || (isLs.asUInt.orR && !io.toLsDq.canAccept))
+-
+-  // Todo: use decode2dispatch bypass infos to loose `can accept` condition
+-  val dqCanAccept = io.toIntDq0.canAccept && io.toIntDq1.canAccept && io.toFpDq.canAccept && io.toVecDq.canAccept && io.toLsDq.canAccept
+-
+-  // input for ROB, LSQ, Dispatch Queue
+-  for (i <- 0 until RenameWidth) {
+-    io.enqRob.needAlloc(i) := io.fromRename(i).valid
+-    io.enqRob.req(i).valid := io.fromRename(i).valid && thisCanActualOut(i) && dqCanAccept
+-    io.enqRob.req(i).bits := updatedUop(i)
+-    io.enqRob.req(i).bits.hasException := updatedUop(i).hasException || updatedUop(i).singleStep
+-    io.enqRob.req(i).bits.numWB := Mux(updatedUop(i).singleStep, 0.U, updatedUop(i).numWB)
+-    XSDebug(io.enqRob.req(i).valid, p"pc 0x${Hexadecimal(io.fromRename(i).bits.pc)} receives nrob ${io.enqRob.resp(i)}\n")
+-
+-    // When previous instructions have exceptions, following instructions should not enter dispatch queues.
+-    val previousHasException = if (i == 0) false.B else VecInit(hasValidException.take(i)).asUInt.orR
+-    val canEnterDpq = !hasException(i) && thisCanActualOut(i) && !previousHasException && io.enqRob.canAccept
+-
+-    // send uops to dispatch queues
+-    // Note that if one of their previous instructions cannot enqueue, they should not enter dispatch queue.
+-    val doesNotNeedExec = io.fromRename(i).bits.eliminatedMove
+-    io.toIntDq0.needAlloc(i) := io.fromRename(i).valid && isIntDq0(i) && !doesNotNeedExec && toIntDq0Valid(i)
+-    io.toIntDq0.req(i).valid := io.fromRename(i).valid && isIntDq0(i) && !doesNotNeedExec && toIntDq0Valid(i) &&
+-      canEnterDpq && dqCanAccept
+-    io.toIntDq0.req(i).bits := updatedUop(i)
+-
+-    io.toIntDq1.needAlloc(i) := io.fromRename(i).valid && isIntDq1(i) && !doesNotNeedExec && toIntDq1Valid(i)
+-    io.toIntDq1.req(i).valid := io.fromRename(i).valid && isIntDq1(i) && !doesNotNeedExec && toIntDq1Valid(i) &&
+-      canEnterDpq && dqCanAccept
+-    io.toIntDq1.req(i).bits := updatedUop(i)
+-
+-    io.toFpDq.needAlloc(i) := io.fromRename(i).valid && isFp(i)
+-    io.toFpDq.req(i).valid := io.fromRename(i).valid && isFp(i) &&
+-      canEnterDpq && dqCanAccept
+-    io.toFpDq.req(i).bits := updatedUop(i)
+-
+-    io.toVecDq.needAlloc(i)  := io.fromRename(i).valid && isVec(i)
+-    io.toVecDq.req(i).valid  := io.fromRename(i).valid && isVec(i) &&
+-                               canEnterDpq && dqCanAccept
+-    io.toVecDq.req(i).bits   := updatedUop(i)
+-
+-    io.toLsDq.needAlloc(i)  := io.fromRename(i).valid && isMem(i)
+-    io.toLsDq.req(i).valid  := io.fromRename(i).valid && isMem(i) &&
+-                               canEnterDpq && dqCanAccept
+-    io.toLsDq.req(i).bits   := updatedUop(i)
+-
+-    //delete trigger message from frontend
+-    io.toDq.map(dq => { dq.req(i).bits.trigger := TriggerAction.None })
+-
+-    XSDebug(io.toIntDq0.req(i).valid, p"pc 0x${Hexadecimal(io.toIntDq0.req(i).bits.pc)} int index $i\n")
+-    XSDebug(io.toIntDq1.req(i).valid, p"pc 0x${Hexadecimal(io.toIntDq1.req(i).bits.pc)} int index $i\n")
+-    XSDebug(io.toVecDq.req(i).valid , p"pc 0x${Hexadecimal(io.toVecDq.req(i).bits.pc )} fp  index $i\n")
+-    XSDebug(io.toLsDq.req(i).valid , p"pc 0x${Hexadecimal(io.toLsDq.req(i).bits.pc )} ls  index $i\n")
+-  }
+-
+-  val enq_dq0_cnt = io.toIntDq0.needAlloc.zip(io.toIntDq0.req.map(_.valid)).map{ case(needAlloc, valid) => needAlloc && valid}
+-  XSPerfAccumulate("enq_dq0_cnt", PopCount(enq_dq0_cnt))
+-  val enq_dq1_cnt = io.toIntDq1.needAlloc.zip(io.toIntDq1.req.map(_.valid)).map { case (needAlloc, valid) => needAlloc && valid }
+-  XSPerfAccumulate("enq_dq1_cnt", PopCount(enq_dq1_cnt))
+-  val enq_dq0_alu_cnt = enq_dq0_cnt.zip(isAlu).map{ case (enq,isalu) => enq && isalu }
+-  XSPerfAccumulate("enq_dq0_alu_cnt", PopCount(enq_dq0_alu_cnt))
+-  val enq_dq1_alu_cnt = enq_dq1_cnt.zip(isAlu).map{ case (enq,isalu) => enq && isalu }
+-  XSPerfAccumulate("enq_dq1_alu_cnt", PopCount(enq_dq1_alu_cnt))
+-  val enq_dq0_brh_cnt = enq_dq0_cnt.zip(isBrh).map { case (enq, isbrh) => enq && isbrh }
+-  XSPerfAccumulate("enq_dq0_brh_cnt", PopCount(enq_dq0_brh_cnt))
+-  val enq_dq1_brh_cnt = enq_dq1_cnt.zip(isBrh).map { case (enq, isbrh) => enq && isbrh }
+-  XSPerfAccumulate("enq_dq1_brh_cnt", PopCount(enq_dq1_brh_cnt))
+-
+-  /**
+-    * Part 4: send response to rename when dispatch queue accepts the uop
+-    */
+-  val hasValidInstr = VecInit(io.fromRename.map(_.valid)).asUInt.orR
+-  val hasSpecialInstr = Cat((0 until RenameWidth).map(i => isBlockBackward(i))).orR
+-
+-  private val canAccept = !hasValidInstr || !hasSpecialInstr && io.enqRob.canAccept && dqCanAccept
+-
+-  val isWaitForwardOrBlockBackward = isWaitForward.asUInt.orR || isBlockBackward.asUInt.orR
+-  io.toRenameAllFire := !isWaitForwardOrBlockBackward && io.enqRob.canAccept && dqCanAccept
+-  for (i <- 0 until RenameWidth) {
+-    io.fromRename(i).ready := thisCanActualOut(i) && io.enqRob.canAccept && dqCanAccept
+-
+-    io.allocPregs(i).isInt := io.fromRename(i).valid && io.fromRename(i).bits.rfWen && !io.fromRename(i).bits.eliminatedMove
+-    io.allocPregs(i).isFp := io.fromRename(i).valid && io.fromRename(i).bits.fpWen
+-    io.allocPregs(i).isVec := io.fromRename(i).valid && io.fromRename(i).bits.vecWen
+-    io.allocPregs(i).isV0 := io.fromRename(i).valid && io.fromRename(i).bits.v0Wen
+-    io.allocPregs(i).isVl := io.fromRename(i).valid && io.fromRename(i).bits.vlWen
+-    io.allocPregs(i).preg  := io.fromRename(i).bits.pdest
+-  }
+-  val renameFireCnt = PopCount(io.fromRename.map(_.fire))
+-  val enqFireCnt = PopCount(io.toIntDq0.req.map(_.valid && io.toIntDq0.canAccept)) +
+-    PopCount(io.toIntDq1.req.map(_.valid && io.toIntDq1.canAccept)) +
+-    PopCount(io.toFpDq.req.map(_.valid && io.toFpDq.canAccept)) +
+-    PopCount(io.toVecDq.req.map(_.valid && io.toVecDq.canAccept)) +
+-    PopCount(io.toLsDq.req.map(_.valid && io.toLsDq.canAccept))
+-  XSError(enqFireCnt > renameFireCnt, "enqFireCnt should not be greater than renameFireCnt\n")
+-
+-  val stall_rob = hasValidInstr && !io.enqRob.canAccept && dqCanAccept
+-  val stall_int_dq = hasValidInstr && io.enqRob.canAccept && !toIntDqCanAccept && io.toVecDq.canAccept && io.toLsDq.canAccept
+-  val stall_int_dq0 = hasValidInstr && io.enqRob.canAccept && !io.toIntDq0.canAccept && io.toVecDq.canAccept && io.toLsDq.canAccept
+-  val stall_int_dq1 = hasValidInstr && io.enqRob.canAccept && !io.toIntDq1.canAccept && io.toVecDq.canAccept && io.toLsDq.canAccept
+-  val stall_fp_dq = hasValidInstr && io.enqRob.canAccept && toIntDqCanAccept && !io.toVecDq.canAccept && io.toLsDq.canAccept
+-  val stall_ls_dq = hasValidInstr && io.enqRob.canAccept && toIntDqCanAccept && io.toVecDq.canAccept && !io.toLsDq.canAccept
+-
+-  XSPerfAccumulate("in_valid_count", PopCount(io.fromRename.map(_.valid)))
+-  XSPerfAccumulate("in_fire_count", PopCount(io.fromRename.map(_.fire)))
+-  XSPerfAccumulate("in_valid_not_ready_count", PopCount(io.fromRename.map(x => x.valid && !x.ready)))
+-  XSPerfAccumulate("wait_cycle", !io.fromRename.head.valid && allResourceReady)
+-
+-  XSPerfAccumulate("stall_cycle_rob", stall_rob)
+-  XSPerfAccumulate("stall_cycle_int_dq0", stall_int_dq0)
+-  XSPerfAccumulate("stall_cycle_int_dq1", stall_int_dq1)
+-  XSPerfAccumulate("stall_cycle_fp_dq", stall_fp_dq)
+-  XSPerfAccumulate("stall_cycle_ls_dq", stall_ls_dq)
+-
+-  val notIssue = !io.debugTopDown.fromRob.robHeadLsIssue
+-  val tlbReplay = io.debugTopDown.fromCore.fromMem.robHeadTlbReplay
+-  val tlbMiss = io.debugTopDown.fromCore.fromMem.robHeadTlbMiss
+-  val vioReplay = io.debugTopDown.fromCore.fromMem.robHeadLoadVio
+-  val mshrReplay = io.debugTopDown.fromCore.fromMem.robHeadLoadMSHR
+-  val l1Miss = io.debugTopDown.fromCore.fromMem.robHeadMissInDCache
+-  val l2Miss = io.debugTopDown.fromCore.l2MissMatch
+-  val l3Miss = io.debugTopDown.fromCore.l3MissMatch
+-
+-  val ldReason = Mux(l3Miss, TopDownCounters.LoadMemStall.id.U,
+-  Mux(l2Miss, TopDownCounters.LoadL3Stall.id.U,
+-  Mux(l1Miss, TopDownCounters.LoadL2Stall.id.U,
+-  Mux(notIssue, TopDownCounters.MemNotReadyStall.id.U,
+-  Mux(tlbMiss, TopDownCounters.LoadTLBStall.id.U,
+-  Mux(tlbReplay, TopDownCounters.LoadTLBStall.id.U,
+-  Mux(mshrReplay, TopDownCounters.LoadMSHRReplayStall.id.U,
+-  Mux(vioReplay, TopDownCounters.LoadVioReplayStall.id.U,
+-  TopDownCounters.LoadL1Stall.id.U))))))))
+-
+-  val decodeReason = RegNextN(io.stallReason.reason, 2)
+-  val renameReason = RegNext(io.stallReason.reason)
+-
+-  val stallReason = Wire(chiselTypeOf(io.stallReason.reason))
+-  val firedVec = io.fromRename.map(_.fire)
+-  io.stallReason.backReason.valid := !canAccept
+-  io.stallReason.backReason.bits := TopDownCounters.OtherCoreStall.id.U
+-  stallReason.zip(io.stallReason.reason).zip(firedVec).zipWithIndex.map { case (((update, in), fire), idx) =>
+-    val headIsInt = FuType.isInt(io.robHead.getDebugFuType)  && io.robHeadNotReady
+-    val headIsFp  = FuType.isFArith(io.robHead.getDebugFuType)   && io.robHeadNotReady
+-    val headIsDiv = FuType.isDivSqrt(io.robHead.getDebugFuType) && io.robHeadNotReady
+-    val headIsLd  = io.robHead.getDebugFuType === FuType.ldu.U && io.robHeadNotReady || !io.lqCanAccept
+-    val headIsSt  = io.robHead.getDebugFuType === FuType.stu.U && io.robHeadNotReady || !io.sqCanAccept
+-    val headIsAmo = io.robHead.getDebugFuType === FuType.mou.U && io.robHeadNotReady
+-    val headIsLs  = headIsLd || headIsSt
+-    val robLsFull = io.robFull || !io.lqCanAccept || !io.sqCanAccept
+-
+-    import TopDownCounters._
+-    update := MuxCase(OtherCoreStall.id.U, Seq(
+-      // fire
+-      (fire                                              ) -> NoStall.id.U          ,
+-      // dispatch not stall / core stall from decode or rename
+-      (in =/= OtherCoreStall.id.U && in =/= NoStall.id.U ) -> in                    ,
+-      // dispatch queue stall
+-      (!toIntDqCanAccept && !headIsInt && !io.robFull) -> IntDqStall.id.U       ,
+-      (!io.toVecDq.canAccept  && !headIsFp  && !io.robFull) -> FpDqStall.id.U        ,
+-      (!io.toLsDq.canAccept  && !headIsLs  && !robLsFull ) -> LsDqStall.id.U        ,
+-      // rob stall
+-      (headIsAmo                                         ) -> AtomicStall.id.U      ,
+-      (headIsSt                                          ) -> StoreStall.id.U       ,
+-      (headIsLd                                          ) -> ldReason              ,
+-      (headIsDiv                                         ) -> DivStall.id.U         ,
+-      (headIsInt                                         ) -> IntNotReadyStall.id.U ,
+-      (headIsFp                                          ) -> FPNotReadyStall.id.U  ,
+-      (renameReason(idx) =/= NoStall.id.U                ) -> renameReason(idx)     ,
+-      (decodeReason(idx) =/= NoStall.id.U                ) -> decodeReason(idx)     ,
+-    ))
+-  }
+-
+-  TopDownCounters.values.foreach(ctr => XSPerfAccumulate(ctr.toString(), PopCount(stallReason.map(_ === ctr.id.U))))
+-
+-  val robTrueCommit = io.debugTopDown.fromRob.robTrueCommit
+-  TopDownCounters.values.foreach(ctr => XSPerfRolling("td_"+ctr.toString(), PopCount(stallReason.map(_ === ctr.id.U)),
+-                                                      robTrueCommit, 1000, clock, reset))
+-
+-  XSPerfHistogram("slots_fire", PopCount(thisActualOut), true.B, 0, RenameWidth+1, 1)
+-  // Explaination: when out(0) not fire, PopCount(valid) is not meaningfull
+-  XSPerfHistogram("slots_valid_pure", PopCount(io.enqRob.req.map(_.valid)), thisActualOut(0), 0, RenameWidth+1, 1)
+-  XSPerfHistogram("slots_valid_rough", PopCount(io.enqRob.req.map(_.valid)), true.B, 0, RenameWidth+1, 1)
+-
+-  val perfEvents = Seq(
+-    ("dispatch_in",                 PopCount(io.fromRename.map(_.valid & io.fromRename(0).ready))),
+-    ("dispatch_empty",              !hasValidInstr                                               ),
+-    ("dispatch_utili",              PopCount(io.fromRename.map(_.valid))                         ),
+-    ("dispatch_waitinstr",          PopCount(io.fromRename.map(!_.valid && canAccept))           ),
+-    ("dispatch_stall_cycle_lsq",    false.B                                                      ),
+-    ("dispatch_stall_cycle_rob",    stall_rob                                                    ),
+-    ("dispatch_stall_cycle_int_dq", stall_int_dq                                                 ),
+-    ("dispatch_stall_cycle_fp_dq",  stall_fp_dq                                                  ),
+-    ("dispatch_stall_cycle_ls_dq",  stall_ls_dq                                                  )
+-  )
+-  generatePerfEvent()
+-}
+diff --git a/src/main/scala/xiangshan/backend/dispatch/Dispatch2IqFpImp.scala b/src/main/scala/xiangshan/backend/dispatch/Dispatch2IqFpImp.scala
+deleted file mode 100644
+index c3aabe0ebf3..00000000000
+--- a/src/main/scala/xiangshan/backend/dispatch/Dispatch2IqFpImp.scala
++++ /dev/null
+@@ -1,198 +0,0 @@
+-package xiangshan.backend.dispatch
+-
+-import org.chipsalliance.cde.config.Parameters
+-import chisel3._
+-import chisel3.util._
+-import chisel3.util.experimental.decode._
+-import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+-import utility.{Constantin, PriorityMuxDefault, SelectOne, XSPerfAccumulate}
+-import xiangshan._
+-import xiangshan.backend.fu.{FuConfig, FuType}
+-import xiangshan.backend.rename.BusyTableReadIO
+-import xiangshan.mem.LsqEnqIO
+-import xiangshan.backend.Bundles.DynInst
+-import xiangshan.backend.datapath.DataSource
+-import xiangshan.backend.fu.FuType.{FuTypeOrR, falu}
+-import xiangshan.backend.issue._
+-
+-import scala.collection._
+-
+-class Dispatch2IqFpImp(override val wrapper: Dispatch2Iq)(implicit p: Parameters, params: SchdBlockParams)
+-  extends Dispatch2IqImp(wrapper)
+-    with HasXSParameter {
+-
+-  val fpIQValidNumVec = io.fpIQValidNumVec.get
+-  private val numIQ = io.out.size
+-  val exeUnitParms = params.issueBlockParams.map(_.exuBlockParams)
+-  val exeFuConfigs = params.issueBlockParams.map(_.exuBlockParams.map(_.fuConfigs)).flatten
+-  val IQFuConfigs = params.issueBlockParams.map(_.exuBlockParams.map(_.fuConfigs).flatten)
+-  val allFuConfigs = params.issueBlockParams.map(_.exuBlockParams.map(_.fuConfigs)).flatten.flatten.distinct
+-  val fuConfigMapIQ = allFuConfigs.map{ case x =>
+-    x -> IQFuConfigs.map(_.contains(x))
+-  }
+-  val fuConfigOnlyOneIQ = fuConfigMapIQ.filter(x => x._2.count(_ == true) == 1).map(_._1)
+-  val fuConfigMultiIQ = fuConfigMapIQ.filter(x => x._2.count(_ == true) > 1).map(_._1)
+-  println(s"[Dispatch2IqFpImp] IQFuConfigs: ${IQFuConfigs.map(_.map(_.name))}")
+-  println(s"[Dispatch2IqFpImp] allFuConfigs: ${allFuConfigs.map(_.name)}")
+-  println(s"[Dispatch2IqFpImp] fuConfigMapIQ: ${fuConfigMapIQ.map(x => (x._1.name, x._2))}")
+-  println(s"[Dispatch2IqFpImp] fuConfigOnlyOneIQ: ${fuConfigOnlyOneIQ.map(_.name)}")
+-  println(s"[Dispatch2IqFpImp] fuConfigMultiIQ: ${fuConfigMultiIQ.map(_.name)}")
+-  val uopsInFuType = VecInit(uopsIn.map(x => Mux(x.valid, x.bits.fuType, 0.U.asTypeOf(x.bits.fuType))))
+-  val inFuTypeIsMultiIQ = VecInit(uopsInFuType.map{ case x =>
+-    VecInit(fuConfigMultiIQ.map{ case y => x(y.fuType.id)})
+-  })
+-  val inFuTypeIsOnlyOneIQ  = VecInit(uopsInFuType.map { case x =>
+-    VecInit(fuConfigOnlyOneIQ.map { case y => x(y.fuType.id) })
+-  })
+-  val popFuType = Wire(Vec(numEnq, Vec(fuConfigMultiIQ.size, UInt(numEnq.U.getWidth.W))))
+-  popFuType.zipWithIndex.map{ case (p, i) =>
+-    p.zipWithIndex.map{ case (pp, j) =>
+-      pp := PopCount(inFuTypeIsMultiIQ.take(i + 1).map(_(j)))
+-    }
+-  }
+-
+-  // sort the UInt, result[0] is minimum OH, result[1] is second minimum OH...
+-  def sortUInt(input: Vec[UInt]): Vec[Vec[Bool]] = {
+-    val inputSize = input.size
+-    val inputWithIndex = input.zipWithIndex
+-    val compareResult = inputWithIndex.map{ case (input, i) =>
+-      inputWithIndex.filter(_._2 != i).map{ case (input2, i2) =>
+-        if (i < i2) input <= input2 else input < input2
+-      }
+-    }
+-    VecInit((0 until inputSize).map{ i =>
+-      VecInit(compareResult.map{ c =>
+-        PopCount(c) === (inputSize - 1 - i).U
+-      })
+-    })
+-  }
+-  def shiftLeftVecBool(input: Vec[Vec[Bool]], shiftNum: UInt): Vec[Vec[Bool]] = {
+-    VecInit(input.zipWithIndex.map{ case (in, i) =>
+-      Mux(i.U < shiftNum, input((i+input.size).U - shiftNum), input(i.U - shiftNum))
+-    })
+-  }
+-  val minIQSel = VecInit(fuConfigMultiIQ.map{ case fuConfig =>
+-    val thisFuValidNumSeq = VecInit(exeFuConfigs.zip(io.fpIQValidNumVec.get.flatten).filter{case (a,b) => a.contains(fuConfig)}.map(_._2))
+-    // here use RegNext for better timing
+-    val sortResult = RegNext(sortUInt(thisFuValidNumSeq))
+-    val selIQOHSeq = Wire(Vec(numEnq, Vec(numIQ, Bool())))
+-    selIQOHSeq.zipWithIndex.map{ case (s, i) =>
+-      s.zipWithIndex.map{ case (ss, j) =>
+-        if (IQFuConfigs(j).contains(fuConfig)) ss := sortResult(i % sortResult.size)(j)
+-        else ss := false.B
+-      }
+-    }
+-    if (backendParams.debugEn){
+-      dontTouch(thisFuValidNumSeq)
+-      dontTouch(sortResult)
+-    }
+-    selIQOHSeq
+-  })
+-  val lastIQSel = Reg(chiselTypeOf(minIQSel))
+-  val lastDispatchNum = Reg(Vec(fuConfigMultiIQ.size, UInt(numEnq.W)))
+-  val robbSel = VecInit(lastIQSel.zip(lastDispatchNum).map{ case(s, n) =>
+-    shiftLeftVecBool(s,n)
+-  })
+-  val useMinIQSel = Wire(Vec(fuConfigMultiIQ.size, Bool()))
+-  // set all useMinIQSel is true
+-  useMinIQSel.map(_ := true.B)
+-  val finalMultiIQSel = VecInit(minIQSel.zip(robbSel).zip(useMinIQSel).map{ case ((m , r), u) =>
+-    Mux(u, m, r)
+-  })
+-  lastIQSel := finalMultiIQSel
+-  val onlyOneIQSel = Wire(Vec(fuConfigOnlyOneIQ.size, Vec(numIQ, Bool())))
+-  onlyOneIQSel := VecInit(fuConfigOnlyOneIQ.map{ case fu =>
+-    val index = fuConfigMapIQ.map(_._1).indexOf(fu)
+-    VecInit(fuConfigMapIQ(index)._2.map(_.B))
+-  })
+-  val multiSelIQOH = Wire(Vec(numEnq, Vec(numIQ, Bool())))
+-  multiSelIQOH.zip(inFuTypeIsMultiIQ.zip(popFuType)).map{ case (sel, (fu, popFuType)) =>
+-    // popFuType need - 1.U because first instr index is 0 popFuType is 1
+-    sel := Mux1H(fu, finalMultiIQSel)(Mux1H(fu, popFuType.map(_ - 1.U )))
+-  }
+-  val onlyOneSelIQOH = Wire(Vec(numEnq, Vec(numIQ, Bool())))
+-  onlyOneSelIQOH.zip(inFuTypeIsOnlyOneIQ).map { case (sel, fu) =>
+-    sel := Mux1H(fu, onlyOneIQSel)
+-  }
+-  val finalSelIQOH = VecInit(multiSelIQOH.zip(onlyOneSelIQOH).map{ case (m ,o) =>
+-    VecInit(m.zip(o).map{ case (mm, oo) =>
+-      mm || oo
+-    })
+-  })
+-  // popSelIQOH width is numEnq.U.getWidth.W because of all uopsIn can select same IQ
+-  val popSelIQOH = Wire(Vec(numEnq, Vec(numIQ, UInt(numEnq.U.getWidth.W))))
+-  popSelIQOH.zipWithIndex.map { case (p, i) =>
+-    p.zipWithIndex.map { case (pp, j) =>
+-      pp := PopCount(finalSelIQOH.take(i + 1).map(_(j)))
+-    }
+-  }
+-  val IQIsReadyMapEnqNum = io.out.map(x => x.size -> x.head.ready)
+-  val uopsInReady = popSelIQOH.zipWithIndex.map{ case (p, uopinIndex) =>
+-    p.zip(IQIsReadyMapEnqNum).zipWithIndex.map{ case ((pp, mapEnqNum), iqIndex) =>
+-      mapEnqNum._2 && (pp < (mapEnqNum._1 + 1).U) && finalSelIQOH(uopinIndex)(iqIndex) || !finalSelIQOH(uopinIndex)(iqIndex)
+-    }.reduce(_ && _)
+-  }
+-  val isMultiIQDispatch = VecInit(inFuTypeIsMultiIQ.zip(uopsInReady).map{ case (i, u) =>
+-    VecInit(i.map{_ && u})
+-  })
+-  lastDispatchNum.zipWithIndex.map{ case (l,i) =>
+-    // isMultiIQDispatch index (uopsIn)(fuConfig)
+-    // lastDispatchNum index (fuConfig)
+-    l := Mux(isMultiIQDispatch.map(_(i)).reduce(_ || _), PopCount(isMultiIQDispatch.map(_(i))), 0.U)
+-  }
+-  uopsIn.zip(uopsInReady).map{ case (u, r) =>
+-    u.ready := r
+-  }
+-  val popSelIQOHIsOne = VecInit(popSelIQOH.map { case p =>
+-    VecInit(p.zip(IQIsReadyMapEnqNum).map { case (pp, i) =>
+-      i._2 && pp === 1.U
+-    })
+-  })
+-  val popSelIQOHIsTwo = VecInit(popSelIQOH.map { case p =>
+-    VecInit(p.zip(IQIsReadyMapEnqNum).map { case (pp, i) =>
+-      i._2 && pp === 2.U
+-    })
+-  })
+-  io.out.zipWithIndex.map{ case (iq, iqIndex) =>
+-    iq.zipWithIndex.map{ case (enq, i) =>
+-      if (i == 0) {
+-        enq.valid := PriorityMuxDefault(popSelIQOHIsOne.map(_(iqIndex)).zip(uopsIn.map(_.valid)), false.B)
+-        enq.bits := PriorityMuxDefault(popSelIQOHIsOne.map(_(iqIndex)).zip(uopsIn.map(_.bits)), 0.U.asTypeOf(enq.bits))
+-      }
+-      else if (i == 1) {
+-        enq.valid := PriorityMuxDefault(popSelIQOHIsTwo.map(_(iqIndex)).zip(uopsIn.map(_.valid)), false.B)
+-        enq.bits := PriorityMuxDefault(popSelIQOHIsTwo.map(_(iqIndex)).zip(uopsIn.map(_.bits)), 0.U.asTypeOf(enq.bits))
+-      }
+-      else {
+-        assert(false, "IQ enqNum must <= 2")
+-      }
+-    }
+-  }
+-  if(backendParams.debugEn){
+-    dontTouch(io.fpIQValidNumVec.get)
+-    dontTouch(inFuTypeIsOnlyOneIQ)
+-    dontTouch(inFuTypeIsMultiIQ)
+-    dontTouch(uopsInFuType)
+-    dontTouch(popFuType)
+-    dontTouch(minIQSel)
+-    dontTouch(lastIQSel)
+-    dontTouch(lastDispatchNum)
+-    dontTouch(robbSel)
+-    dontTouch(useMinIQSel)
+-    dontTouch(finalMultiIQSel)
+-    dontTouch(onlyOneIQSel)
+-    dontTouch(multiSelIQOH)
+-    dontTouch(onlyOneSelIQOH)
+-    dontTouch(finalSelIQOH)
+-    dontTouch(popSelIQOH)
+-    dontTouch(isMultiIQDispatch)
+-    dontTouch(popSelIQOHIsOne)
+-    dontTouch(popSelIQOHIsTwo)
+-  }
+-
+-
+-  XSPerfAccumulate("in_valid", PopCount(io.in.map(_.valid)))
+-  XSPerfAccumulate("in_fire", PopCount(io.in.map(_.fire)))
+-  XSPerfAccumulate("out_valid", PopCount(io.out.flatMap(_.map(_.valid))))
+-  XSPerfAccumulate("out_fire", PopCount(io.out.flatMap(_.map(_.fire))))
+-}
+diff --git a/src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala b/src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala
+deleted file mode 100644
+index 585c2f0dd45..00000000000
+--- a/src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala
++++ /dev/null
+@@ -1,299 +0,0 @@
+-/***************************************************************************************
+-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+-* Copyright (c) 2020-2021 Peng Cheng Laboratory
+-*
+-* XiangShan is licensed under Mulan PSL v2.
+-* You can use this software according to the terms and conditions of the Mulan PSL v2.
+-* You may obtain a copy of Mulan PSL v2 at:
+-*          http://license.coscl.org.cn/MulanPSL2
+-*
+-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+-*
+-* See the Mulan PSL v2 for more details.
+-***************************************************************************************/
+-
+-package xiangshan.backend.dispatch
+-
+-import org.chipsalliance.cde.config.Parameters
+-import chisel3._
+-import chisel3.util._
+-import utils._
+-import utility._
+-import xiangshan._
+-import xiangshan.backend.rob.RobPtr
+-import xiangshan.backend.Bundles.DynInst
+-import xiangshan.backend.fu.FuType
+-
+-class DispatchQueueIO(enqnum: Int, deqnum: Int, size: Int)(implicit p: Parameters) extends XSBundle {
+-  val enq = new Bundle {
+-    // output: dispatch queue can accept new requests
+-    val canAccept = Output(Bool())
+-    // input: need to allocate new entries (for address computing)
+-    val needAlloc = Vec(enqnum, Input(Bool()))
+-    // input: actually do the allocation (for write enable)
+-    val req = Vec(enqnum, Flipped(ValidIO(new DynInst)))
+-  }
+-  val deq = Vec(deqnum, DecoupledIO(new DynInst))
+-  val redirect = Flipped(ValidIO(new Redirect))
+-  val dqFull = Output(Bool())
+-  val validDeq0Num = Output(UInt(size.U.getWidth.W))
+-  val validDeq1Num = Output(UInt(size.U.getWidth.W))
+-}
+-
+-// dispatch queue: accepts at most enqnum uops from dispatch1 and dispatches deqnum uops at every clock cycle
+-class DispatchQueue(size: Int, enqnum: Int, deqnum: Int, dqIndex: Int = 0)(implicit p: Parameters)
+-  extends XSModule with HasCircularQueuePtrHelper with HasPerfEvents {
+-  val io = IO(new DispatchQueueIO(enqnum, deqnum, size))
+-  require(dpParams.IntDqDeqWidth == 8, "dpParams.IntDqDeqWidth must be 8")
+-  require(backendParams.intSchdParams.get.issueBlockParams.size == 4, "int issueBlockParams must be 4")
+-  backendParams.intSchdParams.get.issueBlockParams.map(x => require(x.exuBlockParams.size == 2, "int issueBlockParam's must be 2"))
+-
+-  val s_invalid :: s_valid :: Nil = Enum(2)
+-
+-  // queue data array
+-  private def hasRen: Boolean = true
+-  val dataModule = Module(new SyncDataModuleTemplate(new DynInst, size, 2 * deqnum, enqnum, hasRen = hasRen))
+-  val robIdxEntries = Reg(Vec(size, new RobPtr))
+-  val stateEntries = RegInit(VecInit(Seq.fill(size)(s_invalid)))
+-  val validDeq0 = RegInit(VecInit(Seq.fill(size)(false.B)))
+-  val validDeq1 = RegInit(VecInit(Seq.fill(size)(false.B)))
+-  io.validDeq0Num := PopCount(validDeq0.zip(stateEntries).map{case (v, s) => v && (s===s_valid)})
+-  io.validDeq1Num := PopCount(validDeq1.zip(stateEntries).map{case (v, s) => v && (s===s_valid)})
+-
+-  class DispatchQueuePtr extends CircularQueuePtr[DispatchQueuePtr](size)
+-
+-  // head: first valid entry (dispatched entry)
+-  val headPtr = RegInit(VecInit((0 until 2 * deqnum).map(_.U.asTypeOf(new DispatchQueuePtr))))
+-  val headPtrNext = Wire(Vec(2 * deqnum, new DispatchQueuePtr))
+-  val headPtrMask = UIntToMask(headPtr(0).value, size)
+-  val headPtrOH = RegInit(1.U(size.W))
+-  val headPtrOHShift = CircularShift(headPtrOH)
+-  val headPtrOHVec = VecInit.tabulate(deqnum + 1)(headPtrOHShift.left)
+-  // tail: first invalid entry (free entry)
+-  val tailPtr = RegInit(VecInit((0 until enqnum).map(_.U.asTypeOf(new DispatchQueuePtr))))
+-  val tailPtrMask = UIntToMask(tailPtr(0).value, size)
+-  val tailPtrOH = RegInit(1.U(size.W))
+-  val tailPtrOHShift = CircularShift(tailPtrOH)
+-  val tailPtrOHVec = VecInit.tabulate(enqnum + 1)(tailPtrOHShift.left)
+-  // valid entries counter
+-  val validCounter = RegInit(0.U(log2Ceil(size + 1).W))
+-  val allowEnqueue = RegInit(true.B)
+-
+-  val isTrueEmpty = !VecInit(stateEntries.map(_ === s_valid)).asUInt.orR
+-  val canEnqueue = allowEnqueue
+-
+-  /**
+-   * Part 1: update states and uops when enqueue, dequeue, commit, redirect/replay
+-   *
+-   * uop only changes when a new instruction enqueues.
+-   *
+-   * state changes when
+-   * (1) enqueue: from s_invalid to s_valid
+-   * (2) dequeue: from s_valid to s_dispatched
+-   * (3) commit: from s_dispatched to s_invalid
+-   * (4) redirect (branch misprediction or exception): from any state to s_invalid (flushed)
+-   * (5) redirect (replay): from s_dispatched to s_valid (re-dispatch)
+-   */
+-  // enqueue: from s_invalid to s_valid
+-  io.enq.canAccept := canEnqueue
+-  val enqOffset = (0 until enqnum).map(i => PopCount(io.enq.needAlloc.take(i)))
+-  val enqIndexOH = (0 until enqnum).map(i => tailPtrOHVec(enqOffset(i)))
+-  for (i <- 0 until size) {
+-    val validVec = io.enq.req.map(_.valid).zip(enqIndexOH).map{ case (v, oh) => v && oh(i) }
+-    when (VecInit(validVec).asUInt.orR && canEnqueue) {
+-      robIdxEntries(i) := Mux1H(validVec, io.enq.req.map(_.bits.robIdx))
+-      stateEntries(i) := s_valid
+-      if (dqIndex == 0) {
+-        validDeq0(i) := FuType.isIntDq0Deq0(Mux1H(validVec, io.enq.req.map(_.bits.fuType)))
+-        validDeq1(i) := FuType.isIntDq0Deq1(Mux1H(validVec, io.enq.req.map(_.bits.fuType)))
+-      }
+-      else {
+-        validDeq0(i) := FuType.isIntDq1Deq0(Mux1H(validVec, io.enq.req.map(_.bits.fuType)))
+-        validDeq1(i) := FuType.isIntDq1Deq1(Mux1H(validVec, io.enq.req.map(_.bits.fuType)))
+-      }
+-    }
+-  }
+-  for (i <- 0 until enqnum) {
+-    dataModule.io.wen(i) := canEnqueue && io.enq.req(i).valid
+-    dataModule.io.waddr(i) := tailPtr(enqOffset(i)).value
+-    dataModule.io.wdata(i) := io.enq.req(i).bits
+-  }
+-
+-  // dequeue: from s_valid to s_dispatched
+-  for (i <- 0 until size) {
+-    val validVec = io.deq.map(_.fire).zip(headPtrOHVec).map{ case (v, oh) => v && oh(i) }
+-    when (VecInit(validVec).asUInt.orR && !io.redirect.valid) {
+-      stateEntries(i) := s_invalid
+-    }
+-  }
+-
+-  // redirect: cancel uops currently in the queue
+-  val needCancel = Wire(Vec(size, Bool()))
+-  for (i <- 0 until size) {
+-    needCancel(i) := stateEntries(i) =/= s_invalid && robIdxEntries(i).needFlush(io.redirect)
+-
+-    when(needCancel(i)) {
+-      stateEntries(i) := s_invalid
+-    }
+-
+-    XSInfo(needCancel(i), p"valid entry($i): robIndex ${robIdxEntries(i)} " +
+-      p"cancelled with redirect robIndex 0x${Hexadecimal(io.redirect.bits.robIdx.asUInt)}\n")
+-  }
+-
+-  /**
+-   * Part 2: update indices
+-   *
+-   * tail: (1) enqueue; (2) redirect
+-   * head: dequeue
+-   */
+-
+-  // dequeue
+-  val currentValidCounter = distanceBetween(tailPtr(0), headPtr(0))
+-  val numDeqTryMask = Mux(currentValidCounter >= deqnum.U,
+-    // all deq are valid
+-    (1 << deqnum).U,
+-    // only the valid bits are set
+-    UIntToOH(currentValidCounter, deqnum)
+-  )
+-  val deqEnable_n = io.deq.zipWithIndex.map { case (deq, i) =>
+-    // For dequeue, the first entry should never be s_invalid
+-    // Otherwise, there should be a redirect and tail walks back
+-    // in this case, we set numDeq to 0
+-    if (i == 0) !deq.fire || numDeqTryMask(i)
+-    // When the state is s_invalid, we set deqEnable_n to false.B because
+-    // the entry may leave earlier and require to move forward the deqPtr.
+-    else (!deq.fire && stateEntries(headPtr(i).value) =/= s_invalid) || numDeqTryMask(i)
+-  } :+ true.B
+-  val numDeq = PriorityEncoder(deqEnable_n)
+-  // agreement with reservation station: don't dequeue when redirect.valid
+-  for (i <- 0 until 2 * deqnum) {
+-    headPtrNext(i) := Mux(io.redirect.valid, headPtr(i), headPtr(i) + numDeq)
+-  }
+-  headPtr := headPtrNext
+-  headPtrOH := Mux(io.redirect.valid, headPtrOH, ParallelPriorityMux(deqEnable_n, headPtrOHVec))
+-  XSError(headPtrOH =/= headPtr.head.toOH, p"head: $headPtrOH != UIntToOH(${headPtr.head})")
+-
+-  // For branch mis-prediction or memory violation replay,
+-  // we delay updating the indices for one clock cycle.
+-  // For now, we simply use PopCount to count #instr cancelled.
+-  val lastCycleMisprediction = GatedValidRegNext(io.redirect.valid)
+-  // find the last one's position, starting from headPtr and searching backwards
+-  val validBitVec = VecInit((0 until size).map(i => stateEntries(i) === s_valid))
+-  val loValidBitVec = Cat((0 until size).map(i => validBitVec(i) && headPtrMask(i)))
+-  val hiValidBitVec = Cat((0 until size).map(i => validBitVec(i) && !headPtrMask(i)))
+-  val flippedFlag = loValidBitVec.orR || validBitVec(size - 1)
+-  val leadingZeros = PriorityEncoder(Mux(loValidBitVec.orR, loValidBitVec, hiValidBitVec))
+-  val lastOneIndex = Mux(leadingZeros === 0.U, 0.U, size.U - leadingZeros)
+-  val walkedTailPtr = Wire(new DispatchQueuePtr)
+-  walkedTailPtr.flag := flippedFlag ^ headPtr(0).flag
+-  walkedTailPtr.value := lastOneIndex
+-
+-  // enqueue
+-  val numEnq = Mux(io.enq.canAccept, PopCount(io.enq.req.map(_.valid)), 0.U)
+-  val numNeedAlloc = Mux(io.enq.canAccept, PopCount(io.enq.needAlloc), 0.U)
+-  tailPtr(0) := Mux(io.redirect.valid,
+-    tailPtr(0),
+-    Mux(lastCycleMisprediction,
+-      Mux(isTrueEmpty, headPtr(0), walkedTailPtr),
+-      tailPtr(0) + numEnq)
+-  )
+-  val lastLastCycleMisprediction = GatedValidRegNext(lastCycleMisprediction)
+-  for (i <- 1 until enqnum) {
+-    tailPtr(i) := Mux(io.redirect.valid,
+-      tailPtr(i),
+-      Mux(lastLastCycleMisprediction,
+-        tailPtr(0) + i.U,
+-        tailPtr(i) + numEnq)
+-    )
+-  }
+-  tailPtrOH := Mux(lastLastCycleMisprediction, tailPtr.head.toOH, tailPtrOHVec(numEnq))
+-  val tailPtrOHAccurate = !lastCycleMisprediction && !lastLastCycleMisprediction
+-  XSError(tailPtrOHAccurate && tailPtrOH =/= tailPtr.head.toOH, p"tail: $tailPtrOH != UIntToOH(${tailPtr.head})")
+-
+-  // update valid counter and allowEnqueue reg
+-  validCounter := Mux(io.redirect.valid,
+-    validCounter,
+-    Mux(lastLastCycleMisprediction,
+-      currentValidCounter,
+-      validCounter + numEnq - numDeq)
+-  )
+-  allowEnqueue := (numNeedAlloc +& currentValidCounter <= (size - enqnum).U) || (numNeedAlloc +& currentValidCounter - (size - enqnum).U <= numDeq)
+-
+-  /**
+-   * Part 3: set output valid and data bits
+-   */
+-  val deqData = Reg(Vec(deqnum, new DynInst))
+-  // How to pipeline the data read:
+-  // T: get the required read data
+-  for (i <- 0 until deqnum) {
+-    io.deq(i).bits := deqData(i)
+-    // Some bits have bad timing in Dispatch but will not be used at Dispatch2
+-    // They will use the slow path from data module
+-    io.deq(i).bits.fpu := dataModule.io.rdata(i).fpu
+-    // do not dequeue when io.redirect valid because it may cause dispatchPtr work improperly
+-    io.deq(i).valid := Mux1H(headPtrOHVec(i), stateEntries) === s_valid && !lastCycleMisprediction
+-  }
+-  // T-1: select data from the following (deqnum + 1 + numEnq) sources with priority
+-  // For data(i): (1) current output (deqnum - i); (2) next-step data (i + 1)
+-  // For the next-step data(i): (1) enqueue data (enqnum); (2) data from storage (1)
+-  val nextStepData = Wire(Vec(2 * deqnum, new DynInst))
+-  val ptrMatch = new QPtrMatchMatrix(headPtr, tailPtr)
+-  for (i <- 0 until 2 * deqnum) {
+-    val enqMatchVec = VecInit(ptrMatch(i))
+-    val enqBypassEnVec = io.enq.needAlloc.zip(enqOffset).map{ case (v, o) => v && enqMatchVec(o) }
+-    val enqBypassEn = io.enq.canAccept && VecInit(enqBypassEnVec).asUInt.orR
+-    val enqBypassData = Mux1H(enqBypassEnVec, io.enq.req.map(_.bits))
+-    val readData = if (i < deqnum) deqData(i) else dataModule.io.rdata(i)
+-    nextStepData(i) := Mux(enqBypassEn, enqBypassData, readData)
+-  }
+-  for (i <- 0 until deqnum) {
+-    when (!io.redirect.valid) {
+-      deqData(i) := ParallelPriorityMux(deqEnable_n, nextStepData.drop(i).take(deqnum + 1))
+-    }
+-  }
+-  // T-2: read data from storage: next
+-  for (i <- 0 until 2 * deqnum) {
+-    dataModule.io.ren.get(i) := io.redirect.valid || io.deq.map(_.valid).reduce(_|_)
+-  }
+-  dataModule.io.raddr := headPtrNext.map(_.value)
+-
+-  // debug: dump dispatch queue states
+-  XSDebug(p"head: ${headPtr(0)}, tail: ${tailPtr(0)}\n")
+-  XSDebug(p"state: ")
+-  stateEntries.reverse.foreach { s =>
+-    XSDebug(false, s === s_invalid, "-")
+-    XSDebug(false, s === s_valid, "v")
+-  }
+-  XSDebug(false, true.B, "\n")
+-  XSDebug(p"ptr:   ")
+-  (0 until size).reverse.foreach { i =>
+-    val isPtr = i.U === headPtr(0).value || i.U === tailPtr(0).value
+-    XSDebug(false, isPtr, "^")
+-    XSDebug(false, !isPtr, " ")
+-  }
+-  XSDebug(false, true.B, "\n")
+-
+-  // XSError(isAfter(headPtr(0), tailPtr(0)), p"assert greaterOrEqualThan(tailPtr: ${tailPtr(0)}, headPtr: ${headPtr(0)}) failed\n")
+-  QueuePerf(size, PopCount(stateEntries.map(_ =/= s_invalid)), !canEnqueue)
+-  io.dqFull := !canEnqueue
+-  XSPerfAccumulate("in", numEnq)
+-  XSPerfAccumulate("out", PopCount(io.deq.map(_.fire)))
+-  XSPerfAccumulate("out_try", PopCount(io.deq.map(_.valid)))
+-  val fake_block = currentValidCounter <= (size - enqnum).U && !canEnqueue
+-  XSPerfAccumulate("fake_block", fake_block)
+-
+-  val validEntries = RegNext(PopCount(stateEntries.map(_ =/= s_invalid)))
+-  val perfEvents = Seq(
+-    ("dispatchq_in",         numEnq                                                          ),
+-    ("dispatchq_out",        PopCount(io.deq.map(_.fire))                                    ),
+-    ("dispatchq_out_try",    PopCount(io.deq.map(_.valid))                                   ),
+-    ("dispatchq_fake_block", fake_block                                                      ),
+-    ("dispatchq_1_4_valid ", validEntries <  (size / 4).U                                    ),
+-    ("dispatchq_2_4_valid ", validEntries >= (size / 4).U && validEntries <= (size / 2).U    ),
+-    ("dispatchq_3_4_valid ", validEntries >= (size / 2).U && validEntries <= (size * 3 / 4).U),
+-    ("dispatchq_4_4_valid ", validEntries >= (size * 3 / 4).U                                )
+-  )
+-  generatePerfEvent()
+-}
+diff --git a/src/main/scala/xiangshan/backend/dispatch/IndexMapping.scala b/src/main/scala/xiangshan/backend/dispatch/IndexMapping.scala
+deleted file mode 100644
+index 4424376c9d6..00000000000
+--- a/src/main/scala/xiangshan/backend/dispatch/IndexMapping.scala
++++ /dev/null
+@@ -1,120 +0,0 @@
+-/***************************************************************************************
+-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+-* Copyright (c) 2020-2021 Peng Cheng Laboratory
+-*
+-* XiangShan is licensed under Mulan PSL v2.
+-* You can use this software according to the terms and conditions of the Mulan PSL v2.
+-* You may obtain a copy of Mulan PSL v2 at:
+-*          http://license.coscl.org.cn/MulanPSL2
+-*
+-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+-*
+-* See the Mulan PSL v2 for more details.
+-***************************************************************************************/
+-
+-package xiangshan.backend.dispatch
+-
+-import org.chipsalliance.cde.config.Parameters
+-import chisel3._
+-import chisel3.util._
+-import xiangshan._
+-import utils._
+-import utility._
+-
+-class IndexMapping(inWidth: Int, outWidth: Int, withPriority: Boolean)(implicit p: Parameters) extends XSModule {
+-  val io = IO(new Bundle() {
+-    val validBits = Vec(inWidth, Input(Bool()))
+-    val priority = Vec(outWidth, Input(UInt(log2Ceil(outWidth).W)))
+-    val mapping = Vec(outWidth, ValidIO(UInt(log2Ceil(inWidth).W)))
+-    val reverseMapping = Vec(inWidth, ValidIO(UInt(log2Ceil(outWidth).W)))
+-  })
+-
+-  // find the ones in vector (assumed the vector is not one-hot)
+-  def get_ones(vec: Vec[Bool], num: Int, zeros: Int = 0) : (Bool, UInt) = {
+-    val vecLeft = vec.drop(zeros)
+-    val maskedVec = VecInit(Seq.fill(zeros)(false.B) ++ vecLeft)
+-    if (num == 1) {
+-      (Cat(vecLeft).orR, PriorityEncoder(maskedVec))
+-    }
+-    else if (num + zeros == vec.size) {
+-      (Cat(vecLeft).andR, (vec.size - 1).U)
+-    }
+-    else {
+-      val tail_minus_1 = get_ones(vec, num - 1, zeros + 1)
+-      val tail_orig = get_ones(vec, num, zeros + 1)
+-      val valid = (tail_minus_1._1 && vec(zeros)) || tail_orig._1
+-      val index = Mux(vec(zeros), tail_minus_1._2, tail_orig._2)
+-      (valid, index)
+-    }
+-  }
+-
+-  for (j <- 0 until inWidth) {
+-    io.reverseMapping(j).valid := false.B
+-    io.reverseMapping(j).bits := DontCare
+-  }
+-
+-  val unsortedMapping = Wire(Vec(outWidth, UInt(log2Ceil(inWidth).W)))
+-  val unsortedValid = Wire(Vec(outWidth, Bool()))
+-  for (i <- 0 until outWidth) {
+-    val (valid, map) = get_ones(io.validBits, i + 1)
+-    unsortedValid(i) := valid
+-    unsortedMapping(i) := map
+-
+-    val index = if (withPriority) io.priority(i) else i.U
+-    io.mapping(i).valid := unsortedValid(index)
+-    io.mapping(i).bits := unsortedMapping(index)
+-
+-    for (j <- 0 until inWidth) {
+-      when (io.mapping(i).valid && io.mapping(i).bits === j.U) {
+-        io.reverseMapping(j).valid := true.B
+-        io.reverseMapping(j).bits := i.U
+-      }
+-    }
+-  }
+-}
+-
+-object PriorityGen {
+-  def apply(numExist: Seq[UInt]) = {
+-    assert(numExist.length > 1)
+-    val sortedIndex = Wire(Vec(numExist.length, UInt(log2Ceil(numExist.length).W)))
+-    val priority = WireInit(VecInit(Seq.tabulate(numExist.length)(_ => 0.U(log2Ceil(numExist.length).W))))
+-    for (i <- numExist.indices) {
+-      sortedIndex(i) := PriorityEncoder(numExist.indices.map(each => {
+-        // itself should not be found yet
+-        val equalPrevious = (if (i == 0) false.B else Cat((0 until i).map(l => each.U === sortedIndex(l))).orR)
+-        val largerThanAnyOther = Cat(numExist.indices.map(another => {
+-          // no need to be compared with the larger ones
+-          val anotherEqualPrevious = (if (i == 0) false.B else Cat((0 until i).map(l => another.U === sortedIndex(l))).orR)
+-          // need to be no smaller than any other numbers except the previoud found larger ones
+-          (numExist(each) <= numExist(another)) || anotherEqualPrevious
+-        })).andR
+-        largerThanAnyOther && !equalPrevious
+-      }))
+-      priority(sortedIndex(i)) := i.U
+-    }
+-    (priority, sortedIndex)
+-  }
+-}
+-
+-object RegfileReadPortGen {
+-  def apply(staticMappedValid: Seq[Bool], dynamicMappedValid: Seq[Bool]) = {
+-    val choiceCount = dynamicMappedValid.length + 1
+-    val readPortSrc = Wire(Vec(staticMappedValid.length, UInt(log2Ceil(choiceCount).W)))
+-    var hasAssigned = (0 until choiceCount).map(_ => false.B)
+-    for (i <- staticMappedValid.indices) {
+-      val valid = staticMappedValid(i) +: dynamicMappedValid
+-      val wantReadPort = (0 until choiceCount).map(j => valid(j) && ((j == 0).asBool || !hasAssigned(j)))
+-      readPortSrc(i) := PriorityEncoder(wantReadPort)
+-      val onehot = UIntToOH(readPortSrc(i))
+-      hasAssigned = (0 until choiceCount).map(i => hasAssigned(i) || onehot(i))
+-    }
+-    val dynamicExuSrc = Wire(Vec(dynamicMappedValid.length, UInt(log2Ceil(staticMappedValid.length).W)))
+-    for (i <- dynamicMappedValid.indices) {
+-      val targetMatch = staticMappedValid.indices.map(j => readPortSrc(j) === (i + 1).U)
+-      dynamicExuSrc(i) := PriorityEncoder(targetMatch)
+-    }
+-    (readPortSrc, dynamicExuSrc)
+-  }
+-}
+diff --git a/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala b/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
+index 4ed7fc9a98b..706196758e1 100644
+--- a/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
++++ b/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
+@@ -35,13 +35,16 @@ import xiangshan.backend.datapath.WbConfig._
+ import xiangshan.backend.datapath.DataSource
+ import xiangshan.backend.datapath.WbConfig.VfWB
+ import xiangshan.backend.fu.FuType.FuTypeOrR
+-import xiangshan.backend.dispatch.Dispatch2IqFpImp
+ import xiangshan.backend.regcache.{RCTagTableReadPort, RegCacheTagTable}
+ import xiangshan.mem.MemCoreTopDownIO
+ import xiangshan.mem.mdp._
+ import xiangshan.mem.{HasVLSUParameters, _}
+ 
+-
++class CoreDispatchTopDownIO extends Bundle {
++  val l2MissMatch = Input(Bool())
++  val l3MissMatch = Input(Bool())
++  val fromMem = Flipped(new MemCoreTopDownIO)
++}
+ // TODO delete trigger message from frontend to iq
+ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with HasVLSUParameters {
+   // std IQ donot need dispatch, only copy sta IQ, but need sta IQ's ready && std IQ's ready
+diff --git a/src/main/scala/xiangshan/backend/issue/Dispatch2Iq.scala b/src/main/scala/xiangshan/backend/issue/Dispatch2Iq.scala
+deleted file mode 100644
+index 106403410fa..00000000000
+--- a/src/main/scala/xiangshan/backend/issue/Dispatch2Iq.scala
++++ /dev/null
+@@ -1,1215 +0,0 @@
+-package xiangshan.backend.issue
+-
+-import org.chipsalliance.cde.config.Parameters
+-import chisel3._
+-import chisel3.util._
+-import chisel3.util.experimental.decode._
+-import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+-import utility._
+-import xiangshan._
+-import xiangshan.backend.fu.{FuConfig, FuType}
+-import xiangshan.backend.rename.{BusyTableReadIO,VlBusyTableReadIO}
+-import xiangshan.mem._
+-import xiangshan.backend.Bundles.DynInst
+-import xiangshan.backend.datapath.DataSource
+-import xiangshan.backend.fu.FuType.FuTypeOrR
+-import xiangshan.backend.dispatch.Dispatch2IqFpImp
+-import xiangshan.backend.regcache.RCTagTableReadPort
+-import scala.collection._
+-
+-class Dispatch2Iq(val schdBlockParams : SchdBlockParams)(implicit p: Parameters) extends LazyModule with HasXSParameter {
+-  override def shouldBeInlined: Boolean = false
+-
+-  val issueBlockParams = schdBlockParams.issueBlockParams
+-
+-  val numIn = schdBlockParams.numUopIn
+-  require(issueBlockParams.size > 0, "issueBlock is null or the enq size of all issueBlock not be the same all\n")
+-  val numOut = issueBlockParams.head.numEnq
+-
+-  // Deq for std's IQ is not assigned in Dispatch2Iq, so add one more src for it.
+-  val numRegSrc: Int = issueBlockParams.map(_.exuBlockParams.map(
+-    x => if (x.hasStdFu) x.numRegSrc + 1 else x.numRegSrc
+-  ).max).max
+-
+-  val numRegSrcInt: Int = issueBlockParams.map(_.exuBlockParams.map(
+-    x => if (x.hasStdFu) x.numIntSrc + 1 else x.numIntSrc
+-  ).max).max
+-  val numRegSrcFp: Int = issueBlockParams.map(_.exuBlockParams.map(
+-    x => if (x.hasStdFu) x.numFpSrc + 1 else x.numFpSrc
+-  ).max).max
+-  val numRegSrcVf: Int = issueBlockParams.map(_.exuBlockParams.map(
+-    x => x.numVecSrc
+-  ).max).max
+-  val numRegSrcV0: Int = issueBlockParams.map(_.exuBlockParams.map(
+-    x => x.numV0Src
+-  ).max).max
+-  val numRegSrcVl: Int = issueBlockParams.map(_.exuBlockParams.map(
+-    x => x.numVlSrc
+-  ).max).max
+-
+-  println(s"[Dispatch2Iq] numRegSrc: ${numRegSrc}, numRegSrcInt: ${numRegSrcInt}, numRegSrcFp: ${numRegSrcFp}, " +
+-          s"numRegSrcVf: ${numRegSrcVf}, numRegSrcV0: ${numRegSrcV0}, numRegSrcVl: ${numRegSrcVl}")
+-
+-  val numIntStateRead = schdBlockParams.schdType match {
+-    case IntScheduler() | MemScheduler() => numRegSrcInt * numIn
+-    case _ => 0
+-  }
+-  val numFpStateRead = schdBlockParams.schdType match {
+-    case FpScheduler() | MemScheduler() => numRegSrcFp * numIn
+-    case _ => 0
+-  }
+-  val numVfStateRead = schdBlockParams.schdType match {
+-    case VfScheduler() | MemScheduler() => numRegSrcVf * numIn
+-    case _ => 0
+-  }
+-  val numV0StateRead = schdBlockParams.schdType match {
+-    case VfScheduler() | MemScheduler() => numRegSrcV0 * numIn
+-    case _ => 0
+-  }
+-  val numVlStateRead = schdBlockParams.schdType match {
+-    case VfScheduler() | MemScheduler() => numRegSrcVl * numIn
+-    case _ => 0
+-  }
+-  val numRCTagTableStateRead = schdBlockParams.schdType match {
+-    case IntScheduler() | MemScheduler() => numRegSrcInt * numIn
+-    case _ => 0
+-  }
+-
+-  val isMem = schdBlockParams.schdType == MemScheduler()
+-
+-  lazy val module: Dispatch2IqImp = schdBlockParams.schdType match {
+-    case IntScheduler() => new Dispatch2IqIntImp(this)(p, schdBlockParams)
+-    case FpScheduler()  => new Dispatch2IqFpImp(this)(p, schdBlockParams)
+-    case MemScheduler() => new Dispatch2IqMemImp(this)(p, schdBlockParams)
+-    case VfScheduler() => new Dispatch2IqArithImp(this)(p, schdBlockParams)
+-    case _ => null
+-  }
+-}
+-
+-abstract class Dispatch2IqImp(override val wrapper: Dispatch2Iq)(implicit p: Parameters, params: SchdBlockParams)
+-  extends LazyModuleImp(wrapper) with HasXSParameter {
+-
+-  val numIn = wrapper.numIn
+-  val numRegSrc = wrapper.numRegSrc
+-  val numRegSrcInt = wrapper.numRegSrcInt
+-  val numRegSrcFp = wrapper.numRegSrcFp
+-  val numRegSrcVf = wrapper.numRegSrcVf
+-  val numRegSrcV0 = wrapper.numRegSrcV0
+-  val numRegSrcVl = wrapper.numRegSrcVl
+-  val numIntStateRead = wrapper.numIntStateRead
+-  val numFpStateRead = wrapper.numFpStateRead
+-  val numVfStateRead = wrapper.numVfStateRead
+-  val numV0StateRead = wrapper.numV0StateRead
+-  val numVlStateRead = wrapper.numVlStateRead
+-  val numRCTagTableStateRead = wrapper.numRCTagTableStateRead
+-  val numIssueBlock = wrapper.issueBlockParams.size
+-
+-  val io = IO(new Bundle() {
+-    val redirect = Flipped(ValidIO(new Redirect))
+-    val in = Flipped(Vec(wrapper.numIn, DecoupledIO(new DynInst)))
+-    val readIntState = if (numIntStateRead > 0) Some(Vec(numIntStateRead, Flipped(new BusyTableReadIO))) else None
+-    val readFpState = if (numFpStateRead > 0) Some(Vec(numFpStateRead, Flipped(new BusyTableReadIO))) else None
+-    val readVfState = if (numVfStateRead > 0) Some(Vec(numVfStateRead, Flipped(new BusyTableReadIO))) else None
+-    val readV0State = if (numV0StateRead > 0) Some(Vec(numV0StateRead, Flipped(new BusyTableReadIO))) else None
+-    val readVlState = if (numVlStateRead > 0) Some(Vec(numVlStateRead, Flipped(new BusyTableReadIO))) else None
+-    val readVlInfo  = if (numVlStateRead > 0) Some(Vec(numVlStateRead, Flipped(new VlBusyTableReadIO))) else None
+-    val readRCTagTableState = Option.when(numRCTagTableStateRead > 0)(Vec(numRCTagTableStateRead, Flipped(new RCTagTableReadPort(RegCacheIdxWidth, params.pregIdxWidth))))
+-    val out = MixedVec(params.issueBlockParams.filter(iq => iq.StdCnt == 0).map(x => Vec(x.numEnq, DecoupledIO(new DynInst))))
+-    val enqLsqIO = if (wrapper.isMem) Some(Flipped(new LsqEnqIO)) else None
+-    val iqValidCnt = MixedVec(params.issueBlockParams.filter(_.StdCnt == 0).map(x => Input(UInt(log2Ceil(x.numEntries).W))))
+-    val intIQValidNumVec = if (params.isIntSchd) Some(Input(MixedVec(backendParams.genIntIQValidNumBundle))) else None
+-    val fpIQValidNumVec = if (params.isFpSchd) Some(Input(MixedVec(backendParams.genFpIQValidNumBundle))) else None
+-    val lqFreeCount = if (wrapper.isMem) Some(Input(UInt(log2Up(VirtualLoadQueueSize + 1).W))) else None
+-    val sqFreeCount = if (wrapper.isMem) Some(Input(UInt(log2Up(StoreQueueSize + 1).W))) else None
+-  })
+-
+-  val uopsIn = Wire(Vec(wrapper.numIn, DecoupledIO(new DynInst)))
+-  val numEnq = io.in.size
+-  val numInPorts = io.in.size
+-  val outs = io.out.flatten
+-  uopsIn <> io.in
+-
+-  private val intReqPsrcVec: IndexedSeq[UInt] = io.in.flatMap(in => in.bits.psrc.take(numRegSrcInt))
+-  private val fpReqPsrcVec:  IndexedSeq[UInt] = io.in.flatMap(in => in.bits.psrc.take(numRegSrcFp))
+-  private val vfReqPsrcVec:  IndexedSeq[UInt] = io.in.flatMap(in => in.bits.psrc.take(numRegSrcVf))
+-  private val v0ReqPsrcVec:  IndexedSeq[UInt] = io.in.map(in => in.bits.psrc(numRegSrc - 2))
+-  private val vlReqPsrcVec:  IndexedSeq[UInt] = io.in.map(in => in.bits.psrc(numRegSrc - 1))
+-  private val intRenVec:     IndexedSeq[Bool] = io.in.flatMap(in => in.bits.psrc.take(numRegSrcInt).map(x => in.valid))
+-  private val intSrcStateVec = Option.when(io.readIntState.isDefined)(Wire(Vec(numIntStateRead, SrcState())))
+-  private val fpSrcStateVec  = Option.when(io.readFpState.isDefined )(Wire(Vec(numFpStateRead, SrcState()))) 
+-  private val vfSrcStateVec  = Option.when(io.readVfState.isDefined )(Wire(Vec(numVfStateRead, SrcState()))) 
+-  private val v0SrcStateVec  = Option.when(io.readV0State.isDefined )(Wire(Vec(numV0StateRead, SrcState())))
+-  private val vlSrcStateVec  = Option.when(io.readVlState.isDefined )(Wire(Vec(numVlStateRead, SrcState())))
+-  private val vlSrcIsZeroVec  = Option.when(io.readVlInfo.isDefined )(Wire(Vec(numVlStateRead, Bool())))
+-  private val vlSrcIsVlMaxVec  = Option.when(io.readVlInfo.isDefined )(Wire(Vec(numVlStateRead, Bool())))
+-  private val intAllSrcStateVec = Option.when(io.readIntState.isDefined)(Wire(Vec(numIn * numRegSrc, SrcState())))
+-  private val fpAllSrcStateVec  = Option.when(io.readFpState.isDefined )(Wire(Vec(numIn * numRegSrc, SrcState())))
+-  private val vecAllSrcStateVec = Option.when(io.readVfState.isDefined )(Wire(Vec(numIn * numRegSrc, SrcState())))
+-  private val intSrcLoadDependency = Option.when(io.readIntState.isDefined)(Wire(Vec(numIntStateRead, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+-  private val fpSrcLoadDependency  = Option.when(io.readFpState.isDefined )(Wire(Vec(numFpStateRead, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+-  private val vfSrcLoadDependency  = Option.when(io.readVfState.isDefined )(Wire(Vec(numVfStateRead, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+-  private val v0SrcLoadDependency  = Option.when(io.readV0State.isDefined )(Wire(Vec(numV0StateRead, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+-  private val vlSrcLoadDependency  = Option.when(io.readVlState.isDefined )(Wire(Vec(numVlStateRead, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+-  private val intAllSrcLoadDependency = Option.when(io.readIntState.isDefined)(Wire(Vec(numIn * numRegSrc, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+-  private val fpAllSrcLoadDependency  = Option.when(io.readFpState.isDefined )(Wire(Vec(numIn * numRegSrc, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+-  private val vecAllSrcLoadDependency = Option.when(io.readVfState.isDefined )(Wire(Vec(numIn * numRegSrc, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+-  private val rcTagTableStateVec   = Option.when(io.readRCTagTableState.isDefined)(Wire(Vec(numRCTagTableStateRead, Bool())))
+-  private val rcTagTableAddrVec    = Option.when(io.readRCTagTableState.isDefined)(Wire(Vec(numRCTagTableStateRead, UInt(RegCacheIdxWidth.W))))
+-
+-  // We always read physical register states when in gives the instructions.
+-  // This usually brings better timing.
+-  if (io.readIntState.isDefined) {
+-    require(io.readIntState.get.size == intReqPsrcVec.size,
+-      s"[Dispatch2IqImp] readIntState size: ${io.readIntState.get.size}, int psrc size: ${intReqPsrcVec.size}")
+-    io.readIntState.get.map(_.req).zip(intReqPsrcVec).foreach(x => x._1 := x._2)
+-    io.readIntState.get.map(_.resp).zip(intSrcStateVec.get).foreach(x => x._2 := x._1)
+-    io.readIntState.get.map(_.loadDependency).zip(intSrcLoadDependency.get).foreach(x => x._2 := x._1)
+-
+-    for (i <- 0 until numIn) {
+-      for (j <- 0 until numRegSrcInt) {
+-        intAllSrcStateVec.get(i * numRegSrc + j)       := intSrcStateVec.get(i * numRegSrcInt + j)
+-        intAllSrcLoadDependency.get(i * numRegSrc + j) := intSrcLoadDependency.get(i * numRegSrcInt + j);
+-      }
+-      for (j <- numRegSrcInt until numRegSrc) {
+-        intAllSrcStateVec.get(i * numRegSrc + j)       := SrcState.busy
+-        intAllSrcLoadDependency.get(i * numRegSrc + j) := 0.U.asTypeOf(intAllSrcLoadDependency.get(i * numRegSrc + j))
+-      }
+-    }
+-  }
+-  if (io.readFpState.isDefined) {
+-    require(io.readFpState.get.size == fpReqPsrcVec.size,
+-      s"[Dispatch2IqImp] readFpState size: ${io.readFpState.get.size}, fp psrc size: ${fpReqPsrcVec.size}")
+-    io.readFpState.get.map(_.req).zip(fpReqPsrcVec).foreach(x => x._1 := x._2)
+-    io.readFpState.get.map(_.resp).zip(fpSrcStateVec.get).foreach(x => x._2 := x._1)
+-    io.readFpState.get.map(_.loadDependency).zip(fpSrcLoadDependency.get).foreach(x => x._2 := x._1)
+-
+-    for (i <- 0 until numIn) {
+-      for (j <- 0 until numRegSrcFp) {
+-        fpAllSrcStateVec.get(i * numRegSrc + j)       := fpSrcStateVec.get(i * numRegSrcFp + j)
+-        fpAllSrcLoadDependency.get(i * numRegSrc + j) := fpSrcLoadDependency.get(i * numRegSrcFp + j);
+-      }
+-      for (j <- numRegSrcFp until numRegSrc) {
+-        fpAllSrcStateVec.get(i * numRegSrc + j)       := SrcState.busy
+-        fpAllSrcLoadDependency.get(i * numRegSrc + j) := 0.U.asTypeOf(fpAllSrcLoadDependency.get(i * numRegSrc + j))
+-      }
+-    }
+-  }
+-  if (io.readVfState.isDefined) {
+-    require(io.readVfState.get.size + io.readV0State.get.size + io.readVlState.get.size == vfReqPsrcVec.size + v0ReqPsrcVec.size + vlReqPsrcVec.size,
+-      s"[Dispatch2IqImp] readVfState size: ${io.readVfState.get.size}, readV0State size: ${io.readV0State.get.size}, readVlState size: ${io.readVlState.get.size}, psrc size: ${vfReqPsrcVec.size + v0ReqPsrcVec.size + vlReqPsrcVec.size}")
+-    io.readVfState.get.map(_.req).zip(vfReqPsrcVec).foreach(x => x._1 := x._2)
+-    io.readVfState.get.map(_.resp).zip(vfSrcStateVec.get).foreach(x => x._2 := x._1)
+-    io.readVfState.get.map(_.loadDependency).zip(vfSrcLoadDependency.get).foreach(x => x._2 := x._1)
+-
+-    io.readV0State.get.map(_.req).zip(v0ReqPsrcVec).foreach(x => x._1 := x._2)
+-    io.readV0State.get.map(_.resp).zip(v0SrcStateVec.get).foreach(x => x._2 := x._1)
+-    io.readV0State.get.map(_.loadDependency).zip(v0SrcLoadDependency.get).foreach(x => x._2 := x._1)
+-
+-    io.readVlState.get.map(_.req).zip(vlReqPsrcVec).foreach(x => x._1 := x._2)
+-    io.readVlState.get.map(_.resp).zip(vlSrcStateVec.get).foreach(x => x._2 := x._1)
+-    io.readVlInfo.get.map(_.is_zero).zip(vlSrcIsZeroVec.get).foreach(x => x._2 := x._1)
+-    io.readVlInfo.get.map(_.is_vlmax).zip(vlSrcIsVlMaxVec.get).foreach(x => x._2 := x._1)
+-    io.readVlState.get.map(_.loadDependency).zip(vlSrcLoadDependency.get).foreach(x => x._2 := x._1)
+-
+-    for (i <- 0 until numIn) {
+-      for (j <- 0 until numRegSrcVf) {
+-        vecAllSrcStateVec.get(i * numRegSrc + j)       := vfSrcStateVec.get(i * numRegSrcVf + j);
+-        vecAllSrcLoadDependency.get(i * numRegSrc + j) := vfSrcLoadDependency.get(i * numRegSrcVf + j);
+-      }
+-      vecAllSrcStateVec.get(i * numRegSrc + numRegSrc - 2)       := v0SrcStateVec.get(i);
+-      vecAllSrcStateVec.get(i * numRegSrc + numRegSrc - 1)       := vlSrcStateVec.get(i);
+-      vecAllSrcLoadDependency.get(i * numRegSrc + numRegSrc - 2) := v0SrcLoadDependency.get(i);
+-      vecAllSrcLoadDependency.get(i * numRegSrc + numRegSrc - 1) := vlSrcLoadDependency.get(i);
+-
+-      // same as eliminate the old vd dependency in issue queue when wake up by wakeup
+-      val isDependOldVd = io.in(i).bits.vpu.isDependOldVd
+-      val isWritePartVd = io.in(i).bits.vpu.isWritePartVd
+-      val vta = io.in(i).bits.vpu.vta
+-      val vma = io.in(i).bits.vpu.vma
+-      val vm = io.in(i).bits.vpu.vm
+-      val vlIsVlmax = vlSrcIsVlMaxVec.get(i)
+-      val vlIsZero = vlSrcIsZeroVec.get(i)
+-      val vlIsNonZero = !vlSrcIsZeroVec.get(i)
+-      val ignoreTail = vlIsVlmax && (vm =/= 0.U || vma) && !isWritePartVd
+-      val ignoreWhole = (vm =/= 0.U || vma) && vta
+-      for (j <- 0 until numRegSrcVf) {
+-        val ignoreOldVd = Wire(Bool())
+-        if (j == numRegSrcVf - 1) {
+-          // check whether can ignore the old vd dependency
+-          ignoreOldVd := SrcState.isReady(vlSrcStateVec.get(i)) && vlIsNonZero && !isDependOldVd && (ignoreTail || ignoreWhole)
+-        } else {
+-          // check whether can ignore the src
+-          ignoreOldVd := false.B
+-        }
+-        uopsIn(i).bits.srcType(j) := Mux(ignoreOldVd, SrcType.no, io.in(i).bits.srcType(j))
+-        vecAllSrcStateVec.get(i * numRegSrc + j) := Mux(ignoreOldVd, SrcState.rdy, vfSrcStateVec.get(i * numRegSrcVf + j))
+-      }
+-    }
+-  }
+-  if (io.readRCTagTableState.isDefined) {
+-    require(io.readRCTagTableState.get.size == intReqPsrcVec.size,
+-      s"[Dispatch2IqImp] readRCTagTableState size: ${io.readRCTagTableState.get.size}, int psrc size: ${intReqPsrcVec.size}")
+-    io.readRCTagTableState.get.map(_.ren).zip(intRenVec).foreach(x => x._1 := x._2)
+-    io.readRCTagTableState.get.map(_.tag).zip(intReqPsrcVec).foreach(x => x._1 := x._2)
+-    io.readRCTagTableState.get.map(_.valid).zip(rcTagTableStateVec.get).foreach(x => x._2 := x._1)
+-    io.readRCTagTableState.get.map(_.addr).zip(rcTagTableAddrVec.get).foreach(x => x._2 := x._1)
+-  }
+-
+-  uopsIn
+-    .flatMap(x => x.bits.srcState.take(numRegSrc) zip x.bits.srcType.take(numRegSrc))
+-    .zip(
+-      intAllSrcStateVec.getOrElse(VecInit(Seq.fill(numIn * numRegSrc)(SrcState.busy).toSeq)) zip 
+-      fpAllSrcStateVec .getOrElse(VecInit(Seq.fill(numIn * numRegSrc)(SrcState.busy).toSeq)) zip 
+-      vecAllSrcStateVec.getOrElse(VecInit(Seq.fill(numIn * numRegSrc)(SrcState.busy).toSeq))
+-    )
+-    .foreach {
+-      case ((state: UInt, srcType), ((intState, fpState), vfState)) =>
+-        state := Mux1H(Seq(
+-          SrcType.isXp(srcType) -> intState,
+-          SrcType.isFp(srcType) -> fpState,
+-          SrcType.isVp(srcType) -> vfState,
+-          SrcType.isV0(srcType) -> vfState,
+-          SrcType.isNotReg(srcType) -> true.B,
+-        ))
+-    }
+-  uopsIn
+-    .flatMap(x => x.bits.srcLoadDependency.take(numRegSrc) zip x.bits.srcType.take(numRegSrc))
+-    .zip(
+-      intAllSrcLoadDependency.getOrElse(VecInit(Seq.fill(numIn * numRegSrc)(0.U.asTypeOf(Vec(LoadPipelineWidth, UInt(LoadPipelineWidth.W)))).toSeq)) zip 
+-      fpAllSrcLoadDependency .getOrElse(VecInit(Seq.fill(numIn * numRegSrc)(0.U.asTypeOf(Vec(LoadPipelineWidth, UInt(LoadPipelineWidth.W)))).toSeq)) zip 
+-      vecAllSrcLoadDependency.getOrElse(VecInit(Seq.fill(numIn * numRegSrc)(0.U.asTypeOf(Vec(LoadPipelineWidth, UInt(LoadPipelineWidth.W)))).toSeq))
+-    )
+-    .foreach {
+-      case ((ldp, srcType), ((intLdp, fpLdq), vfLdp)) =>
+-        when(SrcType.isXp(srcType)) {
+-          ldp := intLdp
+-        }.elsewhen(SrcType.isFp(srcType)) {
+-          ldp := fpLdq
+-        }.elsewhen(SrcType.isVp(srcType) || SrcType.isV0(srcType)) {
+-          ldp := vfLdp
+-        }.otherwise {
+-          ldp := 0.U.asTypeOf(ldp)
+-        }
+-    }
+-
+-  uopsIn
+-    .flatMap(x => x.bits.useRegCache.take(numRegSrc) lazyZip x.bits.regCacheIdx.take(numRegSrc) lazyZip x.bits.srcType.take(numRegSrc))
+-    .zip(
+-      rcTagTableStateVec.getOrElse(VecInit(Seq.fill(numIn * numRegSrc)(false.B).toSeq)) zip 
+-      rcTagTableAddrVec.getOrElse(VecInit(Seq.fill(numIn * numRegSrc)(0.U).toSeq))
+-    )
+-    .foreach {
+-      case ((useRC, rcIdx, srcType), (state, addr)) =>
+-        useRC := state && SrcType.isXp(srcType)
+-        rcIdx := addr
+-    }
+-
+-  /**
+-    *
+-    * @param portFuSets portFuSet(i): the ith port can accept the set including [[FuType]]
+-    * @return set of the [[FuType]] can deq by port num
+-    */
+-  def getFuDeqMap[T](portFuSets: Seq[Set[T]]): Map[T, Seq[Int]] = {
+-    val res: mutable.Map[T, Seq[Int]] = mutable.Map()
+-    for ((set, i) <- portFuSets.zipWithIndex) {
+-      for (fuType <- set) {
+-        if (res.contains(fuType)) {
+-          res(fuType) :+= i
+-        } else {
+-          res += (fuType -> Seq(i))
+-        }
+-      }
+-    }
+-    res.toMap
+-  }
+-
+-  def mergeFuDeqMap[T](map: Map[T, Seq[Int]]) = {
+-    val res: mutable.Map[Seq[Int], Seq[T]] = mutable.Map()
+-    for ((k, v) <- map) {
+-      if (res.contains(v)) {
+-        res(v) :+= k
+-      } else {
+-        res += (v -> Seq(k))
+-      }
+-    }
+-    res.map(x => (x._2, x._1))
+-  }
+-
+-  def expendFuDeqMap[T](map: Map[Seq[T], Seq[Int]], numEnqs: Seq[Int]) = {
+-    val res: mutable.Map[Seq[T], Seq[Int]] = mutable.Map()
+-    val portSum: Seq[Int] = numEnqs.indices.map(x => numEnqs.slice(0, x).sum)
+-    for ((fuType, iqIdxSeq) <- map) {
+-      val portIdxSeq = iqIdxSeq.flatMap(x => Seq.range(portSum(x), portSum(x) + numEnqs(x)))
+-      res += (fuType -> portIdxSeq)
+-    }
+-    res
+-  }
+-
+-  def expendPortSel(map: Map[Seq[Int], Vec[ValidIO[UInt]]]) = {
+-    val res : mutable.Map[Int, Seq[ValidIO[UInt]]]= mutable.Map()
+-    for((k, v) <- map) {
+-      for(i <- 0 until k.size) {
+-        if(res.contains(k(i))) {
+-          res(k(i)) :+= v(i)
+-        } else {
+-          res += (k(i) -> Seq(v(i)))
+-        }
+-      }
+-    }
+-    res
+-  }
+-
+-  def canAccept(acceptVec: Seq[BigInt], fuType: UInt): Bool = {
+-    (acceptVec.reduce(_ | _).U & fuType).orR
+-  }
+-
+-  def canAccept(acceptVec: Seq[Seq[BigInt]], fuType: UInt): Vec[Bool] = {
+-    VecInit(acceptVec.map(x => canAccept(x, fuType)).toSeq)
+-  }
+-
+-  def filterCanAccept(fuConfigs: Seq[FuConfig], fuType: UInt, canAcceptAlu: Boolean): Bool = {
+-    if(canAcceptAlu) {
+-      Cat(fuConfigs.map(_.fuType.U === fuType).toSeq).orR
+-    }
+-    else{
+-      Mux(fuType === FuType.alu.U, false.B, Cat(fuConfigs.map(_.fuType.U === fuType).toSeq).orR)
+-    }
+-  }
+-}
+-
+-class Dispatch2IqIntImp(override val wrapper: Dispatch2Iq)(implicit p: Parameters, params: SchdBlockParams)
+-  extends Dispatch2IqImp(wrapper)
+-    with HasXSParameter {
+-
+-  require(outs.size == uopsIn.size, "Dispatch2IqInt outs.size =/= uopsIn.size")
+-
+-  val intIQValidNumVec = io.intIQValidNumVec.get
+-  val uopsInDq0Num = uopsIn.size / 2
+-  val uopsInDq1Num = uopsIn.size / 2
+-  val uopsInDq0 = uopsIn.take(uopsInDq0Num)
+-  val uopsInDq1 = uopsIn.drop(uopsInDq0Num).take(uopsInDq1Num)
+-  val uopsOutDq0 = outs.take(uopsInDq0Num)
+-  val uopsOutDq1 = outs.drop(uopsInDq0Num).take(uopsInDq1Num)
+-  val IQ0Deq0Num = intIQValidNumVec(0)(0)
+-  val IQ0Deq1Num = intIQValidNumVec(0)(1)
+-  val IQ1Deq0Num = intIQValidNumVec(1)(0)
+-  val IQ1Deq1Num = intIQValidNumVec(1)(1)
+-  val IQ2Deq0Num = intIQValidNumVec(2)(0)
+-  val IQ2Deq1Num = intIQValidNumVec(2)(1)
+-  val IQ3Deq0Num = intIQValidNumVec(3)(0)
+-  val IQ3Deq1Num = intIQValidNumVec(3)(1)
+-
+-  val IQ0Deq0IsLess = IQ1Deq0Num > IQ0Deq0Num
+-  val IQ0Deq1IsLess = IQ1Deq1Num > IQ0Deq1Num
+-  val diffIQ01Deq0 = Mux(IQ0Deq0IsLess, IQ1Deq0Num - IQ0Deq0Num, IQ0Deq0Num - IQ1Deq0Num)
+-  val diffIQ01Deq1 = Mux(IQ0Deq1IsLess, IQ1Deq1Num - IQ0Deq1Num, IQ0Deq1Num - IQ1Deq1Num)
+-  val IQ0Deq0IsLess2 = IQ0Deq0IsLess && (diffIQ01Deq0 >= 2.U)
+-  val IQ0Deq1IsLess2 = IQ0Deq1IsLess && (diffIQ01Deq1 >= 2.U)
+-  val IQ1Deq0IsLess2 = !IQ0Deq0IsLess && (diffIQ01Deq0 >= 2.U)
+-  val IQ1Deq1IsLess2 = !IQ0Deq1IsLess && (diffIQ01Deq1 >= 2.U)
+-  val IQ0Deq0IsEqual = IQ1Deq0Num === IQ0Deq0Num
+-  val IQ0Deq1IsEqual = IQ1Deq1Num === IQ0Deq1Num
+-  val isDq0Deq0 = VecInit(uopsInDq0.map{case in => in.valid && FuType.isIntDq0Deq0(in.bits.fuType)})
+-  val isDq0Deq1 = VecInit(uopsInDq0.map{case in => in.valid && FuType.isIntDq0Deq1(in.bits.fuType)})
+-  val popDq0Deq0 = isDq0Deq0.zipWithIndex.map { case (_, i) => PopCount(isDq0Deq0.take(i + 1)) }
+-  val popDq0Deq1 = isDq0Deq1.zipWithIndex.map { case (_, i) => PopCount(isDq0Deq1.take(i + 1)) }
+-  val isDq0Deq0Num = popDq0Deq0.last
+-  val isDq0Deq1Num = popDq0Deq1.last
+-  val IQ0Deq0IsLessSeq = VecInit(popDq0Deq0.map(p => (p <= diffIQ01Deq0) && IQ0Deq0IsLess))
+-  val IQ0Deq1IsLessSeq = VecInit(popDq0Deq1.map(p => (p <= diffIQ01Deq1) && IQ0Deq1IsLess))
+-  val lastAlu0SelectIQ0Enq0 = RegInit(false.B)
+-  val lastBrh0SelectIQ0Enq0 = RegInit(false.B)
+-  when(uopsOutDq0.head.ready && uopsOutDq0.last.ready && IQ0Deq0IsEqual && (popDq0Deq0(3)(0) === 1.U)) {
+-    lastAlu0SelectIQ0Enq0 := !lastAlu0SelectIQ0Enq0
+-  }
+-  when(uopsOutDq0.head.ready && uopsOutDq0.last.ready && IQ0Deq1IsEqual && (popDq0Deq1(3)(0) === 1.U)) {
+-    lastBrh0SelectIQ0Enq0 := !lastBrh0SelectIQ0Enq0
+-  }
+-  val IQ0FuCfgs = params.issueBlockParams(0).getFuCfgs
+-  val IQ1FuCfgs = params.issueBlockParams(1).getFuCfgs
+-  val IQ01BothfuCfgs = IQ0FuCfgs.intersect(IQ1FuCfgs)
+-  val IQ0FuTypes = IQ0FuCfgs.map(_.fuType)
+-  val IQ1FuTypes = IQ1FuCfgs.map(_.fuType)
+-  val IQ0OnlyFuTypes = IQ0FuCfgs.diff(IQ1FuCfgs).map(_.fuType)
+-  val IQ1OnlyFuTypes = IQ1FuCfgs.diff(IQ0FuCfgs).map(_.fuType)
+-  val isOnlyIQ0 = uopsInDq0.map(x => x.valid && FuTypeOrR(x.bits.fuType, IQ0OnlyFuTypes))
+-  val isOnlyIQ1 = uopsInDq0.map(x => x.valid && FuTypeOrR(x.bits.fuType, IQ1OnlyFuTypes))
+-  val isBothIQ01_0 = uopsInDq0(0).valid && FuTypeOrR(uopsInDq0(0).bits.fuType, IQ01BothfuCfgs.map(_.fuType))
+-  val isBothIQ01_1 = uopsInDq0(1).valid && FuTypeOrR(uopsInDq0(1).bits.fuType, IQ01BothfuCfgs.map(_.fuType))
+-  val alu0SelectIQ0Enq0 = Mux(IQ0Deq0IsEqual, !lastAlu0SelectIQ0Enq0, IQ0Deq0IsLess)
+-  val brh0SelectIQ0Enq0 = Mux(IQ0Deq1IsEqual, !lastBrh0SelectIQ0Enq0, IQ0Deq1IsLess)
+-  val uop0SelectIQ0Enq0 = Mux(isDq0Deq0(0), alu0SelectIQ0Enq0, brh0SelectIQ0Enq0) || isOnlyIQ0(0)
+-  val alu1SelectIQ0Enq0 = !uop0SelectIQ0Enq0 && (IQ0Deq0IsLess2 || Mux(IQ0Deq0IsEqual, Mux(popDq0Deq0(1) === 1.U, !lastAlu0SelectIQ0Enq0, lastAlu0SelectIQ0Enq0), isDq0Deq0(0) || IQ0Deq0IsLess))
+-  val brh1SelectIQ0Enq0 = !uop0SelectIQ0Enq0 && (IQ0Deq1IsLess2 || Mux(IQ0Deq1IsEqual, Mux(popDq0Deq1(1) === 1.U, !lastBrh0SelectIQ0Enq0, lastBrh0SelectIQ0Enq0), isDq0Deq1(0) || IQ0Deq1IsLess))
+-  val uop1SelectIQ0Enq0 = Mux(isDq0Deq0(1), alu1SelectIQ0Enq0, brh1SelectIQ0Enq0)
+-  val alu1SelectIQ0Enq1 = isDq0Deq0(0) && IQ0Deq0IsLess2 || isDq0Deq1(0) && IQ0Deq0IsLess
+-  val brh1SelectIQ0Enq1 = isDq0Deq1(0) && IQ0Deq1IsLess2 || isDq0Deq0(0) && IQ0Deq1IsLess
+-  val uop1SelectIQ0Enq1 = uop0SelectIQ0Enq0 && Mux(isDq0Deq0(1), alu1SelectIQ0Enq1, brh1SelectIQ0Enq1)
+-  val alu1SelectIQ1Enq0 = uop0SelectIQ0Enq0 && (IQ1Deq0IsLess2 || Mux(IQ0Deq0IsEqual, Mux(popDq0Deq0(1) === 1.U, lastAlu0SelectIQ0Enq0, !lastAlu0SelectIQ0Enq0), isDq0Deq0(0) || !IQ0Deq0IsLess))
+-  val brh1SelectIQ1Enq0 = uop0SelectIQ0Enq0 && (IQ1Deq1IsLess2 || Mux(IQ0Deq1IsEqual, Mux(popDq0Deq1(1) === 1.U, lastBrh0SelectIQ0Enq0, !lastBrh0SelectIQ0Enq0), isDq0Deq1(0) || !IQ0Deq1IsLess))
+-  val uop1SelectIQ1Enq0 = !uop1SelectIQ0Enq0 && !uop1SelectIQ0Enq1 && Mux(isDq0Deq0(1), alu1SelectIQ1Enq0, brh1SelectIQ1Enq0)
+-  val uop1SelectIQ1Enq1 = !uop1SelectIQ0Enq0 && !uop1SelectIQ0Enq1 && !uop1SelectIQ1Enq0
+-  val alu2SelectIQ0Enq1 = Mux(popDq0Deq0(2) === 2.U, Mux(IQ0Deq0IsLess2, true.B, isDq0Deq0(0) && !alu0SelectIQ0Enq0 || isDq0Deq1(0) && brh0SelectIQ0Enq0), alu0SelectIQ0Enq0)
+-  val brh2SelectIQ0Enq1 = Mux(popDq0Deq1(2) === 2.U, Mux(IQ0Deq1IsLess2, true.B, isDq0Deq1(0) && !brh0SelectIQ0Enq0 || isDq0Deq0(0) && alu0SelectIQ0Enq0), brh0SelectIQ0Enq0)
+-  val uop2SelectIQ0Enq1 = Mux(isDq0Deq0(2), alu2SelectIQ0Enq1, brh2SelectIQ0Enq1) || isOnlyIQ0(2)
+-  val IQ0Enq0Select = Wire(Vec(4, Bool()))
+-  val IQ0Enq1Select = Wire(Vec(4, Bool()))
+-  val IQ1Enq0Select = Wire(Vec(4, Bool()))
+-  val IQ1Enq1Select = Wire(Vec(4, Bool()))
+-  val uopsInDq0Valid = VecInit(uopsInDq0.map(_.valid))
+-  val IQ0DeqIsLess = VecInit(isDq0Deq0.map(x => Mux(x, Mux(IQ0Deq0IsEqual, IQ0Deq1IsLess, IQ0Deq0IsLess),  Mux(IQ0Deq1IsEqual, IQ0Deq0IsLess, IQ0Deq1IsLess))))
+-  val IQ0DeqIsEqual = IQ0Deq0IsEqual && IQ0Deq1IsEqual
+-  val IQ0Enq0Select0 = isOnlyIQ0(0) || isBothIQ01_0 && uop0SelectIQ0Enq0
+-  val IQ1Enq0Select0 = !IQ0Enq0Select0 && (isOnlyIQ1(0) || isBothIQ01_0 && uopsInDq0(0).valid)
+-  val IQ0Enq0Select1 = !IQ0Enq0Select0 && (isOnlyIQ0(1) || isBothIQ01_1 && (uop1SelectIQ0Enq0 || isOnlyIQ1(0)))
+-  val IQ0Enq1Select1 = !IQ0Enq0Select1 && (isOnlyIQ0(1) || isBothIQ01_1 && uop1SelectIQ0Enq1)
+-  val IQ1Enq0Select1 = !IQ0Enq0Select1 && !IQ0Enq1Select1 && !IQ1Enq0Select0 && (isOnlyIQ1(1) || isBothIQ01_1 && (uop1SelectIQ1Enq0 || isOnlyIQ0(0)))
+-  val IQ1Enq1Select1 = !IQ0Enq0Select1 && !IQ0Enq1Select1 && !IQ1Enq0Select1 && (isOnlyIQ1(1) || isBothIQ01_1 && uop1SelectIQ1Enq1)
+-  val IQ0Enq0Select2 = !IQ0Enq0Select0 && !IQ0Enq0Select1 && uopsInDq0(2).valid
+-  val IQ0Enq1Select2 = !IQ0Enq1Select1 && !IQ0Enq0Select2 && uopsInDq0(2).valid && uop2SelectIQ0Enq1
+-  val IQ1Enq0Select2 = !IQ1Enq0Select0 && !IQ1Enq0Select1 && !IQ0Enq0Select2 && !IQ0Enq1Select2 && uopsInDq0(2).valid
+-  val IQ1Enq1Select2 = !IQ0Enq0Select2 && !IQ0Enq1Select2 && !IQ1Enq0Select2 && uopsInDq0(2).valid
+-  val IQ0Enq1Select3 = !IQ0Enq1Select1 && !IQ0Enq1Select2 && uopsInDq0(3).valid
+-  val IQ1Enq1Select3 = !IQ1Enq1Select1 && !IQ1Enq1Select2 && uopsInDq0(3).valid
+-  when(uopsOutDq0.head.ready && uopsOutDq0.last.ready){
+-    IQ0Enq0Select := Cat(false.B, IQ0Enq0Select2, IQ0Enq0Select1, IQ0Enq0Select0).asBools
+-    IQ0Enq1Select := Cat(IQ0Enq1Select3, IQ0Enq1Select2, IQ0Enq1Select1, false.B).asBools
+-    IQ1Enq0Select := Cat(false.B, IQ1Enq0Select2, IQ1Enq0Select1, IQ1Enq0Select0).asBools
+-    IQ1Enq1Select := Cat(IQ1Enq1Select3, IQ1Enq1Select2, IQ1Enq1Select1, false.B).asBools
+-  }.elsewhen(uopsOutDq0.head.ready){
+-    IQ0Enq0Select := Cat(false.B, false.B, false.B, true.B).asBools
+-    IQ0Enq1Select := Cat(false.B, false.B, true.B, false.B).asBools
+-    IQ1Enq0Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ1Enq1Select := Cat(false.B, false.B, false.B, false.B).asBools
+-  }.elsewhen(uopsOutDq0.last.ready){
+-    IQ0Enq0Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ0Enq1Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ1Enq0Select := Cat(false.B, false.B, false.B, true.B).asBools
+-    IQ1Enq1Select := Cat(false.B, false.B, true.B, false.B).asBools
+-  }.otherwise{
+-    IQ0Enq0Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ0Enq1Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ1Enq0Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ1Enq1Select := Cat(false.B, false.B, false.B, false.B).asBools
+-  }
+-  assert(PopCount(IQ0Enq0Select) < 2.U, "IQ0Enq0Select is not one hot")
+-  assert(PopCount(IQ0Enq1Select) < 2.U, "IQ0Enq1Select is not one hot")
+-  assert(PopCount(IQ1Enq0Select) < 2.U, "IQ1Enq0Select is not one hot")
+-  assert(PopCount(IQ1Enq1Select) < 2.U, "IQ1Enq1Select is not one hot")
+-  assert(PopCount(IQ0Enq0Select) < 2.U, "IQ0Enq0Select is not one hot")
+-  assert(PopCount(IQ0Enq1Select) < 2.U, "IQ0Enq1Select is not one hot")
+-  assert(PopCount(IQ1Enq0Select) < 2.U, "IQ1Enq0Select is not one hot")
+-  assert(PopCount(IQ1Enq1Select) < 2.U, "IQ1Enq1Select is not one hot")
+-  assert(PopCount(VecInit(IQ0Enq0Select(0), IQ0Enq1Select(0), IQ1Enq0Select(0), IQ1Enq1Select(0))) < 2.U, "Dq1Uop0Select is not one hot")
+-  assert(PopCount(VecInit(IQ0Enq0Select(1), IQ0Enq1Select(1), IQ1Enq0Select(1), IQ1Enq1Select(1))) < 2.U, "Dq1Uop1Select is not one hot")
+-  assert(PopCount(VecInit(IQ0Enq0Select(2), IQ0Enq1Select(2), IQ1Enq0Select(2), IQ1Enq1Select(2))) < 2.U, "Dq1Uop2Select is not one hot")
+-  assert(PopCount(VecInit(IQ0Enq0Select(3), IQ0Enq1Select(3), IQ1Enq0Select(3), IQ1Enq1Select(3))) < 2.U, "Dq1Uop3Select is not one hot")
+-  val dq0Block = Wire(Vec(uopsInDq0Num, Bool()))
+-  if (IQ0FuCfgs.size == IQ1FuCfgs.size && IQ0FuCfgs.size == IQ01BothfuCfgs.size) {
+-    dq0Block := Cat(false.B, false.B, false.B, false.B).asBools
+-  }
+-  else {
+-    val fuTypes = uopsInDq0.map(_.bits.fuType)
+-    val iqNotReady0 = (FuTypeOrR(fuTypes(0),IQ0OnlyFuTypes) && !uopsOutDq0.head.ready) || (FuTypeOrR(fuTypes(0),IQ1OnlyFuTypes) && !uopsOutDq0.last.ready)
+-    val iqNotReady1 = (FuTypeOrR(fuTypes(1),IQ0OnlyFuTypes) && !uopsOutDq0.head.ready) || (FuTypeOrR(fuTypes(1),IQ1OnlyFuTypes) && !uopsOutDq0.last.ready)
+-    val iqNotReady2 = (FuTypeOrR(fuTypes(2),IQ0OnlyFuTypes) && !uopsOutDq0.head.ready) || (FuTypeOrR(fuTypes(2),IQ1OnlyFuTypes) && !uopsOutDq0.last.ready)
+-    val iqNotReady3 = (FuTypeOrR(fuTypes(3),IQ0OnlyFuTypes) && !uopsOutDq0.head.ready) || (FuTypeOrR(fuTypes(3),IQ1OnlyFuTypes) && !uopsOutDq0.last.ready)
+-    val conflict2 = ( (IQ0Enq0Select(2) || IQ0Enq1Select(2)) && FuTypeOrR(fuTypes(2),IQ1OnlyFuTypes)) || ( (IQ1Enq0Select(2) || IQ1Enq1Select(2)) && FuTypeOrR(fuTypes(2),IQ0OnlyFuTypes))
+-    val conflict3 = ( (IQ0Enq0Select(3) || IQ0Enq1Select(3)) && FuTypeOrR(fuTypes(3),IQ1OnlyFuTypes)) || ( (IQ1Enq0Select(3) || IQ1Enq1Select(3)) && FuTypeOrR(fuTypes(3),IQ0OnlyFuTypes))
+-    dq0Block(0) := iqNotReady0
+-    dq0Block(1) := dq0Block(0) || iqNotReady1
+-    dq0Block(2) := dq0Block(0) || dq0Block(1) || conflict2
+-    dq0Block(3) := dq0Block(0) || dq0Block(1) || dq0Block(2) || conflict3
+-  }
+-  uopsInDq0.zipWithIndex.map { case (u, i) =>
+-    u.ready := (IQ0Enq0Select(i) || IQ0Enq1Select(i) || IQ1Enq0Select(i) || IQ1Enq1Select(i)) && !dq0Block(i)
+-  }
+-  uopsOutDq0(0).bits :=  Mux1H(IQ0Enq0Select.zip(dq0Block).map(x => x._1 && !x._2), uopsInDq0.map(_.bits))
+-  uopsOutDq0(1).bits :=  Mux1H(IQ0Enq1Select.zip(dq0Block).map(x => x._1 && !x._2), uopsInDq0.map(_.bits))
+-  uopsOutDq0(2).bits :=  Mux1H(IQ1Enq0Select.zip(dq0Block).map(x => x._1 && !x._2), uopsInDq0.map(_.bits))
+-  uopsOutDq0(3).bits :=  Mux1H(IQ1Enq1Select.zip(dq0Block).map(x => x._1 && !x._2), uopsInDq0.map(_.bits))
+-  uopsOutDq0(0).valid := Mux1H(IQ0Enq0Select.zip(dq0Block).map(x => x._1 && !x._2), uopsInDq0.map(_.valid))
+-  uopsOutDq0(1).valid := Mux1H(IQ0Enq1Select.zip(dq0Block).map(x => x._1 && !x._2), uopsInDq0.map(_.valid))
+-  uopsOutDq0(2).valid := Mux1H(IQ1Enq0Select.zip(dq0Block).map(x => x._1 && !x._2), uopsInDq0.map(_.valid))
+-  uopsOutDq0(3).valid := Mux1H(IQ1Enq1Select.zip(dq0Block).map(x => x._1 && !x._2), uopsInDq0.map(_.valid))
+-
+-
+-  val IQ2Deq0IsLess = IQ3Deq0Num > IQ2Deq0Num
+-  val IQ2Deq1IsLess = IQ3Deq1Num > IQ2Deq1Num
+-  val diffIQ23Deq0 = Mux(IQ2Deq0IsLess, IQ3Deq0Num - IQ2Deq0Num, IQ2Deq0Num - IQ3Deq0Num)
+-  val diffIQ23Deq1 = Mux(IQ2Deq1IsLess, IQ3Deq1Num - IQ2Deq1Num, IQ2Deq1Num - IQ3Deq1Num)
+-  val IQ2Deq0IsLess2 = IQ2Deq0IsLess && (diffIQ23Deq0 >= 2.U)
+-  val IQ2Deq1IsLess2 = IQ2Deq1IsLess && (diffIQ23Deq1 >= 2.U)
+-  val IQ3Deq0IsLess2 = !IQ2Deq0IsLess && (diffIQ23Deq0 >= 2.U)
+-  val IQ3Deq1IsLess2 = !IQ2Deq1IsLess && (diffIQ23Deq1 >= 2.U)
+-  val IQ2Deq0IsEqual = IQ3Deq0Num === IQ2Deq0Num
+-  val IQ2Deq1IsEqual = IQ3Deq1Num === IQ2Deq1Num
+-  val isDq1Deq0 = VecInit(uopsInDq1.map { case in => in.valid && FuType.isIntDq1Deq0(in.bits.fuType) })
+-  val isDq1Deq1 = VecInit(uopsInDq1.map { case in => in.valid && FuType.isIntDq1Deq1(in.bits.fuType) })
+-  val popDq1Deq0 = isDq1Deq0.zipWithIndex.map { case (_, i) => PopCount(isDq1Deq0.take(i + 1)) }
+-  val popDq1Deq1 = isDq1Deq1.zipWithIndex.map { case (_, i) => PopCount(isDq1Deq1.take(i + 1)) }
+-  val isDq1Deq0Num = popDq1Deq0.last
+-  val isDq1Deq1Num = popDq1Deq1.last
+-  val IQ2Deq0IsLessSeq = VecInit(popDq1Deq0.map(p => (p <= diffIQ23Deq0) && IQ2Deq0IsLess))
+-  val IQ2Deq1IsLessSeq = VecInit(popDq1Deq1.map(p => (p <= diffIQ23Deq1) && IQ2Deq1IsLess))
+-  val lastAlu0SelectIQ2Enq0 = RegInit(false.B)
+-  val lastBrh0SelectIQ2Enq0 = RegInit(false.B)
+-  when(uopsOutDq1.head.ready && uopsOutDq1.last.ready && IQ2Deq0IsEqual && (popDq1Deq0(3)(0) === 1.U)) {
+-    lastAlu0SelectIQ2Enq0 := !lastAlu0SelectIQ2Enq0
+-  }
+-  when(uopsOutDq1.head.ready && uopsOutDq1.last.ready && IQ2Deq1IsEqual && (popDq1Deq1(3)(0) === 1.U)) {
+-    lastBrh0SelectIQ2Enq0 := !lastBrh0SelectIQ2Enq0
+-  }
+-  val IQ2FuCfgs = params.issueBlockParams(2).getFuCfgs
+-  val IQ3FuCfgs = params.issueBlockParams(3).getFuCfgs
+-  val IQ23BothfuCfgs = IQ2FuCfgs.intersect(IQ3FuCfgs)
+-  val IQ2FuTypes = IQ2FuCfgs.map(_.fuType)
+-  val IQ3FuTypes = IQ3FuCfgs.map(_.fuType)
+-  val IQ2OnlyFuTypes = IQ2FuCfgs.diff(IQ3FuCfgs).map(_.fuType)
+-  val IQ3OnlyFuTypes = IQ3FuCfgs.diff(IQ2FuCfgs).map(_.fuType)
+-  val isOnlyIQ2 = uopsInDq1.map(x => x.valid && FuTypeOrR(x.bits.fuType, IQ2OnlyFuTypes))
+-  val isOnlyIQ3 = uopsInDq1.map(x => x.valid && FuTypeOrR(x.bits.fuType, IQ3OnlyFuTypes))
+-  val isBothIQ23_0 = uopsInDq1(0).valid && FuTypeOrR(uopsInDq1(0).bits.fuType, IQ23BothfuCfgs.map(_.fuType))
+-  val isBothIQ23_1 = uopsInDq1(1).valid && FuTypeOrR(uopsInDq1(1).bits.fuType, IQ23BothfuCfgs.map(_.fuType))
+-  val alu0SelectIQ2Enq0 = Mux(IQ2Deq0IsEqual, !lastAlu0SelectIQ2Enq0, IQ2Deq0IsLess)
+-  val brh0SelectIQ2Enq0 = Mux(IQ2Deq1IsEqual, !lastBrh0SelectIQ2Enq0, IQ2Deq1IsLess)
+-  val uop0SelectIQ2Enq0 = Mux(isDq1Deq0(0), alu0SelectIQ2Enq0, brh0SelectIQ2Enq0) || isOnlyIQ2(0)
+-  val alu1SelectIQ2Enq0 = !uop0SelectIQ2Enq0 && (IQ2Deq0IsLess2 || Mux(IQ2Deq0IsEqual, Mux(popDq1Deq0(1) === 1.U, !lastAlu0SelectIQ2Enq0, lastAlu0SelectIQ2Enq0), isDq1Deq0(0) || IQ2Deq0IsLess))
+-  val brh1SelectIQ2Enq0 = !uop0SelectIQ2Enq0 && (IQ2Deq1IsLess2 || Mux(IQ2Deq1IsEqual, Mux(popDq1Deq1(1) === 1.U, !lastBrh0SelectIQ2Enq0, lastBrh0SelectIQ2Enq0), isDq1Deq1(0) || IQ2Deq1IsLess))
+-  val uop1SelectIQ2Enq0 = Mux(isDq1Deq0(1), alu1SelectIQ2Enq0, brh1SelectIQ2Enq0)
+-  val alu1SelectIQ2Enq1 = isDq1Deq0(0) && IQ2Deq0IsLess2 || isDq1Deq1(0) && IQ2Deq0IsLess
+-  val brh1SelectIQ2Enq1 = isDq1Deq1(0) && IQ2Deq1IsLess2 || isDq1Deq0(0) && IQ2Deq1IsLess
+-  val uop1SelectIQ2Enq1 = uop0SelectIQ2Enq0 && Mux(isDq1Deq0(1), alu1SelectIQ2Enq1, brh1SelectIQ2Enq1)
+-  val alu1SelectIQ3Enq0 = uop0SelectIQ2Enq0 && (IQ3Deq0IsLess2 || Mux(IQ2Deq0IsEqual, Mux(popDq1Deq0(1) === 1.U, lastAlu0SelectIQ2Enq0, !lastAlu0SelectIQ2Enq0), isDq1Deq0(0) || !IQ2Deq0IsLess))
+-  val brh1SelectIQ3Enq0 = uop0SelectIQ2Enq0 && (IQ3Deq1IsLess2 || Mux(IQ2Deq1IsEqual, Mux(popDq1Deq1(1) === 1.U, lastBrh0SelectIQ2Enq0, !lastBrh0SelectIQ2Enq0), isDq1Deq1(0) || !IQ2Deq1IsLess))
+-  val uop1SelectIQ3Enq0 = !uop1SelectIQ2Enq0 && !uop1SelectIQ2Enq1 && Mux(isDq1Deq0(1), alu1SelectIQ3Enq0, brh1SelectIQ3Enq0)
+-  val uop1SelectIQ3Enq1 = !uop1SelectIQ2Enq0 && !uop1SelectIQ2Enq1 && !uop1SelectIQ3Enq0
+-  val alu2SelectIQ2Enq1 = Mux(popDq1Deq0(2) === 2.U, Mux(IQ2Deq0IsLess2, true.B, isDq1Deq0(0) && !alu0SelectIQ2Enq0 || isDq1Deq1(0) && brh0SelectIQ2Enq0), alu0SelectIQ2Enq0)
+-  val brh2SelectIQ2Enq1 = Mux(popDq1Deq1(2) === 2.U, Mux(IQ2Deq1IsLess2, true.B, isDq1Deq1(0) && !brh0SelectIQ2Enq0 || isDq1Deq0(0) && alu0SelectIQ2Enq0), brh0SelectIQ2Enq0)
+-  val uop2SelectIQ2Enq1 = Mux(isDq1Deq0(2), alu2SelectIQ2Enq1, brh2SelectIQ2Enq1) || isOnlyIQ2(2)
+-  val IQ2Enq0Select = Wire(Vec(4, Bool()))
+-  val IQ2Enq1Select = Wire(Vec(4, Bool()))
+-  val IQ3Enq0Select = Wire(Vec(4, Bool()))
+-  val IQ3Enq1Select = Wire(Vec(4, Bool()))
+-  val IQ2Enq0Select0 = isOnlyIQ2(0) || isBothIQ23_0 && uop0SelectIQ2Enq0
+-  val IQ3Enq0Select0 = !IQ2Enq0Select0 && (isOnlyIQ3(0) || isBothIQ23_0 && uopsInDq1(0).valid)
+-  val IQ2Enq0Select1 = !IQ2Enq0Select0 && (isOnlyIQ2(1) || isBothIQ23_1 && (uop1SelectIQ2Enq0 || isOnlyIQ3(0)))
+-  val IQ2Enq1Select1 = !IQ2Enq0Select1 && (isOnlyIQ2(1) || isBothIQ23_1 && uop1SelectIQ2Enq1)
+-  val IQ3Enq0Select1 = !IQ2Enq0Select1 && !IQ2Enq1Select1 && !IQ3Enq0Select0 && (isOnlyIQ3(1) || isBothIQ23_1 && (uop1SelectIQ3Enq0 || isOnlyIQ3(0)))
+-  val IQ3Enq1Select1 = !IQ2Enq0Select1 && !IQ2Enq1Select1 && !IQ3Enq0Select1 && (isOnlyIQ3(1) || isBothIQ23_1 && uop1SelectIQ3Enq1)
+-  val IQ2Enq0Select2 = !IQ2Enq0Select0 && !IQ2Enq0Select1 && uopsInDq1(2).valid
+-  val IQ2Enq1Select2 = !IQ2Enq1Select1 && !IQ2Enq0Select2 && uopsInDq1(2).valid && uop2SelectIQ2Enq1
+-  val IQ3Enq0Select2 = !IQ3Enq0Select0 && !IQ3Enq0Select1 && !IQ2Enq0Select2 && !IQ2Enq1Select2 && uopsInDq1(2).valid
+-  val IQ3Enq1Select2 = !IQ2Enq0Select2 && !IQ2Enq1Select2 && !IQ3Enq0Select2 && uopsInDq1(2).valid
+-  val IQ2Enq1Select3 = !IQ2Enq1Select1 && !IQ2Enq1Select2 && uopsInDq1(3).valid
+-  val IQ3Enq1Select3 = !IQ3Enq1Select1 && !IQ3Enq1Select2 && uopsInDq1(3).valid
+-  when(uopsOutDq1.head.ready && uopsOutDq1.last.ready) {
+-    IQ2Enq0Select := Cat(false.B, IQ2Enq0Select2, IQ2Enq0Select1, IQ2Enq0Select0).asBools
+-    IQ2Enq1Select := Cat(IQ2Enq1Select3, IQ2Enq1Select2, IQ2Enq1Select1, false.B).asBools
+-    IQ3Enq0Select := Cat(false.B, IQ3Enq0Select2, IQ3Enq0Select1, IQ3Enq0Select0).asBools
+-    IQ3Enq1Select := Cat(IQ3Enq1Select3, IQ3Enq1Select2, IQ3Enq1Select1, false.B).asBools
+-  }.elsewhen(uopsOutDq1.head.ready) {
+-    IQ2Enq0Select := Cat(false.B, false.B, false.B, true.B).asBools
+-    IQ2Enq1Select := Cat(false.B, false.B, true.B, false.B).asBools
+-    IQ3Enq0Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ3Enq1Select := Cat(false.B, false.B, false.B, false.B).asBools
+-  }.elsewhen(uopsOutDq1.last.ready) {
+-    IQ2Enq0Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ2Enq1Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ3Enq0Select := Cat(false.B, false.B, false.B, true.B).asBools
+-    IQ3Enq1Select := Cat(false.B, false.B, true.B, false.B).asBools
+-  }.otherwise {
+-    IQ2Enq0Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ2Enq1Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ3Enq0Select := Cat(false.B, false.B, false.B, false.B).asBools
+-    IQ3Enq1Select := Cat(false.B, false.B, false.B, false.B).asBools
+-  }
+-  assert(PopCount(IQ2Enq0Select) < 2.U, "IQ2Enq0Select is not one hot")
+-  assert(PopCount(IQ2Enq1Select) < 2.U, "IQ2Enq1Select is not one hot")
+-  assert(PopCount(IQ3Enq0Select) < 2.U, "IQ3Enq0Select is not one hot")
+-  assert(PopCount(IQ3Enq1Select) < 2.U, "IQ3Enq1Select is not one hot")
+-  assert(PopCount(IQ2Enq0Select) < 2.U, "IQ2Enq0Select is not one hot")
+-  assert(PopCount(IQ2Enq1Select) < 2.U, "IQ2Enq1Select is not one hot")
+-  assert(PopCount(IQ3Enq0Select) < 2.U, "IQ3Enq0Select is not one hot")
+-  assert(PopCount(IQ3Enq1Select) < 2.U, "IQ3Enq1Select is not one hot")
+-  assert(PopCount(VecInit(IQ2Enq0Select(0), IQ2Enq1Select(0), IQ3Enq0Select(0), IQ3Enq1Select(0))) < 2.U, "Dq1Uop0Select is not one hot")
+-  assert(PopCount(VecInit(IQ2Enq0Select(1), IQ2Enq1Select(1), IQ3Enq0Select(1), IQ3Enq1Select(1))) < 2.U, "Dq1Uop1Select is not one hot")
+-  assert(PopCount(VecInit(IQ2Enq0Select(2), IQ2Enq1Select(2), IQ3Enq0Select(2), IQ3Enq1Select(2))) < 2.U, "Dq1Uop2Select is not one hot")
+-  assert(PopCount(VecInit(IQ2Enq0Select(3), IQ2Enq1Select(3), IQ3Enq0Select(3), IQ3Enq1Select(3))) < 2.U, "Dq1Uop3Select is not one hot")
+-  val dq1Block = Wire(Vec(uopsInDq1Num, Bool()))
+-  if (IQ2FuCfgs.size == IQ3FuCfgs.size && IQ2FuCfgs.size == IQ23BothfuCfgs.size) {
+-    dq1Block := Cat(false.B, false.B, false.B, false.B).asBools
+-  }
+-  else {
+-    val fuTypes = uopsInDq1.map(_.bits.fuType)
+-    val iqNotReady0 = (FuTypeOrR(fuTypes(0), IQ2OnlyFuTypes) && !uopsOutDq1.head.ready) || (FuTypeOrR(fuTypes(0), IQ3OnlyFuTypes) && !uopsOutDq1.last.ready)
+-    val iqNotReady1 = (FuTypeOrR(fuTypes(1), IQ2OnlyFuTypes) && !uopsOutDq1.head.ready) || (FuTypeOrR(fuTypes(1), IQ3OnlyFuTypes) && !uopsOutDq1.last.ready)
+-    val iqNotReady2 = (FuTypeOrR(fuTypes(2), IQ2OnlyFuTypes) && !uopsOutDq1.head.ready) || (FuTypeOrR(fuTypes(2), IQ3OnlyFuTypes) && !uopsOutDq1.last.ready)
+-    val iqNotReady3 = (FuTypeOrR(fuTypes(3), IQ2OnlyFuTypes) && !uopsOutDq1.head.ready) || (FuTypeOrR(fuTypes(3), IQ3OnlyFuTypes) && !uopsOutDq1.last.ready)
+-    val conflict2 = ( (IQ2Enq0Select(2) || IQ2Enq1Select(2)) && FuTypeOrR(fuTypes(2), IQ3OnlyFuTypes)) || ( (IQ3Enq0Select(2) || IQ3Enq1Select(2)) && FuTypeOrR(fuTypes(2), IQ2OnlyFuTypes))
+-    val conflict3 = ( (IQ2Enq0Select(3) || IQ2Enq1Select(3)) && FuTypeOrR(fuTypes(3), IQ3OnlyFuTypes)) || ( (IQ3Enq0Select(3) || IQ3Enq1Select(3)) && FuTypeOrR(fuTypes(3), IQ2OnlyFuTypes))
+-    dq1Block(0) := iqNotReady0
+-    dq1Block(1) := dq1Block(0) || iqNotReady1
+-    dq1Block(2) := dq1Block(0) || dq1Block(1) || conflict2
+-    dq1Block(3) := dq1Block(0) || dq1Block(1) || dq1Block(2) || conflict3
+-  }
+-  uopsInDq1.zipWithIndex.map { case (u, i) =>
+-    u.ready := (IQ2Enq0Select(i) || IQ2Enq1Select(i) || IQ3Enq0Select(i) || IQ3Enq1Select(i)) && !dq1Block(i)
+-  }
+-  uopsOutDq1(0).bits :=  Mux1H(IQ2Enq0Select.zip(dq1Block).map(x => x._1 && !x._2), uopsInDq1.map(_.bits))
+-  uopsOutDq1(1).bits :=  Mux1H(IQ2Enq1Select.zip(dq1Block).map(x => x._1 && !x._2), uopsInDq1.map(_.bits))
+-  uopsOutDq1(2).bits :=  Mux1H(IQ3Enq0Select.zip(dq1Block).map(x => x._1 && !x._2), uopsInDq1.map(_.bits))
+-  uopsOutDq1(3).bits :=  Mux1H(IQ3Enq1Select.zip(dq1Block).map(x => x._1 && !x._2), uopsInDq1.map(_.bits))
+-  uopsOutDq1(0).valid := Mux1H(IQ2Enq0Select.zip(dq1Block).map(x => x._1 && !x._2), uopsInDq1.map(_.valid))
+-  uopsOutDq1(1).valid := Mux1H(IQ2Enq1Select.zip(dq1Block).map(x => x._1 && !x._2), uopsInDq1.map(_.valid))
+-  uopsOutDq1(2).valid := Mux1H(IQ3Enq0Select.zip(dq1Block).map(x => x._1 && !x._2), uopsInDq1.map(_.valid))
+-  uopsOutDq1(3).valid := Mux1H(IQ3Enq1Select.zip(dq1Block).map(x => x._1 && !x._2), uopsInDq1.map(_.valid))
+-
+-
+-  XSPerfAccumulate("not_ready_iq0", PopCount(!uopsOutDq0(0).ready))
+-  XSPerfAccumulate("not_ready_iq1", PopCount(!uopsOutDq0(2).ready))
+-  XSPerfAccumulate("not_ready_iq2", PopCount(!uopsOutDq1(0).ready))
+-  XSPerfAccumulate("not_ready_iq3", PopCount(!uopsOutDq1(2).ready))
+-  XSPerfAccumulate("not_ready_iq01", PopCount(!uopsOutDq0(0).ready && !uopsOutDq0(2).ready))
+-  XSPerfAccumulate("not_ready_iq23", PopCount(!uopsOutDq1(0).ready && !uopsOutDq1(2).ready))
+-  XSPerfAccumulate("in_valid", PopCount(io.in.map(_.valid)))
+-  XSPerfAccumulate("in_fire", PopCount(io.in.map(_.fire)))
+-  XSPerfAccumulate("out_valid", PopCount(io.out.flatMap(_.map(_.valid))))
+-  XSPerfAccumulate("out_fire", PopCount(io.out.flatMap(_.map(_.fire))))
+-}
+-
+-class Dispatch2IqArithImp(override val wrapper: Dispatch2Iq)(implicit p: Parameters, params: SchdBlockParams)
+-  extends Dispatch2IqImp(wrapper)
+-    with HasXSParameter {
+-
+-  val portFuSets = params.issueBlockParams.map(_.exuBlockParams.flatMap(_.fuConfigs).map(_.fuType).toSet)
+-  println(s"[Dispatch2IqArithImp] portFuSets: $portFuSets")
+-  val fuDeqMap = getFuDeqMap(portFuSets)
+-  println(s"[Dispatch2IqArithImp] fuDeqMap: $fuDeqMap")
+-  val mergedFuDeqMap = mergeFuDeqMap(fuDeqMap)
+-  println(s"[Dispatch2IqArithImp] mergedFuDeqMap: $mergedFuDeqMap")
+-  val expendedFuDeqMap = expendFuDeqMap(mergedFuDeqMap, params.issueBlockParams.map(_.numEnq))
+-  println(s"[Dispatch2IqArithImp] expendedFuDeqMap: $expendedFuDeqMap")
+-
+-  // sort by count of port. Port less, priority higher.
+-  val finalFuDeqMap = expendedFuDeqMap.toSeq.sortBy(_._2.length)
+-  println(s"[Dispatch2IqArithImp] finalFuDeqMap: $finalFuDeqMap")
+-
+-  val outReadyMatrix = Wire(Vec(outs.size, Vec(numInPorts, Bool())))
+-  outReadyMatrix.foreach(_.foreach(_ := false.B))
+-  val selIdxOH = Wire(MixedVec(finalFuDeqMap.map(x => Vec(x._2.size, ValidIO(UInt(uopsIn.size.W))))))
+-  selIdxOH.foreach(_.foreach(_ := 0.U.asTypeOf(ValidIO(UInt(uopsIn.size.W)))))
+-
+-  finalFuDeqMap.zipWithIndex.foreach { case ((fuTypeSeq, deqPortIdSeq), i) =>
+-    val maxSelNum = wrapper.numIn
+-    val selNum = deqPortIdSeq.length
+-    val portReadyVec = deqPortIdSeq.map(x => outs(x).ready)
+-    val canAcc = uopsIn.map(in => canAccept(fuTypeSeq.map(x => x.ohid), in.bits.fuType) && in.valid)
+-    if(selNum <= maxSelNum) {
+-      val selPort = SelectOne("circ", portReadyVec.toSeq, selNum)
+-      val select = SelectOne("naive", canAcc, selNum)
+-      for ((portId, j) <- deqPortIdSeq.zipWithIndex) {
+-        val (selPortReady, selPortIdxOH) = selPort.getNthOH(j + 1)
+-        val (selectValid, selectIdxOH) = select.getNthOH(j + 1)
+-        when(selPortReady && selectValid) {
+-          selIdxOH(i)(OHToUInt(selPortIdxOH)).valid := selectValid
+-          selIdxOH(i)(OHToUInt(selPortIdxOH)).bits := selectIdxOH.asUInt
+-        }
+-      }
+-    } else {
+-      val selPort = SelectOne("circ", portReadyVec.toSeq, maxSelNum)
+-      val select = SelectOne("naive", canAcc, maxSelNum)
+-      for(j <- 0 until maxSelNum) {
+-        val (selPortReady, selPortIdxOH) = selPort.getNthOH(j + 1)
+-        val (selectValid, selectIdxOH) = select.getNthOH(j + 1)
+-        when(selPortReady && selectValid) {
+-          selIdxOH(i)(OHToUInt(selPortIdxOH)).valid := selectValid
+-          selIdxOH(i)(OHToUInt(selPortIdxOH)).bits := selectIdxOH.asUInt
+-        }
+-      }
+-    }
+-  }
+-
+-  val portSelIdxOH: Map[Seq[Int], Vec[ValidIO[UInt]]] = finalFuDeqMap.zip(selIdxOH).map{ case ((fuTypeSeq, deqPortIdSeq), selIdxOHSeq) => (deqPortIdSeq, selIdxOHSeq)}.toMap
+-  println(s"[Dispatch2IQ] portSelIdxOH: $portSelIdxOH")
+-  val finalportSelIdxOH: mutable.Map[Int, Seq[ValidIO[UInt]]] = expendPortSel(portSelIdxOH)
+-  println(s"[Dispatch2IQ] finalportSelIdxOH: $finalportSelIdxOH")
+-  finalportSelIdxOH.foreach{ case (portId, selSeq) =>
+-    val finalSelIdxOH: UInt = PriorityMux(selSeq.map(_.valid).toSeq, selSeq.map(_.bits).toSeq)
+-    outs(portId).valid := selSeq.map(_.valid).reduce(_ | _)
+-    outs(portId).bits := Mux1H(finalSelIdxOH, uopsIn.map(_.bits))
+-    when(outs(portId).valid) {
+-      outReadyMatrix(portId).zipWithIndex.foreach { case (inReady, i) =>
+-        when(finalSelIdxOH(i)) {
+-          inReady := outs(portId).ready
+-        }
+-      }
+-    }
+-  }
+-
+-  uopsIn.foreach(_.ready := false.B)
+-  uopsIn.zipWithIndex.foreach{ case (uopIn, idx) => uopIn.ready := outReadyMatrix.map(_(idx)).reduce(_ | _) }
+-
+-
+-  XSPerfAccumulate("in_valid", PopCount(io.in.map(_.valid)))
+-  XSPerfAccumulate("in_fire", PopCount(io.in.map(_.fire)))
+-  XSPerfAccumulate("out_valid", PopCount(io.out.flatMap(_.map(_.valid))))
+-  XSPerfAccumulate("out_fire", PopCount(io.out.flatMap(_.map(_.fire))))
+-}
+-
+-/**
+-  *
+-  * @param numIn
+-  * @param dispatchCfg Seq[Seq[FuType], dispatch limits]
+-  */
+-class Dispatch2IqSelect(numIn: Int, dispatchCfg: Seq[(Seq[BigInt], Int)])(implicit p: Parameters) extends Module {
+-
+-  val io = IO(new Bundle {
+-    val in = Flipped(Vec(numIn, ValidIO(new DynInst)))
+-    val out = MixedVec(dispatchCfg.map(x => Vec(x._2, ValidIO(new DynInst))).toSeq)
+-    val mapIdxOH = Output(MixedVec(dispatchCfg.map(x => Vec(x._2, UInt(in.size.W))).toSeq)) // OH mapping of in ports to out ports
+-  })
+-
+-  val issuePortFuType: Seq[Seq[BigInt]] = dispatchCfg.map(_._1)
+-
+-  val numOutKinds = io.out.size
+-  val numInPorts = io.in.size
+-  val numPortsOfKind = io.out.map(_.size)
+-
+-  val canAcceptMatrix = Wire(Vec(numOutKinds, Vec(numInPorts, Bool())))
+-
+-  for (inIdx <- 0 until numInPorts) {
+-    for (kindIdx <- io.out.indices) {
+-      canAcceptMatrix(kindIdx)(inIdx) := io.in(inIdx).valid && canAccept(issuePortFuType(kindIdx), io.in(inIdx).bits.fuType)
+-    }
+-  }
+-
+-  val selectedIdxVec = canAcceptMatrix.zipWithIndex.map { case (outCanAcceptVec, kindIdx) =>
+-    val select = SelectOne("naive", outCanAcceptVec, numPortsOfKind(kindIdx))
+-    for (portIdx <- 0 until numPortsOfKind(kindIdx)) {
+-      val (selectValid, selectIdxOH) = select.getNthOH(portIdx + 1)
+-      io.out(kindIdx)(portIdx).valid := selectValid
+-      io.out(kindIdx)(portIdx).bits := Mux1H(selectIdxOH, io.in.map(_.bits))
+-      io.mapIdxOH(kindIdx)(portIdx) := selectIdxOH.asUInt
+-    }
+-  }
+-
+-  def canAccept(acceptVec: Seq[BigInt], fuType: UInt): Bool = {
+-    (acceptVec.reduce(_ | _).U & fuType).orR
+-  }
+-
+-  def canAccept(acceptVec: Seq[Seq[BigInt]], fuType: UInt): Vec[Bool] = {
+-    VecInit(acceptVec.map(x => canAccept(x, fuType)).toSeq)
+-  }
+-}
+-
+-/**
+-  * @author Yinan Xu, Xuan Hu
+-  */
+-class Dispatch2IqMemImp(override val wrapper: Dispatch2Iq)(implicit p: Parameters, params: SchdBlockParams)
+-  extends Dispatch2IqImp(wrapper)
+-    with HasXSParameter
+-    with HasVLSUParameters {
+-
+-  import FuType._
+-
+-  private val enqLsqIO = io.enqLsqIO.get
+-  private val lqFreeCount = io.lqFreeCount.get
+-  private val sqFreeCount = io.sqFreeCount.get
+-
+-  private val numLoadDeq = LSQLdEnqWidth
+-  private val numStoreAMODeq = LSQStEnqWidth
+-  private val numVLoadDeq = LoadPipelineWidth
+-  private val numDeq = enqLsqIO.req.size
+-  private val iqAllReady = Cat(io.out.map(_.map(_.ready)).flatten.toSeq).andR
+-  private val lsqCanAccept = enqLsqIO.canAccept
+-
+-  private val isLoadVec = VecInit(io.in.map(x => x.valid && FuType.isLoad(x.bits.fuType)))
+-  private val isStoreVec = VecInit(io.in.map(x => x.valid && FuType.isStore(x.bits.fuType)))
+-  private val isAMOVec = io.in.map(x => x.valid && FuType.isAMO(x.bits.fuType))
+-  private val isStoreAMOVec = io.in.map(x => x.valid && (FuType.isStore(x.bits.fuType) || FuType.isAMO(x.bits.fuType)))
+-  private val isVLoadVec = VecInit(io.in.map(x => x.valid && FuType.isVLoad(x.bits.fuType)))
+-  private val isVStoreVec = VecInit(io.in.map(x => x.valid && FuType.isVStore(x.bits.fuType)))
+-
+-  private val loadCntVec = VecInit(isLoadVec.indices.map(x => PopCount(isLoadVec.slice(0, x + 1))))
+-  private val storeAMOCntVec = VecInit(isStoreAMOVec.indices.map(x => PopCount(isStoreAMOVec.slice(0, x + 1))))
+-  private val vloadCntVec = VecInit(isVLoadVec.indices.map(x => PopCount(isVLoadVec.slice(0, x + 1))))
+-
+-  private val s0_enqLsq_resp = Wire(enqLsqIO.resp.cloneType)
+-  private val s0_blockedVec = Wire(Vec(io.in.size, Bool()))
+-
+-  val loadBlockVec = VecInit(loadCntVec.map(_ > numLoadDeq.U))
+-  val storeAMOBlockVec = VecInit(storeAMOCntVec.map(_ > numStoreAMODeq.U))
+-  val vloadBlockVec = VecInit(vloadCntVec.map(_ > numVLoadDeq.U))
+-  val lsStructBlockVec = VecInit((loadBlockVec.zip(storeAMOBlockVec)).zip(vloadBlockVec).map(x => x._1._1 || x._1._2 || x._2))
+-  if(backendParams.debugEn) {
+-    dontTouch(loadBlockVec)
+-    dontTouch(storeAMOBlockVec)
+-    dontTouch(lsStructBlockVec)
+-    dontTouch(vloadBlockVec)
+-    dontTouch(isLoadVec)
+-    dontTouch(isVLoadVec)
+-    dontTouch(loadCntVec)
+-  }
+-
+-  for (i <- 0 until numEnq) {
+-    if (i >= numDeq) {
+-      s0_blockedVec(i) := true.B
+-    } else {
+-      s0_blockedVec(i) := lsStructBlockVec(i)
+-    }
+-  }
+-
+-  private val uop             = io.in.map(_.bits)
+-  private val fuType          = uop.map(_.fuType)
+-  private val fuOpType        = uop.map(_.fuOpType)
+-  private val vtype           = uop.map(_.vpu.vtype)
+-  private val sew             = vtype.map(_.vsew)
+-  private val lmul            = vtype.map(_.vlmul)
+-  private val eew             = uop.map(_.vpu.veew)
+-  private val mop             = fuOpType.map(fuOpTypeItem => LSUOpType.getVecLSMop(fuOpTypeItem))
+-  private val nf              = fuOpType.zip(uop.map(_.vpu.nf)).map{ case (fuOpTypeItem, nfItem) => Mux(LSUOpType.isWhole(fuOpTypeItem), 0.U, nfItem) }
+-  private val emul            = fuOpType.zipWithIndex.map { case (fuOpTypeItem, index) =>
+-    Mux(
+-      LSUOpType.isWhole(fuOpTypeItem),
+-      GenUSWholeEmul(nf(index)),
+-      Mux(
+-        LSUOpType.isMasked(fuOpTypeItem),
+-        0.U(mulBits.W),
+-        EewLog2(eew(index)) - sew(index) + lmul(index)
+-      )
+-    )
+-  }
+-
+-  private val isVlsType       = fuType.map(fuTypeItem => isVls(fuTypeItem))
+-  private val isSegment       = fuType.map(fuTypeItem => isVsegls(fuTypeItem))
+-  private val isUnitStride    = fuOpType.map(fuOpTypeItem => LSUOpType.isAllUS(fuOpTypeItem))
+-  private val isVecUnitType   = isVlsType.zip(isUnitStride).map{ case (isVlsTypeItme, isUnitStrideItem) =>
+-    isVlsTypeItme && isUnitStrideItem
+-  }
+-  private val isfofFixVlUop   = uop.map{x => x.vpu.isVleff && x.lastUop}
+-  private val instType        = isSegment.zip(mop).map{ case (isSegementItem, mopItem) => Cat(isSegementItem, mopItem) }
+-  // There is no way to calculate the 'flow' for 'unit-stride' exactly:
+-  //  Whether 'unit-stride' needs to be split can only be known after obtaining the address.
+-  // For scalar instructions, this is not handled here, and different assignments are done later according to the situation.
+-  private val numLsElem       = VecInit(uop.map(_.numLsElem))
+-
+-  // The maximum 'numLsElem' number that can be emitted per port is:
+-  //    16 2 2 2 2 2.
+-  // The 'allowDispatch' calculations are done conservatively for timing purposes:
+-  //   The Flow of scalar instructions is considered 1,
+-  //   The flow of vector 'unit-stride' instructions is considered 2, and the flow of other vector instructions is considered 16.
+-  private val conserveFlows = isVlsType.zipWithIndex.map{ case (isVlsTyepItem, index) =>
+-    Mux(
+-      isVlsTyepItem,
+-      if (index == 0) Mux(isUnitStride(index), VecMemUnitStrideMaxFlowNum.U, 16.U) else VecMemUnitStrideMaxFlowNum.U,
+-      1.U
+-    )
+-  }
+-
+-  // A conservative allocation strategy is adopted here.
+-  // Vector 'unit-stride' instructions and scalar instructions can be issued from all six ports,
+-  // while other vector instructions can only be issued from the first port
+-  // if is segment instruction, need disptch it to Vldst_RS0, so, except port 0, stall other.
+-  // The allocation needs to meet a few conditions:
+-  //  1) The lsq has enough entris.
+-  //  2) The number of flows accumulated does not exceed VecMemDispatchMaxNumber.
+-  //  3) Vector instructions other than 'unit-stride' can only be issued on the first port.
+-  private val allowDispatch = Wire(Vec(enqLsqIO.req.length, Bool()))
+-
+-  for (index <- allowDispatch.indices) {
+-    val flowTotal = Wire(UInt(log2Up(VirtualLoadQueueMaxStoreQueueSize + 1).W))
+-    flowTotal := conserveFlows.take(index + 1).reduce(_ +& _)
+-    if(index == 0){
+-      when(isStoreVec(index) || isVStoreVec(index)) {
+-        allowDispatch(index) := sqFreeCount > flowTotal
+-      } .elsewhen(isLoadVec(index) || isVLoadVec(index)) {
+-        allowDispatch(index) := lqFreeCount > flowTotal
+-      } .elsewhen (isAMOVec(index)) {
+-        allowDispatch(index) := true.B
+-      } .otherwise {
+-        allowDispatch(index) := false.B
+-      }
+-    }
+-    else{
+-      when(isStoreVec(index) || isVStoreVec(index)) {
+-        allowDispatch(index) := (sqFreeCount > flowTotal) && (isVecUnitType(index) || !isVlsType(index)) && allowDispatch(index - 1)
+-      } .elsewhen(isLoadVec(index) || isVLoadVec(index)) {
+-        allowDispatch(index) := (lqFreeCount > flowTotal) && (isVecUnitType(index) || !isVlsType(index)) && allowDispatch(index - 1)
+-      } .elsewhen (isAMOVec(index)) {
+-        allowDispatch(index) := allowDispatch(index - 1)
+-      } .otherwise {
+-        allowDispatch(index) := false.B
+-      }
+-    }
+-  }
+-
+-  // enqLsq io
+-  require(enqLsqIO.req.size == enqLsqIO.resp.size)
+-  for (i <- enqLsqIO.req.indices) {
+-    when(!io.in(i).fire /* || io.in(i).bits.uopIdx =/= 0.U*/) {
+-      enqLsqIO.needAlloc(i) := 0.U
+-    }.elsewhen(isStoreVec(i) || isVStoreVec(i)) {
+-      enqLsqIO.needAlloc(i) := 2.U // store | vstore
+-    }.otherwise {
+-      enqLsqIO.needAlloc(i) := 1.U // load | vload
+-    }
+-    enqLsqIO.req(i).valid := io.in(i).fire && !isAMOVec(i) && !isSegment(i) && !isfofFixVlUop(i)
+-    enqLsqIO.req(i).bits := io.in(i).bits
+-    enqLsqIO.iqAccept(i) := io.in(i).ready
+-
+-    // This is to make it easier to calculate in LSQ.
+-    // Both scalar instructions and vector instructions with FLOW equal to 1 have a NUM value of 1.”
+-    // But, the 'numLsElem' that is not a vector is set to 0 when passed to IQ
+-    enqLsqIO.req(i).bits.numLsElem := Mux(isVlsType(i), numLsElem(i), 1.U)
+-    enqLsqIO.req(i).bits.exceptionVec := 0.U.asTypeOf(ExceptionVec())
+-    s0_enqLsq_resp(i) := enqLsqIO.resp(i)
+-  }
+-
+-  val portFuSets = params.issueBlockParams.map(_.exuBlockParams.filterNot(_.hasStdFu).flatMap(_.fuConfigs).map(_.fuType).toSet)
+-  println(s"[Dispatch2IqMemImp] portFuSets: $portFuSets")
+-  val fuDeqMap = getFuDeqMap(portFuSets)
+-  println(s"[Dispatch2IqMemImp] fuDeqMap: $fuDeqMap")
+-  val mergedFuDeqMap = mergeFuDeqMap(fuDeqMap)
+-  println(s"[Dispatch2IqMemImp] mergedFuDeqMap: $mergedFuDeqMap")
+-  val expendedFuDeqMap = expendFuDeqMap(mergedFuDeqMap, params.issueBlockParams.map(_.numEnq))
+-  println(s"[Dispatch2IqMemImp] expendedFuDeqMap: $expendedFuDeqMap")
+-
+-  // sort by count of port. Port less, priority higher.
+-  val finalFuDeqMap = expendedFuDeqMap.toSeq.sortBy(_._2.length)
+-  println(s"[Dispatch2IqMemImp] finalFuDeqMap: $finalFuDeqMap")
+-
+-  val selIdxOH = Wire(MixedVec(finalFuDeqMap.map(x => Vec(x._2.size, ValidIO(UInt(uopsIn.size.W))))))
+-  selIdxOH.foreach(_.foreach(_ := 0.U.asTypeOf(ValidIO(UInt(uopsIn.size.W)))))
+-
+-  dontTouch(selIdxOH)
+-
+-  // decide the priority of hyu for load instructions
+-  val hyuPriorityCtr = RegInit(0x100.U(9.W))
+-  val addCtr = io.in.map(in => Mux(in.fire && FuType.isLoad(in.bits.fuType), Constantin.createRecord("hyuPriorityAddCtr", 2)(1, 0), 0.U)).reduce(_ +& _) // loadCnt * 2
+-  val subCtr = io.in.map(in => Mux(in.fire && FuType.isStore(in.bits.fuType), Constantin.createRecord("hyuPrioritySubCtr", 5)(2, 0), 0.U)).reduce(_ +& _) // storeCnt * 5
+-  val nextCtr = hyuPriorityCtr + addCtr - subCtr
+-  hyuPriorityCtr := Mux(addCtr > subCtr && hyuPriorityCtr > nextCtr, 0x1FF.U(9.W),
+-                    Mux(addCtr < subCtr && hyuPriorityCtr < nextCtr, 0x000.U(9.W),
+-                                                                     nextCtr))
+-  val useHyuForLoadMore = hyuPriorityCtr.asBools.last
+-
+-  // index of issue block
+-  private val issueBlockParamsWithoutStd = params.issueBlockParams.filter(_.StdCnt == 0)
+-  val loadIqIdx = issueBlockParamsWithoutStd.zipWithIndex.filter(_._1.LduCnt != 0).unzip._2
+-  val storeIqIdx = issueBlockParamsWithoutStd.zipWithIndex.filter(_._1.StaCnt != 0).unzip._2
+-  val hybridIqIdx = issueBlockParamsWithoutStd.zipWithIndex.filter(_._1.HyuCnt != 0).unzip._2
+-  val stHyIqIdx = issueBlockParamsWithoutStd.zipWithIndex.filter(x => x._1.StaCnt != 0 || x._1.HyuCnt != 0).unzip._2
+-
+-  val Seq(loadIqsEnqPorts, storeIqsEnqPorts, hybridIqsEnqPorts) = Seq(loadIqIdx, storeIqIdx, hybridIqIdx).map(_.map(idx =>
+-    (0 until issueBlockParamsWithoutStd(idx).numEnq).map(_ + issueBlockParamsWithoutStd.take(idx).map(_.numEnq).fold(0)(_ + _))
+-  ).transpose)
+-  val stHyIqsEnqPorts = (storeIqsEnqPorts.transpose ++ hybridIqsEnqPorts.transpose.map(_.reverse).reverse).transpose
+-
+-  // deq port priority sequence
+-  val loadMoreHyuDeq = (loadIqsEnqPorts.take(loadIqsEnqPorts.length / 2) ++ hybridIqsEnqPorts.take(hybridIqsEnqPorts.length / 2) ++
+-                        loadIqsEnqPorts.drop(loadIqsEnqPorts.length / 2) ++ hybridIqsEnqPorts.drop(hybridIqsEnqPorts.length / 2)).flatten
+-  val loadLessHyuDeq = (loadIqsEnqPorts ++ hybridIqsEnqPorts).flatten
+-  val storeDeq = (storeIqsEnqPorts.take(storeIqsEnqPorts.length / 2) ++ hybridIqsEnqPorts.map(_.reverse).reverse.take(hybridIqsEnqPorts.length / 2) ++
+-                  storeIqsEnqPorts.drop(storeIqsEnqPorts.length / 2) ++ hybridIqsEnqPorts.map(_.reverse).reverse.drop(hybridIqsEnqPorts.length / 2)).flatten
+-
+-  val expendedStuDeq = expendedFuDeqMap.get(Seq(stu)).getOrElse(Seq()) ++
+-    expendedFuDeqMap.get(Seq(stu, mou)).getOrElse(Seq()) ++
+-    expendedFuDeqMap.get(Seq(mou, stu)).getOrElse(Seq())
+-
+-  require(loadMoreHyuDeq.sorted == expendedFuDeqMap(Seq(ldu)).sorted)
+-  require(loadLessHyuDeq.sorted == expendedFuDeqMap(Seq(ldu)).sorted)
+-  println(storeDeq)
+-  println(storeDeq.sorted)
+-  println(expendedStuDeq)
+-  println(expendedStuDeq.sorted)
+-  require(storeDeq.sorted == expendedStuDeq.sorted)
+-
+-  // Seq(storeCnt)(priority)
+-  val loadMoreHyuDeqSeq: Seq[Seq[Int]] = Seq.fill(numEnq + 1)(loadMoreHyuDeq)
+-  val loadLessHyuDeqSeq: Seq[Seq[Int]] = Seq.fill(numEnq + 1)(loadLessHyuDeq)
+-  val storeDeqSeq: Seq[Seq[Int]] = Seq.fill(numEnq + 1)(storeDeq)
+-
+-  require(expendedFuDeqMap(Seq(ldu)).max - expendedFuDeqMap(Seq(ldu)).min == expendedFuDeqMap(Seq(ldu)).length - 1)
+-  require(expendedStuDeq.max - expendedStuDeq.min == expendedStuDeq.length - 1)
+-
+-  private abstract class LoadOrStore(val isStore: Boolean) { def isLoad = !isStore }
+-  private case class Load() extends LoadOrStore(false)
+-  private case class Store() extends LoadOrStore(true)
+-
+-  private val allLSPatern = Seq.tabulate(numEnq + 1)(i => (Seq.fill(i)(Load()) ++ Seq.fill(numEnq - i)(Store())).toSeq.permutations).flatten.zipWithIndex.toSeq
+-
+-  val inIsStoreAmoVec = Cat(isStoreAMOVec)
+-  val inIsNotLoadVec = ~Cat(isLoadVec)
+-  object LoadValidTable {
+-    val default = BitPat("b" + "0" * numEnq)
+-    val table = allLSPatern.map { case (pattern, index) =>
+-      pattern.zipWithIndex.filter(_._1.isLoad).map(x => BitPat((1 << x._2).U(numEnq.W))) ++
+-      pattern.filterNot(_.isLoad).map(_ => BitPat("b" + "0" * numEnq)) map
+-      (BitPat(pattern.map(s => if (s.isStore) "1" else "0").mkString("b", "", "")) -> _)
+-    }.transpose
+-    val truthTable = table.map(TruthTable(_, default))
+-  }
+-  object StoreValidTable {
+-    val default = BitPat("b" + "0" * numEnq)
+-    val table = allLSPatern.map { case (pattern, index) =>
+-      pattern.zipWithIndex.filter(_._1.isStore).map(x => BitPat((1 << x._2).U(numEnq.W))) ++
+-      pattern.filterNot(_.isStore).map(_ => BitPat("b" + "0" * numEnq)) map
+-      (BitPat(pattern.map(s => if (s.isStore) "1" else "0").mkString("b", "", "")) -> _)
+-    }.transpose
+-    val truthTable = table.map(TruthTable(_, default))
+-  }
+-  object LoadMoreHyuReadyTable {
+-    val default = BitPat("b" + "0" * loadMoreHyuDeqSeq.head.length)
+-    val table = allLSPatern.map { case (pattern, index) =>
+-      loadMoreHyuDeqSeq(pattern.count(_.isStore)).map(x => BitPat((1 << x - loadMoreHyuDeqSeq.flatten.min).U(loadMoreHyuDeqSeq.head.length.W))) map
+-      (BitPat(pattern.map(s => if (s.isStore) "1" else "0").mkString("b", "", "")) -> _)
+-    }.transpose
+-    val truthTable = table.map(TruthTable(_, default))
+-  }
+-  object LoadLessHyuReadyTable {
+-    val default = BitPat("b" + "0" * loadLessHyuDeqSeq.head.length)
+-    val table = allLSPatern.map { case (pattern, index) =>
+-      loadLessHyuDeqSeq(pattern.count(_.isStore)).map(x => BitPat((1 << x - loadLessHyuDeqSeq.flatten.min).U(loadLessHyuDeqSeq.head.length.W))) map
+-      (BitPat(pattern.map(s => if (s.isStore) "1" else "0").mkString("b", "", "")) -> _)
+-    }.transpose
+-    val truthTable = table.map(TruthTable(_, default))
+-  }
+-  object StoreReadyTable {
+-    val default = BitPat("b" + "0" * storeDeqSeq.head.length)
+-    val table = allLSPatern.map { case (pattern, index) =>
+-      storeDeqSeq(pattern.count(_.isStore)).map(x => BitPat((1 << x - storeDeqSeq.flatten.min).U(storeDeqSeq.head.length.W))) map
+-      (BitPat(pattern.map(s => if (s.isStore) "1" else "0").mkString("b", "", "")) -> _)
+-    }.transpose
+-    val truthTable = table.map(TruthTable(_, default))
+-  }
+-
+-  // port flip for load/store load balance
+-  val loadSwapMap = (loadIqsEnqPorts.map(ports => ports.zipWithIndex.map { case (port, idx) => (port -> ports(ports.length - 1 - idx)) }) ++
+-                     hybridIqsEnqPorts.map(_.map(port => (port -> port)))).flatten.sortBy(_._1).unzip._2
+-  val storeSwapMap = stHyIqsEnqPorts.map(ports => ports.zipWithIndex.map { case (port, idx) => (port -> ports(ports.length - 1 - idx)) }).flatten.sortBy(_._1).unzip._2
+-
+-  val loadFlipMap = loadSwapMap.map(x => (1 << x - loadSwapMap.min).U(loadSwapMap.length.W))
+-  val storeFlipMap = storeSwapMap.map(x => (1 << x - storeSwapMap.min).U(storeSwapMap.length.W))
+-
+-  val loadIqValidCnt = loadIqIdx.map(io.iqValidCnt)
+-  val sthyIqValidCnt = stHyIqIdx.map(io.iqValidCnt)
+-
+-  val loadDeqNeedFlip = RegNext(loadIqValidCnt.last < loadIqValidCnt.head) && Constantin.createRecord("enableLoadBalance", true)
+-  val storeDeqNeedFlip = RegNext(sthyIqValidCnt.last < sthyIqValidCnt.head) && Constantin.createRecord("enableStoreBalance", true)
+-  val loadValidDecoder = LoadValidTable.truthTable.map(decoder(EspressoMinimizer, inIsNotLoadVec, _))
+-  val storeValidDecoder = StoreValidTable.truthTable.map(decoder(EspressoMinimizer, inIsStoreAmoVec, _))
+-
+-  val loadMoreHyuReadyDecoderOriginal = LoadMoreHyuReadyTable.truthTable.map(decoder(EspressoMinimizer, inIsNotLoadVec, _))
+-  val loadMoreHyuReadyDecoderFlipped = loadMoreHyuReadyDecoderOriginal.map(Mux1H(_, loadFlipMap))
+-  val loadLessHyuReadyDecoderOriginal = LoadLessHyuReadyTable.truthTable.map(decoder(EspressoMinimizer, inIsNotLoadVec, _))
+-  val loadLessHyuReadyDecoderFlipped = loadLessHyuReadyDecoderOriginal.map(Mux1H(_, loadFlipMap))
+-  val loadReadyDecoderOriginal = loadMoreHyuReadyDecoderOriginal zip loadLessHyuReadyDecoderOriginal map (x => Mux(useHyuForLoadMore, x._1, x._2))
+-  val loadReadyDecoderFlipped = loadMoreHyuReadyDecoderFlipped zip loadLessHyuReadyDecoderFlipped map (x => Mux(useHyuForLoadMore, x._1, x._2))
+-  val storeReadyDecoderOriginal = StoreReadyTable.truthTable.map(decoder(EspressoMinimizer, inIsStoreAmoVec, _))
+-  val storeReadyDecoderFlipped = storeReadyDecoderOriginal.map(Mux1H(_, storeFlipMap))
+-
+-  val loadReadyDecoder = loadReadyDecoderFlipped zip loadReadyDecoderOriginal map (x => Mux(loadDeqNeedFlip, x._1, x._2))
+-  val storeReadyDecoder = storeReadyDecoderFlipped zip storeReadyDecoderOriginal map (x => Mux(storeDeqNeedFlip, x._1, x._2))
+-
+-  finalFuDeqMap.zipWithIndex.foreach {
+-    case ((Seq(FuType.ldu), deqPortIdSeq), i) =>
+-      println(s"[Dispatch2IqMemImp] deqPort $deqPortIdSeq use ldu policy")
+-      val maxSelNum = wrapper.numIn
+-      val selNum = deqPortIdSeq.length
+-      val portReadyVec = loadReadyDecoder.map(Mux1H(_, deqPortIdSeq.map(outs(_).ready).toSeq))
+-      val canAcc = loadValidDecoder.map(Mux1H(_, uopsIn.map(_.valid)))
+-      val selPort = SelectOne("naive", portReadyVec.toSeq, selNum)
+-      val select = SelectOne("naive", canAcc, selNum)
+-      for ((portId, j) <- deqPortIdSeq.zipWithIndex) {
+-        val (selPortReady, selPortIdxOH) = selPort.getNthOH(j + 1)
+-        val (selectValid, selectIdxOH) = select.getNthOH(j + 1)
+-        when(selPortReady && selectValid) {
+-          selIdxOH(i)(OHToUInt(Mux1H(selPortIdxOH, loadReadyDecoder))).valid := selectValid
+-          selIdxOH(i)(OHToUInt(Mux1H(selPortIdxOH, loadReadyDecoder))).bits := Mux1H(selectIdxOH, loadValidDecoder)
+-        }
+-      }
+-    case ((fuTypeSeq, deqPortIdSeq), i) if fuTypeSeq.contains(FuType.stu) =>
+-      println(s"[Dispatch2IqMemImp] deqPort $deqPortIdSeq use stu policy")
+-      val maxSelNum = wrapper.numIn
+-      val selNum = deqPortIdSeq.length
+-      val portReadyVec = storeReadyDecoder.map(Mux1H(_, deqPortIdSeq.map(outs(_).ready).toSeq))
+-      val canAcc = storeValidDecoder.map(Mux1H(_, uopsIn.map(_.valid)))
+-      val selPort = SelectOne("naive", portReadyVec.toSeq, selNum)
+-      val select = SelectOne("naive", canAcc, selNum)
+-      for ((portId, j) <- deqPortIdSeq.zipWithIndex) {
+-        val (selPortReady, selPortIdxOH) = selPort.getNthOH(j + 1)
+-        val (selectValid, selectIdxOH) = select.getNthOH(j + 1)
+-        when(selPortReady && selectValid) {
+-          selIdxOH(i)(OHToUInt(Mux1H(selPortIdxOH, storeReadyDecoder))).valid := selectValid
+-          selIdxOH(i)(OHToUInt(Mux1H(selPortIdxOH, storeReadyDecoder))).bits := Mux1H(selectIdxOH, storeValidDecoder)
+-        }
+-      }
+-    case ((fuTypeSeq, deqPortIdSeq), i) =>
+-      val maxSelNum = wrapper.numIn
+-      val selNum = deqPortIdSeq.length
+-      val portReadyVec = deqPortIdSeq.map(x => outs(x).ready)
+-      val canAcc = uopsIn.map(in => canAccept(fuTypeSeq.map(x => x.ohid), in.bits.fuType) && in.valid)
+-      val selPort = SelectOne("circ", portReadyVec.toSeq, selNum)
+-      val select = SelectOne("naive", canAcc, selNum)
+-      for ((portId, j) <- deqPortIdSeq.zipWithIndex) {
+-        val (selPortReady, selPortIdxOH) = selPort.getNthOH(j + 1)
+-        val (selectValid, selectIdxOH) = select.getNthOH(j + 1)
+-        when(selPortReady && selectValid) {
+-          selIdxOH(i)(OHToUInt(selPortIdxOH)).valid := selectValid
+-          selIdxOH(i)(OHToUInt(selPortIdxOH)).bits := selectIdxOH.asUInt
+-        }
+-      }
+-  }
+-
+-  val portSelIdxOH: Map[Seq[Int], Vec[ValidIO[UInt]]] = finalFuDeqMap.zip(selIdxOH).map { case ((fuTypeSeq, deqPortIdSeq), selIdxOHSeq) => (deqPortIdSeq, selIdxOHSeq) }.toMap
+-  println(s"[Dispatch2IQ] portSelIdxOH: $portSelIdxOH")
+-  val deqSelIdxOHSeq: mutable.Map[Int, Seq[ValidIO[UInt]]] = expendPortSel(portSelIdxOH)
+-  println(s"[Dispatch2IQ] finalportSelIdxOH: $deqSelIdxOHSeq")
+-
+-  // Todo: split this matrix into more deq parts
+-  // deqSelIdxVec(deqIdx)(enqIdx): enqIdx uop can be accepted by deqIdx
+-  val deqSelIdxVec: Vec[UInt] = VecInit(deqSelIdxOHSeq.map {
+-    case (deqIdx, seq) => PriorityEncoderOH(Mux1H(seq.map(x => (x.valid, x.bits))))
+-  }.toSeq)
+-  deqSelIdxOHSeq.foreach { case (deqIdx, seq) =>
+-    val block_by_conflict = (PopCount(Mux1H(seq.map(x => (x.valid, x.bits)))) > 1.U).asUInt
+-    XSPerfAccumulate(s"block_by_conflict_${deqIdx}", block_by_conflict)
+-  }
+-
+-  // enqSelIdxVec(enqIdx)(deqIdx): enqIdx uop can be accepted by deqIdx
+-  // Maybe one port has been dispatched more than 1 uop.
+-  // Select the oldest one
+-  val enqSelIdxOHVec: Vec[Vec[Bool]] = VecInit(deqSelIdxVec.map(_.asBools).transpose.map(VecInit(_)))
+-  // Check if enq uops have deq port can accept
+-  val enqAcceptedVec = VecInit(enqSelIdxOHVec.map(_.asUInt.orR))
+-  // Check if uop will be blocked by the uops before it
+-  val continousNotBlockVec = VecInit((0 until numEnq).map(enqIdx => enqAcceptedVec.slice(0, enqIdx).fold(true.B)(_ && _)))
+-  // mask off not continous uops
+-  val enqMapDeqMatrix: Vec[Vec[Bool]] = VecInit(enqSelIdxOHVec.zipWithIndex.map {
+-    case (enqSelOH, idx) => VecInit(enqSelOH.map(_ && continousNotBlockVec(idx) && !lsStructBlockVec(idx)))
+-  })
+-
+-  val deqMapEnqMatrix: Vec[Vec[Bool]] = VecInit(enqMapDeqMatrix.transpose.map(VecInit(_)))
+-
+-  dontTouch(deqSelIdxVec)
+-  dontTouch(enqSelIdxOHVec)
+-  dontTouch(enqAcceptedVec)
+-  dontTouch(continousNotBlockVec)
+-  dontTouch(enqMapDeqMatrix)
+-  dontTouch(deqMapEnqMatrix)
+-
+-  deqMapEnqMatrix.zipWithIndex.foreach { case (deqOH, deqIdx) =>
+-    outs(deqIdx).valid := (deqOH.asUInt & allowDispatch.asUInt).orR && lsqCanAccept
+-    outs(deqIdx).bits := Mux1H(deqOH, uopsIn.map(_.bits))
+-  }
+-
+-  uopsIn.foreach(_.ready := false.B)
+-  uopsIn.zipWithIndex.foreach { case (uopIn, idx) =>
+-    uopIn.ready := enqMapDeqMatrix(idx).asUInt.orR && allowDispatch(idx) && lsqCanAccept
+-    uopIn.bits.lqIdx := s0_enqLsq_resp(idx).lqIdx
+-    uopIn.bits.sqIdx := s0_enqLsq_resp(idx).sqIdx
+-    dontTouch(isVlsType(idx))
+-    dontTouch(numLsElem(idx))
+-  }
+-}
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+index cc8f4d8217d..6ccd9546f3e 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+@@ -128,8 +128,6 @@ case class IssueBlockParams(
+   
+   def writeVType: Boolean = exuBlockParams.map(_.writeVType).reduce(_ || _)
+ 
+-  def numPcReadPort: Int = (if (needPc) 1 else 0) * numEnq
+-
+   def numWriteIntRf: Int = exuBlockParams.count(_.writeIntRf)
+ 
+   def numWriteFpRf: Int = exuBlockParams.count(_.writeFpRf)
+diff --git a/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala b/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
+index d3299827245..926ddee298d 100644
+--- a/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
+@@ -14,7 +14,6 @@ case class SchdBlockParams(
+   numDeqOutside   : Int,
+   schdType        : SchedulerType,
+   rfDataWidth     : Int,
+-  numUopIn        : Int,
+ ) {
+   var backendParam: BackendParams = null
+ 
+@@ -86,11 +85,6 @@ case class SchdBlockParams(
+ 
+   def numNoDataWB: Int = issueBlockParams.map(_.numNoDataWB).sum
+ 
+-  def numPcReadPort = {
+-    val bjIssueQueues = issueBlockParams.filter(x => (x.JmpCnt + x.BrhCnt + x.FenceCnt) > 0)
+-    if (bjIssueQueues.map(x => x.numEnq).sum > 0) numUopIn else 0
+-  }
+-
+   def needOg2Resp: Boolean = isVfSchd || isMemSchd && issueBlockParams.map(_.needOg2Resp).reduce(_ || _)
+ 
+   def needSrcFrm: Boolean = issueBlockParams.map(_.needSrcFrm).reduce(_ || _)
+diff --git a/src/main/scala/xiangshan/package.scala b/src/main/scala/xiangshan/package.scala
+index 34559775629..f4694b831ce 100644
+--- a/src/main/scala/xiangshan/package.scala
++++ b/src/main/scala/xiangshan/package.scala
+@@ -971,10 +971,6 @@ package object xiangshan {
+     val V0FlStall = Value("V0FlStall")
+     val VlFlStall = Value("VlFlStall")
+     val MultiFlStall = Value("MultiFlStall")
+-    // dispatch queue full
+-    val IntDqStall = Value("IntDqStall")
+-    val FpDqStall = Value("FpDqStall")
+-    val LsDqStall = Value("LsDqStall")
+ 
+     // memblock
+     val LoadTLBStall = Value("LoadTLBStall")
+```

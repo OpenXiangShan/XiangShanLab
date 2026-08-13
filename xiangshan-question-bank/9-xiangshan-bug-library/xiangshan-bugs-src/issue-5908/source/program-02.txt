@@ -1,0 +1,5 @@
+[0] %Error: UnalignQueue.sv:139: Assertion failed in
+    TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.unalignQueue:
+    Assertion failed at LogUtils.scala:132
+%Error: build/rtl/UnalignQueue.sv:139: Verilog $stop
+Aborting...

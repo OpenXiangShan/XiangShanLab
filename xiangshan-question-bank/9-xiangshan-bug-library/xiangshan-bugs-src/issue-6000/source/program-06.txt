@@ -1,0 +1,10 @@
+riscv64-elf-gcc \
+  -nostdlib -nostartfiles \
+  -march=rv64gc_zicsr_zifencei -mabi=lp64 \
+  -T link.ld \
+  -Wl,--no-relax \
+  -o cjr_jumpunit_isrvc.riscv \
+  instruction_stream.S
+
+riscv64-elf-objdump -dr cjr_jumpunit_isrvc.riscv \
+  > cjr_jumpunit_isrvc.disasm

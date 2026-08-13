@@ -1,0 +1,4 @@
+mstatus different at pc = 0x00800013cc, right = 0x8000040a006c7f22, wrong = 0x8000000a006c67a2
+   mepc different at pc = 0x00800013cc, right = 0x000000008000138c, wrong = 0x0000000080001394
+  mtval different at pc = 0x00800013cc, right = 0x00000000d0217bd3, wrong = 0x00000000ff47bf73
+Core 0: ABORT at pc = 0x800013cc

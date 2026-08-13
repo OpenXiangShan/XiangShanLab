@@ -1,0 +1,21 @@
+{
+  "number": 3699,
+  "title": "fix(LoadMisalignBuffer): all exception from misalignbuffer should ove…",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3699",
+  "state": "closed",
+  "labels": [],
+  "author": "good-circle",
+  "created_at": "2024-10-04T05:23:33Z",
+  "updated_at": "2024-10-05T01:32:05Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3699/commit-log.md"
+  ],
+  "submitted_at": "2024-10-04",
+  "branch": "",
+  "rtl_commit": ""
+}

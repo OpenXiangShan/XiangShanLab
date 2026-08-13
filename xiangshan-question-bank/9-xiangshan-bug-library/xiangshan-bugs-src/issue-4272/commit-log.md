@@ -1,0 +1,42 @@
+# Commit Log
+- Issue: #4272
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4272
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4272
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4272
+- Changed files: 2
+- Additions: 2
+- Deletions: 0
+
+## Files
+- `src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala`
+- `src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+index 4b45ddeab83..380c77fd2be 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+@@ -771,6 +771,7 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   miss_req.word_idx := s2_req.word_idx
+   miss_req.amo_data := s2_req.amo_data
+   miss_req.amo_mask := s2_req.amo_mask
++  miss_req.amo_cmp  := s2_req.amo_cmp
+   miss_req.req_coh := s2_hit_coh
+   miss_req.id := s2_req.id
+   miss_req.cancel := false.B
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
+index 77fff464244..a7c49fd250f 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
+@@ -814,6 +814,7 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
+   io.main_pipe_req.bits.word_idx := req.word_idx
+   io.main_pipe_req.bits.amo_data := req.amo_data
+   io.main_pipe_req.bits.amo_mask := req.amo_mask
++  io.main_pipe_req.bits.amo_cmp  := req.amo_cmp
+   io.main_pipe_req.bits.id := req.id
+   io.main_pipe_req.bits.pf_source := req.pf_source
+   io.main_pipe_req.bits.access := access
+```

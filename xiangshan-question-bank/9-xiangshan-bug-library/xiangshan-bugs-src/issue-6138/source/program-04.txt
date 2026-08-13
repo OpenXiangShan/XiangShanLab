@@ -1,0 +1,17 @@
+{
+  "commit_branch_mispredicts": {
+    "SECRET_VALUE=0": 14,
+    "SECRET_VALUE=1": 15,
+    "delta": 1
+  },
+  "commit_branch_mispredicts_type_conditional": {
+    "SECRET_VALUE=0": 3,
+    "SECRET_VALUE=1": 4,
+    "delta": 1
+  },
+  "commit_branch_mispredicts_reason_TAGE": {
+    "SECRET_VALUE=0": 1,
+    "SECRET_VALUE=1": 2,
+    "delta": 1
+  }
+}

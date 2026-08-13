@@ -1,0 +1,21 @@
+{
+  "number": 3558,
+  "title": "fix(Svpbmt): let PBMTEs in [mh]envcfg be RW and have reset value 0",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3558",
+  "state": "closed",
+  "labels": [],
+  "author": "huxuan0307",
+  "created_at": "2024-09-12T05:34:47Z",
+  "updated_at": "2024-09-13T06:02:09Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3558/commit-log.md"
+  ],
+  "submitted_at": "2024-09-12",
+  "branch": "",
+  "rtl_commit": ""
+}

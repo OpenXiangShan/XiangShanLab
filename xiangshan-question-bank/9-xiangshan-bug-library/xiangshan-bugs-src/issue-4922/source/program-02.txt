@@ -1,0 +1,5 @@
+    is(m_waitCommit) {
+      // in idempotent spaces, we can skip waiting for commit (i.e. can do speculative fetch)
+      // but we do not skip m_waitCommit state, as other signals (e.g. f3_mmio_can_go relies on this)
+      mmio_state := Mux(mmio_commit || ((f3_itlb_pbmt === Pbmt.nc) && io.toIbuffer.ready), m_commited, m_waitCommit)
+    }

@@ -1,0 +1,1 @@
+./build/emu -i cross16b_off44.bin --max-cycles=50000 --no-diff

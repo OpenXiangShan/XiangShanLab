@@ -1,0 +1,20 @@
+{
+  "number": 3084,
+  "title": "In VCS simulation, multi-core simulation of some harts ended prematurely due to incorrect execution of SEQZ instruction",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/3084",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported",
+    "topic: functionality"
+  ],
+  "author": "xxq0902",
+  "created_at": "2024-06-18T04:44:34Z",
+  "updated_at": "2025-09-10T07:08:45Z",
+  "source_files": [
+    "issue-3084/source/amtest-riscv64-xs-dual.zip"
+  ],
+  "archive_files": [
+    "issue-3084/source/amtest-riscv64-xs-dual.zip"
+  ],
+  "has_comments": true
+}

@@ -1,0 +1,2322 @@
+diff --git a/.github/CODEOWNERS b/.github/CODEOWNERS
+index f397366bb14..d04c5e39955 100644
+--- a/.github/CODEOWNERS
++++ b/.github/CODEOWNERS
+@@ -4,6 +4,8 @@ src/main/scala/xiangshan/frontend/instruncache @ngc7331
+ src/main/scala/xiangshan/frontend/ifu @ngc7331 @my-mayfly
+ src/main/scala/xiangshan/frontend/ftq @Yan-Muzi
+ src/main/scala/xiangshan/frontend/bpu @eastonman
++src/main/scala/xiangshan/frontend/bpu/ubtb @ngc7331
++src/main/scala/xiangshan/frontend/bpu/abtb @TheKiteRunner24
+ src/main/scala/xiangshan/frontend/Frontend.scala @eastonman
+ src/main/scala/xiangshan/frontend/FrontendBundle.scala @eastonman
+ src/main/scala/xiangshan/frontend/IBuffer.scala @eastonman
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index d0f259f18aa..c9d7534c13c 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -31,10 +31,10 @@ import xiangshan.backend.regfile._
+ import xiangshan.backend.BackendParams
+ import xiangshan.backend.trace._
+ import xiangshan.cache.DCacheParameters
++import xiangshan.frontend.bpu.BpuParameters
+ import xiangshan.frontend.icache.ICacheParameters
+ import xiangshan.cache.mmu.{L2TLBParameters, TLBParameters}
+ import xiangshan.frontend._
+-import xiangshan.frontend.icache.ICacheParameters
+ import freechips.rocketchip.diplomacy.AddressSet
+ import freechips.rocketchip.tile.MaxHartIdBits
+ import system.SoCParamsKey
+@@ -95,6 +95,7 @@ case class XSCoreParameters
+   // HistoryLength: Int = 512,
+   EnableGHistDiff: Boolean = true,
+   EnableCommitGHistDiff: Boolean = true,
++  // old bpu deprecate start, TODO: remove when v3 Bpu is ready
+   UbtbSize: Int = 256,
+   FtbSize: Int = 2048,
+   FtbWays: Int = 4,
+@@ -121,6 +122,8 @@ case class XSCoreParameters
+   SCCtrBits: Int = 6,
+   SCHistLens: Seq[Int] = Seq(0, 4, 10, 16),
+   numBr: Int = 2,
++  // old bpu deprecate end
++  bpuParameters: BpuParameters = BpuParameters(),
+   ICacheForceMetaECCError: Boolean = false,
+   ICacheForceDataECCError: Boolean = false,
+   IBufSize: Int = 48,
+diff --git a/src/main/scala/xiangshan/frontend/Frontend.scala b/src/main/scala/xiangshan/frontend/Frontend.scala
+index edb15a8b284..d55b566a876 100644
+--- a/src/main/scala/xiangshan/frontend/Frontend.scala
++++ b/src/main/scala/xiangshan/frontend/Frontend.scala
+@@ -48,6 +48,7 @@ import xiangshan.backend.fu.PMPChecker
+ import xiangshan.backend.fu.PMPReqBundle
+ import xiangshan.cache.mmu._
+ import xiangshan.frontend.bpu.Bpu
++import xiangshan.frontend.bpu.DummyBpu
+ import xiangshan.frontend.icache._
+ import xiangshan.frontend.ifu._
+ import xiangshan.frontend.instruncache.InstrUncache
+@@ -109,7 +110,7 @@ class FrontendInlinedImp(outer: FrontendInlined) extends LazyModuleImp(outer)
+   // decouped-frontend modules
+   val instrUncache = outer.instrUncache.module
+   val icache       = outer.icache.module
+-  val bpu          = Module(new Bpu)
++  val bpu          = Module(new DummyBpu)
+   val ifu          = Module(new Ifu)
+   val ibuffer      = Module(new IBuffer)
+   val ftq          = Module(new Ftq)
+@@ -135,8 +136,8 @@ class FrontendInlinedImp(outer: FrontendInlined) extends LazyModuleImp(outer)
+   ifu.io.csrFsIsOff := csrCtrl.fsIsOff
+ 
+   // bpu ctrl
+-  bpu.io.ctrl         := csrCtrl.bp_ctrl
+-  bpu.io.reset_vector := io.reset_vector
++  bpu.io.ctrl        := csrCtrl.bp_ctrl
++  bpu.io.resetVector := io.reset_vector
+ 
+   // pmp
+   val PortNumber = ICacheParameters().PortNumber
+@@ -439,7 +440,7 @@ class FrontendInlinedImp(outer: FrontendInlined) extends LazyModuleImp(outer)
+   pfevent.io.distribute_csr := io.csrCtrl.distribute_csr
+   val csrevents = pfevent.io.hpmevent.take(8)
+ 
+-  val perfFromUnits = Seq(ifu, ibuffer, icache, ftq, bpu).flatMap(_.getPerfEvents)
++  val perfFromUnits = Seq(ifu, ibuffer, icache, ftq).flatMap(_.getPerfEvents)
+   val perfFromIO    = Seq()
+   val perfBlock     = Seq()
+   // let index = 0 be no event
+diff --git a/src/main/scala/xiangshan/frontend/FrontendBundle.scala b/src/main/scala/xiangshan/frontend/FrontendBundle.scala
+index 60b42927f30..818aadaa91d 100644
+--- a/src/main/scala/xiangshan/frontend/FrontendBundle.scala
++++ b/src/main/scala/xiangshan/frontend/FrontendBundle.scala
+@@ -29,7 +29,14 @@ import xiangshan._
+ import xiangshan.backend.GPAMemEntry
+ import xiangshan.backend.fu.PMPRespBundle
+ import xiangshan.cache.mmu.TlbResp
+-import xiangshan.frontend.bpu._
++// FIXME: remove old FullBranchPrediction
++import xiangshan.frontend.bpu.{FullBranchPrediction => NewFullBranchPrediction}
++import xiangshan.frontend.bpu.BPUUtils
++import xiangshan.frontend.bpu.FTBEntry
++import xiangshan.frontend.bpu.HasBPUConst
++import xiangshan.frontend.bpu.NewPredictorMeta
++import xiangshan.frontend.bpu.PredictorMeta
++import xiangshan.frontend.bpu.RasPtr
+ import xiangshan.frontend.icache._
+ import xiangshan.frontend.instruncache.InstrUncacheReq
+ import xiangshan.frontend.instruncache.InstrUncacheResp
+@@ -39,6 +46,13 @@ class FrontendTopDownBundle(implicit p: Parameters) extends XSBundle {
+   val stallWidth = UInt(log2Ceil(PredictWidth).W)
+ }
+ 
++class BpuToFtqIO(implicit p: Parameters) extends XSBundle {
++  // FIXME: remove old FullBranchPrediction
++  val resp: DecoupledIO[NewFullBranchPrediction] = DecoupledIO(new NewFullBranchPrediction)
++  val meta: DecoupledIO[NewPredictorMeta]        = DecoupledIO(new NewPredictorMeta)
++  // TODO: topdown, etc.
++}
++
+ class FetchRequestBundle(implicit p: Parameters) extends XSBundle with HasICacheParameters {
+ 
+   // fast path: Timing critical
+@@ -87,7 +101,7 @@ class FtqToFetchBundle(implicit p: Parameters) extends XSBundle with HasICachePa
+ }
+ 
+ class FtqToICacheIO(implicit p: Parameters) extends XSBundle {
+-  // NOTE: req.bits must be prepare in T cycle
++  // NOTE: req.bits must be prepared in T cycle
+   // while req.valid is set true in T + 1 cycle
+   val fetchReq:      DecoupledIO[FtqToFetchBundle]    = DecoupledIO(new FtqToFetchBundle)
+   val prefetchReq:   DecoupledIO[FtqToPrefetchBundle] = DecoupledIO(new FtqToPrefetchBundle)
+@@ -769,8 +783,6 @@ class BranchPredictionResp(implicit p: Parameters) extends XSBundle with HasBPUC
+   def lastStage = s3
+ }
+ 
+-class BpuToFtqBundle(implicit p: Parameters) extends BranchPredictionResp {}
+-
+ class BranchPredictionUpdate(implicit p: Parameters) extends XSBundle with HasBPUConst {
+   val pc        = PrunedAddr(VAddrBits)
+   val spec_info = new FtqRedirectSramEntry
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Abstracts.scala b/src/main/scala/xiangshan/frontend/bpu/Abstracts.scala
+index 30c00b1fc32..acc3c0e61eb 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Abstracts.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Abstracts.scala
+@@ -15,10 +15,32 @@
+ 
+ package xiangshan.frontend.bpu
+ 
++import chisel3._
++import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import xiangshan.XSBundle
+ import xiangshan.XSModule
++import xiangshan.frontend.PrunedAddr
+ 
+ abstract class BpuBundle(implicit p: Parameters) extends XSBundle with HasBpuParameters
+ 
+ abstract class BpuModule(implicit p: Parameters) extends XSModule with HasBpuParameters
++
++abstract class BasePredictor(implicit p: Parameters) extends BpuModule {
++  val io: BasePredictorIO
++}
++
++abstract class BasePredictorIO(implicit p: Parameters) extends BpuBundle {
++  // control
++  val enable: Bool = Input(Bool())
++  // predict request
++  val startVAddr: PrunedAddr = Input(PrunedAddr(VAddrBits))
++  // predict response
++  val hit:        Bool             = Output(Bool())
++  val prediction: BranchPrediction = Output(new BranchPrediction)
++  // maybe meta, differs from predictor to predictor
++  // predict stage control
++  val stageCtrl: StageCtrl = Input(new StageCtrl)
++  // train: differs from predictor to predictor
++  // ...
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+index 58660bfafa6..d7c603fd544 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+@@ -17,48 +17,149 @@ package xiangshan.frontend.bpu
+ 
+ import chisel3._
+ import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
+ import utils.EnumUInt
++import xiangshan.frontend.PrunedAddr
++import xiangshan.frontend.bpu.abtb.AheadBtbMeta
++import xiangshan.frontend.ftq.FtqPtr
+ 
+ class BranchAttribute extends Bundle {
+-  val value: UInt = BranchAttribute.Value()
++  val branchType: UInt = BranchAttribute.BranchType()
++  val rasAction:  UInt = BranchAttribute.RasAction()
+ 
+-  def isNone:        Bool = value === BranchAttribute.Value.None
+-  def isPop:         Bool = value === BranchAttribute.Value.Pop
+-  def isPush:        Bool = value === BranchAttribute.Value.Push
+-  def isPopAndPush:  Bool = value === BranchAttribute.Value.PopAndPush
+-  def isConditional: Bool = value === BranchAttribute.Value.Conditional
+-  def isIndirect:    Bool = value === BranchAttribute.Value.Indirect
++  def isNone:        Bool = branchType === BranchAttribute.BranchType.None
++  def isConditional: Bool = branchType === BranchAttribute.BranchType.Conditional
++  def isDirect:      Bool = branchType === BranchAttribute.BranchType.Direct
++  def isIndirect:    Bool = branchType === BranchAttribute.BranchType.Indirect
+ 
+-  def hasPop:  Bool = value === BranchAttribute.Value.Pop || value === BranchAttribute.Value.PopAndPush
+-  def hasPush: Bool = value === BranchAttribute.Value.Push || value === BranchAttribute.Value.PopAndPush
++  // NOTE: maybe we should check branchType === BranchAttribute.BranchType.Direct/Indirect,
++  //       but as BranchAttribute.BranchType is declared as private,
++  //       we should not able to create attribute with (Conditional, Push) or something like that.
++  //       So, just check rasAction should be enough.
++  def isCall:          Bool = rasAction === BranchAttribute.RasAction.Push
++  def isReturn:        Bool = rasAction === BranchAttribute.RasAction.Pop
++  def isReturnAndCall: Bool = rasAction === BranchAttribute.RasAction.PopAndPush
++
++  // hasPop = isPop || isPushAndPop, hasPush = isPush || isPushAndPop
++  def hasPop:  Bool = rasAction(BranchAttribute.RasAction.popBit)
++  def hasPush: Bool = rasAction(BranchAttribute.RasAction.pushBit)
+ }
+ 
+ object BranchAttribute {
+-  private object Value extends EnumUInt(6) {
++  private object BranchType extends EnumUInt(4) {
+     // no branch
+     def None: UInt = 0.U(width.W)
+-    // special indirect branches: return/call, refer to risc-v spec Table3. Return-address stack prediction hints
+-    // NOTE: do not change this encoding, this actually ensures `Pop | Push = PopAndPush`, so area can be better
+-    def Pop:        UInt = 1.U(width.W) // return: rs1 is x1/x5 and rd is not
+-    def Push:       UInt = 2.U(width.W) // call: rd is x1/x5 and rs1 is not; or rd is x1/x5 and rs1 == rd
+-    def PopAndPush: UInt = 3.U(width.W) // return & call: both rd and rs1 is x1/x5, and rs1 != rd
+     // conditional branches: beq, bne, blt, bge, bltu, bgeu
+-    def Conditional: UInt = 4.U(width.W)
+-    // indirect branches, other than return/call
+-    def Indirect: UInt = 5.U(width.W)
++    def Conditional: UInt = 1.U(width.W)
++    // direct branches: j, jal
++    def Direct: UInt = 2.U(width.W)
++    // indirect branches: jr, jalr
++    def Indirect: UInt = 3.U(width.W)
++  }
++  private object RasAction extends EnumUInt(4) {
++    def popBit:  Int = 0
++    def pushBit: Int = 1
++    // no action
++    def None: UInt = 0.U(width.W)
++    // special indirect branches: return/call, refer to risc-v spec Table3. Return-address stack prediction hints
++    // return: jalr with rs1=x1/x5 and rd!=x1/x5
++    def Pop: UInt = (1 << popBit).U(width.W)
++    // call: jalr with rd=x1/x5 and rs1!=x1/x5; or rd=x1/x5 and rs1=rd. Or jal with rd=x1/x5
++    def Push: UInt = (1 << pushBit).U(width.W)
++    // return & call: jalr with rd=x1/x5 and rs1=x1/x5 and rs1!=rd
++    def PopAndPush: UInt = ((1 << popBit) | (1 << pushBit)).U(width.W)
+   }
+ 
+-  def apply(that: UInt): BranchAttribute = {
+-    Value.assertLegal(that)
++  def apply(branchType: UInt, rasAction: UInt): BranchAttribute = {
++    BranchType.assertLegal(branchType)
++    RasAction.assertLegal(rasAction)
+     val e = Wire(new BranchAttribute)
+-    e.value := that
++    e.branchType := branchType
++    e.rasAction  := rasAction
++    e
++  }
++
++  def None:          BranchAttribute = apply(BranchType.None, RasAction.None)
++  def Conditional:   BranchAttribute = apply(BranchType.Conditional, RasAction.None)
++  def DirectCall:    BranchAttribute = apply(BranchType.Direct, RasAction.Push)
++  def IndirectCall:  BranchAttribute = apply(BranchType.Indirect, RasAction.Push)
++  def Return:        BranchAttribute = apply(BranchType.Indirect, RasAction.Pop)
++  def ReturnAndCall: BranchAttribute = apply(BranchType.Indirect, RasAction.PopAndPush)
++  def OtherDirect:   BranchAttribute = apply(BranchType.Direct, RasAction.None)
++  def OtherIndirect: BranchAttribute = apply(BranchType.Indirect, RasAction.None)
++}
++
++// used to sync sub-predictors
++class StageCtrl(implicit p: Parameters) extends BpuBundle {
++  // TODO: do we need ready / valid of each stage?
++  val s0_fire: Bool = Bool()
++  val s1_fire: Bool = Bool()
++  val s2_fire: Bool = Bool()
++  val s3_fire: Bool = Bool()
++}
++
++// sub predictors -> Bpu top
++class BranchPrediction(implicit p: Parameters) extends BpuBundle {
++  val taken:       Bool            = Bool()
++  val cfiPosition: UInt            = UInt(CfiPositionWidth.W)
++  val target:      PrunedAddr      = PrunedAddr(VAddrBits)
++  val attribute:   BranchAttribute = new BranchAttribute
++  // TODO: what else do we need?
++}
++
++class OverrideBranchPrediction(implicit p: Parameters) extends BpuBundle {
++  val ftqPtr: FtqPtr = new FtqPtr
++}
++
++// Bpu -> Ftq
++class FullBranchPrediction(implicit p: Parameters) extends BpuBundle {
++  val startVAddr: PrunedAddr = PrunedAddr(VAddrBits)
++  // FIXME: do not use Valid[UInt] for cfiPosition, currently keeping it for Ftq compatibility
++//  val taken:       Bool       = Bool()
++  val cfiPosition: Valid[UInt] = Valid(UInt(CfiPositionWidth.W))
++  val target:      PrunedAddr  = PrunedAddr(VAddrBits)
++  // override valid
++  val s2Override: Valid[OverrideBranchPrediction] = Valid(new OverrideBranchPrediction)
++  val s3Override: Valid[OverrideBranchPrediction] = Valid(new OverrideBranchPrediction)
++
++  def fromStage(pc: PrunedAddr, prediction: BranchPrediction): Unit = {
++    this.startVAddr        := pc
++    this.cfiPosition.valid := prediction.taken
++    this.cfiPosition.bits  := prediction.cfiPosition
++    this.target            := prediction.target
++  }
++
++  // TODO: what else do we need?
++}
++
++class NewPredictorMeta(implicit p: Parameters) extends BpuBundle {
++  val aBtbMeta: AheadBtbMeta = new AheadBtbMeta
++  // TODO: other meta
++}
++
++class TargetState extends Bundle {
++  val value: UInt = TargetState.Value()
++
++  def noCarryAndBorrow: Bool = value === TargetState.Value.NoCarryAndBorrow
++  def isCarry:          Bool = value === TargetState.Value.Carry
++  def isBorrow:         Bool = value === TargetState.Value.Borrow
++}
++
++object TargetState {
++  private object Value extends EnumUInt(3) {
++    def NoCarryAndBorrow: UInt = 0.U(width.W)
++    def Carry:            UInt = 1.U(width.W)
++    def Borrow:           UInt = 2.U(width.W)
++  }
++
++  def apply(value: UInt): TargetState = {
++    Value.assertLegal(value)
++    val e = Wire(new TargetState)
++    e.value := value
+     e
+   }
+ 
+-  def None:        BranchAttribute = apply(Value.None)
+-  def Pop:         BranchAttribute = apply(Value.Pop)
+-  def Push:        BranchAttribute = apply(Value.Push)
+-  def PopAndPush:  BranchAttribute = apply(Value.PopAndPush)
+-  def Conditional: BranchAttribute = apply(Value.Conditional)
+-  def Indirect:    BranchAttribute = apply(Value.Indirect)
++  def NoCarryAndBorrow: TargetState = apply(Value.NoCarryAndBorrow)
++  def Carry:            TargetState = apply(Value.Carry)
++  def Borrow:           TargetState = apply(Value.Borrow)
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/DummyBpu.scala b/src/main/scala/xiangshan/frontend/bpu/DummyBpu.scala
+new file mode 100644
+index 00000000000..d4bf293257d
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/DummyBpu.scala
+@@ -0,0 +1,252 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import utility.DelayN
++import utility.XSError
++import utility.XSPerfAccumulate
++import xiangshan.frontend.BpuToFtqIO
++import xiangshan.frontend.PrunedAddr
++import xiangshan.frontend.PrunedAddrInit
++import xiangshan.frontend.bpu.abtb.AheadBtb
++import xiangshan.frontend.bpu.ubtb.MicroBtb
++import xiangshan.frontend.ftq.FtqToBpuIO
++
++class DummyBpu(implicit p: Parameters) extends BpuModule {
++  class DummyBpuIO extends Bundle {
++    val ctrl:        BPUCtrl    = Input(new BPUCtrl)
++    val resetVector: PrunedAddr = Input(PrunedAddr(PAddrBits))
++    val fromFtq:     FtqToBpuIO = Flipped(new FtqToBpuIO)
++    val toFtq:       BpuToFtqIO = new BpuToFtqIO
++  }
++
++  val io: DummyBpuIO = IO(new DummyBpuIO)
++
++  /* *** submodules *** */
++  private val fallThrough = Module(new FallThroughPredictor)
++  private val ubtb        = Module(new MicroBtb)
++  private val abtb        = Module(new AheadBtb)
++
++  private def predictors: Seq[BasePredictor] = Seq(
++    fallThrough,
++    ubtb,
++    abtb
++  )
++
++  /* *** CSR ctrl sub-predictor enable *** */
++  private val ctrl = DelayN(io.ctrl, 2) // delay 2 cycle for timing
++  fallThrough.io.enable := true.B // fallThrough is always enabled
++  ubtb.io.enable        := ctrl.ubtb_enable
++  abtb.io.enable        := true.B // FIXME
++
++  // For some reason s0 stalled, usually FTQ Full
++  private val s0_stall = Wire(Bool())
++
++  private val s0_fire = Wire(Bool())
++  private val s1_fire = Wire(Bool())
++  private val s2_fire = Wire(Bool())
++  private val s3_fire = Wire(Bool())
++
++  private val s1_ready = Wire(Bool())
++  private val s2_ready = Wire(Bool())
++  private val s3_ready = Wire(Bool())
++
++  private val s1_flush = Wire(Bool())
++  private val s2_flush = Wire(Bool())
++  private val s3_flush = Wire(Bool())
++
++  private val s1_valid = RegInit(false.B)
++  private val s2_valid = RegInit(false.B)
++  private val s3_valid = RegInit(false.B)
++
++  private val s2_override = WireDefault(false.B)
++  private val s3_override = WireDefault(false.B)
++
++  private val resetDone = RegInit(false.B)
++
++  private val s0_pc    = WireDefault(0.U.asTypeOf(PrunedAddr(VAddrBits)))
++  private val s0_pcReg = RegEnable(s0_pc, !s0_stall)
++
++  when(RegNext(RegNext(reset.asBool)) && !reset.asBool) {
++    s0_pcReg  := io.resetVector
++    resetDone := true.B
++  }
++
++  private val s1_pc = RegEnable(s0_pc, s0_fire)
++  private val s2_pc = RegEnable(s1_pc, s1_fire)
++  private val s3_pc = RegEnable(s2_pc, s2_fire)
++
++  private val redirect = io.fromFtq.redirect
++
++  // connect common inputs
++  predictors.foreach { p =>
++    // TODO: duplicate pc and fire to solve high fan-out issue
++    p.io.startVAddr        := s0_pc
++    p.io.stageCtrl.s0_fire := s0_fire
++    p.io.stageCtrl.s1_fire := s1_fire
++    p.io.stageCtrl.s2_fire := s2_fire
++    p.io.stageCtrl.s3_fire := s3_fire
++  }
++
++  // ubtb specific inputs
++  // FIXME: should use s3_prediction to train ubtb
++  ubtb.io.train.valid                  := io.fromFtq.update.valid
++  ubtb.io.train.bits.startVAddr        := io.fromFtq.update.bits.pc
++  ubtb.io.train.bits.cfiPosition.valid := io.fromFtq.update.bits.cfi_idx.valid
++  ubtb.io.train.bits.cfiPosition.bits  := io.fromFtq.update.bits.cfi_idx.bits
++  ubtb.io.train.bits.target            := io.fromFtq.update.bits.full_target
++  ubtb.io.train.bits.attribute := MuxCase(
++    BranchAttribute.Conditional,
++    Seq(
++      (io.fromFtq.update.bits.is_call && io.fromFtq.update.bits.is_jal)  -> BranchAttribute.DirectCall,
++      (io.fromFtq.update.bits.is_call && io.fromFtq.update.bits.is_jalr) -> BranchAttribute.IndirectCall,
++      io.fromFtq.update.bits.is_ret                                      -> BranchAttribute.Return,
++      io.fromFtq.update.bits.is_jal                                      -> BranchAttribute.OtherDirect,
++      io.fromFtq.update.bits.is_jalr                                     -> BranchAttribute.OtherIndirect
++    )
++  )
++
++  abtb.io.redirectValid := redirect.valid
++  abtb.io.overrideValid := s3_override
++  abtb.io.update        := io.fromFtq.newUpdate
++
++  dontTouch(abtb.io.hit)
++  dontTouch(abtb.io.prediction)
++
++  when(abtb.io.prediction.taken) {
++    assert(abtb.io.debug_startVaddr === s1_pc)
++  }
++
++  private val s2_ftqPtr = RegEnable(io.fromFtq.enq_ptr, s1_fire)
++  private val s3_ftqPtr = RegEnable(s2_ftqPtr, s2_fire)
++
++  s3_flush := redirect.valid
++  s2_flush := s3_flush || s3_override
++  s1_flush := s2_flush || s2_override
++
++  s1_ready := s1_fire || !s1_valid
++  s2_ready := s2_fire || !s2_valid
++  s3_ready := s3_fire || !s3_valid
++
++  private val predictorsReady = true.B // FIXME
++
++  s0_fire := s1_ready && predictorsReady && resetDone
++  s1_fire := s1_valid && s2_ready && io.toFtq.resp.ready
++  s2_fire := s2_valid && s3_ready
++  s3_fire := s3_valid
++
++  when(s0_fire)(s1_valid := true.B)
++    .elsewhen(s1_flush)(s1_valid := false.B)
++    .elsewhen(s1_fire)(s1_valid := false.B)
++
++  when(s2_flush)(s2_valid := false.B)
++    .elsewhen(s1_fire)(s2_valid := !s1_flush)
++    .elsewhen(s2_fire)(s2_valid := false.B)
++
++  when(s3_flush)(s3_valid := false.B)
++    .elsewhen(s2_fire)(s3_valid := !s2_flush)
++    .elsewhen(s3_fire)(s3_valid := false.B)
++
++  // s0_stall should be exclusive with any other PC source
++  s0_stall := !(s1_valid || s2_override || s3_override || redirect.valid)
++
++  // s1 prediction:
++  // if ubtb hits, use meta (i.e. cfiPosition, attribute) from ubtb
++  // otherwise, use fallThrough
++  private val s1_prediction = Wire(new BranchPrediction)
++  s1_prediction := Mux(
++    ubtb.io.hit,
++    ubtb.io.prediction,
++    fallThrough.io.prediction
++  )
++  // and, if ubtb predicts a taken branch, use target from ubtb
++  // otherwise, use fallThrough
++  s1_prediction.target := Mux(
++    ubtb.io.hit && ubtb.io.prediction.taken,
++    ubtb.io.prediction.target,
++    fallThrough.io.prediction.target
++  )
++
++  // s2 prediction: TODO
++  private val s2_prediction = Wire(new BranchPrediction)
++  s2_prediction := DontCare
++
++  // s3 prediction: TODO
++  private val s3_prediction = Wire(new BranchPrediction)
++  s3_prediction := DontCare
++
++  io.toFtq.resp.valid := s1_valid && s2_ready || s2_fire && s2_override || s3_fire && s3_override
++
++  when(s3_override) {
++    io.toFtq.resp.bits.fromStage(s3_pc, s3_prediction)
++  }.elsewhen(s2_override) {
++    io.toFtq.resp.bits.fromStage(s2_pc, s2_prediction)
++  }.otherwise {
++    io.toFtq.resp.bits.fromStage(s1_pc, s1_prediction)
++  }
++
++  // override
++  io.toFtq.resp.bits.s2Override.valid       := s2_override
++  io.toFtq.resp.bits.s2Override.bits.ftqPtr := s2_ftqPtr
++  io.toFtq.resp.bits.s3Override.valid       := s3_override
++  io.toFtq.resp.bits.s3Override.bits.ftqPtr := s3_ftqPtr
++
++  // abtb meta delay to s3
++  val s2_abtbMeta = RegEnable(abtb.io.meta, s1_fire)
++  val s3_abtbMeta = RegEnable(s2_abtbMeta, s2_fire)
++
++  private val predictorMeta = Wire(new NewPredictorMeta)
++  predictorMeta.aBtbMeta := s3_abtbMeta
++  // TODO: other meta
++
++  io.toFtq.meta.valid := s3_valid
++  io.toFtq.meta.bits  := predictorMeta
++
++  s0_pc := MuxCase(
++    s0_pcReg,
++    Seq(
++      redirect.valid -> PrunedAddrInit(redirect.bits.cfiUpdate.target),
++      s3_override    -> s3_prediction.target,
++      s2_override    -> s2_prediction.target,
++      s1_valid       -> s1_prediction.target
++    )
++  )
++
++  // Power-on reset
++  private val powerOnResetState = RegInit(true.B)
++  when(s0_fire) {
++    // When BPU pipeline first time fire, we consider power-on reset is done
++    powerOnResetState := false.B
++  }
++  XSError(
++    !powerOnResetState && s0_stall && s0_pc =/= s0_pcReg,
++    "s0_stall but s0_pc is different from s0_pc_reg"
++  )
++
++  /* *** perf pred *** */
++  XSPerfAccumulate("toFtqFire", io.toFtq.resp.fire)
++  XSPerfAccumulate("s2Override", io.toFtq.resp.fire && io.toFtq.resp.bits.s2Override.valid)
++  XSPerfAccumulate("s3Override", io.toFtq.resp.fire && io.toFtq.resp.bits.s3Override.valid)
++  XSPerfAccumulate("ubtbHit", io.toFtq.resp.fire && ubtb.io.hit)
++
++  XSPerfAccumulate("s1Invalid", !s1_valid)
++
++  /* *** perf train *** */
++  XSPerfAccumulate("train", io.fromFtq.update.valid)
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/FallThroughPredictor.scala b/src/main/scala/xiangshan/frontend/bpu/FallThroughPredictor.scala
+new file mode 100644
+index 00000000000..1ba4d293736
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/FallThroughPredictor.scala
+@@ -0,0 +1,42 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++
++class FallThroughPredictor(implicit p: Parameters) extends BasePredictor {
++  class FallThroughPredictorIO extends BasePredictorIO {}
++
++  val io: FallThroughPredictorIO = IO(new FallThroughPredictorIO)
++
++  /* *** predict stage 0 *** */
++  private val s0_fire = io.stageCtrl.s0_fire
++
++  private val s0_startVAddr = io.startVAddr
++
++  private val s0_fallThroughAddr = s0_startVAddr + FetchBlockSize.U
++
++  /* *** predict stage 1 *** */
++  private val s1_fallThroughAddr = RegEnable(s0_fallThroughAddr, s0_fire)
++
++  io.hit                    := true.B
++  io.prediction.taken       := false.B
++  io.prediction.cfiPosition := (FetchBlockInstNum - 1).U
++  io.prediction.target      := s1_fallThroughAddr
++  io.prediction.attribute   := BranchAttribute.None
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Parameters.scala b/src/main/scala/xiangshan/frontend/bpu/Parameters.scala
+index 72e45962b6a..ff583e37592 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Parameters.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Parameters.scala
+@@ -18,21 +18,30 @@ package xiangshan.frontend.bpu
+ import chisel3._
+ import chisel3.util._
+ import xiangshan.HasXSParameter
++import xiangshan.frontend.bpu.abtb.AheadBtbParameters
++import xiangshan.frontend.bpu.ubtb.MicroBtbParameters
++
++case class BpuParameters(
++    // general
++    FetchBlockSize:      Int = 32, // bytes // FIXME: 64B, waiting for ftq/icache support
++    FetchBlockAlignSize: Int = 32, // bytes
++    // sub predictors
++    ubtbParameters: MicroBtbParameters = MicroBtbParameters(),
++    aBtbParameters: AheadBtbParameters = AheadBtbParameters()
++) {
++  // sanity check
++  require(isPow2(FetchBlockSize))
++  require(isPow2(FetchBlockAlignSize))
++}
+ 
+ trait HasBpuParameters extends HasXSParameter {
+-  // general
+-
+-  // ubtb
+-
+-  // abtb
++  def bpuParameters: BpuParameters = coreParams.bpuParameters
+ 
+-  // mbtb
+-
+-  // tage
+-
+-  // sc
+-
+-  // ras
++  // general
++  def FetchBlockSize:       Int = bpuParameters.FetchBlockSize
++  def FetchBlockAlignSize:  Int = bpuParameters.FetchBlockAlignSize
++  def FetchBlockAlignWidth: Int = log2Ceil(FetchBlockAlignSize)
++  def FetchBlockInstNum:    Int = FetchBlockSize / instBytes
+ 
+-  // ...?
++  def CfiPositionWidth: Int = log2Ceil(FetchBlockInstNum) // 2/4B(inst) aligned
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/Abstracts.scala
+similarity index 65%
+rename from src/main/scala/xiangshan/frontend/bpu/Helpers.scala
+rename to src/main/scala/xiangshan/frontend/bpu/abtb/Abstracts.scala
+index 533a7e6117d..8b41712a487 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Helpers.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/Abstracts.scala
+@@ -13,7 +13,12 @@
+ //
+ // See the Mulan PSL v2 for more details.
+ 
+-package xiangshan.frontend.bpu
++package xiangshan.frontend.bpu.abtb
+ 
+-import chisel3._
+-import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import xiangshan.frontend.bpu.BpuBundle
++import xiangshan.frontend.bpu.BpuModule
++
++abstract class AheadBtbBundle(implicit p: Parameters) extends BpuBundle with HasAheadBtbParameters
++
++abstract class AheadBtbModule(implicit p: Parameters) extends BpuModule with HasAheadBtbParameters
+diff --git a/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala
+new file mode 100644
+index 00000000000..148db5a260a
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala
+@@ -0,0 +1,280 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.abtb
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import xiangshan.frontend.bpu.BasePredictor
++import xiangshan.frontend.bpu.BranchPrediction
++import xiangshan.frontend.bpu.SaturateCounter
++
++/**
++ * This module is the implementation of the ahead BTB (Branch Target Buffer).
++ */
++class AheadBtb(implicit p: Parameters) extends BasePredictor with HasAheadBtbParameters with Helpers {
++  val io: AheadBtbIO = IO(new AheadBtbIO)
++
++  private val banks    = Seq.fill(NumBanks)(Module(new Bank))
++  private val replacer = Seq.fill(NumBanks)(Module(new Replacer))
++
++  private val takenCounter = RegInit(VecInit.fill(NumSets)(VecInit.fill(NumWays)(
++    (1 << (TakenCounterWidth - 1)).U.asTypeOf(new SaturateCounter(TakenCounterWidth))
++  )))
++  private val usefulCounter = RegInit(VecInit.fill(NumSets)(VecInit.fill(NumWays)(
++    (1 << (UsefulCounterWidth - 1)).U.asTypeOf(new SaturateCounter(UsefulCounterWidth))
++  )))
++
++  // TODO: write ctr bypass to read
++  // TODO: invliadate multi-hit entry
++
++  private val s0_fire = Wire(Bool())
++  private val s1_fire = Wire(Bool())
++  private val s2_fire = Wire(Bool())
++
++  private val s1_ready = Wire(Bool())
++  private val s2_ready = Wire(Bool())
++
++  private val s1_valid = RegInit(false.B)
++  private val s2_valid = RegInit(false.B)
++
++  private val predictReqValid = io.stageCtrl.s0_fire && io.enable
++
++  s0_fire := predictReqValid
++  s1_fire := s1_valid && s2_ready && predictReqValid
++  s2_fire := s2_valid
++
++  dontTouch(s0_fire)
++  dontTouch(s1_fire)
++  dontTouch(s2_fire)
++
++  s1_ready := s1_fire || !s1_valid
++  s2_ready := s2_fire || !s2_valid
++
++  dontTouch(s1_ready)
++  dontTouch(s2_ready)
++
++  private val redirectValid = io.redirectValid
++
++  when(s0_fire)(s1_valid := true.B)
++    .elsewhen(redirectValid)(s1_valid := false.B)
++    .elsewhen(s1_fire)(s1_valid := false.B)
++
++  when(redirectValid)(s2_valid := false.B)
++    .elsewhen(s1_fire)(s2_valid := !redirectValid)
++    .elsewhen(s2_fire)(s2_valid := false.B)
++
++  // ----------------------------------------------------------------------------------------
++  // predict pipeline stage 0
++  // - get set index and bank index
++  // - send read request to selected bank
++  // ----------------------------------------------------------------------------------------
++
++  private val s0_setIdx   = getSetIndex(io.startVAddr)
++  private val s0_bankIdx  = getBankIndex(io.startVAddr)
++  private val s0_bankMask = UIntToOH(s0_bankIdx)
++
++  banks.zipWithIndex.foreach { case (b, i) =>
++    b.io.readReq.valid       := predictReqValid && s0_bankMask(i)
++    b.io.readReq.bits.setIdx := s0_setIdx
++  }
++
++  // ----------------------------------------------------------------------------------------
++  // predict pipeline stage 1
++  // - get entries from bank
++  // - get the latest start pc for compare tag in s2
++  // ----------------------------------------------------------------------------------------
++
++  private val debug_s1_pc = RegEnable(io.startVAddr, s0_fire)
++  dontTouch(debug_s1_pc)
++
++  private val s1_setIdx     = RegEnable(s0_setIdx, s0_fire)
++  private val s1_bankMask   = RegEnable(s0_bankMask, s0_fire)
++  private val s1_entries    = Mux1H(s1_bankMask, banks.map(_.io.readResp.entries))
++  private val s1_newStartPc = io.startVAddr
++
++  // ----------------------------------------------------------------------------------------
++  // predict pipeline stage 2
++  // - get taken counter result
++  // - compare tag and get taken mask
++  // - compare positions and find first taken entry
++  // - get target from found entry
++  // - output prediction
++  // ----------------------------------------------------------------------------------------
++
++  private val debug_s2_pc = RegEnable(debug_s1_pc, s1_fire)
++  dontTouch(debug_s2_pc)
++
++  private val s2_setIdx   = RegEnable(s1_setIdx, s1_fire)
++  private val s2_bankMask = RegEnable(s1_bankMask, s1_fire)
++  private val s2_entries  = RegEnable(s1_entries, s1_fire)
++//  private val s2_entriesDelay1 = RegNext(s2_entries)
++  private val s2_newStartPc    = RegEnable(s1_newStartPc, s1_fire)
++  private val s2_counterResult = VecInit(takenCounter(s2_setIdx).map(_.isPositive))
++
++  private val s2_tag = getTag(s2_newStartPc)
++//  private val s2_realEntries = Mux(RegNext(io.overrideValid), s2_entriesDelay1, s2_entries)
++  private val s2_realEntries = s2_entries
++  private val s2_hitMask     = getHitMask(s2_realEntries, s2_tag)
++  private val s2_hit         = s2_hitMask.reduce(_ || _)
++  private val s2_takenMask   = getTakenMask(s2_realEntries, s2_hitMask, s2_counterResult)
++  private val s2_taken       = s2_takenMask.reduce(_ || _)
++
++  private val (s2_takenEntry, s2_takenWayIdx) = getFirstTakenEntry(s2_realEntries, s2_takenMask)
++
++  private val s2_takenPosition = Mux(s2_taken, s2_takenEntry.position, (FetchBlockInstNum - 1).U)
++  private val s2_target        = getTarget(s2_takenEntry, s2_newStartPc)
++
++  private val s2_prediction = Wire(new BranchPrediction)
++  s2_prediction.taken       := s2_valid & s2_taken
++  s2_prediction.cfiPosition := s2_takenPosition
++  s2_prediction.target      := s2_target
++  s2_prediction.attribute   := s2_takenEntry.attribute
++  dontTouch(s2_prediction)
++
++  io.prediction := s2_prediction
++  io.hit        := s2_hitMask.reduce(_ || _)
++
++  io.debug_startVaddr := s2_newStartPc
++
++  private val meta = Wire(new AheadBtbMeta)
++  meta.valid         := s2_valid
++  meta.taken         := s2_taken
++  meta.takenPosition := s2_takenPosition
++  meta.takenWayIdx   := s2_takenWayIdx
++  meta.hitMask       := s2_hitMask
++  meta.positions     := s2_realEntries.map(_.position)
++
++  io.meta := meta
++
++  replacer.zipWithIndex.foreach { case (r, i) =>
++    r.io.readValid   := s2_hit && s2_bankMask(i)
++    r.io.readSetIdx  := s2_setIdx
++    r.io.readHitMask := s2_hitMask
++  }
++
++  // ----------------------------------------------------------------------------------------
++  // update
++  // -
++  // -
++  // ----------------------------------------------------------------------------------------
++
++  private val previousUpdateValid = RegInit(false.B)
++  private val previousUpdate      = Reg(new AheadBtbUpdate)
++
++  // delay one cycle for better timing
++  private val currentUpdateValid = RegNext(io.update.valid)
++  private val currentUpdate      = RegEnable(io.update.bits, io.update.valid)
++
++  when(currentUpdateValid) {
++    previousUpdateValid := true.B
++    previousUpdate      := currentUpdate
++  }
++
++  // FIXME: when first wrong, meta is invalid, how to solve it? just don't update for now
++  private val updateValid = previousUpdateValid && currentUpdateValid &&
++    !previousUpdate.hasMispredict && currentUpdate.aBtbMeta.valid
++  private val updateMeta   = currentUpdate.aBtbMeta
++  private val updateSetIdx = getSetIndex(previousUpdate.startVAddr)
++
++  private val predictTaken         = updateMeta.taken
++  private val predictTakenPosition = updateMeta.takenPosition
++  private val predictTakenWayIdx   = updateMeta.takenWayIdx
++
++  private val actualTaken         = currentUpdate.taken
++  private val actualTakenPosition = currentUpdate.cfiPosition
++
++  private val hitTakenBranch = VecInit(updateMeta.hitMask.zip(updateMeta.positions).map { case (hit, pos) =>
++    hit && pos === actualTakenPosition && actualTaken
++  }).reduce(_ || _)
++
++  private val mispredict = currentUpdate.hasMispredict
++
++  private def updateTakenCounter(cond: UInt => Bool, action: SaturateCounter => Unit): Unit =
++    takenCounter(updateSetIdx).zip(updateMeta.hitMask).zip(updateMeta.positions).foreach {
++      case ((ctr, hit), pos) => when(hit && cond(pos))(action(ctr))
++    }
++
++  private def updateUsefulCounter(cond: UInt => Bool, action: SaturateCounter => Unit): Unit =
++    usefulCounter(updateSetIdx).zip(updateMeta.hitMask).zip(updateMeta.positions).foreach {
++      case ((ctr, hit), pos) => when(hit && cond(pos))(action(ctr))
++    }
++
++  when(updateValid) {
++    when(!predictTaken && !actualTaken) {
++      updateTakenCounter(_ => true.B, _.decrease())
++      updateUsefulCounter(_ => true.B, _.increase())
++    }.elsewhen(predictTaken && !actualTaken) {
++      updateTakenCounter(_ => true.B, _.decrease())
++      updateUsefulCounter(_ < predictTakenPosition, _.increase())
++      updateUsefulCounter(_ === predictTakenPosition, _.decrease())
++    }.elsewhen(!predictTaken && actualTaken) {
++      updateTakenCounter(_ < actualTakenPosition, _.decrease())
++      updateTakenCounter(_ === actualTakenPosition, _.increase())
++      updateUsefulCounter(_ < actualTakenPosition, _.increase())
++      updateUsefulCounter(_ === actualTakenPosition, _.decrease())
++    }.otherwise { // predictTaken && actualTaken
++      when(predictTakenPosition === actualTakenPosition) {
++        updateTakenCounter(_ < predictTakenPosition, _.decrease())
++        updateTakenCounter(_ === predictTakenPosition, _.increase())
++        updateUsefulCounter(_ => true.B, _.increase())
++      }.otherwise {
++        updateTakenCounter(_ < actualTakenPosition, _.decrease())
++        updateTakenCounter(_ === actualTakenPosition, _.increase())
++        updateUsefulCounter(_ < actualTakenPosition, _.increase())
++        updateUsefulCounter(_ === actualTakenPosition, _.decrease())
++      }
++    }
++  }
++
++  private val needWriteNewEntry = mispredict && actualTaken && !hitTakenBranch
++  private val needModifyEntry =
++    mispredict && predictTaken && actualTaken && predictTakenPosition === actualTakenPosition
++  private val needInvalidateEntry = WireDefault(false.B) // TODO: need predecode info
++
++  private val writeEntry = Wire(new AheadBtbEntry)
++  writeEntry.valid           := Mux(needInvalidateEntry, false.B, true.B)
++  writeEntry.tag             := getTag(currentUpdate.startVAddr)
++  writeEntry.position        := actualTakenPosition
++  writeEntry.attribute       := currentUpdate.cfiAttribute
++  writeEntry.targetState     := getTargetState(currentUpdate.startVAddr, currentUpdate.target)
++  writeEntry.targetLowerBits := getTargetLowerBits(currentUpdate.target)
++  // TODO: always taken conditional branch and indirect branch
++  writeEntry.isStaticTarget := currentUpdate.cfiAttribute.isDirect // FIXME
++
++  private val writeBankValid = needWriteNewEntry || needModifyEntry || needInvalidateEntry
++  private val writeBankIdx   = getBankIndex(previousUpdate.startVAddr)
++  private val writeBankMask  = UIntToOH(writeBankIdx)
++
++  replacer.foreach { r =>
++    r.io.usefulCounter     := usefulCounter(updateSetIdx)
++    r.io.needReplaceSetIdx := updateSetIdx
++  }
++
++  banks.zip(replacer).zipWithIndex.foreach { case ((b, r), i) =>
++    b.io.writeReq.valid           := writeBankValid && writeBankMask(i) && updateValid
++    b.io.writeReq.bits.isNewEntry := needWriteNewEntry
++    b.io.writeReq.bits.setIdx     := updateSetIdx
++    b.io.writeReq.bits.wayIdx     := Mux(needWriteNewEntry, r.io.victimWayIdx, predictTakenWayIdx)
++    b.io.writeReq.bits.entry      := writeEntry
++  }
++
++  replacer.zip(banks).foreach { case (r, b) =>
++    r.io.writeValid  := b.io.writeResp.valid
++    r.io.writeSetIdx := b.io.writeResp.bits.setIdx
++    r.io.writeWayIdx := b.io.writeResp.bits.wayIdx
++  }
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/abtb/Bank.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/Bank.scala
+new file mode 100644
+index 00000000000..19a5460fcfb
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/Bank.scala
+@@ -0,0 +1,76 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.abtb
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import utility.XSPerfAccumulate
++import utility.sram.SRAMTemplate
++
++/**
++  * This module stores the ahead BTB entries.
++  */
++class Bank(implicit p: Parameters) extends AheadBtbModule {
++  val io = IO(new BankIO)
++
++  private val sram = Module(new SRAMTemplate(
++    new AheadBtbEntry,
++    set = NumSets,
++    way = NumWays,
++    singlePort = true,
++    shouldReset = true,
++    withClockGate = true,
++    hasMbist = hasMbist,
++    hasSramCtl = hasSramCtl
++  ))
++
++  // ====================================== read ====================================== //
++
++  sram.io.r.req.valid       := io.readReq.valid
++  sram.io.r.req.bits.setIdx := io.readReq.bits.setIdx
++  io.readReq.ready          := sram.io.r.req.ready
++
++  io.readResp.entries := sram.io.r.resp.data
++
++  // ===================================== write ======================================= //
++
++  // single port SRAM can not be written and read at the same time
++  // read has higher priority than write
++  // we use a write buffer to store the write requests when read and write are both valid
++  private val writeBuffer = Module(new Queue(new BankWriteReq, WriteBufferSize, pipe = true, flow = true))
++
++  // writeReq is a ValidIO, it means that the new request will be dropped if the buffer is full
++  writeBuffer.io.enq.valid := io.writeReq.valid
++  writeBuffer.io.enq.bits  := io.writeReq.bits
++
++  writeBuffer.io.deq.ready := sram.io.w.req.ready && !io.readReq.valid
++
++  private val writeValid   = writeBuffer.io.deq.valid && !io.readReq.valid
++  private val writeEntry   = writeBuffer.io.deq.bits.entry
++  private val writeSetIdx  = writeBuffer.io.deq.bits.setIdx
++  private val writeWayIdx  = writeBuffer.io.deq.bits.wayIdx
++  private val writeWayMask = UIntToOH(writeWayIdx)
++
++  sram.io.w.apply(writeValid, writeEntry, writeSetIdx, writeWayMask)
++
++  io.writeResp.valid       := sram.io.w.req.fire
++  io.writeResp.bits.setIdx := writeSetIdx
++  io.writeResp.bits.wayIdx := writeWayIdx
++
++  XSPerfAccumulate("aBtb_bank_read_write_conflict", writeBuffer.io.deq.valid && io.readReq.valid)
++  XSPerfAccumulate("aBtb_bank_write_buffer_full", !writeBuffer.io.enq.ready)
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/abtb/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/Bundles.scala
+new file mode 100644
+index 00000000000..d7c64f4b172
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/Bundles.scala
+@@ -0,0 +1,105 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.abtb
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import xiangshan.frontend.PrunedAddr
++import xiangshan.frontend.bpu.BasePredictorIO
++import xiangshan.frontend.bpu.BranchAttribute
++import xiangshan.frontend.bpu.SaturateCounter
++import xiangshan.frontend.bpu.TargetState
++
++class AheadBtbIO(implicit p: Parameters) extends BasePredictorIO {
++  val redirectValid: Bool                  = Input(Bool())
++  val overrideValid: Bool                  = Input(Bool())
++  val update:        Valid[AheadBtbUpdate] = Flipped(Valid(new AheadBtbUpdate))
++
++  val meta:             AheadBtbMeta = Output(new AheadBtbMeta)
++  val debug_startVaddr: PrunedAddr   = Output(PrunedAddr(VAddrBits))
++}
++
++class BankReadReq(implicit p: Parameters) extends AheadBtbBundle {
++  val setIdx: UInt = UInt(SetIdxLen.W)
++}
++
++class BankReadResp(implicit p: Parameters) extends AheadBtbBundle {
++  val entries: Vec[AheadBtbEntry] = Vec(NumWays, new AheadBtbEntry)
++}
++
++class BankWriteReq(implicit p: Parameters) extends AheadBtbBundle {
++  val isNewEntry: Bool          = Bool()
++  val setIdx:     UInt          = UInt(SetIdxLen.W)
++  val wayIdx:     UInt          = UInt(WayIdxLen.W)
++  val entry:      AheadBtbEntry = new AheadBtbEntry
++}
++
++class BankWriteResp(implicit p: Parameters) extends AheadBtbBundle {
++  val setIdx: UInt = UInt(SetIdxLen.W)
++  val wayIdx: UInt = UInt(log2Ceil(NumWays).W)
++}
++
++class BankIO(implicit p: Parameters) extends AheadBtbBundle {
++  val readReq:  DecoupledIO[BankReadReq] = Flipped(Decoupled(new BankReadReq))
++  val readResp: BankReadResp             = Output(new BankReadResp)
++
++  val writeReq:  Valid[BankWriteReq]  = Flipped(Valid(new BankWriteReq))
++  val writeResp: Valid[BankWriteResp] = Valid(new BankWriteResp)
++}
++
++class ReplacerIO(implicit p: Parameters) extends AheadBtbBundle {
++  val readValid:   Bool      = Input(Bool())
++  val readSetIdx:  UInt      = Input(UInt(SetIdxLen.W))
++  val readHitMask: Vec[Bool] = Input(Vec(NumWays, Bool()))
++
++  val writeValid:  Bool = Input(Bool())
++  val writeSetIdx: UInt = Input(UInt(SetIdxLen.W))
++  val writeWayIdx: UInt = Input(UInt(WayIdxLen.W))
++
++  val usefulCounter:     Vec[SaturateCounter] = Input(Vec(NumWays, new SaturateCounter(UsefulCounterWidth)))
++  val needReplaceSetIdx: UInt                 = Input(UInt(SetIdxLen.W))
++  val victimWayIdx:      UInt                 = Output(UInt(WayIdxLen.W))
++}
++
++class AheadBtbMeta(implicit p: Parameters) extends AheadBtbBundle {
++  val valid:         Bool      = Bool()
++  val taken:         Bool      = Bool()
++  val takenPosition: UInt      = UInt(log2Ceil(PredictWidth).W)
++  val takenWayIdx:   UInt      = UInt(WayIdxLen.W)
++  val hitMask:       Vec[Bool] = Vec(NumWays, Bool())
++  val positions:     Vec[UInt] = Vec(NumWays, UInt(log2Ceil(PredictWidth).W))
++}
++
++class AheadBtbEntry(implicit p: Parameters) extends AheadBtbBundle {
++  val valid:           Bool            = Bool()
++  val tag:             UInt            = UInt(TagLen.W)
++  val position:        UInt            = UInt(log2Ceil(PredictWidth).W)
++  val attribute:       BranchAttribute = new BranchAttribute
++  val targetState:     TargetState     = new TargetState
++  val targetLowerBits: UInt            = UInt(TargetLowerBitsLen.W)
++  val isStaticTarget:  Bool            = Bool()
++}
++
++class AheadBtbUpdate(implicit p: Parameters) extends AheadBtbBundle {
++  val startVAddr:    PrunedAddr      = PrunedAddr(VAddrBits)
++  val target:        PrunedAddr      = PrunedAddr(VAddrBits)
++  val hasMispredict: Bool            = Bool()
++  val taken:         Bool            = Bool()
++  val cfiPosition:   UInt            = UInt(log2Ceil(PredictWidth).W)
++  val cfiAttribute:  BranchAttribute = new BranchAttribute
++  val aBtbMeta:      AheadBtbMeta    = new AheadBtbMeta
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/abtb/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/Helpers.scala
+new file mode 100644
+index 00000000000..9a64869494e
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/Helpers.scala
+@@ -0,0 +1,97 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.abtb
++
++import chisel3._
++import chisel3.util._
++import xiangshan.frontend.PrunedAddr
++import xiangshan.frontend.PrunedAddrInit
++import xiangshan.frontend.bpu.TargetState
++
++trait Helpers extends HasAheadBtbParameters {
++  def getSetIndex(pc: PrunedAddr): UInt =
++    pc(SetIdxLen + BankIdxLen + instOffsetBits - 1, BankIdxLen + instOffsetBits)
++
++  def getBankIndex(pc: PrunedAddr): UInt =
++    pc(BankIdxLen + instOffsetBits - 1, instOffsetBits)
++
++  def getTag(pc: PrunedAddr): UInt =
++    pc(TagLen, instOffsetBits)
++
++  def getPcUpperBits(pc: PrunedAddr): UInt =
++    pc(VAddrBits - 1, TargetLowerBitsLen + instOffsetBits)
++
++  def getTargetLowerBits(target: PrunedAddr): UInt =
++    target(TargetLowerBitsLen + instOffsetBits - 1, instOffsetBits)
++
++  def getAlignedPc(pc: PrunedAddr): PrunedAddr = {
++    val shiftAmount = log2Ceil(FetchBlockAlignSize)
++    val alignedPc   = (pc.toUInt >> shiftAmount) << shiftAmount
++    PrunedAddrInit(alignedPc.asUInt)
++  }
++
++  def getHitMask(entries: Vec[AheadBtbEntry], tag: UInt): Vec[Bool] =
++    VecInit(entries.map(entry => entry.valid && entry.tag === tag))
++
++  def getTakenMask(entries: Vec[AheadBtbEntry], hitMask: Vec[Bool], counterResult: Vec[Bool]): Vec[Bool] =
++    VecInit(entries.zip(hitMask).zip(counterResult).map { case ((entry, hit), taken) =>
++      hit && (taken || entry.isStaticTarget)
++    })
++
++  def getFirstTakenEntry(entries: Vec[AheadBtbEntry], takenMask: Vec[Bool]): (AheadBtbEntry, UInt) = {
++    val indexedEntries = VecInit(entries.zipWithIndex.zip(takenMask).map {
++      case ((e, i), t) =>
++        val bundle = new Bundle {
++          val key   = UInt((1 + e.position.getWidth).W)
++          val idx   = UInt(log2Ceil(entries.size).W)
++          val entry = e.cloneType
++        }
++        val wire = Wire(bundle)
++        wire.key   := Cat(!t, e.position)
++        wire.idx   := i.U
++        wire.entry := e
++        wire
++    })
++    val firstTakenEntry = indexedEntries.reduceTree((a, b) => Mux(a.key < b.key, a, b))
++    (firstTakenEntry.entry, firstTakenEntry.idx)
++  }
++
++  def getTarget(entry: AheadBtbEntry, startPc: PrunedAddr): PrunedAddr = {
++    val startPcUpperBits = getPcUpperBits(startPc)
++    val targetUpperBits = MuxCase(
++      startPcUpperBits,
++      Seq(
++        entry.targetState.isCarry  -> (startPcUpperBits + 1.U),
++        entry.targetState.isBorrow -> (startPcUpperBits - 1.U)
++      )
++    )
++    val targetLowerBits = entry.targetLowerBits
++    val target          = PrunedAddrInit(Cat(targetUpperBits, targetLowerBits, 0.U(instOffsetBits.W)))
++    target
++  }
++
++  def getTargetState(startPc: PrunedAddr, target: PrunedAddr): TargetState = {
++    val startPcUpperBits = getPcUpperBits(startPc)
++    val targetUpperBits  = getPcUpperBits(target)
++    MuxCase(
++      TargetState.NoCarryAndBorrow,
++      Seq(
++        (targetUpperBits > startPcUpperBits) -> TargetState.Carry,
++        (targetUpperBits < startPcUpperBits) -> TargetState.Borrow
++      )
++    )
++  }
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/abtb/Parameters.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/Parameters.scala
+new file mode 100644
+index 00000000000..5ab1aead00f
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/Parameters.scala
+@@ -0,0 +1,47 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.abtb
++
++import chisel3.util._
++import xiangshan.frontend.bpu.HasBpuParameters
++
++case class AheadBtbParameters(
++    NumEntries:         Int = 1024,
++    NumWays:            Int = 4,
++    TagLen:             Int = 24,
++    TargetLowerBitsLen: Int = 22,
++    NumBanks:           Int = 4,
++    WriteBufferSize:    Int = 4,
++    TakenCounterWidth:  Int = 2,
++    UsefulCounterWidth: Int = 3
++) {}
++
++trait HasAheadBtbParameters extends HasBpuParameters {
++  def aBtbParameters: AheadBtbParameters = bpuParameters.aBtbParameters
++
++  def NumEntries:         Int = aBtbParameters.NumEntries
++  def NumWays:            Int = aBtbParameters.NumWays
++  def NumSets:            Int = NumEntries / NumWays
++  def TagLen:             Int = aBtbParameters.TagLen
++  def TargetLowerBitsLen: Int = aBtbParameters.TargetLowerBitsLen
++  def NumBanks:           Int = aBtbParameters.NumBanks
++  def SetIdxLen:          Int = log2Ceil(NumSets)
++  def WayIdxLen:          Int = log2Ceil(NumWays)
++  def BankIdxLen:         Int = log2Ceil(NumBanks)
++  def WriteBufferSize:    Int = aBtbParameters.WriteBufferSize
++  def TakenCounterWidth:  Int = aBtbParameters.TakenCounterWidth
++  def UsefulCounterWidth: Int = aBtbParameters.UsefulCounterWidth
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/abtb/Replacer.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/Replacer.scala
+new file mode 100644
+index 00000000000..087d4c275c0
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/Replacer.scala
+@@ -0,0 +1,43 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.abtb
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import utility.ReplacementPolicy
++
++class Replacer(implicit p: Parameters) extends AheadBtbModule {
++  val io: ReplacerIO = IO(new ReplacerIO)
++
++  private val replacer = ReplacementPolicy.fromString(Some("setplru"), NumWays, NumSets)
++
++  // select first not-useful entry
++  private val notUsefulVec = VecInit(io.usefulCounter.map(_.isSaturateNegative))
++  private val notUseful    = notUsefulVec.reduce(_ || _)
++  private val notUsefulIdx = PriorityEncoder(notUsefulVec)
++
++  // if all entries are useful, select by replacement policy
++  io.victimWayIdx := Mux(notUseful, notUsefulIdx, replacer.way(io.needReplaceSetIdx))
++
++  when(io.writeValid) {
++    replacer.access(io.writeSetIdx, io.writeWayIdx)
++  }.elsewhen(io.readValid) {
++    io.readHitMask.zipWithIndex.foreach { case (hit, i) =>
++      when(hit)(replacer.access(io.readSetIdx, i.U))
++    }
++  }
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala b/src/main/scala/xiangshan/frontend/bpu/old/Bpu.scala
+similarity index 99%
+rename from src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+rename to src/main/scala/xiangshan/frontend/bpu/old/Bpu.scala
+index dd6f16ae451..93b0a7e310a 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/old/Bpu.scala
+@@ -38,7 +38,7 @@ import xiangshan.XSBundle
+ import xiangshan.XSModule
+ import xiangshan.frontend.AllAheadFoldedHistoryOldestBits
+ import xiangshan.frontend.AllFoldedHistories
+-import xiangshan.frontend.BpuToFtqBundle
++import xiangshan.frontend.BpuToFtqIO
+ import xiangshan.frontend.BranchPredictionBundle
+ import xiangshan.frontend.BranchPredictionResp
+ import xiangshan.frontend.BranchPredictionUpdate
+@@ -165,10 +165,6 @@ trait HasPredictorCommonSignals extends HasXSParameter {
+   val update = Valid(new BranchPredictionUpdate)
+ }
+ 
+-class BpuToFtqIO(implicit p: Parameters) extends XSBundle {
+-  val resp = DecoupledIO(new BpuToFtqBundle)
+-}
+-
+ class BpuIO(implicit p: Parameters) extends XSBundle {
+   val toFtq        = new BpuToFtqIO
+   val fromFtq      = Flipped(new FtqToBpuIO)
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Ftb.scala b/src/main/scala/xiangshan/frontend/bpu/old/Ftb.scala
+similarity index 100%
+rename from src/main/scala/xiangshan/frontend/bpu/Ftb.scala
+rename to src/main/scala/xiangshan/frontend/bpu/old/Ftb.scala
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Ittage.scala b/src/main/scala/xiangshan/frontend/bpu/old/Ittage.scala
+similarity index 100%
+rename from src/main/scala/xiangshan/frontend/bpu/Ittage.scala
+rename to src/main/scala/xiangshan/frontend/bpu/old/Ittage.scala
+diff --git a/src/main/scala/xiangshan/frontend/bpu/MicroFtb.scala b/src/main/scala/xiangshan/frontend/bpu/old/MicroFtb.scala
+similarity index 100%
+rename from src/main/scala/xiangshan/frontend/bpu/MicroFtb.scala
+rename to src/main/scala/xiangshan/frontend/bpu/old/MicroFtb.scala
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Ras.scala b/src/main/scala/xiangshan/frontend/bpu/old/Ras.scala
+similarity index 100%
+rename from src/main/scala/xiangshan/frontend/bpu/Ras.scala
+rename to src/main/scala/xiangshan/frontend/bpu/old/Ras.scala
+diff --git a/src/main/scala/xiangshan/frontend/bpu/SC.scala b/src/main/scala/xiangshan/frontend/bpu/old/SC.scala
+similarity index 100%
+rename from src/main/scala/xiangshan/frontend/bpu/SC.scala
+rename to src/main/scala/xiangshan/frontend/bpu/old/SC.scala
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Tage.scala b/src/main/scala/xiangshan/frontend/bpu/old/Tage.scala
+similarity index 100%
+rename from src/main/scala/xiangshan/frontend/bpu/Tage.scala
+rename to src/main/scala/xiangshan/frontend/bpu/old/Tage.scala
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ubtb/Abstracts.scala b/src/main/scala/xiangshan/frontend/bpu/ubtb/Abstracts.scala
+new file mode 100644
+index 00000000000..82676211004
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/ubtb/Abstracts.scala
+@@ -0,0 +1,24 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.ubtb
++
++import org.chipsalliance.cde.config.Parameters
++import xiangshan.frontend.bpu.BpuBundle
++import xiangshan.frontend.bpu.BpuModule
++
++abstract class MicroBtbBundle(implicit p: Parameters) extends BpuBundle with HasMicroBtbParameters
++
++abstract class MicroBtbModule(implicit p: Parameters) extends BpuModule with HasMicroBtbParameters
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ubtb/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/ubtb/Bundles.scala
+new file mode 100644
+index 00000000000..92c33e43f46
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/ubtb/Bundles.scala
+@@ -0,0 +1,78 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.ubtb
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import xiangshan.frontend.PrunedAddr
++import xiangshan.frontend.bpu.BranchAttribute
++import xiangshan.frontend.bpu.SaturateCounter
++import xiangshan.frontend.bpu.TargetState
++
++class MicroBtbEntry(implicit p: Parameters) extends MicroBtbBundle {
++  class SlotBase extends Bundle {
++    // branch position: at fetchBlockVAddr + position
++    val position: UInt = UInt(CfiPositionWidth.W)
++    // branch attribute
++    val attribute: BranchAttribute = new BranchAttribute
++    // partial target: full target = Cat(fetchBlockVAddr(VAddrBits-1, TargetWidth), target)
++    val target: UInt = UInt(TargetWidth.W)
++
++    // target fix, see comment in Parameters.scala
++    val targetState: Option[TargetState] = if (EnableTargetFix) Option(new TargetState) else None
++  }
++
++  class Slot1 extends SlotBase {
++    // saturate counter indicating taken bias of branch in slot 1
++    val takenCnt: SaturateCounter = new SaturateCounter(TakenCntWidth)
++    // whether branch in slot 1 has a static target
++    val isStaticTarget: Bool = Bool()
++  }
++
++  class Slot2 extends SlotBase {
++    // whether branch in slot 2 is valid
++    val valid: Bool = Bool()
++    // whether branch in slot 2 is predicted as taken
++    val taken: Bool = Bool()
++  }
++
++  // whether the whole entry is valid
++  val valid: Bool = Bool()
++  // partial vTag = fetchBlockVAddr(TagWidth, 1)
++  val tag: UInt = UInt(TagWidth.W)
++  // saturate counter indicating how useful is this entry
++  val usefulCnt: SaturateCounter = new SaturateCounter(UsefulCntWidth)
++
++  val slot1: Slot1 = new Slot1
++  val slot2: Slot2 = new Slot2
++}
++
++class MicroBtbMeta(implicit p: Parameters) extends MicroBtbBundle {
++  // seems no meta is needed now, reserved for future use
++}
++
++class MicroBtbTrain(implicit p: Parameters) extends MicroBtbBundle {
++  val startVAddr:  PrunedAddr      = Input(PrunedAddr(VAddrBits))
++  val cfiPosition: Valid[UInt]     = Valid(UInt(CfiPositionWidth.W))
++  val target:      PrunedAddr      = PrunedAddr(VAddrBits)
++  val attribute:   BranchAttribute = new BranchAttribute
++  val meta:        MicroBtbMeta    = new MicroBtbMeta // not used now
++}
++
++class ReplacerPerfInfo(implicit p: Parameters) extends MicroBtbBundle {
++  val replaceNotUseful: Bool = Bool() // if not, replacePlru
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ubtb/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/ubtb/Helpers.scala
+new file mode 100644
+index 00000000000..72a19694599
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/ubtb/Helpers.scala
+@@ -0,0 +1,67 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.ubtb
++
++import chisel3._
++import chisel3.util._
++import xiangshan.frontend.PrunedAddr
++import xiangshan.frontend.PrunedAddrInit
++import xiangshan.frontend.bpu.TargetState
++
++trait Helpers extends HasMicroBtbParameters {
++  def getTag(vAddr: PrunedAddr): UInt =
++    vAddr(TagWidth, instOffsetBits)
++
++  def getTargetUpper(vAddr: PrunedAddr): UInt =
++    vAddr(VAddrBits - 1, TargetWidth + instOffsetBits)
++
++  def getFixedTargetUpper(startVAddr: PrunedAddr, targetState: Option[TargetState]): UInt = {
++    val startVAddrUpper = getTargetUpper(startVAddr)
++    if (EnableTargetFix) {
++      MuxCase(
++        startVAddrUpper,
++        Seq(
++          targetState.get.isCarry  -> (startVAddrUpper + 1.U),
++          targetState.get.isBorrow -> (startVAddrUpper - 1.U)
++        )
++      )
++    } else {
++      startVAddrUpper
++    }
++  }
++
++  def getFullTarget(startVAddr: PrunedAddr, target: UInt, targetState: Option[TargetState]): PrunedAddr =
++    PrunedAddrInit(Cat(
++      getFixedTargetUpper(startVAddr, targetState), // (VAddrBits - 1, TargetWidth + instOffsetBits)
++      target,                                       // (TargetWidth + instOffsetBits - 1, instOffsetBits)
++      0.U(instOffsetBits.W)                         // (instOffsetBits - 1, 0)
++    ))
++
++  def getEntryTarget(fullTarget: PrunedAddr): UInt =
++    fullTarget(TargetWidth, instOffsetBits)
++
++  def getEntryTargetState(startVAddr: PrunedAddr, fullTarget: PrunedAddr): TargetState = {
++    val startVAddrUpper = getTargetUpper(startVAddr)
++    val targetUpper     = getTargetUpper(fullTarget)
++    MuxCase(
++      TargetState.NoCarryAndBorrow,
++      Seq(
++        (targetUpper > startVAddrUpper) -> TargetState.Carry,
++        (targetUpper < startVAddrUpper) -> TargetState.Borrow
++      )
++    )
++  }
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala b/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala
+new file mode 100644
+index 00000000000..38294a73737
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala
+@@ -0,0 +1,293 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.ubtb
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import utility.XSPerfAccumulate
++import xiangshan.frontend.bpu.BasePredictor
++import xiangshan.frontend.bpu.BasePredictorIO
++
++// TODO: 2-taken
++class MicroBtb(implicit p: Parameters) extends BasePredictor with HasMicroBtbParameters with Helpers {
++  class MicroBtbIO(implicit p: Parameters) extends BasePredictorIO {
++    // predict request
++    // ... all inherited from BasePredictorIO
++    // train request
++    val train: Valid[MicroBtbTrain] = Flipped(Valid(new MicroBtbTrain))
++  }
++
++  val io: MicroBtbIO = IO(new MicroBtbIO)
++
++  /* *** submodules *** */
++  private val entries = RegInit(VecInit(Seq.fill(NumEntries)(0.U.asTypeOf(new MicroBtbEntry))))
++
++  private val replacer = Module(new MicroBtbReplacer)
++  replacer.io.usefulCnt := VecInit(entries.map(_.usefulCnt))
++
++  /* *** predict stage 0 ***
++   * - io.startVAddr timing might be bad, simply cache it
++   */
++  private val s0_fire = io.stageCtrl.s0_fire && io.enable
++
++  private val s0_startVAddr = io.startVAddr
++
++  /* *** predict stage 1 ***
++   * - read entries
++   * - check if it's hit
++   * - generate prediction
++   * - update replacer
++   */
++  private val s1_fire = io.stageCtrl.s1_fire && io.enable
++
++  private val s1_startVAddr = RegEnable(s0_startVAddr, s0_fire)
++  private val s1_tag        = getTag(s1_startVAddr)
++
++  private val s1_hitOH = VecInit(entries.map(e => e.valid && e.tag === s1_tag)).asUInt
++  assert(PopCount(s1_hitOH) <= 1.U, "MicroBtb s1_hitOH should be one-hot")
++  private val s1_hit      = s1_hitOH.orR
++  private val s1_hitIdx   = OHToUInt(s1_hitOH)
++  private val s1_hitEntry = entries(s1_hitIdx)
++
++  io.hit := s1_hit
++  // we do not need to check attribute.isDirect/Indirect here, as entry.slot1.takenCnt is initialized to weak taken
++  // and for those jumps, takenCnt will remain unchanged during training,
++  // so e.slot1.takenCnt.isPositive is always true if e.slot1.attribute.isDirect/Indirect
++  io.prediction.taken       := s1_hitEntry.slot1.takenCnt.isPositive
++  io.prediction.cfiPosition := s1_hitEntry.slot1.position
++  io.prediction.target      := getFullTarget(s1_startVAddr, s1_hitEntry.slot1.target, s1_hitEntry.slot1.targetState)
++  io.prediction.attribute   := s1_hitEntry.slot1.attribute
++
++  // update replacer
++  replacer.io.predTouch.valid := s1_hit && s1_fire
++  replacer.io.predTouch.bits  := s1_hitIdx
++
++  /* *** train stage 0 ***
++   * - read entries
++   * - check if hits entries
++   * - check if hits t1 stage
++   * - calculate hit flags
++   */
++  private val t0_valid = io.train.valid
++
++  private val t0_startVAddr  = io.train.bits.startVAddr
++  private val t0_tag         = getTag(t0_startVAddr)
++  private val t0_actualTaken = io.train.bits.cfiPosition.valid
++  private val t0_position    = io.train.bits.cfiPosition.bits
++  private val t0_target      = getEntryTarget(io.train.bits.target)
++  private val t0_attribute   = io.train.bits.attribute
++  private val t0_targetState =
++    if (EnableTargetFix) Option(getEntryTargetState(t0_startVAddr, io.train.bits.target)) else None
++
++  private val t0_hitOH = VecInit(entries.map(e => e.valid && e.tag === t0_tag)).asUInt
++  // t0 may hit t1, so we add a "real" prefix for entries hit
++  private val t0_realHit    = t0_hitOH.orR
++  private val t0_realHitIdx = OHToUInt(t0_hitOH)
++
++  // If there are two contiguous trains, the first one is too late to be written to the entries,
++  // the second train might be a false "not hit" and allocate a new entry, causing a multi-hit;
++  // or, the first may replace the entry, causing a false "hit" in the second train, causing wrong update.
++  // So, we define some of the t1 signals in advance, and use them to check if the contiguous trains are hit.
++  private val t1_valid        = Wire(Bool())
++  private val t1_hit          = Wire(Bool())
++  private val t1_tag          = Wire(UInt(TagWidth.W))
++  private val t1_updateIdx    = Wire(UInt(log2Up(NumEntries).W))
++  private val t1_hitEntry     = Wire(new MicroBtbEntry)
++  private val t1_updatedEntry = WireDefault(t1_hitEntry) // will be updated in t1, then write back to entries
++
++  // if t0_tag === t1_tag, t1 must be updating the entry, so we can see it as a hit, and use t1_updateIdx as hitIdx
++  private val t0_hitT1Update = t1_valid && t0_tag === t1_tag
++  // if t0 hits but t1 is replacing it, we should see it as not hit
++  private val t0_hitT1Victim = t1_valid && t0_realHitIdx === replacer.io.victim && t0_realHit && !t1_hit
++
++  // fix final hit
++  private val t0_hit = (t0_realHit || t0_hitT1Update) && !t0_hitT1Victim
++  // select hit entry: use t1_updatedEntry if t0_hitT1Update, otherwise use real hit entry
++  private val t0_hitIdx   = Mux(t0_hitT1Update, t1_updateIdx, t0_realHitIdx)
++  private val t0_hitEntry = Mux(t0_hitT1Update, t1_updatedEntry, entries(t0_realHitIdx))
++
++  // calculate hit flags, valid only when t0_hit
++  private val t0_hitNotUseful     = t0_hitEntry.usefulCnt.isSaturateNegative
++  private val t0_hitPositionLow   = t0_hitEntry.slot1.position > t0_position
++  private val t0_hitPositionHigh  = t0_hitEntry.slot1.position < t0_position
++  private val t0_hitPositionSame  = t0_hitEntry.slot1.position === t0_position
++  private val t0_hitAttributeSame = t0_hitEntry.slot1.attribute === t0_attribute
++  private val t0_hitTargetSame    = t0_hitEntry.slot1.target === t0_target
++  private val t0_hitTaken         = t0_hitEntry.slot1.takenCnt.isPositive
++
++  /* *** train stage 1 ***
++   * - select victim
++   * - generate updated entry
++   * - update entries
++   * - update replacer
++   */
++  t1_valid := RegNext(t0_valid, false.B)
++  t1_tag   := RegEnable(t0_tag, t0_valid)
++  private val t1_actualTaken = RegEnable(t0_actualTaken, t0_valid)
++  private val t1_position    = RegEnable(t0_position, t0_valid)
++  private val t1_target      = RegEnable(t0_target, t0_valid)
++  private val t1_attribute   = RegEnable(t0_attribute, t0_valid)
++  private val t1_targetState = t0_targetState.map(w => RegEnable(w, t0_valid)) // if (EnableTargetFix)
++
++  t1_hit := RegEnable(t0_hit, t0_valid)
++  private val t1_hitIdx = RegEnable(t0_hitIdx, t0_valid)
++  t1_hitEntry := RegEnable(t0_hitEntry, t0_valid)
++
++  // hit states (flags), valid only when t1_hit
++  private val t1_hitNotUseful     = RegEnable(t0_hitNotUseful, t0_valid)
++  private val t1_hitPositionLow   = RegEnable(t0_hitPositionLow, t0_valid)
++  private val t1_hitPositionHigh  = RegEnable(t0_hitPositionHigh, t0_valid)
++  private val t1_hitPositionSame  = RegEnable(t0_hitPositionSame, t0_valid)
++  private val t1_hitAttributeSame = RegEnable(t0_hitAttributeSame, t0_valid)
++  private val t1_hitTargetSame    = RegEnable(t0_hitTargetSame, t0_valid)
++  private val t1_hitTaken         = RegEnable(t0_hitTaken, t0_valid)
++
++  // init a new entry
++  private def initEntryIfNotUseful(notUseful: Bool): Unit =
++    when(notUseful) {
++      t1_updatedEntry.valid := true.B
++      t1_updatedEntry.tag   := t1_tag
++      t1_updatedEntry.usefulCnt.resetPositive() // usefulCnt inits at strong positive, in/decrease by policy
++      // slot1
++      t1_updatedEntry.slot1.position  := t1_position
++      t1_updatedEntry.slot1.attribute := t1_attribute
++      t1_updatedEntry.slot1.target    := t1_target
++      t1_updatedEntry.slot1.takenCnt.resetNeutral() // takenCnt inits at neutral (weak taken), in/decrease by policy
++      t1_updatedEntry.slot1.isStaticTarget := true.B // inits at true, set to false when we see a different target
++      t1_updatedEntry.slot1.targetState.foreach(_ := t1_targetState.get) // if (EnableTargetFix)
++      // TODO: 2-taken train
++      t1_updatedEntry.slot2.valid := false.B
++    }.otherwise {
++      t1_updatedEntry.usefulCnt.value := t1_hitEntry.usefulCnt.getDecrease
++    }
++
++  when(t1_valid) {
++    when(!t1_hit) {
++      // not hit
++      // simply init a new entry
++      initEntryIfNotUseful(true.B)
++    }.elsewhen(!t1_hitAttributeSame) {
++      // hit, but attribute mismatch
++      // if already not useful, init a new entry, otherwise decrease usefulCnt
++      initEntryIfNotUseful(t1_hitNotUseful)
++    }.elsewhen(t1_attribute.isConditional) {
++      // attribute match, and is conditional (branch)
++      when(
++        // branch position match, and actual taken
++        t1_hitPositionSame && t1_actualTaken
++      ) {
++        // increase takenCnt
++        t1_updatedEntry.slot1.takenCnt.value := t1_hitEntry.slot1.takenCnt.getIncrease
++      }.elsewhen(
++        // branch position match, and actual not taken
++        t1_hitPositionSame && !t1_actualTaken ||
++          // an actual taken branch is at higher address -> the predicted position is actual not taken
++          t1_hitPositionHigh && t1_actualTaken ||
++          // actual not taken, but predicted taken -> no matter position, the predicted position is actual not taken
++          !t1_actualTaken && t1_hitTaken
++      ) {
++        // decrease takenCnt
++        t1_updatedEntry.slot1.takenCnt.value := t1_hitEntry.slot1.takenCnt.getDecrease
++      }
++      when(
++        // branch position match, and both actual & predicted taken -> prediction correct, useful
++        t1_hitPositionSame && t1_actualTaken && t1_hitTaken
++      ) {
++        // increase usefulCnt
++        t1_updatedEntry.usefulCnt.value := t1_hitEntry.usefulCnt.getIncrease
++      }.elsewhen(
++        // position mismatch -> not useful
++        !t1_hitPositionSame ||
++          // actual not taken -> fall through, not useful
++          !t1_actualTaken
++      ) {
++        // decrease usefulCnt
++        t1_updatedEntry.usefulCnt.value := t1_hitEntry.usefulCnt.getDecrease
++      }
++    }.otherwise {
++      // attribute match, and is direct / indirect jump
++      when(!t1_hitPositionSame) {
++        // position mismatch
++        // if already not useful, init a new entry, otherwise decrease usefulCnt
++        initEntryIfNotUseful(t1_hitNotUseful)
++      }.elsewhen(t1_hitTargetSame) {
++        // position match, and target match
++        // increase usefulCnt
++        t1_updatedEntry.usefulCnt.value := t1_hitEntry.usefulCnt.getIncrease
++      }.otherwise {
++        // position match, but target mismatch (should not happen for direct jumps unless self-modifies)
++        // decrease usefulCnt
++        t1_updatedEntry.usefulCnt.value := t1_hitEntry.usefulCnt.getDecrease
++        // and, since we've seen a different target, target is not static anymore
++        t1_updatedEntry.slot1.isStaticTarget := false.B
++      }
++    }
++  }
++
++  // select the entry: if hit, use the hit entry, otherwise use the victim from replacer (first not useful, or Plru)
++  t1_updateIdx := Mux(t1_hit, t1_hitIdx, replacer.io.victim)
++  // and write back the updated entry
++  when(t1_valid) {
++    entries(t1_updateIdx) := t1_updatedEntry
++  }
++
++  // update replacer
++  replacer.io.trainTouch.valid := t1_valid
++  replacer.io.trainTouch.bits  := t1_updateIdx
++
++  /* *** perf *** */
++  XSPerfAccumulate("trainHitEntries", t0_valid && t0_realHit)
++  XSPerfAccumulate("trainHitT1Update", t0_valid && t0_hitT1Update)
++  XSPerfAccumulate("trainHitT1Victim", t0_valid && t0_hitT1Victim)
++
++  XSPerfAccumulate("allocateNotUseful", t1_valid && !t1_hit && replacer.io.perf.replaceNotUseful)
++  XSPerfAccumulate("allocatePlru", t1_valid && !t1_hit && !replacer.io.perf.replaceNotUseful)
++  XSPerfAccumulate(
++    "replace",
++    t1_valid && t1_hit && (
++      !t1_hitAttributeSame && t1_hitNotUseful ||
++        t1_hitAttributeSame && !t1_hitPositionSame && t1_hitNotUseful
++    )
++  )
++
++  XSPerfAccumulate("mispredictAttribute", t1_valid && t1_hit && !t1_hitAttributeSame)
++
++  XSPerfAccumulate(
++    "mispredictConditional",
++    t1_valid && t1_hit && t1_hitAttributeSame && t1_attribute.isConditional && (
++      t1_hitPositionSame && t1_actualTaken && !t1_hitTaken ||
++        t1_hitPositionHigh && t1_actualTaken ||
++        !t1_actualTaken && t1_hitTaken
++    )
++  )
++
++  XSPerfAccumulate(
++    "mispredictDirect",
++    t1_valid && t1_hit && t1_hitAttributeSame && t1_attribute.isDirect && (
++      !t1_hitPositionSame ||
++        !t1_hitTargetSame // should not happen unless self-modifies
++    )
++  )
++
++  XSPerfAccumulate(
++    "mispredictIndirect",
++    t1_valid && t1_hit && t1_hitAttributeSame && t1_attribute.isIndirect && (
++      !t1_hitPositionSame ||
++        !t1_hitTargetSame
++    )
++  )
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtbReplacer.scala b/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtbReplacer.scala
+new file mode 100644
+index 00000000000..9a2de749339
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtbReplacer.scala
+@@ -0,0 +1,53 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.ubtb
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import utility.ReplacementPolicy
++import xiangshan.frontend.bpu.SaturateCounter
++
++class MicroBtbReplacer(implicit p: Parameters) extends MicroBtbModule {
++  class MicroBtbReplacerIO extends Bundle {
++    val predTouch:  Valid[UInt] = Flipped(Valid(UInt(log2Up(NumEntries).W)))
++    val trainTouch: Valid[UInt] = Flipped(Valid(UInt(log2Up(NumEntries).W)))
++
++    val usefulCnt: Vec[SaturateCounter] = Input(Vec(NumEntries, new SaturateCounter(UsefulCntWidth)))
++
++    val victim: UInt = Output(UInt(log2Up(NumEntries).W))
++
++    val perf: ReplacerPerfInfo = Output(new ReplacerPerfInfo)
++  }
++
++  val io: MicroBtbReplacerIO = IO(new MicroBtbReplacerIO)
++
++  private val replacer = ReplacementPolicy.fromString(Replacer, NumEntries)
++
++  // select first not-useful entry
++  private val notUsefulVec = VecInit(io.usefulCnt.map(_.isSaturateNegative))
++  private val notUseful    = notUsefulVec.reduce(_ || _)
++  private val notUsefulIdx = PriorityEncoder(notUsefulVec)
++
++  // if all entries are useful, select by replacement policy
++  io.victim := Mux(notUseful, notUsefulIdx, replacer.way)
++
++  // touch Plru
++  replacer.access(Seq(io.predTouch, io.trainTouch))
++
++  /* *** perf *** */
++  io.perf.replaceNotUseful := notUseful
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ubtb/Parameters.scala b/src/main/scala/xiangshan/frontend/bpu/ubtb/Parameters.scala
+new file mode 100644
+index 00000000000..dd9ed4be55c
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/bpu/ubtb/Parameters.scala
+@@ -0,0 +1,44 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.bpu.ubtb
++
++import xiangshan.frontend.bpu.HasBpuParameters
++
++// default MicroBtb parameters, do not change here, use top-level xiangshan/Parameters.scala
++case class MicroBtbParameters(
++    NumEntries:     Int = 32,
++    TagWidth:       Int = 22,
++    TargetWidth:    Int = 22, // 2B aligned
++    UsefulCntWidth: Int = 2,
++    TakenCntWidth:  Int = 2,
++    Replacer:       String = "plru",
++    // enable carry and borrow fix for target, so jumps around 2^(TargetWidth+1) boundary will not cause misprediction
++    // mainBtb should handle this case, so performance affect should be slight, and, bad for timing
++    EnableTargetFix: Boolean = false
++) {}
++
++trait HasMicroBtbParameters extends HasBpuParameters {
++  def ubtbParameters: MicroBtbParameters = bpuParameters.ubtbParameters
++
++  def NumEntries:     Int    = ubtbParameters.NumEntries
++  def TagWidth:       Int    = ubtbParameters.TagWidth
++  def TargetWidth:    Int    = ubtbParameters.TargetWidth
++  def UsefulCntWidth: Int    = ubtbParameters.UsefulCntWidth
++  def TakenCntWidth:  Int    = ubtbParameters.TakenCntWidth
++  def Replacer:       String = ubtbParameters.Replacer
++
++  def EnableTargetFix: Boolean = ubtbParameters.EnableTargetFix
++}
+diff --git a/src/main/scala/xiangshan/frontend/ftq/BundleCollection.scala b/src/main/scala/xiangshan/frontend/ftq/BundleCollection.scala
+index 8ddeceb3f3a..d9630995590 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/BundleCollection.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/BundleCollection.scala
+@@ -34,8 +34,11 @@ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.RasSpeculativeInfo
+ import xiangshan.frontend.bpu.BPUUtils
+ import xiangshan.frontend.bpu.FTBEntry
++import xiangshan.frontend.bpu.FullBranchPrediction
+ import xiangshan.frontend.bpu.HasBPUConst
++import xiangshan.frontend.bpu.NewPredictorMeta
+ import xiangshan.frontend.bpu.PredictorMeta
++import xiangshan.frontend.bpu.abtb.AheadBtbUpdate
+ 
+ class FtqDebugBundle(implicit p: Parameters) extends FtqBundle {
+   val pc        = PrunedAddr(VAddrBits)
+@@ -54,11 +57,12 @@ class FtqEntry(implicit p: Parameters) extends FtqBundle with BPUUtils {
+   val nextLineAddr  = PrunedAddr(VAddrBits)
+   val fallThruError = Bool()
+ 
+-  def :=(resp: BranchPredictionBundle): Unit = {
+-    this.startAddr     := resp.pc
+-    this.nextLineAddr  := resp.pc + (FetchWidth * 4 * 2).U // may be broken on other configs
+-    this.fallThruError := resp.fallThruError
++  def :=(pred: FullBranchPrediction): Unit = {
++    this.startAddr     := pred.startVAddr
++    this.nextLineAddr  := pred.startVAddr + (FetchWidth * 4 * 2).U // may be broken on other configs
++    this.fallThruError := false.B                                  // FIXME
+   }
++
+   override def toPrintable: Printable =
+     p"startAddr:${Hexadecimal(startAddr.toUInt)}"
+ }
+@@ -114,8 +118,9 @@ class FtqRedirectSramEntry(implicit p: Parameters) extends XSBundle {
+ 
+ class Ftq_1R_SRAMEntry(implicit p: Parameters) extends FtqBundle with HasBPUConst {
+   val meta       = new PredictorMeta
++  val newMeta    = new NewPredictorMeta
+   val ftb_entry  = new FTBEntry
+-  val paddingBit = if ((meta.getWidth + ftb_entry.getWidth) % 2 != 0) Some(UInt(1.W)) else None
++  val paddingBit = if ((meta.getWidth + newMeta.getWidth + ftb_entry.getWidth) % 2 != 0) Some(UInt(1.W)) else None
+ }
+ 
+ class Ftq_Pred_Info(implicit p: Parameters) extends FtqBundle {
+@@ -139,6 +144,7 @@ class FtqRead[T <: Data](private val gen: T)(implicit p: Parameters) extends Ftq
+ class FtqToBpuIO(implicit p: Parameters) extends FtqBundle {
+   val redirect       = Valid(new BranchPredictionRedirect)
+   val update         = Valid(new BranchPredictionUpdate)
++  val newUpdate      = Valid(new AheadBtbUpdate) // FIXME
+   val enq_ptr        = Output(new FtqPtr)
+   val redirctFromIFU = Output(Bool())
+ }
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 7706cfb2881..fc4bf37da7d 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -31,13 +31,14 @@ import xiangshan.Redirect
+ import xiangshan.RedirectLevel
+ import xiangshan.ValidUndirectioned
+ import xiangshan.backend.CtrlToFtqIO
++import xiangshan.frontend.BpuToFtqIO
+ import xiangshan.frontend.BranchPredictionRedirect
+ import xiangshan.frontend.ExceptionType
+ import xiangshan.frontend.FtqToICacheIO
+ import xiangshan.frontend.FtqToIfuIO
+ import xiangshan.frontend.IfuToFtqIO
+ import xiangshan.frontend.PrunedAddr
+-import xiangshan.frontend.bpu.BpuToFtqIO
++import xiangshan.frontend.bpu.BranchAttribute
+ import xiangshan.frontend.bpu.HasBPUConst
+ 
+ class Ftq(implicit p: Parameters) extends FtqModule
+@@ -138,11 +139,12 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   // --------------------------------------------------------------------------------
+   // TODO: resp is a bad name
+   io.fromBpu.resp.ready := validEntries < FtqSize.U || readyToCommit
++  io.fromBpu.meta.ready := validEntries < FtqSize.U || readyToCommit
+ 
+   private val bpuResp = io.fromBpu.resp.bits
+ 
+-  private val bpuS2Redirect = bpuResp.s2.valid && bpuResp.s2.hasRedirect
+-  private val bpuS3Redirect = bpuResp.s3.valid && bpuResp.s3.hasRedirect
++  private val bpuS2Redirect = bpuResp.s2Override.valid && io.fromBpu.resp.valid
++  private val bpuS3Redirect = bpuResp.s3Override.valid && io.fromBpu.resp.valid
+ 
+   io.toBpu.enq_ptr := bpuPtr(0)
+   // TODO: Why use bpuResp.s2&3.valid for s2 and s3, but io.fromBpu.resp.fire for s1?
+@@ -151,41 +153,54 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   private val bpuIn = (io.fromBpu.resp.fire || bpuS2Redirect || bpuS3Redirect) &&
+     !ifuRedirect.valid && !backendRedirect.valid
+ 
+-  private val bpuInResp    = bpuResp.selectedResp
+-  private val bpuInStage   = bpuResp.selectedRespIdxForFtq
+-  private val bpuInRespPtr = Mux(bpuInStage === BP_S1, bpuPtr(0), bpuInResp.ftq_idx)
++  private val bpuInResp = bpuResp
++//  private val bpuInStage   = bpuResp.selectedRespIdxForFtq
++  private val bpuInRespPtr = MuxCase(
++    bpuPtr(0),
++    Seq(
++      bpuResp.s3Override.valid -> bpuResp.s3Override.bits.ftqPtr,
++      bpuResp.s2Override.valid -> bpuResp.s2Override.bits.ftqPtr
++    )
++  )
+ 
+   private val bpuInNext        = RegNext(bpuIn)
+   private val bpuInRespNext    = RegEnable(bpuInResp, bpuIn)
+   private val bpuInRespPtrNext = RegEnable(bpuInRespPtr, bpuIn)
+-  private val bpuInStageNext   = RegEnable(bpuInStage, bpuIn)
++//  private val bpuInStageNext   = RegEnable(bpuInStage, bpuIn)
+ 
+   bpuPtr := bpuPtr + bpuEnqueue
+-  for (stage <- 2 to 3) {
+-    when(bpuResp.stage(stage).valid && bpuResp.stage(stage).hasRedirect) {
+-      bpuPtr := bpuResp.stage(stage).ftq_idx + 1.U
+-    }
+-  }
++//  for (stage <- 2 to 3) {
++//    when(bpuResp.stage(stage).valid && bpuResp.stage(stage).hasRedirect) {
++//      bpuPtr := bpuResp.stage(stage).ftq_idx + 1.U
++//    }
++//  }
+ 
+   entryQueue.io.wen   := bpuIn
+   entryQueue.io.waddr := bpuInRespPtr.value
+   entryQueue.io.wdata := bpuInResp
+ 
+-  redirectQueue.io.wen   := bpuResp.lastStage.valid
+-  redirectQueue.io.waddr := bpuResp.lastStage.ftq_idx.value
+-  redirectQueue.io.wdata := bpuResp.s3_specInfo
+-
+-  metaQueue.io.wen        := bpuResp.lastStage.valid
+-  metaQueue.io.waddr      := bpuResp.lastStage.ftq_idx.value
+-  metaQueue.io.wdata.meta := bpuResp.s3_meta
++//  redirectQueue.io.wen   := bpuResp.lastStage.valid
++//  redirectQueue.io.waddr := bpuResp.lastStage.ftq_idx.value
++//  redirectQueue.io.wdata := bpuResp.s3_specInfo
++  redirectQueue.io.wen   := false.B
++  redirectQueue.io.waddr := DontCare
++  redirectQueue.io.wdata := DontCare
++
++  metaQueue.io.wen             := io.fromBpu.meta.valid
++  metaQueue.io.waddr           := io.fromBpu.resp.bits.s3Override.bits.ftqPtr.value
++  metaQueue.io.wdata.meta      := DontCare
++  metaQueue.io.wdata.newMeta   := io.fromBpu.meta.bits
++  metaQueue.io.wdata.ftb_entry := DontCare
+   if (metaQueue.io.wdata.paddingBit.isDefined) {
+     metaQueue.io.wdata.paddingBit.get := 0.U
+   }
+-  metaQueue.io.wdata.ftb_entry := bpuResp.s3_ftbEntry
+ 
+-  ftbEntryQueue.io.wen   := bpuResp.lastStage.valid
+-  ftbEntryQueue.io.waddr := bpuResp.lastStage.ftq_idx.value
+-  ftbEntryQueue.io.wdata := bpuResp.s3_ftbEntry
++//  ftbEntryQueue.io.wen   := bpuResp.lastStage.valid
++//  ftbEntryQueue.io.waddr := bpuResp.lastStage.ftq_idx.value
++//  ftbEntryQueue.io.wdata := bpuResp.s3_ftbEntry
++  ftbEntryQueue.io.wen   := false.B
++  ftbEntryQueue.io.waddr := DontCare
++  ftbEntryQueue.io.wdata := DontCare
+ 
+   private val latestTarget           = Reg(PrunedAddr(VAddrBits))
+   private val latestTargetModified   = RegInit(false.B)
+@@ -204,11 +219,11 @@ class Ftq(implicit p: Parameters) extends FtqModule
+     val ftqIdx = bpuInRespPtrNext.value
+ 
+     entrySentToIfu(ftqIdx) := false.B
+-    cfiIndexVec(ftqIdx)    := bpuInRespNext.cfiIndex
+-    predStage(ftqIdx)      := bpuInStageNext
++    cfiIndexVec(ftqIdx)    := bpuInRespNext.cfiPosition
++//    predStage(ftqIdx)      := bpuInStageNext
+ 
+     latestTargetModified   := true.B
+-    latestTarget           := bpuInRespNext.getTarget
++    latestTarget           := bpuInRespNext.target
+     latestEntryPtrModified := true.B
+     latestEntryPtr         := bpuInRespPtrNext
+ 
+@@ -225,9 +240,9 @@ class Ftq(implicit p: Parameters) extends FtqModule
+ 
+   // Only use FTB result to modify hit status
+   // TODO: Why?
+-  when(bpuResp.s2.valid) {
+-    entryHitStatus(bpuResp.s2.ftq_idx.value) := Mux(bpuResp.s2.full_pred.hit, entryHit, entryNotHit)
+-  }
++//  when(bpuResp.s2.valid) {
++//    entryHitStatus(bpuResp.s2.ftq_idx.value) := Mux(bpuResp.s2.full_pred.hit, entryHit, entryNotHit)
++//  }
+ 
+   // --------------------------------------------------------------------------------
+   // Interaction with ICache and IFU
+@@ -241,8 +256,8 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   }
+ 
+   for (stage <- 2 to 3) {
+-    val redirect = bpuResp.stage(stage).valid && bpuResp.stage(stage).hasRedirect
+-    val ftqIdx   = bpuResp.stage(stage).ftq_idx
++    val redirect = if (stage == 2) bpuResp.s2Override.valid else bpuResp.s3Override.valid
++    val ftqIdx   = if (stage == 2) bpuResp.s2Override.bits.ftqPtr else bpuResp.s3Override.bits.ftqPtr
+ 
+     io.toICache.flushFromBpu.stage(stage).valid := redirect
+     io.toICache.flushFromBpu.stage(stage).bits  := ftqIdx
+@@ -295,14 +310,14 @@ class Ftq(implicit p: Parameters) extends FtqModule
+ 
+   when(bpuInIfuBypass) {
+     toIfuEntry          := bpuInRespNext
+-    toIfuEntryNextAddr  := bpuInRespNext.getTarget
+-    toIfuEntryFtqOffset := bpuInRespNext.cfiIndex
++    toIfuEntryNextAddr  := bpuInRespNext.target
++    toIfuEntryFtqOffset := bpuInRespNext.cfiPosition
+   }.otherwise {
+     toIfuEntry := Mux(RegNext(io.toIfu.req.fire), entryQueue.io.ifuPtr(1).rdata, entryQueue.io.ifuPtr(0).rdata)
+     // TODO: potential problems here
+     toIfuEntryNextAddr := Mux(
+       bpuInNext && bpuInRespPtrNext === ifuPtr(1),
+-      bpuInRespNext.pc,
++      bpuInRespNext.startVAddr,
+       Mux(ifuPtr(0) === latestEntryPtr, latestTarget, RegNext(entryQueue.io.ifuPtr(1).rdata.startAddr))
+     )
+   }
+@@ -327,8 +342,8 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   // False hit if fall through is smaller than start address
+   when(toIfuEntry.fallThruError && entryHitStatus(ifuPtr(0).value) === entryHit) {
+     when(io.toIfu.req.fire &&
+-      !(bpuS2Redirect && bpuResp.stage(2).ftq_idx === ifuPtr(0)) &&
+-      !(bpuS3Redirect && bpuResp.stage(3).ftq_idx === ifuPtr(0))) {
++      !(bpuS2Redirect && bpuResp.s2Override.bits.ftqPtr === ifuPtr(0)) &&
++      !(bpuS3Redirect && bpuResp.s3Override.bits.ftqPtr === ifuPtr(0))) {
+       entryHitStatus(ifuPtr(0).value) := entryFalseHit
+     }
+   }
+@@ -558,8 +573,9 @@ class Ftq(implicit p: Parameters) extends FtqModule
+ 
+   metaQueue.io.ren   := readyToCommit
+   metaQueue.io.raddr := commitPtr(0).value
+-  private val s2_commitMeta = metaQueue.io.rdata.meta
+-  private val s2_commitFtb  = metaQueue.io.rdata.ftb_entry // TODO: why not FTB entry queue?
++  private val s2_commitMeta    = metaQueue.io.rdata.meta
++  private val s2_commitNewMeta = metaQueue.io.rdata.newMeta
++  private val s2_commitFtb     = metaQueue.io.rdata.ftb_entry // TODO: why not FTB entry queue?
+ 
+   private val s1_commitCfi = cfiIndexVec(commitPtr(0).value)
+   private val s2_commitCfi = RegEnable(s1_commitCfi, readyToCommit)
+@@ -599,6 +615,15 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   io.toBpu.update.bits.br_taken_mask     := ftbGenerator.io.taken_mask
+   io.toBpu.update.bits.jmp_taken         := ftbGenerator.io.jmp_taken
+ 
++  io.toBpu.newUpdate.valid              := s2_commitValid && s2_readyToCommit
++  io.toBpu.newUpdate.bits.startVAddr    := s2_commitEntry.startAddr
++  io.toBpu.newUpdate.bits.target        := s2_commitTarget
++  io.toBpu.newUpdate.bits.hasMispredict := s2_commitMispredict.reduce(_ || _)
++  io.toBpu.newUpdate.bits.taken         := s2_commitCfi.valid
++  io.toBpu.newUpdate.bits.cfiPosition   := s2_commitCfi.bits
++  io.toBpu.newUpdate.bits.cfiAttribute  := BranchAttribute.None // FIXME
++  io.toBpu.newUpdate.bits.aBtbMeta      := s2_commitNewMeta.aBtbMeta
++
+   // --------------------------------------------------------------------------------
+   // Performance monitoring
+   // --------------------------------------------------------------------------------

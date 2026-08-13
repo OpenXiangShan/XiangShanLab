@@ -1,0 +1,3 @@
+timeout 120 ./XiangShan/build/verilator-compile/emu \
+  -i tor_granularity_store8_smode_control.elf \
+  --no-diff -C 500000

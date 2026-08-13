@@ -1,0 +1,584 @@
+# Commit Log
+- Issue: #3840
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3840
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3840
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3840
+- Changed files: 14
+- Additions: 218
+- Deletions: 44
+
+## Files
+- `.github/workflows/emu.yml`
+- `difftest`
+- `ready-to-run`
+- `rocket-chip`
+- `scripts/xiangshan.py`
+- `src/main/scala/xiangshan/Bundle.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnit.scala`
+- `src/main/scala/xiangshan/backend/decode/FPDecoder.scala`
+- `src/main/scala/xiangshan/backend/decode/VecDecoder.scala`
+- `src/main/scala/xiangshan/backend/decode/VecExceptionGen.scala`
+- `src/main/scala/xiangshan/backend/fu/fpu/IntToFP.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/VFDivSqrt.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/VFMA.scala`
+
+## Diff
+```diff
+diff --git a/.github/workflows/emu.yml b/.github/workflows/emu.yml
+index 5426192ce02..e6368a6e7a2 100644
+--- a/.github/workflows/emu.yml
++++ b/.github/workflows/emu.yml
+@@ -146,6 +146,9 @@ jobs:
+       - name: V Extension Test - rvv-bench
+         run: |
+           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --ci rvv-bench 2> /dev/zero
++      - name: F16 Test - f16_test
++        run: |
++          python3 ./scripts/xiangshan.py --wave-dump ./build --thread 16 --numa --ci f16_test 2> /dev/zero
+   emu-chi:
+     runs-on: bosc
+     needs: changes
+diff --git a/difftest b/difftest
+index 76f8b089ecf..4233651b648 160000
+--- a/difftest
++++ b/difftest
+@@ -1 +1 @@
+-Subproject commit 76f8b089ecf4f0d9de2d660564cc4e3a974ea2a0
++Subproject commit 4233651b648aaf2d22b520f26d0abd32776d777c
+diff --git a/ready-to-run b/ready-to-run
+index 66744384a9a..287e8f0fa85 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit 66744384a9a7b77af01dd3cd5ed126d2539308ee
++Subproject commit 287e8f0fa8520a837e82da3a5241726c4995140b
+diff --git a/rocket-chip b/rocket-chip
+index 42a9ca21876..44e548b91bc 160000
+--- a/rocket-chip
++++ b/rocket-chip
+@@ -1 +1 @@
+-Subproject commit 42a9ca2187667e2e03053d93c0386b99d88aeace
++Subproject commit 44e548b91bcba3c5b2c36b309c953d272977722e
+diff --git a/scripts/xiangshan.py b/scripts/xiangshan.py
+index 384a73b57ba..ba33db1415c 100644
+--- a/scripts/xiangshan.py
++++ b/scripts/xiangshan.py
+@@ -398,6 +398,94 @@ def __get_ci_rvvtest(self, name=None):
+         rvv_test = map(lambda x: os.path.join(base_dir, x), workloads)
+         return rvv_test
+ 
++    def __get_ci_F16test(self, name=None):
++        base_dir = "/nfs/home/share/ci-workloads/vector/F16-tests/build"
++        workloads = [
++            "rv64uzfhmin-p-fzfhmincvt.bin",
++            "rv64uzfh-p-fadd.bin",
++            "rv64uzfh-p-fclass.bin",
++            "rv64uzfh-p-fcmp.bin",
++            "rv64uzfh-p-fcvt.bin",
++            "rv64uzfh-p-fcvt_w.bin",
++            "rv64uzfh-p-fdiv.bin",
++            "rv64uzfh-p-fmadd.bin",
++            "rv64uzfh-p-fmin.bin",
++            "rv64uzfh-p-ldst.bin",
++            "rv64uzfh-p-move.bin",
++            "rv64uzfh-p-recoding.bin",
++            "rv64uzvfh-p-vfadd.bin",
++            "rv64uzvfh-p-vfclass.bin",
++            "rv64uzvfh-p-vfcvtfx.bin",
++            "rv64uzvfh-p-vfcvtfxu.bin",
++            "rv64uzvfh-p-vfcvtrxf.bin",
++            "rv64uzvfh-p-vfcvtrxuf.bin",
++            "rv64uzvfh-p-vfcvtxf.bin",
++            "rv64uzvfh-p-vfcvtxuf.bin",
++            "rv64uzvfh-p-vfdiv.bin",
++            "rv64uzvfh-p-vfdown.bin",
++            "rv64uzvfh-p-vfmacc.bin",
++            "rv64uzvfh-p-vfmadd.bin",
++            "rv64uzvfh-p-vfmax.bin",
++            "rv64uzvfh-p-vfmerge.bin",
++            "rv64uzvfh-p-vfmin.bin",
++            "rv64uzvfh-p-vfmsac.bin",
++            "rv64uzvfh-p-vfmsub.bin",
++            "rv64uzvfh-p-vfmul.bin",
++            "rv64uzvfh-p-vfmv.bin",
++            "rv64uzvfh-p-vfncvtff.bin",
++            "rv64uzvfh-p-vfncvtfx.bin",
++            "rv64uzvfh-p-vfncvtfxu.bin",
++            "rv64uzvfh-p-vfncvtrff.bin",
++            "rv64uzvfh-p-vfncvtrxf.bin",
++            "rv64uzvfh-p-vfncvtrxuf.bin",
++            "rv64uzvfh-p-vfncvtxf.bin",
++            "rv64uzvfh-p-vfncvtxuf.bin",
++            "rv64uzvfh-p-vfnmacc.bin",
++            "rv64uzvfh-p-vfnmadd.bin",
++            "rv64uzvfh-p-vfnmsac.bin",
++            "rv64uzvfh-p-vfnmsub.bin",
++            "rv64uzvfh-p-vfrdiv.bin",
++            "rv64uzvfh-p-vfrec7.bin",
++            "rv64uzvfh-p-vfredmax.bin",
++            "rv64uzvfh-p-vfredmin.bin",
++            "rv64uzvfh-p-vfredosum.bin",
++            "rv64uzvfh-p-vfredusum.bin",
++            "rv64uzvfh-p-vfrsqrt7.bin",
++            "rv64uzvfh-p-vfrsub.bin",
++            "rv64uzvfh-p-vfsgnj.bin",
++            "rv64uzvfh-p-vfsgnjn.bin",
++            "rv64uzvfh-p-vfsgnjx.bin",
++            "rv64uzvfh-p-vfsqrt.bin",
++            "rv64uzvfh-p-vfsub.bin",
++            "rv64uzvfh-p-vfup.bin",
++            "rv64uzvfh-p-vfwadd.bin",
++            "rv64uzvfh-p-vfwadd-w.bin",
++            "rv64uzvfh-p-vfwcvtff.bin",
++            "rv64uzvfh-p-vfwcvtfx.bin",
++            "rv64uzvfh-p-vfwcvtfxu.bin",
++            "rv64uzvfh-p-vfwcvtrxf.bin",
++            "rv64uzvfh-p-vfwcvtrxuf.bin",
++            "rv64uzvfh-p-vfwcvtxf.bin",
++            "rv64uzvfh-p-vfwcvtxuf.bin",
++            "rv64uzvfh-p-vfwmacc.bin",
++            "rv64uzvfh-p-vfwmsac.bin",
++            "rv64uzvfh-p-vfwmul.bin",
++            "rv64uzvfh-p-vfwnmacc.bin",
++            "rv64uzvfh-p-vfwnmsac.bin",
++            "rv64uzvfh-p-vfwredosum.bin",
++            "rv64uzvfh-p-vfwredusum.bin",
++            "rv64uzvfh-p-vfwsub.bin",
++            "rv64uzvfh-p-vfwsub-w.bin",
++            "rv64uzvfh-p-vmfeq.bin",
++            "rv64uzvfh-p-vmfge.bin",
++            "rv64uzvfh-p-vmfgt.bin",
++            "rv64uzvfh-p-vmfle.bin",
++            "rv64uzvfh-p-vmflt.bin",
++            "rv64uzvfh-p-vmfne.bin"
++        ]
++        f16_test = map(lambda x: os.path.join(base_dir, x), workloads)
++        return f16_test
++
+     def __get_ci_mc(self, name=None):
+         base_dir = "/nfs/home/share/ci-workloads"
+         workloads = [
+@@ -479,7 +567,8 @@ def run_ci(self, test):
+             "coremark": self.__am_apps_path,
+             "coremark-1-iteration": self.__am_apps_path,
+             "rvv-bench": self.__get_ci_rvvbench,
+-            "rvv-test": self.__get_ci_rvvtest
++            "rvv-test": self.__get_ci_rvvtest,
++            "f16_test": self.__get_ci_F16test
+         }
+         for target in all_tests.get(test, self.__get_ci_workloads)(test):
+             print(target)
+@@ -506,7 +595,8 @@ def run_ci_vcs(self, test):
+             "coremark": self.__am_apps_path,
+             "coremark-1-iteration": self.__am_apps_path,
+             "rvv-bench": self.__get_ci_rvvbench,
+-            "rvv-test": self.__get_ci_rvvtest
++            "rvv-test": self.__get_ci_rvvtest,
++            "f16_test": self.__get_ci_F16test
+         }
+         for target in all_tests.get(test, self.__get_ci_workloads)(test):
+             print(target)
+diff --git a/src/main/scala/xiangshan/Bundle.scala b/src/main/scala/xiangshan/Bundle.scala
+index 3e2c915dc86..d88924125e9 100644
+--- a/src/main/scala/xiangshan/Bundle.scala
++++ b/src/main/scala/xiangshan/Bundle.scala
+@@ -167,8 +167,8 @@ class CtrlFlow(implicit p: Parameters) extends XSBundle {
+ 
+ class FPUCtrlSignals(implicit p: Parameters) extends XSBundle {
+   val isAddSub = Bool() // swap23
+-  val typeTagIn = UInt(1.W)
+-  val typeTagOut = UInt(1.W)
++  val typeTagIn = UInt(2.W)  // H S D
++  val typeTagOut = UInt(2.W) // H S D
+   val fromInt = Bool()
+   val wflags = Bool()
+   val fpWen = Bool()
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index d51f5b10356..2b6a624cb8d 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -408,6 +408,10 @@ object FpDecode extends DecodeConstants{
+     FCVT_D_L  -> FDecode(SrcType.reg, SrcType.imm, SrcType.X, FuType.i2f, FuOpType.X, fWen = T, canRobCompress = T),
+     FCVT_D_LU -> FDecode(SrcType.reg, SrcType.imm, SrcType.X, FuType.i2f, FuOpType.X, fWen = T, canRobCompress = T),
+ 
++    FCVT_H_W  -> FDecode(SrcType.reg, SrcType.imm, SrcType.X, FuType.i2f, FuOpType.X, fWen = T, canRobCompress = T),
++    FCVT_H_WU -> FDecode(SrcType.reg, SrcType.imm, SrcType.X, FuType.i2f, FuOpType.X, fWen = T, canRobCompress = T),
++    FCVT_H_L  -> FDecode(SrcType.reg, SrcType.imm, SrcType.X, FuType.i2f, FuOpType.X, fWen = T, canRobCompress = T),
++    FCVT_H_LU -> FDecode(SrcType.reg, SrcType.imm, SrcType.X, FuType.i2f, FuOpType.X, fWen = T, canRobCompress = T),
+   )
+ }
+ 
+@@ -949,13 +953,13 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   )
+   private val wfflagsInsts = Seq(
+     // opfff
+-    FADD_S, FSUB_S, FADD_D, FSUB_D,
+-    FEQ_S, FLT_S, FLE_S, FEQ_D, FLT_D, FLE_D,
+-    FMIN_S, FMAX_S, FMIN_D, FMAX_D,
+-    FMUL_S, FMUL_D,
+-    FDIV_S, FDIV_D, FSQRT_S, FSQRT_D,
+-    FMADD_S, FMSUB_S, FNMADD_S, FNMSUB_S, FMADD_D, FMSUB_D, FNMADD_D, FNMSUB_D,
+-    FSGNJ_S, FSGNJN_S, FSGNJX_S,
++    FADD_S, FSUB_S, FADD_D, FSUB_D, FADD_H, FSUB_H,
++    FEQ_S, FLT_S, FLE_S, FEQ_D, FLT_D, FLE_D, FEQ_H, FLT_H, FLE_H,
++    FMIN_S, FMAX_S, FMIN_D, FMAX_D, FMIN_H, FMAX_H,
++    FMUL_S, FMUL_D, FMUL_H,
++    FDIV_S, FDIV_D, FSQRT_S, FSQRT_D, FDIV_H, FSQRT_H,
++    FMADD_S, FMSUB_S, FNMADD_S, FNMSUB_S, FMADD_D, FMSUB_D, FNMADD_D, FNMSUB_D, FMADD_H, FMSUB_H, FNMADD_H, FNMSUB_H,
++    FSGNJ_S, FSGNJN_S, FSGNJX_S, FSGNJ_H, FSGNJN_H, FSGNJX_H,
+     // opfvv
+     VFADD_VV, VFSUB_VV, VFWADD_VV, VFWSUB_VV, VFWADD_WV, VFWSUB_WV,
+     VFMUL_VV, VFDIV_VV, VFWMUL_VV,
+@@ -981,6 +985,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+     FCVT_D_W, FCVT_D_WU, FCVT_D_L, FCVT_D_LU,
+     FCVT_W_D, FCVT_WU_D, FCVT_L_D, FCVT_LU_D, FCVT_S_D, FCVT_D_S,
+     FCVT_S_H, FCVT_H_S, FCVT_H_D, FCVT_D_H,
++    FCVT_H_W, FCVT_H_WU, FCVT_H_L, FCVT_H_LU,
++    FCVT_W_H, FCVT_WU_H, FCVT_L_H, FCVT_LU_H,
+     VFCVT_XU_F_V, VFCVT_X_F_V, VFCVT_RTZ_XU_F_V, VFCVT_RTZ_X_F_V, VFCVT_F_XU_V, VFCVT_F_X_V,
+     VFWCVT_XU_F_V, VFWCVT_X_F_V, VFWCVT_RTZ_XU_F_V, VFWCVT_RTZ_X_F_V, VFWCVT_F_XU_V, VFWCVT_F_X_V, VFWCVT_F_F_V,
+     VFNCVT_XU_F_W, VFNCVT_X_F_W, VFNCVT_RTZ_XU_F_W, VFNCVT_RTZ_X_F_W, VFNCVT_F_XU_W, VFNCVT_F_X_W, VFNCVT_F_F_W,
+@@ -993,9 +999,11 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   )
+ 
+   private val scalaNeedFrmInsts = Seq(
+-    FADD_S, FSUB_S, FADD_D, FSUB_D,
++    FADD_S, FSUB_S, FADD_D, FSUB_D, FADD_H, FSUB_H,
+     FCVT_W_S, FCVT_WU_S, FCVT_L_S, FCVT_LU_S,
+     FCVT_W_D, FCVT_WU_D, FCVT_L_D, FCVT_LU_D, FCVT_S_D, FCVT_D_S,
++    FCVT_W_H, FCVT_WU_H, FCVT_L_H, FCVT_LU_H,
++    FCVT_S_H, FCVT_H_S, FCVT_H_D, FCVT_D_H,
+     FROUND_H, FROUND_S, FROUND_D, FROUNDNX_H, FROUNDNX_S, FROUNDNX_D,
+   )
+ 
+diff --git a/src/main/scala/xiangshan/backend/decode/FPDecoder.scala b/src/main/scala/xiangshan/backend/decode/FPDecoder.scala
+index 8bf87101ac7..dfd4a6a117e 100644
+--- a/src/main/scala/xiangshan/backend/decode/FPDecoder.scala
++++ b/src/main/scala/xiangshan/backend/decode/FPDecoder.scala
+@@ -35,25 +35,31 @@ class FPToVecDecoder(implicit p: Parameters) extends XSModule {
+ 
+   val inst = io.instr.asTypeOf(new XSInstBitFields)
+   val fpToVecInsts = Seq(
+-    FADD_S, FSUB_S, FADD_D, FSUB_D,
+-    FEQ_S, FLT_S, FLE_S, FEQ_D, FLT_D, FLE_D,
+-    FMIN_S, FMAX_S, FMIN_D, FMAX_D,
+-    FMUL_S, FMUL_D,
+-    FDIV_S, FDIV_D, FSQRT_S, FSQRT_D,
+-    FMADD_S, FMSUB_S, FNMADD_S, FNMSUB_S, FMADD_D, FMSUB_D, FNMADD_D, FNMSUB_D,
++    FADD_S, FSUB_S, FADD_D, FSUB_D, FADD_H, FSUB_H,
++    FEQ_S, FLT_S, FLE_S, FEQ_D, FLT_D, FLE_D, FEQ_H, FLT_H, FLE_H,
++    FMIN_S, FMAX_S, FMIN_D, FMAX_D, FMIN_H, FMAX_H,
++    FMUL_S, FMUL_D, FMUL_H,
++    FDIV_S, FDIV_D, FSQRT_S, FSQRT_D, FDIV_H, FSQRT_H,
++    FMADD_S, FMSUB_S, FNMADD_S, FNMSUB_S, FMADD_D, FMSUB_D, FNMADD_D, FNMSUB_D, FMADD_H, FMSUB_H, FNMADD_H, FNMSUB_H,
+     FCLASS_S, FCLASS_D, FSGNJ_S, FSGNJ_D, FSGNJX_S, FSGNJX_D, FSGNJN_S, FSGNJN_D,
+-
++    FCLASS_H, FSGNJ_H, FSGNJX_H, FSGNJN_H,
+     // scalar cvt inst
+     FCVT_W_S, FCVT_WU_S, FCVT_L_S, FCVT_LU_S,
+     FCVT_W_D, FCVT_WU_D, FCVT_L_D, FCVT_LU_D, FCVT_S_D, FCVT_D_S,
+     FCVT_S_H, FCVT_H_S, FCVT_H_D, FCVT_D_H,
+     FMV_X_W, FMV_X_D, FMV_X_H,
++    FCVT_W_H, FCVT_WU_H, FCVT_L_H, FCVT_LU_H,
+     // zfa inst
+     FLEQ_H, FLEQ_S, FLEQ_D, FLTQ_H, FLTQ_S, FLTQ_D, FMINM_H, FMINM_S, FMINM_D, FMAXM_H, FMAXM_S, FMAXM_D,
+     FROUND_H, FROUND_S, FROUND_D, FROUNDNX_H, FROUNDNX_S, FROUNDNX_D, FCVTMOD_W_D,
+   )
+   val isFpToVecInst = fpToVecInsts.map(io.instr === _).reduce(_ || _)
+   val isFP16Instrs = Seq(
++    // zfh inst
++    FADD_H, FSUB_H, FEQ_H, FLT_H, FLE_H, FMIN_H, FMAX_H,
++    FMUL_H, FDIV_H, FSQRT_H,
++    FMADD_H, FMSUB_H, FNMADD_H, FNMSUB_H,
++    FCLASS_H, FSGNJ_H, FSGNJX_H, FSGNJN_H,
+     // zfa inst
+     FLEQ_H, FLTQ_H, FMINM_H, FMAXM_H,
+     FROUND_H, FROUNDNX_H,
+@@ -93,6 +99,9 @@ class FPToVecDecoder(implicit p: Parameters) extends XSModule {
+   val isSew2Cvth = Seq(
+     FCVT_S_H, FCVT_H_S, FCVT_D_H,
+     FMV_X_H,
++    FCVT_W_H, FCVT_L_H, FCVT_H_W,
++    FCVT_H_L, FCVT_H_WU, FCVT_H_LU,
++    FCVT_WU_H, FCVT_LU_H,
+   )
+   val isSew2Cvt32 = isSew2Cvts.map(io.instr === _).reduce(_ || _)
+   val isSew2Cvt16 = isSew2Cvth.map(io.instr === _).reduce(_ || _)
+@@ -102,13 +111,15 @@ class FPToVecDecoder(implicit p: Parameters) extends XSModule {
+   )
+   val isLmulMf4Cvt = isLmulMf4Cvts.map(io.instr === _).reduce(_ || _)
+   val needReverseInsts = Seq(
+-    FADD_S, FSUB_S, FADD_D, FSUB_D,
+-    FEQ_S, FLT_S, FLE_S, FEQ_D, FLT_D, FLE_D,
+-    FMIN_S, FMAX_S, FMIN_D, FMAX_D,
+-    FMUL_S, FMUL_D,
+-    FDIV_S, FDIV_D, FSQRT_S, FSQRT_D,
++    FADD_S, FSUB_S, FADD_D, FSUB_D, FADD_H, FSUB_H,
++    FEQ_S, FLT_S, FLE_S, FEQ_D, FLT_D, FLE_D, FEQ_H, FLT_H, FLE_H,
++    FMIN_S, FMAX_S, FMIN_D, FMAX_D, FMIN_H, FMAX_H,
++    FMUL_S, FMUL_D, FMUL_H,
++    FDIV_S, FDIV_D, FSQRT_S, FSQRT_D, FDIV_H, FSQRT_H,
+     FMADD_S, FMSUB_S, FNMADD_S, FNMSUB_S, FMADD_D, FMSUB_D, FNMADD_D, FNMSUB_D,
++    FMADD_H, FMSUB_H, FNMADD_H, FNMSUB_H,
+     FCLASS_S, FCLASS_D, FSGNJ_S, FSGNJ_D, FSGNJX_S, FSGNJX_D, FSGNJN_S, FSGNJN_D,
++    FCLASS_H, FSGNJ_H, FSGNJX_H, FSGNJN_H,
+     // zfa inst
+     FLEQ_H, FLEQ_S, FLEQ_D, FLTQ_H, FLTQ_S, FLTQ_D, FMINM_H, FMINM_S, FMINM_D, FMAXM_H, FMAXM_S, FMAXM_D,
+   )
+@@ -144,13 +155,15 @@ class FPDecoder(implicit p: Parameters) extends XSModule{
+   private val inst: XSInstBitFields = io.instr.asTypeOf(new XSInstBitFields)
+ 
+   def X = BitPat("b?")
++  def T = BitPat("b??") //type
+   def N = BitPat("b0")
+   def Y = BitPat("b1")
+-  val s = BitPat(FPU.S(0))
+-  val d = BitPat(FPU.D(0))
+-  val i = BitPat(FPU.D(0))
++  val s = BitPat(FPU.S(1,0))
++  val d = BitPat(FPU.D(1,0))
++  val i = BitPat(FPU.D(1,0))
++  val h = BitPat(FPU.H(1,0))
+ 
+-  val default = List(X,X,X,N,N,N,X,X,X)
++  val default = List(X,T,T,N,N,N,X,X,X)
+ 
+   // isAddSub tagIn tagOut fromInt wflags fpWen div sqrt fcvt
+   val single: Array[(BitPat, List[BitPat])] = Array(
+@@ -222,7 +235,41 @@ class FPDecoder(implicit p: Parameters) extends XSModule{
+     FSQRT_D  -> List(N,d,d,N,Y,Y,N,Y,N)
+   )
+ 
+-  val table = single ++ double
++  val half : Array[(BitPat, List[BitPat])] = Array(
++    // IntToFP
++    FMV_H_X  -> List(N,i,h,Y,N,Y,N,N,N),
++    FCVT_H_W -> List(N,i,h,Y,Y,Y,N,N,Y),
++    FCVT_H_WU-> List(N,i,h,Y,Y,Y,N,N,Y),
++    FCVT_H_L -> List(N,i,h,Y,Y,Y,N,N,Y),
++    FCVT_H_LU-> List(N,i,h,Y,Y,Y,N,N,Y),
++    // FPToInt
++    FMV_X_H  -> List(N,h,i,N,N,N,N,N,N), // d or h ??
++    FCLASS_H -> List(N,h,i,N,N,N,N,N,N),
++    FCVT_W_H -> List(N,h,i,N,Y,N,N,N,Y),
++    FCVT_WU_H-> List(N,h,i,N,Y,N,N,N,Y),
++    FCVT_L_H -> List(N,h,i,N,Y,N,N,N,Y),
++    FCVT_LU_H-> List(N,h,i,N,Y,N,N,N,Y),
++    FEQ_H    -> List(N,h,i,N,Y,N,N,N,N),
++    FLT_H    -> List(N,h,i,N,Y,N,N,N,N),
++    FLE_H    -> List(N,h,i,N,Y,N,N,N,N),
++    // FPToFP
++    FSGNJ_H  -> List(N,h,h,N,N,Y,N,N,N),
++    FSGNJN_H -> List(N,h,h,N,N,Y,N,N,N),
++    FSGNJX_H -> List(N,h,h,N,N,Y,N,N,N),
++    FMIN_H   -> List(N,h,h,N,Y,Y,N,N,N),
++    FMAX_H   -> List(N,h,h,N,Y,Y,N,N,N),
++    FADD_H   -> List(Y,h,h,N,Y,Y,N,N,N),
++    FSUB_H   -> List(Y,h,h,N,Y,Y,N,N,N),
++    FMUL_H   -> List(N,h,h,N,Y,Y,N,N,N),
++    FMADD_H  -> List(N,h,h,N,Y,Y,N,N,N),
++    FMSUB_H  -> List(N,h,h,N,Y,Y,N,N,N),
++    FNMADD_H -> List(N,h,h,N,Y,Y,N,N,N),
++    FNMSUB_H -> List(N,h,h,N,Y,Y,N,N,N),
++    FDIV_H   -> List(N,h,h,N,Y,Y,Y,N,N),
++    FSQRT_H  -> List(N,h,h,N,Y,Y,N,Y,N)
++  )
++
++  val table = single ++ double ++ half
+ 
+   val decoder = DecodeLogic(io.instr, default, table)
+ 
+@@ -240,18 +287,25 @@ class FPDecoder(implicit p: Parameters) extends XSModule{
+   val fmaTable: Array[(BitPat, List[BitPat])] = Array(
+     FADD_S  -> List(BitPat("b00"),N),
+     FADD_D  -> List(BitPat("b00"),N),
++    FADD_H  -> List(BitPat("b00"),N),
+     FSUB_S  -> List(BitPat("b01"),N),
+     FSUB_D  -> List(BitPat("b01"),N),
++    FSUB_H  -> List(BitPat("b01"),N),
+     FMUL_S  -> List(BitPat("b00"),N),
+     FMUL_D  -> List(BitPat("b00"),N),
++    FMUL_H  -> List(BitPat("b00"),N),
+     FMADD_S -> List(BitPat("b00"),Y),
+     FMADD_D -> List(BitPat("b00"),Y),
++    FMADD_H -> List(BitPat("b00"),Y),
+     FMSUB_S -> List(BitPat("b01"),Y),
+     FMSUB_D -> List(BitPat("b01"),Y),
++    FMSUB_H -> List(BitPat("b01"),Y),
+     FNMADD_S-> List(BitPat("b11"),Y),
+     FNMADD_D-> List(BitPat("b11"),Y),
++    FNMADD_H-> List(BitPat("b11"),Y),
+     FNMSUB_S-> List(BitPat("b10"),Y),
+-    FNMSUB_D-> List(BitPat("b10"),Y)
++    FNMSUB_D-> List(BitPat("b10"),Y),
++    FNMSUB_H-> List(BitPat("b10"),Y)
+   )
+   val fmaDefault = List(BitPat("b??"), N)
+   Seq(ctrl.fmaCmd, ctrl.ren3).zip(
+diff --git a/src/main/scala/xiangshan/backend/decode/VecDecoder.scala b/src/main/scala/xiangshan/backend/decode/VecDecoder.scala
+index 6e5dc22d450..1ea02eff08b 100644
+--- a/src/main/scala/xiangshan/backend/decode/VecDecoder.scala
++++ b/src/main/scala/xiangshan/backend/decode/VecDecoder.scala
+@@ -488,18 +488,25 @@ object VecDecoder extends DecodeConstants {
+     // Scalar Float Point
+     FADD_S -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfadd, F, T, F, UopSplitType.SCA_SIM),
+     FADD_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfadd, F, T, F, UopSplitType.SCA_SIM),
++    FADD_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfadd, F, T, F, UopSplitType.SCA_SIM),
+     FSUB_S -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsub, F, T, F, UopSplitType.SCA_SIM),
+     FSUB_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsub, F, T, F, UopSplitType.SCA_SIM),
++    FSUB_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsub, F, T, F, UopSplitType.SCA_SIM),
+     FEQ_S  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfeq , T, F, F, UopSplitType.SCA_SIM),
+     FLT_S  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vflt , T, F, F, UopSplitType.SCA_SIM),
+     FLE_S  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfle , T, F, F, UopSplitType.SCA_SIM),
+     FEQ_D  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfeq , T, F, F, UopSplitType.SCA_SIM),
+     FLT_D  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vflt , T, F, F, UopSplitType.SCA_SIM),
+     FLE_D  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfle , T, F, F, UopSplitType.SCA_SIM),
++    FEQ_H  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfeq , T, F, F, UopSplitType.SCA_SIM),
++    FLT_H  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vflt , T, F, F, UopSplitType.SCA_SIM),
++    FLE_H  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfle , T, F, F, UopSplitType.SCA_SIM),
+     FMIN_S -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfmin, F, T, F, UopSplitType.SCA_SIM),
+     FMIN_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfmin, F, T, F, UopSplitType.SCA_SIM),
+     FMAX_S -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfmax, F, T, F, UopSplitType.SCA_SIM),
+     FMAX_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfmax, F, T, F, UopSplitType.SCA_SIM),
++    FMIN_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfmin, F, T, F, UopSplitType.SCA_SIM),
++    FMAX_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfmax, F, T, F, UopSplitType.SCA_SIM),
+     // Scalar Float Point Convert Inst.
+     FCVT_W_S  -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.vfcvt_xfv,   T, F, F, UopSplitType.SCA_SIM),
+     FCVT_WU_S -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.vfcvt_xufv,  T, F, F, UopSplitType.SCA_SIM),
+@@ -516,6 +523,10 @@ object VecDecoder extends DecodeConstants {
+     FCVT_S_H  -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.fcvt_s_h,  F, T, F, UopSplitType.SCA_SIM),
+     FCVT_H_D  -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.fcvt_h_d,  F, T, F, UopSplitType.SCA_SIM),
+     FCVT_D_H  -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.fcvt_d_h,  F, T, F, UopSplitType.SCA_SIM),
++    FCVT_W_H  -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.fcvt_w_h,  T, F, F, UopSplitType.SCA_SIM),
++    FCVT_WU_H -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.fcvt_wu_h, T, F, F, UopSplitType.SCA_SIM),
++    FCVT_L_H  -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.fcvt_l_h,  T, F, F, UopSplitType.SCA_SIM),
++    FCVT_LU_H -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, VfcvtType.fcvt_lu_h, T, F, F, UopSplitType.SCA_SIM),
+     // Scalar Float Point f2i MV Inst.
+     FMV_X_D -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, FuOpType.FMVXF, T, F, F, UopSplitType.SCA_SIM),
+     FMV_X_W -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.fcvt, FuOpType.FMVXF, T, F, F, UopSplitType.SCA_SIM),
+@@ -523,20 +534,27 @@ object VecDecoder extends DecodeConstants {
+     // donot wflags
+     FCLASS_S -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.falu, VfaluType.vfclass, T, F, F, UopSplitType.SCA_SIM),
+     FCLASS_D -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.falu, VfaluType.vfclass, T, F, F, UopSplitType.SCA_SIM),
++    FCLASS_H -> OPFFF(SrcType.fp, SrcType.X, SrcType.X, FuType.falu, VfaluType.vfclass, T, F, F, UopSplitType.SCA_SIM),
+     FSGNJ_S  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsgnj , F, T, F, UopSplitType.SCA_SIM),
+     FSGNJ_D  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsgnj , F, T, F, UopSplitType.SCA_SIM),
++    FSGNJ_H  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsgnj , F, T, F, UopSplitType.SCA_SIM),
+     FSGNJX_S -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsgnjx, F, T, F, UopSplitType.SCA_SIM),
+     FSGNJX_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsgnjx, F, T, F, UopSplitType.SCA_SIM),
++    FSGNJX_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsgnjx, F, T, F, UopSplitType.SCA_SIM),
+     FSGNJN_S -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsgnjn, F, T, F, UopSplitType.SCA_SIM),
+     FSGNJN_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsgnjn, F, T, F, UopSplitType.SCA_SIM),
++    FSGNJN_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.falu, VfaluType.vfsgnjn, F, T, F, UopSplitType.SCA_SIM),
+ 
+     FMUL_S -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.fmac , VfmaType.vfmul, F, T, F, UopSplitType.SCA_SIM),
+     FMUL_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.fmac , VfmaType.vfmul, F, T, F, UopSplitType.SCA_SIM),
++    FMUL_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.fmac , VfmaType.vfmul, F, T, F, UopSplitType.SCA_SIM),
+ 
+     FDIV_S  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.fDivSqrt, VfdivType.vfdiv , F, T, F, UopSplitType.SCA_SIM),
+     FDIV_D  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.fDivSqrt, VfdivType.vfdiv , F, T, F, UopSplitType.SCA_SIM),
++    FDIV_H  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.fDivSqrt, VfdivType.vfdiv , F, T, F, UopSplitType.SCA_SIM),
+     FSQRT_S -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.fDivSqrt, VfdivType.vfsqrt, F, T, F, UopSplitType.SCA_SIM),
+     FSQRT_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.fDivSqrt, VfdivType.vfsqrt, F, T, F, UopSplitType.SCA_SIM),
++    FSQRT_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.X, FuType.fDivSqrt, VfdivType.vfsqrt, F, T, F, UopSplitType.SCA_SIM),
+ 
+     FMADD_S  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.fp, FuType.fmac, VfmaType.vfmacc , F, T, F, UopSplitType.SCA_SIM),
+     FMSUB_S  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.fp, FuType.fmac, VfmaType.vfmsac , F, T, F, UopSplitType.SCA_SIM),
+@@ -546,6 +564,10 @@ object VecDecoder extends DecodeConstants {
+     FMSUB_D  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.fp, FuType.fmac, VfmaType.vfmsac , F, T, F, UopSplitType.SCA_SIM),
+     FNMADD_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.fp, FuType.fmac, VfmaType.vfnmacc, F, T, F, UopSplitType.SCA_SIM),
+     FNMSUB_D -> OPFFF(SrcType.fp, SrcType.fp, SrcType.fp, FuType.fmac, VfmaType.vfnmsac, F, T, F, UopSplitType.SCA_SIM),
++    FMADD_H  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.fp, FuType.fmac, VfmaType.vfmacc , F, T, F, UopSplitType.SCA_SIM),
++    FMSUB_H  -> OPFFF(SrcType.fp, SrcType.fp, SrcType.fp, FuType.fmac, VfmaType.vfmsac , F, T, F, UopSplitType.SCA_SIM),
++    FNMADD_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.fp, FuType.fmac, VfmaType.vfnmacc, F, T, F, UopSplitType.SCA_SIM),
++    FNMSUB_H -> OPFFF(SrcType.fp, SrcType.fp, SrcType.fp, FuType.fmac, VfmaType.vfnmsac, F, T, F, UopSplitType.SCA_SIM),
+   )
+ 
+   val opfvv: Array[(BitPat, XSDecodeBase)] = Array(
+diff --git a/src/main/scala/xiangshan/backend/decode/VecExceptionGen.scala b/src/main/scala/xiangshan/backend/decode/VecExceptionGen.scala
+index 4cb9d1d99bb..764af5b40be 100644
+--- a/src/main/scala/xiangshan/backend/decode/VecExceptionGen.scala
++++ b/src/main/scala/xiangshan/backend/decode/VecExceptionGen.scala
+@@ -178,14 +178,10 @@ class VecExceptionGen(implicit p: Parameters) extends XSModule{
+   private val villIllegal = io.vtype.illegal && isVArithMem && !notDependVtypeInst
+ 
+   // 3. EEW Illegal
+-  private val doubleFpInst = Seq(
+-    VFWCVT_F_X_V, VFWCVT_F_XU_V, VFNCVT_RTZ_X_F_W, VFNCVT_RTZ_XU_F_W, VFNCVT_X_F_W, VFNCVT_XU_F_W
+-  ).map(_ === inst.ALL).reduce(_ || _)
+-  //Zvfhmin Inst
+-  private val ZvfhminInst = Seq(VFWCVT_F_F_V, VFNCVT_F_F_W).map(_ === inst.ALL).reduce(_ || _)
++  
+   // funct3 of OPFVV is 001, funct3 of OPFVF is 101
+   private val isFp = (inst.FUNCT3 === BitPat("b?01")) && (inst.OPCODE7Bit === OPCODE7Bit.VECTOR_ARITH)
+-  private val fpEewIllegal = isFp && (((!doubleFpInst && !ZvfhminInst) && (SEW === 1.U)) || SEW === 0.U)
++  private val fpEewIllegal = isFp && (SEW === 0.U)
+ 
+   private val intExtEewIllegal = intExt2 && SEW === 0.U ||
+                                  intExt4 && SEW <= 1.U ||
+diff --git a/src/main/scala/xiangshan/backend/fu/fpu/IntToFP.scala b/src/main/scala/xiangshan/backend/fu/fpu/IntToFP.scala
+index e4e383543c3..fca7bfab464 100644
+--- a/src/main/scala/xiangshan/backend/fu/fpu/IntToFP.scala
++++ b/src/main/scala/xiangshan/backend/fu/fpu/IntToFP.scala
+@@ -24,6 +24,7 @@ import chisel3._
+ import chisel3.util._
+ import utility.{SignExt, ZeroExt}
+ import xiangshan.backend.fu.FuConfig
++import yunsuan.scalar
+ 
+ class IntToFPDataModule(latency: Int)(implicit p: Parameters) extends FPUDataModule {
+   val regEnables = IO(Input(Vec(latency, Bool())))
+@@ -56,8 +57,8 @@ class IntToFPDataModule(latency: Int)(implicit p: Parameters) extends FPUDataMod
+   mux.exc := 0.U
+ 
+   when(s2_wflags){
+-    val i2fResults = for(t <- FPU.ftypes.take(2)) yield {
+-      val i2f = Module(new fudian.IntToFP(t.expWidth, t.precision))
++    val i2fResults = for(t <- FPU.ftypes.take(3)) yield {
++      val i2f = Module(new scalar.IntToFP(t.expWidth, t.precision))
+       i2f.io.sign := ~s2_typ(0)
+       i2f.io.long := s2_typ(1)
+       i2f.io.int := intValue
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala b/src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala
+index 81333abcf21..47ce81386da 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/VFALU.scala
+@@ -356,7 +356,7 @@ class VFAlu(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg)
+   vlMaxAllUop := Mux(outVecCtrl.vlmul(2), vlMax >> lmulAbs, vlMax << lmulAbs).asUInt
+   val vlMaxThisUop = Mux(outVecCtrl.vlmul(2), vlMax >> lmulAbs, vlMax).asUInt
+   val vlSetThisUop = Mux(outVlFix > outVuopidx*vlMaxThisUop, outVlFix - outVuopidx*vlMaxThisUop, 0.U)
+-  val vlThisUop = Wire(UInt(3.W))
++  val vlThisUop = Wire(UInt(4.W))
+   vlThisUop := Mux(vlSetThisUop < vlMaxThisUop, vlSetThisUop, vlMaxThisUop)
+   val vlMaskRShift = Wire(UInt((4 * numVecModule).W))
+   vlMaskRShift := Fill(4 * numVecModule, 1.U(1.W)) >> ((4 * numVecModule).U - vlThisUop)
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/VFDivSqrt.scala b/src/main/scala/xiangshan/backend/fu/wrapper/VFDivSqrt.scala
+index 6d98628f5fc..9322489d821 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/VFDivSqrt.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/VFDivSqrt.scala
+@@ -94,7 +94,7 @@ class VFDivSqrt(cfg: FuConfig)(implicit p: Parameters) extends VecNonPipedFuncUn
+   vlMaxAllUop := Mux(outVecCtrl.vlmul(2), vlMax >> lmulAbs, vlMax << lmulAbs).asUInt
+   val vlMaxThisUop = Mux(outVecCtrl.vlmul(2), vlMax >> lmulAbs, vlMax).asUInt
+   val vlSetThisUop = Mux(outVlFix > outVuopidx * vlMaxThisUop, outVlFix - outVuopidx * vlMaxThisUop, 0.U)
+-  val vlThisUop = Wire(UInt(3.W))
++  val vlThisUop = Wire(UInt(4.W))
+   vlThisUop := Mux(vlSetThisUop < vlMaxThisUop, vlSetThisUop, vlMaxThisUop)
+   val vlMaskRShift = Wire(UInt((4 * numVecModule).W))
+   vlMaskRShift := Fill(4 * numVecModule, 1.U(1.W)) >> ((4 * numVecModule).U - vlThisUop)
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/VFMA.scala b/src/main/scala/xiangshan/backend/fu/wrapper/VFMA.scala
+index 286f626d44e..9a6124c5b22 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/VFMA.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/VFMA.scala
+@@ -101,7 +101,7 @@ class VFMA(cfg: FuConfig)(implicit p: Parameters) extends VecPipedFuncUnit(cfg)
+   vlMaxAllUop := Mux(outVecCtrl.vlmul(2), vlMax >> lmulAbs, vlMax << lmulAbs).asUInt
+   val vlMaxThisUop = Mux(outVecCtrl.vlmul(2), vlMax >> lmulAbs, vlMax).asUInt
+   val vlSetThisUop = Mux(outVlFix > outVuopidx * vlMaxThisUop, outVlFix - outVuopidx * vlMaxThisUop, 0.U)
+-  val vlThisUop = Wire(UInt(3.W))
++  val vlThisUop = Wire(UInt(4.W))
+   vlThisUop := Mux(vlSetThisUop < vlMaxThisUop, vlSetThisUop, vlMaxThisUop)
+   val vlMaskRShift = Wire(UInt((4 * numVecModule).W))
+   vlMaskRShift := Fill(4 * numVecModule, 1.U(1.W)) >> ((4 * numVecModule).U - vlThisUop)
+```

@@ -1,0 +1,1 @@
+Previously, handle_block manually checked hit for stage1 and stage2, which could lead to issues when s1 and s2 are at different levels (different page sizes). This commit refactors the logic to use the existing unified function io.ptw.resp.bits.hit instead of checking io.ptw.resp.bits.s1.hit and s2.hit separately.

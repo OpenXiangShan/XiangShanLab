@@ -1,0 +1,23 @@
+{
+  "number": 3889,
+  "title": "feat(frontend): add ClockGate at frontend SRAMTemplate",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3889",
+  "state": "closed",
+  "labels": [
+    "topic: power"
+  ],
+  "author": "Lawrence-ID",
+  "created_at": "2024-11-18T09:08:06Z",
+  "updated_at": "2024-11-19T07:41:52Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3889/commit-log.md"
+  ],
+  "submitted_at": "2024-11-18",
+  "branch": "",
+  "rtl_commit": ""
+}

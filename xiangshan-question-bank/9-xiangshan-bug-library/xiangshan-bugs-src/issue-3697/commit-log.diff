@@ -1,0 +1,154 @@
+diff --git a/coupledL2 b/coupledL2
+index 8c757005852..a17d090738e 160000
+--- a/coupledL2
++++ b/coupledL2
+@@ -1 +1 @@
+-Subproject commit 8c757005852daa382852a42466417f34c71daa53
++Subproject commit a17d090738e6aceb25b09b5dca3c0e824c46ae8f
+diff --git a/src/main/scala/top/Configs.scala b/src/main/scala/top/Configs.scala
+index eee7da86cec..2235af0242f 100644
+--- a/src/main/scala/top/Configs.scala
++++ b/src/main/scala/top/Configs.scala
+@@ -290,7 +290,7 @@ class WithNKBL2
+           sets = 2 * p.dcacheParametersOpt.get.nSets / banks,
+           ways = p.dcacheParametersOpt.get.nWays + 2,
+           aliasBitsOpt = p.dcacheParametersOpt.get.aliasBitsOpt,
+-          vaddrBitsOpt = Some((if(p.EnableSv48) p.VAddrBitsSv48 else p.VAddrBitsSv39) - log2Up(p.dcacheParametersOpt.get.blockBytes)),
++          vaddrBitsOpt = Some(p.GPAddrBitsSv48x4 - log2Up(p.dcacheParametersOpt.get.blockBytes)),
+           isKeywordBitsOpt = p.dcacheParametersOpt.get.isKeywordBitsOpt
+         )),
+         reqField = Seq(utility.ReqSourceField()),
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+index d6fbeb622cf..0fdb667cec2 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+@@ -510,6 +510,7 @@ class TlbReq(implicit p: Parameters) extends TlbBundle {
+   val size = Output(UInt(log2Ceil(log2Ceil(VLEN/8)+1).W))
+   val kill = Output(Bool()) // Use for blocked tlb that need sync with other module like icache
+   val memidx = Output(new MemBlockidxBundle)
++  val isPrefetch = Output(Bool())
+   // do not translate, but still do pmp/pma check
+   val no_translate = Output(Bool())
+   val pmp_addr = Output(UInt(PAddrBits.W)) // load s1 send prefetch paddr
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLB.scala b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+index 15eeade3a71..ee6ce009428 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+@@ -205,12 +205,15 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+     val isOnlys2xlate = req_out_s2xlate(i) === onlyStage2
+     val need_gpa_vpn_hit = need_gpa_vpn === get_pn(req_out(i).vaddr)
+     val isitlb = TlbCmd.isExec(req_out(i).cmd)
++    val isPrefetch = req_out(i).isPrefetch
++    val currentRedirect = req_out(i).debug.robIdx.needFlush(redirect)
++    val lastCycleRedirect = req_out(i).debug.robIdx.needFlush(RegNext(redirect))
+ 
+     when (!isitlb && need_gpa_robidx.needFlush(redirect) || isitlb && flush_pipe(i)){
+       need_gpa := false.B
+       resp_gpa_refill := false.B
+       need_gpa_vpn := 0.U
+-    }.elsewhen (req_out_v(i) && !p_hit && !(resp_gpa_refill && need_gpa_vpn_hit) && !isOnlys2xlate && hasGpf(i) && need_gpa === false.B && !io.requestor(i).req_kill) {
++    }.elsewhen (req_out_v(i) && !p_hit && !(resp_gpa_refill && need_gpa_vpn_hit) && !isOnlys2xlate && hasGpf(i) && need_gpa === false.B && !io.requestor(i).req_kill && !isPrefetch && !currentRedirect && !lastCycleRedirect) {
+       need_gpa := true.B
+       need_gpa_vpn := get_pn(req_out(i).vaddr)
+       resp_gpa_refill := false.B
+@@ -223,12 +226,12 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+       resp_gpa_refill := true.B
+     }
+ 
+-    when (req_out_v(i) && hasGpf(i) && resp_gpa_refill && need_gpa_vpn_hit ){
++    when (req_out_v(i) && hasGpf(i) && resp_gpa_refill && need_gpa_vpn_hit){
+       need_gpa := false.B
+     }
+ 
+     val hit = e_hit || p_hit
+-    val miss = (!hit && enable) || hasGpf(i) && !p_hit && !(resp_gpa_refill && need_gpa_vpn_hit) && !isOnlys2xlate
++    val miss = (!hit && enable) || hasGpf(i) && !p_hit && !(resp_gpa_refill && need_gpa_vpn_hit) && !isOnlys2xlate && !isPrefetch && !lastCycleRedirect
+     hit.suggestName(s"hit_read_${i}")
+     miss.suggestName(s"miss_read_${i}")
+ 
+diff --git a/src/main/scala/xiangshan/frontend/IFU.scala b/src/main/scala/xiangshan/frontend/IFU.scala
+index b6bd58829b0..775d25bfc30 100644
+--- a/src/main/scala/xiangshan/frontend/IFU.scala
++++ b/src/main/scala/xiangshan/frontend/IFU.scala
+@@ -743,6 +743,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
+   io.iTLBInter.req.bits.vaddr              := f3_resend_vaddr
+   io.iTLBInter.req.bits.debug.pc           := f3_resend_vaddr
+   io.iTLBInter.req.bits.cmd                := TlbCmd.exec
++  io.iTLBInter.req.bits.isPrefetch         := false.B
+   io.iTLBInter.req.bits.kill               := false.B // IFU use itlb for mmio, doesn't need sync, set it to false
+   io.iTLBInter.req.bits.no_translate       := false.B
+   io.iTLBInter.req.bits.fullva             := 0.U
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 769cfe9535e..894cecf6a19 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -346,6 +346,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+                                          Mux(s0_sel_src.prf_wr, TlbCmd.write, TlbCmd.read),
+                                          TlbCmd.read
+                                        )
++  io.tlb.req.bits.isPrefetch         := s0_sel_src.prf
+   io.tlb.req.bits.vaddr              := s0_tlb_vaddr
+   io.tlb.req.bits.fullva             := s0_tlb_fullva
+   io.tlb.req.bits.checkfullva        := s0_src_select_vec(vec_iss_idx) || s0_src_select_vec(int_iss_idx)
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 84458241814..f107a95b7af 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -171,6 +171,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   io.tlb.req.bits.fullva             := s0_fullva
+   io.tlb.req.bits.checkfullva        := s0_use_flow_rs || s0_use_flow_vec
+   io.tlb.req.bits.cmd                := TlbCmd.write
++  io.tlb.req.bits.isPrefetch         := s0_use_flow_prf
+   io.tlb.req.bits.size               := s0_size
+   io.tlb.req.bits.kill               := false.B
+   io.tlb.req.bits.memidx.is_ld       := false.B
+diff --git a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
+index ed52b5b1f6e..8f16a261130 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
+@@ -601,6 +601,7 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+       tlb_req_arb.io.in(i).bits.vaddr := l2_array(i - MLP_L1_SIZE).get_tlb_va()
+     }
+     tlb_req_arb.io.in(i).bits.cmd := TlbCmd.read
++    tlb_req_arb.io.in(i).bits.isPrefetch := true.B
+     tlb_req_arb.io.in(i).bits.size := 3.U
+     tlb_req_arb.io.in(i).bits.kill := false.B
+     tlb_req_arb.io.in(i).bits.no_translate := false.B
+@@ -642,7 +643,7 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+ 
+       when(!s2_tlb_resp.bits.miss) {
+         l1_array(s2_tlb_update_index).region := Cat(0.U((VAddrBits - PAddrBits).W), s2_tlb_resp.bits.paddr.head(s2_tlb_resp.bits.paddr.head.getWidth - 1, REGION_TAG_OFFSET))
+-        when(s2_tlb_resp.bits.excp.head.pf.ld || s2_tlb_resp.bits.excp.head.af.ld) {
++        when(s2_tlb_resp.bits.excp.head.pf.ld || s2_tlb_resp.bits.excp.head.gpf.ld || s2_tlb_resp.bits.excp.head.af.ld) {
+           invalid_array(s2_tlb_update_index, false)
+         }
+       }
+@@ -652,7 +653,7 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+   
+       when(!s2_tlb_resp.bits.miss) {
+         l2_array(inner_index).region := Cat(0.U((VAddrBits - PAddrBits).W), s2_tlb_resp.bits.paddr.head(s2_tlb_resp.bits.paddr.head.getWidth - 1, REGION_TAG_OFFSET))
+-        when(s2_tlb_resp.bits.excp.head.pf.ld || s2_tlb_resp.bits.excp.head.af.ld) {
++        when(s2_tlb_resp.bits.excp.head.pf.ld || s2_tlb_resp.bits.excp.head.gpf.ld || s2_tlb_resp.bits.excp.head.af.ld) {
+           invalid_array(inner_index, true)
+         }
+       }
+@@ -665,6 +666,7 @@ class MutiLevelPrefetchFilter(implicit p: Parameters) extends XSModule with HasL
+   XSPerfAccumulate("s2_tlb_resp_miss", s2_tlb_resp.valid && !s2_tlb_evict && s2_tlb_resp.bits.miss)
+   XSPerfAccumulate("s2_tlb_resp_updated", s2_tlb_resp.valid && !s2_tlb_evict && !s2_tlb_resp.bits.miss)
+   XSPerfAccumulate("s2_tlb_resp_page_fault", s2_tlb_resp.valid && !s2_tlb_evict && !s2_tlb_resp.bits.miss && s2_tlb_resp.bits.excp.head.pf.ld)
++  XSPerfAccumulate("s2_tlb_resp_guestpage_fault", s2_tlb_resp.valid && !s2_tlb_evict && !s2_tlb_resp.bits.miss && s2_tlb_resp.bits.excp.head.gpf.ld)
+   XSPerfAccumulate("s2_tlb_resp_access_fault", s2_tlb_resp.valid && !s2_tlb_evict && !s2_tlb_resp.bits.miss && s2_tlb_resp.bits.excp.head.af.ld)
+ 
+   // l1 pf
+diff --git a/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala b/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala
+index 3907cd76353..5cd16d4d20b 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala
+@@ -885,6 +885,7 @@ class PrefetchFilter()(implicit p: Parameters) extends XSModule with HasSMSModul
+     tlb_req_arb.io.in(i).valid := v && !s1_tlb_fire_vec(i) && !s2_tlb_fire_vec(i) && !ent.paddr_valid && !is_evicted
+     tlb_req_arb.io.in(i).bits.vaddr := Cat(ent.region_addr, 0.U(log2Up(REGION_SIZE).W))
+     tlb_req_arb.io.in(i).bits.cmd := TlbCmd.read
++    tlb_req_arb.io.in(i).bits.isPrefetch := true.B
+     tlb_req_arb.io.in(i).bits.size := 3.U
+     tlb_req_arb.io.in(i).bits.kill := false.B
+     tlb_req_arb.io.in(i).bits.no_translate := false.B

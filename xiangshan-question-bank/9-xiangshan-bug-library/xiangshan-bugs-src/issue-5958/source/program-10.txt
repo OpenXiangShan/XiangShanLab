@@ -1,0 +1,3 @@
+Core 0: HIT GOOD TRAP at pc = 0x80000070
+Core-0 instrCnt = 5470, cycleCnt = 7911, IPC = 0.691442
+Seed=241027 Guest cycle spent: 7917

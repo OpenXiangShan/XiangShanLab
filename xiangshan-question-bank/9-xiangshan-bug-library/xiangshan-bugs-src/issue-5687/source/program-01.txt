@@ -1,0 +1,4 @@
+start            page boundary      assumed end (start+32)
+  | uncache fetch region |              |
+0xfffc                0xffff         0x10018
+  |   exception = None   | exception = Access Fault

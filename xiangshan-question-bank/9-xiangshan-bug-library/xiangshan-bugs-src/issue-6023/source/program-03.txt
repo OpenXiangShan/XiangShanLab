@@ -1,0 +1,3 @@
+source /xs-env/env.sh
+cd /testcase/gpf-htinst
+make ARCH=riscv64-xs

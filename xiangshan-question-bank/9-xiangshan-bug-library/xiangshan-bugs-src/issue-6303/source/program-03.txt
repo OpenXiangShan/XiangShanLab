@@ -1,0 +1,3 @@
+No instruction of core 0 commits for 15000 cycles, maybe get stuck
+(please also check whether a fence.i instruction requires more than 15000 cycles to flush the icache)
+Let REF run one more instruction.

@@ -1,0 +1,12 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala
+index 6d725d749fc..9d4bfbc8705 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala
+@@ -60,6 +60,7 @@ class MretEventModule(implicit p: Parameters) extends Module with CSREventBase {
+ 
+   out.privState.valid := valid
+   out.mstatus  .valid := valid
++  out.vsstatus .valid := valid
+   out.targetPc .valid := valid
+ 
+   out.privState.bits          := outPrivState

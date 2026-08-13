@@ -1,0 +1,4 @@
+python3 ./validate_replay_vcd.py \
+  validation_utage_abtb_disabled_read_7800_9000.vcd \
+  --start 7800 \
+  --json-out validation_utage_abtb_disabled_read_7800_9000.independent.monitor.json

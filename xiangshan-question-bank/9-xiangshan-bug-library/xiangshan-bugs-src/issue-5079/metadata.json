@@ -1,0 +1,28 @@
+{
+  "number": 5079,
+  "title": "fix(Closecompress): when rob compress close, fusion which cross two ftq should be cancompressed",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5079",
+  "state": "closed",
+  "labels": [
+    "module: backend",
+    "topic: functionality"
+  ],
+  "author": "lewislzh",
+  "created_at": "2025-09-28T07:40:42Z",
+  "updated_at": "2025-10-10T06:16:37Z",
+  "submitted_at": "2025-09-28",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5079/commit-log.md"
+  ],
+  "bug_categories": [
+    "backend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

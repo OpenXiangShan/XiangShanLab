@@ -1,0 +1,13 @@
+diff --git a/src/main/scala/top/Configs.scala b/src/main/scala/top/Configs.scala
+index cc9449e3794..2967cb1adb8 100644
+--- a/src/main/scala/top/Configs.scala
++++ b/src/main/scala/top/Configs.scala
+@@ -281,7 +281,7 @@ class MinimalConfig(n: Int = 1) extends Config(
+           sets = 2048,
+           banks = 4,
+           fullAddressBits = 48,
+-          clientCaches = Seq(L2Param())
++          clientCaches = tiles.map(_ => L2Param())
+         )),
+         L3NBanks = 1
+       )

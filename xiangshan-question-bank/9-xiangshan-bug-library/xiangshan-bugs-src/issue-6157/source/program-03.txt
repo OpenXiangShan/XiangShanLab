@@ -1,0 +1,8 @@
+{
+  "redirect_cycles": 65,
+  "meta_valid_cycles": 324,
+  "meta_valid_during_redirect": 58,
+  "meta_valid_during_redirect_without_enqueue": 58,
+  "meta_valid_for_redirect_flushed_entry": 58,
+  "prediction_fire_during_redirect": 3
+}

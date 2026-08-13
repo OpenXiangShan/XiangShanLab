@@ -1,0 +1,9 @@
+store nuke paddr = 0x8000108c
+store nuke mask  = 0xf000
+store matchType  = 1 (OctaWord)
+
+load paddr       = 0x80001090
+load mask        = 0x000f
+
+paddr match      = true, because OctaWord allows store VWord + 1
+mask match       = false, because 0xf000 & 0x000f == 0

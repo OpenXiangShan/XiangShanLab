@@ -1,0 +1,37 @@
+# Commit Log
+- Issue: #5164
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5164
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5164
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5164
+- Changed files: 1
+- Additions: 4
+- Deletions: 4
+
+## Files
+- `src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+index 039171ae83f..46a543f751a 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+@@ -493,11 +493,11 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+         instMicroOp.exceptionVaddr    := io.dtlb.resp.bits.fullva
+         instMicroOp.exceptionGpaddr   := io.dtlb.resp.bits.gpaddr(0)
+         instMicroOp.exceptionIsForVSnonLeafPTE  := io.dtlb.resp.bits.isForVSnonLeafPTE
+-        lowPagePaddr  := Mux(isMisalignReg && !notCross16ByteReg && !curPtr, io.dtlb.resp.bits.paddr(0), lowPagePaddr)
+-        lowPageGPaddr := Mux(isMisalignReg && !notCross16ByteReg && !curPtr, io.dtlb.resp.bits.gpaddr(0), lowPageGPaddr)
++        lowPagePaddr  := Mux(!curPtr, io.dtlb.resp.bits.paddr(0), lowPagePaddr)
++        lowPageGPaddr := Mux(!curPtr, io.dtlb.resp.bits.gpaddr(0), lowPageGPaddr)
+ 
+-        highPagePaddr  := Mux(isMisalignReg && !notCross16ByteReg && curPtr, io.dtlb.resp.bits.paddr(0), highPagePaddr)
+-        highPageGPaddr := Mux(isMisalignReg && !notCross16ByteReg && curPtr, io.dtlb.resp.bits.gpaddr(0), highPageGPaddr)
++        highPagePaddr  := Mux(curPtr, io.dtlb.resp.bits.paddr(0), highPagePaddr)
++        highPageGPaddr := Mux(curPtr, io.dtlb.resp.bits.gpaddr(0), highPageGPaddr)
+       }
+   }
+   // pmp
+```

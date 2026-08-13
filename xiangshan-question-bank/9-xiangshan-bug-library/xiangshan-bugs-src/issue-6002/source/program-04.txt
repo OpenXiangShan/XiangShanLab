@@ -1,0 +1,2 @@
+default PoC actual a0 = 0x00000000
+stale-data PoC actual a0 = 0xdeadbeef

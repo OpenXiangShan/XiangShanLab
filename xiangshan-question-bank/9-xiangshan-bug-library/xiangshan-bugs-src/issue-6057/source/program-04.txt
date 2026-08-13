@@ -1,0 +1,7 @@
+[20] exception pc 0000000080001010 inst e20b8953 cause 0000000000000002 fmv.x.d s2, fs7
+[25] commit pc 0000000080001014 inst 02696bb3 wen 1 dst 23 data 0000000000000000 idx 018 rem     s7, s2, t1
+[26] exception pc 000000008000101c inst 002026f3 cause 0000000000000002 csrr    a3, frm <--
+...
+mtval: 0x00000000002026f3
+...
+mtval different at pc = 0x0080001014, right = 0x00000000002026f3, wrong = 0x00000000c02cf5d3

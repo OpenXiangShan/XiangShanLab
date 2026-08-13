@@ -1,0 +1,21 @@
+{
+  "number": 3012,
+  "title": "Difftest failed on a RISC-V Vector memcpy workload with misaligned(in vlen granularity, not element) unit stride load",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/3012",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported"
+  ],
+  "author": "cyyself",
+  "created_at": "2024-05-27T10:14:49Z",
+  "updated_at": "2024-05-28T02:06:39Z",
+  "source_files": [
+    "issue-3012/source/program-01.txt",
+    "issue-3012/source/program-02.txt",
+    "issue-3012/source/program-03.txt",
+    "issue-3012/source/program-04.txt",
+    "issue-3012/source/program-05.txt"
+  ],
+  "archive_files": [],
+  "has_comments": true
+}

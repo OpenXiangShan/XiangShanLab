@@ -1,0 +1,80 @@
+# Commit Log
+- Issue: #3741
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3741
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3741
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3741
+- Changed files: 2
+- Additions: 11
+- Deletions: 8
+
+## Files
+- `src/main/scala/xiangshan/backend/MemBlock.scala`
+- `src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/MemBlock.scala b/src/main/scala/xiangshan/backend/MemBlock.scala
+index af9e9755943..e5b02e6ca3c 100644
+--- a/src/main/scala/xiangshan/backend/MemBlock.scala
++++ b/src/main/scala/xiangshan/backend/MemBlock.scala
+@@ -1412,8 +1412,11 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   // lsq.io.vecWriteback.bits := vlWrapper.io.uopWriteback.bits
+ 
+   // vector
+-  val vlsuCanAccept = (0 until VlduCnt).map(
+-    i => vsSplit(i).io.in.ready && vlSplit(i).io.in.ready
++  val vLoadCanAccept  = (0 until VlduCnt).map(i =>
++    vlSplit(i).io.in.ready && VlduType.isVecLd(io.ooo_to_mem.issueVldu(i).bits.uop.fuOpType)
++  )
++  val vStoreCanAccept = (0 until VstuCnt).map(i =>
++    vsSplit(i).io.in.ready && VstuType.isVecSt(io.ooo_to_mem.issueVldu(i).bits.uop.fuOpType)
+   )
+   val isSegment     = io.ooo_to_mem.issueVldu.head.valid && isVsegls(io.ooo_to_mem.issueVldu.head.bits.uop.fuType)
+   val isFixVlUop    = io.ooo_to_mem.issueVldu.map{x =>
+@@ -1441,8 +1444,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   (0 until VstuCnt).foreach{i =>
+     vsSplit(i).io.redirect <> redirect
+     vsSplit(i).io.in <> io.ooo_to_mem.issueVldu(i)
+-    vsSplit(i).io.in.valid := io.ooo_to_mem.issueVldu(i).valid && VstuType.isVecSt(io.ooo_to_mem.issueVldu(i).bits.uop.fuOpType) &&
+-                              vlsuCanAccept(i) && !isSegment
++    vsSplit(i).io.in.valid := io.ooo_to_mem.issueVldu(i).valid &&
++                              vStoreCanAccept(i) && !isSegment
+     vsSplit(i).io.toMergeBuffer <> vsMergeBuffer(i).io.fromSplit.head
+     NewPipelineConnect(
+       vsSplit(i).io.out, storeUnits(i).io.vecstin, storeUnits(i).io.vecstin.fire,
+@@ -1455,8 +1458,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   (0 until VlduCnt).foreach{i =>
+     vlSplit(i).io.redirect <> redirect
+     vlSplit(i).io.in <> io.ooo_to_mem.issueVldu(i)
+-    vlSplit(i).io.in.valid := io.ooo_to_mem.issueVldu(i).valid && VlduType.isVecLd(io.ooo_to_mem.issueVldu(i).bits.uop.fuOpType) &&
+-                              vlsuCanAccept(i) && !isSegment && !isFixVlUop(i)
++    vlSplit(i).io.in.valid := io.ooo_to_mem.issueVldu(i).valid &&
++                              vLoadCanAccept(i) && !isSegment && !isFixVlUop(i)
+     vlSplit(i).io.toMergeBuffer <> vlMergeBuffer.io.fromSplit(i)
+     NewPipelineConnect(
+       vlSplit(i).io.out, loadUnits(i).io.vecldin, loadUnits(i).io.vecldin.fire,
+@@ -1479,7 +1482,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   }
+ 
+   (0 until VlduCnt).foreach{i=>
+-    io.ooo_to_mem.issueVldu(i).ready := vlsuCanAccept(i)
++    io.ooo_to_mem.issueVldu(i).ready := vLoadCanAccept(i) || vStoreCanAccept(i)
+   }
+ 
+   vlMergeBuffer.io.redirect <> redirect
+diff --git a/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala b/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
+index 24cd5509e7c..95ef21a2a22 100644
+--- a/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
++++ b/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
+@@ -272,7 +272,7 @@ abstract class BaseVMergeBuffer(isVStore: Boolean=false)(implicit p: Parameters)
+         entry.isForVSnonLeafPTE := selPort(0).isForVSnonLeafPTE
+       }.otherwise{
+         entry.uop.vpu.vta  := VType.tu
+-        entry.vl           := vstart
++        entry.vl           := Mux(entry.vl < vstart, entry.vl, vstart)
+       }
+     }
+   }
+```

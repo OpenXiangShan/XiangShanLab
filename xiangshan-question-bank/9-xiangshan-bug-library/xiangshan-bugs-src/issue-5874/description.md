@@ -1,0 +1,1 @@
+When an exception occurs, the IFU should assert the exception info immediately rather than waiting for instruction reassembly to complete. This prevents confusion in the exception handling logic. fix #5872

@@ -1,0 +1,111 @@
+diff --git a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+index af9e1e53add..8818692b002 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+@@ -46,22 +46,48 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+ 
+   private val full = distanceBetween(enqPtr, deqPtr) >= (ResolveQueueSize - 4).U
+ 
+-  private val hit = io.backendResolve.map { branch =>
++  // Branches that have been issued to functional units cannot be flushed by redirects. Therefore, these branches will
++  // be resolved. However, the meta of these branches may already be overwritten by new branches, which means they
++  // cannot be updated by BPU. To handle this case, backend redirect will be propagated for several cycles to make sure
++  // newly resolved branches can be flushed correctly.
++  // 3 cycles may be enough, we'll see in practice.
++  private def RedirectDelay   = 3
++  private val backendRedirect = WireDefault(VecInit.fill(RedirectDelay)(false.B))
++  backendRedirect := VecInit((0 until RedirectDelay).map(i =>
++    if (i == 0) io.backendRedirect else RegNext(backendRedirect(i - 1))
++  ))
++  private val backendRedirectPtr = DataHoldBypass(io.backendRedirectPtr, FtqPtr(false.B, 0.U), io.backendRedirect)
++  XSError(
++    RegNext(backendRedirect(RedirectDelay - 1)) && !backendRedirect.reduce(_ || _) && io.backendResolve.map(branch =>
++      branch.valid && branch.bits.ftqIdx > backendRedirectPtr
++    ).reduce(_ || _),
++    "Backend resolves branches that should have been flushed\n"
++  )
++
++  private val resolve = io.backendResolve.map { backendResolve =>
++    val filteredResolve = Wire(Valid(new Resolve))
++    filteredResolve.valid := backendResolve.valid &&
++      !(backendRedirect.reduce(_ || _) && backendResolve.bits.ftqIdx > backendRedirectPtr)
++    filteredResolve.bits := backendResolve.bits
++    filteredResolve
++  }
++
++  private val hit = resolve.map { branch =>
+     mem.map(entry =>
+       branch.valid && entry.valid && !entry.bits.flushed && entry.bits.ftqIdx === branch.bits.ftqIdx
+     ).reduce(_ || _)
+   }
+-  private val hitIndex = io.backendResolve.map { branch =>
++  private val hitIndex = resolve.map { branch =>
+     mem.indexWhere(entry =>
+       branch.valid && entry.valid && !entry.bits.flushed && entry.bits.ftqIdx === branch.bits.ftqIdx
+     )
+   }
+-  private val hitPrevious = io.backendResolve.zipWithIndex.map { case (branch, i) =>
+-    io.backendResolve.take(i).map(previousBranch =>
++  private val hitPrevious = resolve.zipWithIndex.map { case (branch, i) =>
++    resolve.take(i).map(previousBranch =>
+       previousBranch.valid && branch.valid && previousBranch.bits.ftqIdx === branch.bits.ftqIdx
+     )
+   }
+-  private val needNewEntry = io.backendResolve.zipWithIndex.map { case (branch, i) =>
++  private val needNewEntry = resolve.zipWithIndex.map { case (branch, i) =>
+     branch.valid && !hit(i) && !hitPrevious(i).fold(false.B)(_ || _)
+   }
+ 
+@@ -76,7 +102,7 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+   })
+   when(!full)(enqPtr := enqPtr + PopCount(needNewEntry))
+ 
+-  io.backendResolve.zipWithIndex.foreach { case (branch, i) =>
++  resolve.zipWithIndex.foreach { case (branch, i) =>
+     when(branch.valid && !full) {
+       mem(enqIndex(i)).valid           := true.B
+       mem(enqIndex(i)).bits.ftqIdx     := branch.bits.ftqIdx
+@@ -93,37 +119,15 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+     }
+   }
+ 
+-  // Branches that have been issued to functional units cannot be flushed by redirects. Therefore, these branches will
+-  // be resolved. However, the meta of these branches may already be overwritten by new branches, which means they
+-  // cannot be updated by BPU. To handle this case, backend redirect will be propagated for several cycles to make sure
+-  // newly resolved branches can be flushed correctly.
+-  // 3 cycles may be enough, we'll see in practice.
+-  private def RedirectDelay   = 3
+-  private val backendRedirect = WireDefault(VecInit.fill(RedirectDelay)(false.B))
+-  backendRedirect := VecInit((0 until RedirectDelay).map(i =>
+-    if (i == 0) io.backendRedirect else RegNext(backendRedirect(i - 1))
+-  ))
+-  private val backendRedirectPtr = DataHoldBypass(io.backendRedirectPtr, FtqPtr(false.B, 0.U), io.backendRedirect)
+-  XSError(
+-    RegNext(backendRedirect(RedirectDelay - 1)) && !backendRedirect.reduce(_ || _) && io.backendResolve.map(branch =>
+-      branch.valid && branch.bits.ftqIdx > backendRedirectPtr
+-    ).reduce(_ || _),
+-    "Backend resolves branches that should have been flushed\n"
+-  )
+-
+-  when(backendRedirect.reduce(_ || _)) {
+-    mem.foreach(entry =>
+-      when(entry.valid)(entry.bits.flushed := entry.bits.flushed || entry.bits.ftqIdx > backendRedirectPtr)
+-    )
+-  }
+-
+-  when(io.bpuEnqueue) {
+-    mem.foreach(entry =>
+-      when(entry.valid)(entry.bits.flushed := entry.bits.flushed || entry.bits.ftqIdx === io.bpuEnqueuePtr)
+-    )
++  mem.foreach { entry =>
++    when(entry.valid &&
++      (backendRedirect.reduce(_ || _) && entry.bits.ftqIdx > backendRedirectPtr ||
++        io.bpuEnqueue && entry.bits.ftqIdx === io.bpuEnqueuePtr)) {
++      entry.bits.flushed := true.B
++    }
+   }
+ 
+-  private val deqValid = mem(deqPtr.value).valid && !io.backendResolve.map(branch =>
++  private val deqValid = mem(deqPtr.value).valid && !resolve.map(branch =>
+     branch.valid && branch.bits.ftqIdx === mem(deqPtr.value).bits.ftqIdx
+   ).reduce(_ || _)

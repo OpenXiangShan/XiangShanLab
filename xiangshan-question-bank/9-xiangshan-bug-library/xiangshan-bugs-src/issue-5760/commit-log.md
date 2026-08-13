@@ -1,0 +1,3899 @@
+# Commit Log
+- Issue: #5760
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5760
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5760
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5760
+- Changed files: 23
+- Additions: 1468
+- Deletions: 1695
+
+## Files
+- `src/main/scala/xiangshan/backend/Backend.scala`
+- `src/main/scala/xiangshan/backend/Bundles.scala`
+- `src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala`
+- `src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala`
+- `src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala`
+- `src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala`
+- `src/main/scala/xiangshan/cache/dcache/storepipe/StorePipe.scala`
+- `src/main/scala/xiangshan/mem/Bundles.scala`
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala`
+- `src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala`
+- `src/main/scala/xiangshan/mem/pipeline/Bundles.scala`
+- `src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala`
+- `src/main/scala/xiangshan/mem/pipeline/NewStoreUnit.scala`
+- `src/main/scala/xiangshan/mem/pipeline/StdExeUnit.scala`
+- `src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala`
+- `src/main/scala/xiangshan/mem/pipeline/package.scala`
+- `src/main/scala/xiangshan/mem/vector/VSplit.scala`
+- `src/main/scala/xiangshan/mem/vector/VecBundle.scala`
+- `src/main/scala/xiangshan/package.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/Backend.scala b/src/main/scala/xiangshan/backend/Backend.scala
+index c86852ac6a7..2f914a79076 100644
+--- a/src/main/scala/xiangshan/backend/Backend.scala
++++ b/src/main/scala/xiangshan/backend/Backend.scala
+@@ -299,12 +299,14 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+ 
+   intRegion.io.memWriteback.zip(io.mem.intWriteback).foreach { case (sinkWriteback, sourceWriteback) =>
+     sinkWriteback.zip(sourceWriteback).foreach { case (sink, source) =>
+-      sink <> source
++      sink.valid := source.toRob.valid
++      sink.bits := source.toNewExuOutputBundle()
+     }
+   }
+-  val lduWriteback = io.mem.intWriteback.flatten.filter(_.bits.params.hasLoadFu)
++  val lduWriteback = io.mem.intWriteback.flatten.filter(_.params.hasLoadFu)
+   fpRegion.io.lduWriteback.get.flatten.zip(lduWriteback).map { case (sink, source) =>
+-    sink <> source
++    sink.valid := source.toRob.valid
++    sink.bits := source.toNewExuOutputBundle()
+   }
+   intRegion.io.wakeUpFromFp. foreach(x => x := fpRegion.io.wakeUpToDispatch)
+   intRegion.io.wakeupFromF2I.foreach(x => x := fpRegion.io.cross.F2IWakeupOut.get)
+@@ -647,8 +649,8 @@ class BackendMemIO(implicit p: Parameters, params: BackendParams) extends XSBund
+   val storePcRead = Vec(params.StaCnt, Output(UInt(VAddrBits.W)))
+   val hyuPcRead = Vec(params.HyuCnt, Output(UInt(VAddrBits.W)))
+   // Input
+-  val intWriteback: MixedVec[MixedVec[DecoupledIO[NewExuOutput]]] =
+-    Flipped(intSchdParams.genNewExuOutputDecoupledBundleMemBlock)
++  val intWriteback: MixedVec[MixedVec[MemWriteBack]] =
++    Flipped(intSchdParams.genMemWriteBackBundle)
+   val vecWriteback: MixedVec[MixedVec[DecoupledIO[ExuOutput]]] =
+     Flipped(vecSchdParams.genExuOutputDecoupledBundleMemBlock)
+ 
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index facd5a9ef33..7bf2f7272d0 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -95,11 +95,6 @@ object Bundles {
+     sink.bits.toVlRf. foreach(_.bits  := source.bits.data(0))
+   }
+ 
+-  def connectMemDecoupledNewExuOutput(sink: DecoupledIO[NewExuOutput], source: NewExuOutput) = {
+-    sink.valid := source.toRob.valid
+-    sink.bits := source
+-  }
+-
+   def connectWriteBackRob(sink: WriteBackRobBundle, source: NewExuOutput) = {
+     connectSamePort(sink, source.toRob.bits)
+     connectSamePort(sink, source)
+@@ -1384,6 +1379,79 @@ class ExuOutputVLoad(val params: ExeUnitParams)(implicit val p: Parameters) exte
+     val perfDebugInfo  = Option.when(backendParams.debugEn)(new PerfDebugInfo())
+     val debug_seqNum   = Option.when(backendParams.debugEn)(InstSeqNum())
+   }
++  
++  class MemDebugBundle(implicit p: Parameters) extends XSBundle {
++    val isMMIO = Option.when(backendParams.basicDebugEn)(Bool())
++    val isNCIO = Option.when(backendParams.basicDebugEn)(Bool())
++    val isPerfCnt = Option.when(backendParams.basicDebugEn)(Bool())
++
++    def isSkipDiff: Bool = isMMIO.get || isNCIO.get || isPerfCnt.get
++    /* add L/S inst info in EXU */
++    // val L1toL2TlbLatency = UInt(XLEN.W)
++    // val levelTlbHit = UInt(2.W)
++
++    val paddr = Option.when(backendParams.debugEn)(UInt(PAddrBits.W))
++    val vaddr = Option.when(backendParams.debugEn)(UInt(VAddrBits.W))
++    val perfDebugInfo = Option.when(backendParams.debugEn)(new PerfDebugInfo())
++    val debug_seqNum = Option.when(backendParams.debugEn)(new InstSeqNum())
++  }
++  class MemToRob(params: ExeUnitParams)(implicit p: Parameters) extends ExuOutputToRob(params) {
++    val debugInfo = new MemDebugBundle
++  }
++  class MemToIntRf(val params: ExeUnitParams)(implicit p: Parameters) extends Bundle {
++    val pdest = UInt(params.wbPregIdxWidth.W)
++    val data = UInt(params.destDataBitsMax.W)
++    val isFromLoadUnit = Option.when(params.hasLoadFu)(Bool())
++  }
++  class MemToFpRf(val params: ExeUnitParams)(implicit p: Parameters) extends Bundle {
++    val pdest = UInt(params.wbPregIdxWidth.W)
++    val data = UInt(params.destDataBitsMax.W)
++  }
++  class MemWriteBack(
++    val params: ExeUnitParams,
++  )(implicit
++    val p: Parameters
++  ) extends Bundle with BundleSource with HasXSParameter {
++    val toRob = ValidIO(new MemToRob(params))
++    val toIntRf = Option.when(params.writeIntRf)(ValidIO(new MemToIntRf(params)))
++    val toFpRf = Option.when(params.writeFpRf)(ValidIO(new MemToFpRf(params)))
++
++    def toNewExuOutputBundle(): NewExuOutput = {
++      val res = Wire(new NewExuOutput(params))
++      res := DontCare
++      res.toRob := toRob
++      res.toIntRf.zip(toIntRf).foreach { case (dst, src) =>
++        dst.valid := src.valid
++        dst.bits  := src.bits.data
++      }
++      res.toFpRf.zip(toFpRf).foreach { case (dst, src) =>
++        dst.valid := src.valid
++        dst.bits  := src.bits.data
++      }
++      res.pdest := ((toIntRf, toFpRf) match {
++        case (Some(int), Some(fp)) => Mux(int.valid, int.bits.pdest, fp.bits.pdest)
++        case (Some(int), None)     => int.bits.pdest
++        case (None, Some(fp))      => fp.bits.pdest
++        case _                     => 0.U(params.wbPregIdxWidth.W)
++      })
++      res.isFromLoadUnit.zip(toIntRf.flatMap(_.bits.isFromLoadUnit)).foreach {
++        case (dst, src) => dst := src
++      }
++      toRob.bits.debugInfo.isMMIO.foreach(res.debug.isMMIO := _)
++      toRob.bits.debugInfo.isNCIO.foreach(res.debug.isNCIO := _)
++      toRob.bits.debugInfo.isPerfCnt.foreach(res.debug.isPerfCnt := _)
++      toRob.bits.debugInfo.paddr.foreach(res.debug.paddr := _)
++      toRob.bits.debugInfo.vaddr.foreach(res.debug.vaddr := _)
++      res.perfDebugInfo.zip(toRob.bits.debugInfo.perfDebugInfo).foreach {
++        case (dst, src) => dst := src
++      }
++      res.debug_seqNum.zip(toRob.bits.debugInfo.debug_seqNum).foreach {
++        case (dst, src) => dst := src
++      }
++
++      res
++    }
++  }
+ 
+   // ExuOutput + DynInst --> WriteBackBundle
+   class WriteBackBundle(val params: PregWB, backendParams: BackendParams)(implicit p: Parameters) extends Bundle with BundleSource {
+diff --git a/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala b/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
+index 6605b0237d9..55fb1514f64 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExeUnitParams.scala
+@@ -4,7 +4,7 @@ import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+ import xiangshan.backend.BackendParams
+-import xiangshan.backend.Bundles.{ExuBypassBundle, ExuInput, NewExuInput, ExuOutput}
++import xiangshan.backend.Bundles.{ExuBypassBundle, ExuInput, NewExuInput, ExuOutput, MemWriteBack}
+ import xiangshan.backend.datapath.DataConfig.DataConfig
+ import xiangshan.backend.datapath.RdConfig._
+ import xiangshan.backend.datapath.WbConfig._
+@@ -508,6 +508,10 @@ case class ExeUnitParams(
+     new NewExuOutput(this)
+   }
+ 
++  def genMemWriteBackBundle(implicit p: Parameters): MemWriteBack = {
++    new MemWriteBack(this)
++  }
++  
+   def genWriteBackRobBundle(implicit p: Parameters): WriteBackRobBundle = {
+     new WriteBackRobBundle(this, backendParam)
+   }
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+index f454f9adbca..8951f1f0ede 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+@@ -414,6 +414,10 @@ case class IssueBlockParams(
+     MixedVec(this.exuParams.map(x => DecoupledIO(x.genNewExuOutputBundle)))
+   }
+ 
++  def genMemWriteBackBundle(implicit p: Parameters): MixedVec[MemWriteBack] = {
++    MixedVec(this.exuParams.map(x => x.genMemWriteBackBundle))
++  }
++
+   def genExuOutputValidBundle(implicit p: Parameters): MixedVec[ValidIO[ExuOutput]] = {
+     MixedVec(this.exuParams.map(x => ValidIO(x.genExuOutputBundle)))
+   }
+diff --git a/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala b/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
+index 1c9bffe8ebd..0165d06f8f5 100644
+--- a/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/SchdBlockParams.scala
+@@ -168,6 +168,10 @@ case class SchdBlockParams(
+     MixedVec(this.issueBlockParams.filter(_.isMemBlockIQ).map(_.genNewExuOutputDecoupledBundle))
+   }
+ 
++  def genMemWriteBackBundle(implicit p: Parameters): MixedVec[MixedVec[MemWriteBack]] = {
++    MixedVec(this.issueBlockParams.filter(_.isMemBlockIQ).map(_.genMemWriteBackBundle))
++  }
++
+   def genExuOutputDecoupledBundleLoad(implicit p: Parameters): MixedVec[MixedVec[DecoupledIO[ExuOutput]]] = {
+     MixedVec(backendParam.intSchdParams.get.issueBlockParams.filter(_.isLdAddrIQ).map(_.genExuOutputDecoupledBundle))
+   }
+diff --git a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+index 952427e1727..1e691dad9df 100644
+--- a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
++++ b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+@@ -1355,7 +1355,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
+     ldu(w).io.disable_ld_fast_wakeup :=
+       bankedDataArray.io.disable_ld_fast_wakeup(w) // load pipe fast wake up should be disabled when bank conflict
+   }
+-  
++
+   val clear_flag = Wire(Vec(LoadPipelineWidth, Bool()))
+   clear_flag(0) := false.B
+   for (i <- 1 until LoadPipelineWidth) {
+diff --git a/src/main/scala/xiangshan/cache/dcache/storepipe/StorePipe.scala b/src/main/scala/xiangshan/cache/dcache/storepipe/StorePipe.scala
+index d4fd35523cb..0bff9ba08f2 100644
+--- a/src/main/scala/xiangshan/cache/dcache/storepipe/StorePipe.scala
++++ b/src/main/scala/xiangshan/cache/dcache/storepipe/StorePipe.scala
+@@ -29,6 +29,15 @@ class DcacheStoreRequestIO(implicit p: Parameters) extends DCacheBundle {
+   val instrtype   = UInt(sourceTypeWidth.W)
+ }
+ 
++class DcacheStoreRespIO(implicit p: Parameters) extends DCacheBundle {
++  // this store misses (for now, not used)
++  val miss = Bool()
++  // this store needs replay (for now, not used)
++  val replay = Bool()
++  // tag error TODO: add logic
++  val tag_error = Bool()
++}
++
+ class DCacheStoreIO(implicit p: Parameters) extends DCacheBundle {
+   // Paddr in STA s1, used for hit check
+   val s1_paddr = Output(UInt(PAddrBits.W))
+@@ -40,14 +49,7 @@ class DCacheStoreIO(implicit p: Parameters) extends DCacheBundle {
+   val s2_pc = Output(UInt(VAddrBits.W))
+ 
+   val req = DecoupledIO(new DcacheStoreRequestIO)
+-  val resp = Flipped(DecoupledIO(new DCacheBundle() {
+-    // this store misses (for now, not used)
+-    val miss = Bool()
+-    // this store needs replay (for now, not used)
+-    val replay = Bool()
+-    // tag error TODO: add logic
+-    val tag_error = Bool()
+-  }))
++  val resp = Flipped(DecoupledIO(new DcacheStoreRespIO()))
+ }
+ /** Non-Blocking Store Dcache Pipeline
+   *
+diff --git a/src/main/scala/xiangshan/mem/Bundles.scala b/src/main/scala/xiangshan/mem/Bundles.scala
+index 76dda98747e..da1dccf45f0 100644
+--- a/src/main/scala/xiangshan/mem/Bundles.scala
++++ b/src/main/scala/xiangshan/mem/Bundles.scala
+@@ -37,11 +37,11 @@ object Bundles {
+ 
+   object StLdNukeMatchType {
+     def Normal      = "b00".U
+-    def QuadWord    = "b01".U
++    def OctaWord    = "b01".U
+     def CacheLine   = "b10".U
+ 
+     def isNormal(matchType: UInt)    = matchType === Normal
+-    def isQuadWord(matchType: UInt)  = matchType === QuadWord
++    def isOctaWord(matchType: UInt)  = matchType === OctaWord
+     def isCacheLine(matchType: UInt) = matchType === CacheLine
+ 
+     def apply() = UInt(2.W)
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index cf583e1c092..64b19531b6b 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -233,7 +233,7 @@ class mem_to_ooo(implicit p: Parameters) extends MemBlockBundle {
+     val pc     = Input(UInt(VAddrBits.W))
+   })
+ 
+-  val intWriteback: MixedVec[MixedVec[DecoupledIO[NewExuOutput]]] = intSchdParams.genNewExuOutputDecoupledBundleMemBlock
++  val intWriteback: MixedVec[MixedVec[MemWriteBack]] = intSchdParams.genMemWriteBackBundle
+   val vecWriteback: MixedVec[MixedVec[DecoupledIO[ExuOutput]]] = vecSchdParams.genExuOutputDecoupledBundleMemBlock
+ 
+   val staIqFeedback = Vec(StaCnt, new MemRSFeedbackIO)
+@@ -447,16 +447,16 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   val issueStd = intIssue.filter(_.bits.params.hasStdFu)
+   val issueVldu = vecIssue.filter(_.bits.params.hasVLoadFu)
+ 
+-  val intWriteback: Seq[DecoupledIO[NewExuOutput]] = io.mem_to_ooo.intWriteback.flatten
++  val intWriteback: Seq[MemWriteBack] = io.mem_to_ooo.intWriteback.flatten
+   val vecWriteback: Seq[DecoupledIO[ExuOutput]] = io.mem_to_ooo.vecWriteback.flatten
+   val writeback = intWriteback ++ vecWriteback
+-  val writebackLda = intWriteback.filter(_.bits.params.hasLoadFu)
+-  val writebackSta = intWriteback.filter(_.bits.params.hasStoreAddrFu)
+-  val writebackStd = intWriteback.filter(_.bits.params.hasStdFu)
++  val writebackLda = intWriteback.filter(_.params.hasLoadFu)
++  val writebackSta = intWriteback.filter(_.params.hasStoreAddrFu)
++  val writebackStd = intWriteback.filter(_.params.hasStdFu)
+   val writebackVldu = vecWriteback.filter(_.bits.params.hasVLoadFu)
+ 
+   intWriteback.zipWithIndex.foreach{ case (wb, i) =>
+-    wb.bits.debug_seqNum.foreach(x => PerfCCT.updateInstPos(x, PerfCCT.InstPos.AtBypassVal.id.U, wb.valid, clock, reset))
++    wb.toRob.bits.debugInfo.debug_seqNum.foreach(x => PerfCCT.updateInstPos(x, PerfCCT.InstPos.AtBypassVal.id.U, wb.toRob.valid, clock, reset))
+   }
+   vecWriteback.zipWithIndex.foreach{ case (wb, i) =>
+     wb.bits.debug_seqNum.foreach(x => PerfCCT.updateInstPos(x, PerfCCT.InstPos.AtBypassVal.id.U, wb.valid, clock, reset))
+@@ -493,7 +493,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   }
+ 
+   val newLoadUnits = Seq.tabulate(LduCnt)(i => Module(new NewLoadUnit(ldaParams(i))))
+-  val storeUnits = Seq.tabulate(StaCnt)(i => Module(new StoreUnit(staParams(i))))
++  val storeUnits = Seq.tabulate(StaCnt)(i => Module(new NewStoreUnit(staParams(i))))
+   val stdExeUnits = Seq.tabulate(StdCnt)(i => Module(new StdExeUnit(stdParams(i))))
+   val atomicsUnit = Module(new AtomicsUnit(mouParam))
+ 
+@@ -505,9 +505,6 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   val vSegmentUnit  = Module(new VSegmentUnit(vsegParam))
+   val vfofBuffer    = Module(new VfofBuffer(vlduParams.head))
+ 
+-  // misalign Buffer
+-  val storeMisalignBuffer = Module(new StoreMisalignBuffer)
+-
+   // exceptionInfoGen
+   val exceptionInfoGen = Module(new ExceptionInfoGen)
+ 
+@@ -518,20 +515,19 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   writebackLda.zipWithIndex.foreach { case (wb, i) =>
+     if (i == AtomicWBPort) {
+       // atomicsUnit writeback
+-      val lduDecoupledOut = Wire(DecoupledIO(new NewExuOutput(ldaParams(i))))
+-      val atomicDecoupledOut = Wire(DecoupledIO(new NewExuOutput(ldaParams(i))))
+-      connectMemDecoupledNewExuOutput(lduDecoupledOut, newLoadUnits(i).io.ldout)
+-      connectMemDecoupledNewExuOutput(atomicDecoupledOut, atomicsUnit.io.out)
+-
+-      oneHotArbiter(Seq(atomicDecoupledOut, lduDecoupledOut), wb, Some("writebackLdaAtomic"))
++      when (atomicsUnit.io.out.toRob.valid) {
++        wb := atomicsUnit.io.out
++      } .otherwise {
++        wb := newLoadUnits(i).io.ldout
++      }
+     } else {
+       // normal load writeback
+-      connectMemDecoupledNewExuOutput(wb, newLoadUnits(i).io.ldout)
++      wb := newLoadUnits(i).io.ldout
+     }
+   }
+ 
+   writebackStd.zipWithIndex.foreach { case (wb, i) =>
+-    connectMemDecoupledNewExuOutput(wb, stdExeUnits(i).io.out)
++    wb := stdExeUnits(i).io.out
+   }
+ 
+   val lsq     = Module(new LsqWrapper)
+@@ -736,9 +732,9 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   prefetcher.io.trainSource.s2_loadFireHint := newLoadUnits.map(_.io.prefetchTrainHintS2)
+   prefetcher.io.trainSource.s3_load := newLoadUnits.map(_.io.prefetchTrain)
+   prefetcher.io.trainSource.s3_ptrChasing := newLoadUnits.map(_ => false.B) // TODO: remove ptr chasing logic in prefetcher
+-  prefetcher.io.trainSource.s1_storeFireHint := storeUnits.map(_.io.s1_prefetch_spec)
+-  prefetcher.io.trainSource.s2_storeFireHint := storeUnits.map(_.io.s2_prefetch_spec)
+-  prefetcher.io.trainSource.s3_store <> storeUnits.map(_.io.prefetch_train)
++  prefetcher.io.trainSource.s1_storeFireHint := storeUnits.map(_.io.prefetchTrainHintS1)
++  prefetcher.io.trainSource.s2_storeFireHint := storeUnits.map(_.io.prefetchTrainHintS2)
++  prefetcher.io.trainSource.s3_store <> storeUnits.map(_.io.prefetchTrain)
+   (0 until prefetcherNum).foreach { i => //NOTE lyq: prefetcherNum minimum is 1 for simpler code generation, which is ugly
+     prefetcher.io.tlb_req(i).req.ready := false.B
+     prefetcher.io.tlb_req(i).resp.valid := false.B
+@@ -808,7 +804,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     io.debug_ls.debugLsInfo(i) := newLoadUnits(i).io.debugInfo
+   }
+   for (i <- 0 until StaCnt) {
+-    io.debug_ls.debugLsInfo.drop(LduCnt)(i) := storeUnits(i).io.debug_ls
++    io.debug_ls.debugLsInfo.drop(LduCnt)(i) := storeUnits(i).io.debugInfo
+   }
+ 
+   io.mem_to_ooo.lsTopdownInfo := newLoadUnits.map(_.io.topDownInfo)
+@@ -920,7 +916,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     // pmp
+     newLoadUnits(i).io.pmp <> pmp_check(i).resp
+     // st-ld violation query
+-    newLoadUnits(i).io.staNukeQueryReq <> storeUnits.map(_.io.stld_nuke_query)
++    newLoadUnits(i).io.staNukeQueryReq <> storeUnits.map(_.io.staNukeQueryReq)
+ 
+     // load replay
+     newLoadUnits(i).io.replay <> lsq.io.replay(i)
+@@ -951,15 +947,6 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     newLoadUnits(i).io.csrTrigger.debugMode := debugMode
+   }
+ 
+-  storeMisalignBuffer.io.redirect               <> redirect
+-  storeMisalignBuffer.io.rob.lcommit            := io.ooo_to_mem.lsqio.lcommit
+-  storeMisalignBuffer.io.rob.scommit            := io.ooo_to_mem.lsqio.scommit
+-  storeMisalignBuffer.io.rob.commit             := io.ooo_to_mem.lsqio.commit
+-  storeMisalignBuffer.io.rob.pendingPtr         := io.ooo_to_mem.lsqio.pendingPtr
+-  storeMisalignBuffer.io.rob.pendingPtrNext     := io.ooo_to_mem.lsqio.pendingPtrNext
+-
+-  lsq.io.maControl                              <> storeMisalignBuffer.io.sqControl
+-
+   lsq.io.cmoOpReq <> dcache.io.cmoOpReq
+   lsq.io.cmoOpResp <> dcache.io.cmoOpResp
+ 
+@@ -980,76 +967,49 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     val stu = storeUnits(i)
+ 
+     stu.io.redirect      <> redirect
+-    stu.io.csrCtrl       <> csrCtrl
+     stu.io.dcache        <> dcache.io.lsu.sta(i)
+-    stu.io.feedback_slow <> io.mem_to_ooo.staIqFeedback(i).feedbackSlow
++    stu.io.feedBackSlow  <> io.mem_to_ooo.staIqFeedback(i).feedbackSlow
+     stu.io.stin          <> issueSta(i)
+-    stu.io.toLsq         <> lsq.io.sta.storeAddrIn(i)
+-    stu.io.toLsqRe       <> lsq.io.sta.storeAddrInRe(i)
+-    stu.io.toStoreUnalignQueue <> lsq.io.sta.unalignQueueReq(i)
++    stu.io.toSqAddr      <> lsq.io.sta.storeAddrIn(i)
++    stu.io.toSqAddrRe    <> lsq.io.sta.storeAddrInRe(i)
++    stu.io.toUnalignQueue <> lsq.io.sta.unalignQueueReq(i)
+     // dtlb
+     stu.io.tlb          <> dtlb_st.head.requestor(i)
+     stu.io.pmp          <> pmp_check(TlbStartVec(dtlb_st_idx) + i).resp
+-    stu.io.sqCommitPtr     <> lsq.io.sqCommitPtr
+-    stu.io.sqCommitUopIdx  <> lsq.io.sqCommitUopIdx
+-    stu.io.sqCommitRobIdx  <> lsq.io.sqCommitRobIdx
+ 
+     // -------------------------
+     // Store Triggers
+     // -------------------------
+-    stu.io.fromCsrTrigger.tdataVec := tdata
+-    stu.io.fromCsrTrigger.tEnableVec := tEnable
+-    stu.io.fromCsrTrigger.triggerCanRaiseBpExp := triggerCanRaiseBpExp
+-    stu.io.fromCsrTrigger.debugMode := debugMode
++    stu.io.csrTrigger.tdataVec := tdata
++    stu.io.csrTrigger.tEnableVec := tEnable
++    stu.io.csrTrigger.triggerCanRaiseBpExp := triggerCanRaiseBpExp
++    stu.io.csrTrigger.debugMode := debugMode
+ 
+     // prefetch
+-    stu.io.prefetch_req <> sbuffer.io.store_prefetch(i)
++    stu.io.prefetchReq <> sbuffer.io.store_prefetch(i)
+ 
+     // store unit does not need fast feedback
+     io.mem_to_ooo.staIqFeedback(i).feedbackFast := DontCare
+ 
+-    // Lsq to sta unit
+-    lsq.io.sta.storeMaskIn(i) <> stu.io.st_mask_out
+-
+-    // connect misalignBuffer
+-    storeMisalignBuffer.io.enq(i) <> stu.io.misalign_enq
+-
+-    if (i == 0) {
+-      stu.io.misalign_stin  <> storeMisalignBuffer.io.splitStoreReq
+-      stu.io.misalign_stout <> storeMisalignBuffer.io.splitStoreResp
+-    } else {
+-      stu.io.misalign_stin.valid := false.B
+-      stu.io.misalign_stin.bits := DontCare
+-    }
+-
+     // 1. sync issue info to store set LFST
+     // 2. when store issue, broadcast issued sqPtr to wake up the following insts
+     io.mem_to_ooo.updateLFST(i) := stu.io.updateLFST
+ 
+     // vector
+-    if (i < VstuCnt) {
+-      stu.io.vecstin <> vsSplit(i).io.out
+-      // vsFlowQueue.io.pipeFeedback(i) <> stu.io.vec_feedback_slow // need connect
+-    } else {
+-      stu.io.vecstin.valid := false.B
+-      stu.io.vecstin.bits := DontCare
+-      stu.io.vecstout.ready := false.B
+-    }
+-    stu.io.vec_isFirstIssue := true.B // TODO
++    stu.io.vecstin.valid := false.B
++    stu.io.vecstin.bits := DontCare
++    stu.io.vecstout.ready := false.B
+   }
+ 
+-  val sqStoutLatch = Wire(DecoupledIO(new NewExuOutput(staParams.head)))
++  val sqStoutLatch = Wire(DecoupledIO(new MemToRob(staParams.head)))
+   NewPipelineConnect(lsq.io.mmioStout, sqStoutLatch, sqStoutLatch.fire, false.B, Some("sqStout"))
+   writebackSta.zipWithIndex.foreach { case (wb, i) =>
+     if (i == 0) {
+-      val staDecoupledOut = Wire(DecoupledIO(new NewExuOutput(staParams(i))))
+-      connectMemDecoupledNewExuOutput(staDecoupledOut, storeUnits(i).io.stout)
+-      arbiter(
+-        Seq(staDecoupledOut, sqStoutLatch, storeMisalignBuffer.io.writeBack),
+-        wb, Some(s"writebackSta_$i")
+-      )
++      wb.toRob.valid := storeUnits(i).io.stout.toRob.valid || sqStoutLatch.valid
++      wb.toRob.bits := Mux(storeUnits(i).io.stout.toRob.valid, storeUnits(i).io.stout.toRob.bits, sqStoutLatch.bits)
++      sqStoutLatch.ready := !storeUnits(i).io.stout.toRob.valid
+     } else {
+-      connectMemDecoupledNewExuOutput(wb, storeUnits(i).io.stout)
++      wb := storeUnits(i).io.stout
+     }
+   }
+ 
+@@ -1229,9 +1189,6 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   (0 until VstuCnt).foreach{i =>
+     vsMergeBuffer(i).io.fromPipeline := DontCare
+     vsMergeBuffer(i).io.fromSplit := DontCare
+-
+-//    vsMergeBuffer(i).io.fromMisalignBuffer.get.flush := storeMisalignBuffer.io.toVecStoreMergeBuffer(i).flush
+-//    vsMergeBuffer(i).io.fromMisalignBuffer.get.mbIndex := storeMisalignBuffer.io.toVecStoreMergeBuffer(i).mbIndex
+   }
+ 
+   (0 until VstuCnt).foreach{i =>
+@@ -1240,18 +1197,19 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     vsSplit(i).io.in.valid := issueVldu(i).valid &&
+                               vStoreCanAccept(i) && !isSegment
+     vsSplit(i).io.toMergeBuffer <> vsMergeBuffer(i).io.fromSplit.head
++    val vsSplitOut = Wire(DecoupledIO(new VectorStoreIn()))
++    vsSplitOut.valid := vsSplit(i).io.out.valid
++    vsSplitOut.bits := vsSplit(i).io.out.bits.toVectorStoreIn()
++    vsSplit(i).io.out.ready := vsSplitOut.ready
+     NewPipelineConnect(
+-      vsSplit(i).io.out, storeUnits(i).io.vecstin, storeUnits(i).io.vecstin.fire,
+-      Mux(vsSplit(i).io.out.fire, vsSplit(i).io.out.bits.uop.robIdx.needFlush(io.redirect), storeUnits(i).io.vecstin.bits.uop.robIdx.needFlush(io.redirect)),
++      vsSplitOut, storeUnits(i).io.vecstin, storeUnits(i).io.vecstin.fire,
++      Mux(vsSplitOut.fire,
++        vsSplitOut.bits.uop.robIdx.needFlush(io.redirect),
++        storeUnits(i).io.vecstin.bits.uop.robIdx.needFlush(io.redirect)
++      ),
+       Option("VsSplitConnectStu")
+     )
+     vsSplit(i).io.vstd.get := DontCare // Todo: Discuss how to pass vector store data
+-
+-    vsSplit(i).io.vstdMisalign.get.storeMisalignBufferEmpty  := storeMisalignBuffer.io.toVecSplit.empty
+-    vsSplit(i).io.vstdMisalign.get.storeMisalignBufferRobIdx := storeMisalignBuffer.io.toVecSplit.robIdx
+-    vsSplit(i).io.vstdMisalign.get.storeMisalignBufferUopIdx := storeMisalignBuffer.io.toVecSplit.uopIdx
+-    vsSplit(i).io.vstdMisalign.get.storePipeEmpty := !storeUnits.map(_.io.s0_s1_s2_valid).reduce(_||_)
+-
+   }
+   (0 until VlduCnt).foreach { i =>
+     vlSplit(i).io.redirect <> redirect
+@@ -1291,7 +1249,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   (0 until StaCnt).foreach{i=>
+     if(i < VstuCnt){
+       arbiter(
+-        Seq(storeUnits(i).io.vecstout, storeMisalignBuffer.io.vecWriteBack(i)),
++        Seq(storeUnits(i).io.vecstout),
+         vsMergeBuffer(i).io.fromPipeline.head,
+         Some(s"vecstout_$i")
+       )
+@@ -1430,7 +1388,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   for (i <- 0 until StaCnt) {
+     when (state === s_atomics(i)) {
+       io.mem_to_ooo.staIqFeedback(i).feedbackSlow := atomicsUnit.io.feedbackSlow
+-      assert(!storeUnits(i).io.feedback_slow.valid)
++      assert(!storeUnits(i).io.feedBackSlow.valid)
+     }
+   }
+ 
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala
+index 4c8b24129f9..3ccdfd28dfd 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala
+@@ -19,7 +19,7 @@ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import utility.InstSeqNum
+ import xiangshan._
+-import xiangshan.backend.Bundles.{DynInst, ExuOutput, MemExuOutput, NewExuOutput, UopIdx}
++import xiangshan.backend.Bundles.{DynInst, ExuOutput, MemExuOutput, MemToRob, UopIdx}
+ import xiangshan.backend.exu.ExeUnitParams
+ import xiangshan.backend.fu.FuType
+ import xiangshan.backend.fu.vector.Bundles.NumLsElem
+@@ -106,15 +106,13 @@ class StoreAddrIO(implicit p: Parameters) extends MemBlockBundle {
+   val size            = UInt(MemorySize.Size.width.W)
+   val memBackTypeMM   = Bool() // 1: main memory, 0: IO.
+   val hasException    = Bool() // indicate request has exception.
+-  val af              = Bool() // indicate access fault.
+   val isHyper         = Bool()
+ 
+-
+   /* only use in cmo.zero
+   * means this write request need to write whole cacheline.
+   * */
+   val wlineflag          = Bool() // store write the whole cache line.
+-
++  
+   // misalign
+   val isUnalign           = Bool()
+   val unalignWithin16Byte = Bool()
+@@ -135,8 +133,6 @@ class StoreQueueDataWrite(implicit p: Parameters) extends MemBlockBundle {
+ }
+ 
+ class StaIO(implicit p: Parameters) extends MemBlockBundle {
+-
+-  val storeMaskIn      = Vec(StorePipelineWidth, Flipped(ValidIO(new StoreMaskBundle))) // store mask, send to sq
+   val storeAddrIn      = Vec(StorePipelineWidth, Flipped(ValidIO(new StoreAddrIO))) // store addr, data is not included
+   // this bundle will be removed in the feature.
+   val storeAddrInRe    = Vec(StorePipelineWidth, Input(new StoreAddrIO)) // store more mmio and exception
+@@ -210,9 +206,8 @@ class StoreQueueIO(val param: ExeUnitParams)(implicit p: Parameters) extends Mem
+   // write store request to uncacheBuffer.
+   val toUncacheBuffer    = new UncacheWordIO
+   // to backend , used to writeback uop when request is mmio, cmo.
+-  val writeBack          = DecoupledIO(new NewExuOutput(param))
++  val writeBack          = DecoupledIO(new MemToRob(param))
+   // from misalignBuffer, will be remove in the feature
+-//  val maControl          = Flipped(new StoreMaBufToSqControlIO)
+   val wfi                = Flipped(new WfiReqBundle)
+   val sqEmpty            = Output(Bool())
+   val sqFull             = Output(Bool())
+@@ -224,8 +219,6 @@ class StoreQueueIO(val param: ExeUnitParams)(implicit p: Parameters) extends Mem
+   val sqDeq              = Output(UInt(log2Ceil(EnsbufferWidth + 1).W))
+   // to store unit
+   val sqDeqPtr           = Output(new SqPtr)
+-  val sqDeqUopIdx        = Output(UopIdx())
+-  val sqDeqRobIdx        = Output(new RobPtr)
+   // for store difftest
+   val diffStore          = Option.when(debugEn)(Flipped(new DiffStoreIO))
+ }
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+index e52671006de..4862b556313 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+@@ -22,7 +22,7 @@ import chisel3.util._
+ import utils._
+ import utility._
+ import xiangshan._
+-import xiangshan.backend.Bundles.{DynInst, ExuOutput, MemExuOutput, NewExuOutput, UopIdx, connectSamePort}
++import xiangshan.backend.Bundles.{DynInst, ExuOutput, MemExuOutput, MemToRob, UopIdx, connectSamePort}
+ import xiangshan.backend._
+ import xiangshan.backend.rob.{RobLsqIO, RobPtr}
+ import xiangshan.backend.fu.FuType
+@@ -80,7 +80,6 @@ class LsqWrapper(implicit p: Parameters) extends XSModule
+       val ldin = Vec(LoadPipelineWidth, Flipped(Decoupled(new LqWriteBundle))) // from load_s3
+     }
+     val sta = new Bundle() {
+-      val storeMaskIn = Vec(StorePipelineWidth, Flipped(Valid(new StoreMaskBundle))) // from store_s0, store mask, send to sq from rs
+       val storeAddrIn = Vec(StorePipelineWidth, Flipped(Valid(new StoreAddrIO))) // from store_s1
+       val storeAddrInRe = Vec(StorePipelineWidth, Input(new StoreAddrIO)) // from store_s2
+       // ready indicate unaligned queue reject this unaligned request
+@@ -100,10 +99,9 @@ class LsqWrapper(implicit p: Parameters) extends XSModule
+     val mdpTrain        = ValidIO(new Redirect)
+     val release = Flipped(Valid(new Release))
+     val loadWakeup = Flipped(ValidIO(new DCacheLoadWakeup()))
+-    val maControl     = Flipped(new StoreMaBufToSqControlIO)
+     val uncacheOutstanding = Input(Bool())
+     val uncache = new UncacheWordIO
+-    val mmioStout = DecoupledIO(new NewExuOutput(staParams.head)) // writeback uncached store
++    val mmioStout = DecoupledIO(new MemToRob(staParams.head)) // writeback uncached store
+     val sqEmpty = Output(Bool())
+     val lq_rep_full = Output(Bool())
+     val sqFull = Output(Bool())
+@@ -116,9 +114,6 @@ class LsqWrapper(implicit p: Parameters) extends XSModule
+     val sqCanAccept = Output(Bool())
+     val lqDeqPtr = Output(new LqPtr)
+     val sqDeqPtr = Output(new SqPtr)
+-    val sqCommitPtr = Output(new SqPtr)
+-    val sqCommitUopIdx = Output(UopIdx())
+-    val sqCommitRobIdx = Output(new RobPtr)
+     val issuePtrExt = Output(new SqPtr)
+     val l2_hint = Input(Valid(new L2ToL1Hint()))
+     val tlb_hint = Flipped(new TlbHintIO)
+@@ -145,9 +140,6 @@ class LsqWrapper(implicit p: Parameters) extends XSModule
+   storeQueue.io.wfi <> io.wfi
+ 
+   if (backendParams.debugEn){ dontTouch(loadQueue.io.tlbReplayDelayCycleCtrl) }
+-  // TODO: Don't use for now, will be remove in the feature
+-  io.maControl := DontCare
+-  io.maControl.toStoreMisalignBuffer.doDeq := true.B // always true, cross page unalign handled by store queue.
+   // Todo: imm
+   val tlbReplayDelayCycleCtrl = WireInit(VecInit(Seq(14.U(ReSelectLen.W), 0.U(ReSelectLen.W), 125.U(ReSelectLen.W), 0.U(ReSelectLen.W))))
+   loadQueue.io.tlbReplayDelayCycleCtrl := tlbReplayDelayCycleCtrl
+@@ -162,9 +154,6 @@ class LsqWrapper(implicit p: Parameters) extends XSModule
+   storeQueue.io.enq.lqCanAccept := loadQueue.io.enq.canAccept
+   io.lqDeqPtr := loadQueue.io.lqDeqPtr
+   io.sqDeqPtr := storeQueue.io.sqDeqPtr
+-  io.sqCommitRobIdx := storeQueue.io.sqDeqRobIdx
+-  io.sqCommitUopIdx := storeQueue.io.sqDeqUopIdx
+-  io.sqCommitPtr    := storeQueue.io.sqDeqPtr
+   io.rarValidCount := loadQueue.io.rarValidCount
+   for (i <- io.enq.req.indices) {
+     loadQueue.io.enq.needAlloc(i)      := io.enq.needAlloc(i)(0)
+@@ -192,7 +181,6 @@ class LsqWrapper(implicit p: Parameters) extends XSModule
+   storeQueue.io.fromStoreUnit.storeAddrIn     <> io.sta.storeAddrIn // from store_s1
+   storeQueue.io.fromStoreUnit.storeAddrInRe   <> io.sta.storeAddrInRe // from store_s2
+   storeQueue.io.storeDataIn                   <> io.std.storeDataIn // from store_s0
+-  storeQueue.io.fromStoreUnit.storeMaskIn     <> io.sta.storeMaskIn // from store_s0
+   storeQueue.io.writeToSbuffer                <> io.sbuffer
+   storeQueue.io.writeBack                     <> io.mmioStout
+   storeQueue.io.fromRob.pendingPtr            := io.rob.pendingPtr
+@@ -208,7 +196,6 @@ class LsqWrapper(implicit p: Parameters) extends XSModule
+   storeQueue.io.toDCache.resp                 <> io.cmoOpResp
+   io.flushSbuffer.valid                       := storeQueue.io.sbufferCtrl.req.flush
+   storeQueue.io.sbufferCtrl.resp.empty        := io.flushSbuffer.empty
+-//  storeQueue.io.maControl    <> io.maControl
+   io.diffStore.foreach{ case sink =>
+     storeQueue.io.diffStore.foreach(sink := _)
+   }
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+index 943f03b8fe7..7293e90fcc3 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+@@ -782,7 +782,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+       val fromRob         = Input(new FromRobIO)
+       val toRob           = Output(new toRobIO)
+       val writeToSbuffer  = new SbufferWriteIO
+-      val writeBack       = DecoupledIO(new NewExuOutput(param))
++      val writeBack       = DecoupledIO(new MemToRob(param))
+       val exceptionInfo   = ValidIO(new MemExceptionInfo)
+       val sbufferCtrl     = new SbufferCtrlIO
+ 
+@@ -792,7 +792,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+       val rdataPtrExt     = Input(Vec(EnsbufferWidth, new SqPtr))
+       val deqPtrExt       = Input(Vec(EnsbufferWidth, new SqPtr))
+       val validCnt        = Input(UInt(log2Ceil(StoreQueueSize + 1).W))
+-      val fromUnalignQueue = Flipped(ValidIO(new Bundle {
++      val fromUnalignQueue = Flipped(DecoupledIO(new Bundle {
+         val paddr         = UInt(PAddrBits.W)
+         val sqIdx         = new SqPtr
+       }))
+@@ -1018,35 +1018,32 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+       hasAccessFault := false.B
+     }
+ 
+-    val writeBack = Wire(new NewExuOutput(staParams.head))
+-    writeBack.toRob.valid                        := (uncacheState === UncacheState.writeback) || (cboState === CboState.writeback)
+-    writeBack.toRob.bits.robIdx := dataEntries.head.uop.robIdx
+-    writeBack.toRob.bits.exceptionVec.foreach{ case x =>
++    val writeBackValid = uncacheState === UncacheState.writeback || cboState === CboState.writeback
++    val writeBackToRob = Wire(new MemToRob(staParams.head))
++    writeBackToRob.robIdx := dataEntries.head.uop.robIdx
++    writeBackToRob.exceptionVec.foreach{ case x =>
+       x := ExceptionNO.selectByFu(0.U.asTypeOf(ExceptionVec()), StaCfg)
+       x(hardwareError) := hasHardwareError
+-      x(storeAccessFault) := hasAccessFault} // override
+-    writeBack.toRob.bits.trigger.foreach(_ := DontCare)
+-    writeBack.toRob.bits.isRVC.foreach(_ := DontCare)
+-    writeBack.toRob.bits.sqIdx.foreach(_ := io.rdataPtrExt.head)
+-    writeBack.pdest := DontCare
+-    // for difftest, ref will skip mmio store
+-    writeBack.debug := DontCare
+-    if(debugEn) {
+-      writeBack.debug.vaddr   := dataEntries.head.debugVaddr.get
+-      writeBack.debug.paddr   := dataEntries.head.debugPaddr.get
+-      writeBack.debug.isPerfCnt := DontCare
+-      writeBack.debug_seqNum.foreach(_ := dataEntries.head.debugUop.get.debug_seqNum)
+-      writeBack.perfDebugInfo.foreach(_ := dataEntries.head.debugUop.get.perfDebugInfo)
++      x(storeAccessFault) := hasAccessFault
+     }
+-    if(basicDebugEn) {
+-      writeBack.debug.isMMIO  := isMmio(dataEntries.head.memoryType) || isPbmtIO(dataEntries.head.memoryType)
+-      writeBack.debug.isNCIO  := isPbmtNC(dataEntries.head.memoryType)
+-    }
+-    connectMemDecoupledNewExuOutput(io.writeBack, writeBack)
+-
+-    io.exceptionInfo.valid             := (uncacheState === UncacheState.writeback) || (cboState === CboState.writeback)
++    writeBackToRob.trigger.foreach(_ := DontCare)
++    writeBackToRob.isRVC.foreach(_ := DontCare)
++    writeBackToRob.sqIdx.foreach(_ := io.rdataPtrExt.head)
++    // for difftest, ref will skip mmio store
++    writeBackToRob.debugInfo := DontCare
++    writeBackToRob.debugInfo.vaddr.foreach(_ := dataEntries.head.debugVaddr.get)
++    writeBackToRob.debugInfo.paddr.foreach(_ := dataEntries.head.debugPaddr.get)
++    writeBackToRob.debugInfo.isPerfCnt.foreach(_ := DontCare)
++    writeBackToRob.debugInfo.debug_seqNum.foreach(_ := dataEntries.head.debugUop.get.debug_seqNum)
++    writeBackToRob.debugInfo.perfDebugInfo.foreach(_ := dataEntries.head.debugUop.get.perfDebugInfo)
++    writeBackToRob.debugInfo.isMMIO.foreach(_ := isMmio(dataEntries.head.memoryType) || isPbmtIO(dataEntries.head.memoryType))
++    writeBackToRob.debugInfo.isNCIO.foreach(_ := isPbmtNC(dataEntries.head.memoryType))
++    io.writeBack.valid := writeBackValid
++    io.writeBack.bits := writeBackToRob
++
++    io.exceptionInfo.valid             := writeBackValid
+     io.exceptionInfo.bits.robIdx       := dataEntries.head.uop.robIdx
+-    io.exceptionInfo.bits.exceptionVec := ExceptionNO.selectByFu(writeBack.toRob.bits.exceptionVec.get, StaCfg)
++    io.exceptionInfo.bits.exceptionVec := ExceptionNO.selectByFu(writeBackToRob.exceptionVec.get, StaCfg)
+     // TODO: why not fullVaddr and why don't have gpaddr ?
+     io.exceptionInfo.bits.vaddr        := dataEntries.head.vaddr
+     io.exceptionInfo.bits.gpaddr       := 0.U.asTypeOf(io.exceptionInfo.bits.gpaddr)
+@@ -1096,7 +1093,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+     private val vaddrHigh         = Cat(headDataEntry.vaddr(headDataEntry.vaddr.getWidth - 1, 4), 0.U(4.W)) + 16.U
+ 
+     for (i <- 0 until EnsbufferWidth) {
+-      unalignMask(i)         := VecInit(Seq.fill(VLENB)(false.B)).asUInt >> dataEntries(i).vaddr(3, 0)
++      unalignMask(i)         := Fill(VLENB, true.B) << dataEntries(i).vaddr(3, 0)
+       // unalignWithin16Byte is for old unalign framework difftest, will be remove in the future.
+       val unalignWithin16Byte = (if (debugEn) ctrlEntries(i).unalignWithin16Byte.get else false.B)
+       if(i == 0) {
+@@ -1105,8 +1102,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+         writeSbufferPaddr(i) := paddrLow
+         writeSbufferVaddr(i) := vaddrLow
+         diffIsHighPart(i)    := dataEntries(i).paddr(3) && !unalignWithin16Byte //TODO: will be fix in thefuture
+-      }
+-      if(i == 1) {
++      } else if (i == 1) {
+         writeSbufferData(i)  := Mux(headCross16B, outData(0), outData(i))
+         writeSbufferMask(i)  := Mux(headCross16B, outMask(0) & (~unalignMask(0)).asUInt, outMask(i))
+         writeSbufferPaddr(i) := Mux(headCrossPage,
+@@ -1220,6 +1216,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+     }
+ 
+     io.writeToSbuffer    <> dataQueue.io.toSbuffer
++    io.fromUnalignQueue.ready := headrdataPtr === io.fromUnalignQueue.bits.sqIdx && writeSbufferWire.head.fire
+ 
+     /*============================================ deqPtr generate ===================================================*/
+     /*
+@@ -1347,16 +1344,16 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+   private class UnalignQueue(val param: ExeUnitParams)(implicit p: Parameters) extends LSQModule {
+     val io = IO(new Bundle {
+       val redirect       = Flipped(ValidIO(new Redirect))
+-      val fromStaS2      = Vec(StorePipelineWidth, Flipped(DecoupledIO(new UnalignQueueIO)))
++      val fromStaS1      = Vec(StorePipelineWidth, Flipped(DecoupledIO(new UnalignQueueIO)))
+       val fromSQ = new Bundle {
+         val addrReadyPtr = Input(new SqPtr)
+       }
+-      val toDeqModule = ValidIO(new Bundle {
++      val toDeqModule = DecoupledIO(new Bundle {
+         val paddr        = UInt(PAddrBits.W)
+         val sqIdx        = new SqPtr
+       })
+     })
+-    private val enqWidth: Int  = io.fromStaS2.length
++    private val enqWidth: Int  = io.fromStaS1.length
+     private val queueSize: Int = SQUnalignQueueSize
+ 
+     private val entries    = Reg(Vec(queueSize, new UnalignBufferEntry())) // no need to reset!
+@@ -1371,9 +1368,9 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+     private val full       = enqPtr.value === deqPtr.value && enqPtr.flag =/= deqPtr.flag
+ 
+     // enq
+-    private val canEnq     = io.fromStaS2.map{case port => port.fire} // one-hot, only second request of the unaligned need to enter.
++    private val canEnq     = io.fromStaS1.map{case port => port.fire} // one-hot, only second request of the unaligned need to enter.
+     private val doEnq      = canEnq.reduce(_ || _)
+-    private val doEnqReq   = Mux1H(canEnq, io.fromStaS2.map(_.bits))
++    private val doEnqReq   = Mux1H(canEnq, io.fromStaS1.map(_.bits))
+ 
+     when(doEnq) {
+       entries(enqPtr.value).robIdx     := doEnqReq.robIdx
+@@ -1384,8 +1381,8 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+     (0 until queueSize).map{i =>
+       when(needCancel(i)) { // when redirect, unalignQueue not allow enqueue.
+         allocated(i) := false.B
+-      }.otherwise{
+-        allocated(i) := (i.U === enqPtr.value) && doEnq
++      }.elsewhen((i.U === enqPtr.value) && doEnq){
++        allocated(i) := true.B
+       }
+     }
+ 
+@@ -1414,7 +1411,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+     io.toDeqModule.bits.sqIdx := headEntry.sqIdx
+     io.toDeqModule.valid      := !empty
+ 
+-    io.fromStaS2.map{case sink =>
++    io.fromStaS1.map{case sink =>
+       sink.ready := !full && io.fromSQ.addrReadyPtr === sink.bits.sqIdx && !io.redirect.valid
+     }
+ 
+@@ -1520,7 +1517,7 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+   // unalignQueue connection
+   unalignQueue.io.redirect            := io.redirect
+   unalignQueue.io.fromSQ.addrReadyPtr := addrReadyPtrExt
+-  unalignQueue.io.fromStaS2.zip(io.fromStoreUnit.unalignQueueReq).map{case (sink, source) =>
++  unalignQueue.io.fromStaS1.zip(io.fromStoreUnit.unalignQueueReq).map{case (sink, source) =>
+     sink <> source
+   }
+ 
+@@ -1724,8 +1721,9 @@ class NewStoreQueue(implicit p: Parameters) extends NewStoreQueueBase with HasPe
+       ctrlEntries(i).waitStoreS2  := false.B
+     }
+ 
+-    when(staReValid) {
+-      ctrlEntries(i).hasException := hasExceptionSet
++    // When any valid bit is true, this entry is in stage 2 and can update exception state.
++    when(staReValidVec.reduce(_ || _)) {
++      ctrlEntries(i).hasException := ctrlEntries(i).hasException || hasExceptionSet
+     }.elsewhen(deqCancel || needCancel(i)) {
+       ctrlEntries(i).hasException := false.B
+     }
+@@ -2026,8 +2024,6 @@ class NewStoreQueue(implicit p: Parameters) extends NewStoreQueueBase with HasPe
+ 
+   io.toLoadQueue.stIssuePtr := enqPtrExt(0)
+   io.sqDeqPtr := deqPtrExt(0)
+-  io.sqDeqUopIdx := dataEntries(deqPtrExt(0).value).uop.uopIdx
+-  io.sqDeqRobIdx := dataEntries(deqPtrExt(0).value).uop.robIdx
+ 
+   // Currently, storeQueue will always safe, no other uncommitted instructions may precede the wfi instruction.
+   io.wfi.wfiSafe := true.B
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+deleted file mode 100644
+index 22044f4e4d3..00000000000
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
++++ /dev/null
+@@ -1,669 +0,0 @@
+-/***************************************************************************************
+-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+-* Copyright (c) 2020-2021 Peng Cheng Laboratory
+-*
+-* XiangShan is licensed under Mulan PSL v2.
+-* You can use this software according to the terms and conditions of the Mulan PSL v2.
+-* You may obtain a copy of Mulan PSL v2 at:
+-*          http://license.coscl.org.cn/MulanPSL2
+-*
+-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+-*
+-* See the Mulan PSL v2 for more details.
+-***************************************************************************************/
+-
+-package xiangshan.mem
+-
+-import org.chipsalliance.cde.config.Parameters
+-import chisel3._
+-import chisel3.util._
+-import utils._
+-import utility._
+-import xiangshan._
+-import xiangshan.ExceptionNO._
+-import xiangshan.frontend.ftq.FtqPtr
+-import xiangshan.backend.fu.FuConfig._
+-import xiangshan.backend.fu.fpu.FPU
+-import xiangshan.backend.rob.RobLsqIO
+-import xiangshan.backend.rob.RobPtr
+-import xiangshan.backend.Bundles._
+-import xiangshan.backend.fu.FuConfig.StaCfg
+-import xiangshan.backend.fu.FuType.isVStore
+-import xiangshan.mem.Bundles._
+-import xiangshan.cache._
+-import xiangshan.cache.wpu.ReplayCarry
+-
+-class MisBuffertoVecSplitIO(implicit p: Parameters) extends XSBundle {
+-  val empty  = Bool()
+-  val robIdx = new RobPtr
+-  val uopIdx = UopIdx()
+-}
+-class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+-  with HasMemBlockParameters
+-  with HasCircularQueuePtrHelper
+-{
+-  private val enqPortNum = StorePipelineWidth
+-  private val maxSplitNum = 2
+-
+-  require(maxSplitNum == 2)
+-
+-  private val SB = "b00".U(2.W)
+-  private val SH = "b01".U(2.W)
+-  private val SW = "b10".U(2.W)
+-  private val SD = "b11".U(2.W)
+-
+-  // encode of how many bytes to shift or truncate
+-  private val BYTE0 = "b000".U(3.W)
+-  private val BYTE1 = "b001".U(3.W)
+-  private val BYTE2 = "b010".U(3.W)
+-  private val BYTE3 = "b011".U(3.W)
+-  private val BYTE4 = "b100".U(3.W)
+-  private val BYTE5 = "b101".U(3.W)
+-  private val BYTE6 = "b110".U(3.W)
+-  private val BYTE7 = "b111".U(3.W)
+-
+-  def getMask(sizeEncode: UInt) = LookupTree(sizeEncode, List(
+-    SB -> 0x1.U,
+-    SH -> 0x3.U,
+-    SW -> 0xf.U,
+-    SD -> 0xff.U
+-  ))
+-
+-  val io = IO(new Bundle() {
+-    val redirect        = Flipped(Valid(new Redirect))
+-    val enq             = Vec(enqPortNum, Flipped(new MisalignBufferEnqIO))
+-    val rob             = Flipped(new RobLsqIO)
+-    val splitStoreReq   = Decoupled(new LsPipelineBundle)
+-    val splitStoreResp  = Flipped(Valid(new SqWriteBundle))
+-    val writeBack       = DecoupledIO(new NewExuOutput(staParams.head))
+-    val vecWriteBack    = Vec(VecStorePipelineWidth, Decoupled(new VecPipelineFeedbackIO(isVStore = true)))
+-    val overwriteExpBuf = Output(new XSBundle {
+-      val valid = Bool()
+-      val vaddr = UInt(XLEN.W)
+-      val isHyper = Bool()
+-      val gpaddr = UInt(XLEN.W)
+-      val isForVSnonLeafPTE = Bool()
+-    })
+-    val sqControl       = new StoreMaBufToSqControlIO
+-
+-    val toVecSplit = Output(new MisBuffertoVecSplitIO) // robIdx in misalignedBuffer
+-  })
+-
+-  io.rob.mmioBusy := false.B
+-
+-  class StoreMisalignBufferEntry(implicit p: Parameters) extends LsPipelineBundle {
+-    val portIndex = UInt(log2Up(enqPortNum).W)
+-  }
+-  private def selectOlder(left: StoreMisalignBufferEntry, right: StoreMisalignBufferEntry): Bool = {
+-    isBefore(left.uop.robIdx, right.uop.robIdx) ||
+-      (left.uop.robIdx === right.uop.robIdx && left.uop.uopIdx < right.uop.uopIdx)
+-  }
+-
+-  val req_valid = RegInit(false.B)
+-  val req = Reg(new StoreMisalignBufferEntry)
+-
+-  val cross4KBPageBoundary = Wire(Bool())
+-  val needFlushPipe = RegInit(false.B)
+-
+-  val selectOldestModule = Module(new SelectOldest(new StoreMisalignBufferEntry, enqPortNum, selectOlder))
+-
+-  // buffer control:
+-  //  - s_idle:  Idle
+-  //  - s_split: Split miss-aligned store into aligned stores
+-  //  - s_req:   Send split store to sta and get result from sta
+-  //  - s_resp:  Responds to a split store access request
+-  //  - s_wb:    writeback yo rob/vecMergeBuffer
+-  //  - s_block: Wait for this instr to reach the head of Rob.
+-  val s_idle :: s_split :: s_req :: s_resp :: s_wb :: s_block :: Nil = Enum(6)
+-  val bufferState    = RegInit(s_idle)
+-
+-  // enqueue
+-  // s1:
+-  val s1_req = VecInit(io.enq.map(_.req.bits))
+-  val s1_valid = VecInit(io.enq.map(x => x.req.valid))
+-
+-  val s1_index = (0 until io.enq.length).map(_.asUInt)
+-  val selectEntries = Wire(Vec(enqPortNum, new StoreMisalignBufferEntry))
+-  selectEntries.zipWithIndex.map{case (sink, i) =>
+-    connectSamePort(sink, s1_req(i))
+-    sink.portIndex := s1_index(i)
+-  }
+-  selectOldestModule.io.in.zip(selectEntries).zip(s1_valid).map {case ((sink, source), v) =>
+-    sink.bits := source
+-    sink.valid := v
+-  }
+-  val reqSel = selectOldestModule.io.out
+-
+-  val reqSelValid = reqSel.valid
+-  val reqSelBits  = reqSel.bits
+-
+-  val reqRedirect = reqSelBits.uop.robIdx.needFlush(io.redirect)
+-
+-  val canEnq = WireInit(false.B)
+-  canEnq := !req_valid && !reqRedirect && reqSelValid
+-  val robMatch = req_valid && (io.rob.pendingPtr === req.uop.robIdx)
+-
+-  val s2_canEnq = GatedRegNext(canEnq)
+-  val s2_reqSelPort = GatedRegNext(reqSelBits.portIndex)
+-  val s2_needRevoke = s2_canEnq && (0 until enqPortNum).map {
+-    case i => io.enq(i).revoke && s2_reqSelPort === i.U
+-  }.reduce(_|_)
+-
+-  when(canEnq) {
+-    connectSamePort(req, reqSelBits)
+-    req_valid := true.B
+-  }
+-  val cross4KBPageEnq = WireInit(false.B)
+-  when (cross4KBPageBoundary && !reqRedirect) {
+-    when(
+-      reqSelValid &&
+-      (isAfter(req.uop.robIdx, reqSelBits.uop.robIdx) || (isNotBefore(req.uop.robIdx, reqSelBits.uop.robIdx) && req.uop.uopIdx > reqSelBits.uop.uopIdx)) &&
+-      bufferState === s_idle
+-    ) {
+-      connectSamePort(req, reqSelBits)
+-      cross4KBPageEnq := true.B
+-      needFlushPipe   := true.B
+-      canEnq := true.B
+-    } .otherwise {
+-      req := req
+-      cross4KBPageEnq := false.B
+-    }
+-  }
+-
+-  val reqSelCanEnq = UIntToOH(reqSelBits.portIndex)
+-
+-  io.enq.zipWithIndex.map{
+-    case (reqPort, index) => reqPort.req.ready := reqSelCanEnq(index) && (!req_valid || cross4KBPageBoundary && cross4KBPageEnq)
+-  }
+-
+-  io.toVecSplit.empty  := !req_valid
+-  io.toVecSplit.robIdx := req.uop.robIdx
+-  io.toVecSplit.uopIdx := req.uop.uopIdx
+-
+-  //logic
+-  val splitStoreReqs = RegInit(VecInit(List.fill(maxSplitNum)(0.U.asTypeOf(new LsPipelineBundle))))
+-  val splitStoreResp = RegInit(VecInit(List.fill(maxSplitNum)(0.U.asTypeOf(new SqWriteBundle))))
+-  val isCrossPage    = RegInit(false.B)
+-  val exceptionVec   = RegInit(0.U.asTypeOf(ExceptionVec()))
+-  val unSentStores   = RegInit(0.U(maxSplitNum.W))
+-  val unWriteStores  = RegInit(0.U(maxSplitNum.W))
+-  val curPtr = RegInit(0.U(log2Ceil(maxSplitNum).W))
+-
+-  // if there is exception or mmio in split store
+-  val globalException = RegInit(false.B)
+-  val globalUncache = RegInit(false.B)
+-
+-  // debug info
+-  val globalMMIO = RegInit(false.B)
+-  val globalNC   = RegInit(false.B)
+-  val globalMemBackTypeMM = RegInit(false.B)
+-
+-  val hasException = io.splitStoreResp.bits.vecActive && !io.splitStoreResp.bits.need_rep &&
+-    ExceptionNO.selectByFu(io.splitStoreResp.bits.uop.exceptionVec, StaCfg).asUInt.orR || TriggerAction.isDmode(io.splitStoreResp.bits.uop.trigger)
+-  val isUncache = (io.splitStoreResp.bits.mmio || io.splitStoreResp.bits.nc) && !io.splitStoreResp.bits.need_rep
+-
+-  io.sqControl.toStoreQueue.crossPageWithHit := io.sqControl.toStoreMisalignBuffer.sqPtr === req.uop.sqIdx && isCrossPage
+-  io.sqControl.toStoreQueue.crossPageCanDeq := !isCrossPage || bufferState === s_block
+-  io.sqControl.toStoreQueue.paddr := Cat(splitStoreResp(1).paddr(splitStoreResp(1).paddr.getWidth - 1, 3), 0.U(3.W))
+-
+-  io.sqControl.toStoreQueue.withSameUop := io.sqControl.toStoreMisalignBuffer.uop.robIdx === req.uop.robIdx && io.sqControl.toStoreMisalignBuffer.uop.uopIdx === req.uop.uopIdx && req.isvec && robMatch && isCrossPage
+-
+-  //state transition
+-  switch(bufferState) {
+-    is (s_idle) {
+-      when(cross4KBPageBoundary && !s2_needRevoke) {
+-        when(robMatch) {
+-          bufferState := s_split
+-          isCrossPage := true.B
+-        }
+-      } .otherwise {
+-        when (req_valid && !s2_needRevoke) {
+-          bufferState := s_split
+-          isCrossPage := false.B
+-        }
+-      }
+-    }
+-
+-    is (s_split) {
+-      bufferState := s_req
+-    }
+-
+-    is (s_req) {
+-      when (io.splitStoreReq.fire) {
+-        bufferState := s_resp
+-      }
+-    }
+-
+-    is (s_resp) {
+-      val needDelay = WireInit(false.B)
+-
+-      when (io.splitStoreResp.valid) {
+-        val clearOh = UIntToOH(curPtr)
+-        when (hasException || isUncache) {
+-          // commit directly when exception ocurs
+-          // if any split store reaches mmio space, delegate to software storeAddrMisaligned exception
+-          bufferState := s_wb
+-          globalException := hasException
+-          globalUncache := isUncache
+-          globalMMIO := io.splitStoreResp.bits.mmio
+-          globalNC   := io.splitStoreResp.bits.nc
+-          globalMemBackTypeMM := io.splitStoreResp.bits.memBackTypeMM
+-        } .elsewhen(io.splitStoreResp.bits.need_rep || (unSentStores & (~clearOh).asUInt).orR) {
+-          // need replay or still has unsent requests
+-          bufferState := s_req
+-        } .otherwise {
+-          // got result, goto calculate data and control sq.
+-          // Wait a beat to get  misalign writeback aligned raw rollback.
+-          needDelay := true.B
+-          bufferState := s_resp
+-        }
+-      }
+-
+-      when (RegNextN(needDelay, RAWTotalDelayCycles)) {
+-        bufferState := s_wb
+-      }
+-    }
+-
+-    is (s_wb) {
+-      when (req.isvec) {
+-        when (io.vecWriteBack.map(x => x.fire).reduce( _ || _)) {
+-          bufferState := s_idle
+-          req_valid := false.B
+-          curPtr := 0.U
+-          unSentStores := 0.U
+-          unWriteStores := 0.U
+-          globalException := false.B
+-          globalUncache := false.B
+-          isCrossPage := false.B
+-
+-          globalMMIO := false.B
+-          globalNC   := false.B
+-          globalMemBackTypeMM := false.B
+-        }
+-
+-      }.otherwise {
+-        when (io.writeBack.fire && (!isCrossPage || globalUncache || globalException)) {
+-          bufferState := s_idle
+-          req_valid := false.B
+-          curPtr := 0.U
+-          unSentStores := 0.U
+-          unWriteStores := 0.U
+-          globalException := false.B
+-          globalUncache := false.B
+-          isCrossPage := false.B
+-
+-          globalMMIO := false.B
+-          globalNC   := false.B
+-          globalMemBackTypeMM := false.B
+-        } .elsewhen(io.writeBack.fire && isCrossPage) {
+-          bufferState := s_block
+-        } .otherwise {
+-          bufferState := s_wb
+-        }
+-
+-      }
+-    }
+-
+-    is (s_block) {
+-      when (io.sqControl.toStoreMisalignBuffer.doDeq) {
+-        bufferState := s_idle
+-        req_valid := false.B
+-        curPtr := 0.U
+-        unSentStores := 0.U
+-        unWriteStores := 0.U
+-        globalException := false.B
+-        globalUncache := false.B
+-        isCrossPage := false.B
+-
+-        globalMMIO := false.B
+-        globalNC   := false.B
+-        globalMemBackTypeMM := false.B
+-      }
+-    }
+-  }
+-
+-  val alignedType = Mux(req.isvec, req.alignedType(1,0), LSUOpType.size(req.uop.fuOpType))
+-
+-  val highAddress = LookupTree(alignedType, List(
+-    SB -> 0.U,
+-    SH -> 1.U,
+-    SW -> 3.U,
+-    SD -> 7.U
+-  )) + req.vaddr(4, 0)
+-
+-  val highPageAddress = LookupTree(alignedType, List(
+-    SB -> 0.U,
+-    SH -> 1.U,
+-    SW -> 3.U,
+-    SD -> 7.U
+-  )) + req.vaddr(12, 0)
+-  // to see if (vaddr + opSize - 1) and vaddr are in the same 16 bytes region
+-  val cross16BytesBoundary = req_valid && (highAddress(4) =/= req.vaddr(4))
+-  cross4KBPageBoundary := req_valid && (highPageAddress(12) =/= req.vaddr(12))
+-  val aligned16BytesAddr   = (req.vaddr >> 4) << 4// req.vaddr & ~("b1111".U)
+-  val aligned16BytesSel    = req.vaddr(3, 0)
+-
+-  // meta of 128 bit store
+-  val new128Store = WireInit(0.U.asTypeOf(new LsPipelineBundle))
+-  // meta of split loads
+-  val lowAddrStore  = WireInit(0.U.asTypeOf(new LsPipelineBundle))
+-  val highAddrStore = WireInit(0.U.asTypeOf(new LsPipelineBundle))
+-  // final lowResult = Cat(`lowResultWidth` of store data, 0.U(make it to fill total length of Vlen))
+-  val lowResultWidth = RegInit(0.U(3.W)) // how many bytes should we take from the store data
+-  // final highResult = Zero extend to Vlen(`highResultWidth` of (store data >> lowResultWidth))
+-  val highResultWidth = RegInit(0.U(3.W)) // how many bytes should we take from the store data
+-
+-  when (bufferState === s_split) {
+-    when (!cross16BytesBoundary) {
+-      assert(false.B, s"There should be no non-aligned access that does not cross 16Byte boundaries.")
+-    } .otherwise {
+-      // split this unaligned store into `maxSplitNum` aligned stores
+-      unWriteStores := Fill(maxSplitNum, 1.U(1.W))
+-      unSentStores := Fill(maxSplitNum, 1.U(1.W))
+-      curPtr := 0.U
+-      lowAddrStore.uop := req.uop
+-      lowAddrStore.uop.exceptionVec(storeAddrMisaligned) := false.B
+-      highAddrStore.uop := req.uop
+-      highAddrStore.uop.exceptionVec(storeAddrMisaligned) := false.B
+-
+-      switch (alignedType(1, 0)) {
+-        is (SB) {
+-          assert(false.B, "lb should not trigger miss align")
+-        }
+-
+-        is (SH) {
+-          lowAddrStore.uop.fuOpType := SH
+-          lowAddrStore.vaddr := req.vaddr
+-          lowAddrStore.mask  := 0x3.U
+-          lowResultWidth    := BYTE1
+-
+-          highAddrStore.uop.fuOpType := SB
+-          highAddrStore.vaddr := req.vaddr + 1.U
+-          highAddrStore.mask  := 0x1.U << highAddrStore.vaddr(3, 0)
+-          highResultWidth    := BYTE1
+-        }
+-
+-        is (SW) {
+-          switch (req.vaddr(1, 0)) {
+-            is ("b00".U) {
+-              assert(false.B, "should not trigger miss align")
+-            }
+-
+-            is ("b01".U) {
+-              lowAddrStore.uop.fuOpType := SW
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xf.U
+-              lowResultWidth    := BYTE3
+-
+-              highAddrStore.uop.fuOpType := SB
+-              highAddrStore.vaddr := req.vaddr + 3.U
+-              highAddrStore.mask  := 0x1.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE1
+-            }
+-
+-            is ("b10".U) {
+-              lowAddrStore.uop.fuOpType := SW
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xf.U
+-              lowResultWidth    := BYTE2
+-
+-              highAddrStore.uop.fuOpType := SH
+-              highAddrStore.vaddr := req.vaddr + 2.U
+-              highAddrStore.mask  := 0x3.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE2
+-            }
+-
+-            is ("b11".U) {
+-              lowAddrStore.uop.fuOpType := SW
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xf.U
+-              lowResultWidth    := BYTE1
+-
+-              highAddrStore.uop.fuOpType := SW
+-              highAddrStore.vaddr := req.vaddr + 1.U
+-              highAddrStore.mask  := 0xf.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE3
+-            }
+-          }
+-        }
+-
+-        is (SD) {
+-          switch (req.vaddr(2, 0)) {
+-            is ("b000".U) {
+-              assert(false.B, "should not trigger miss align")
+-            }
+-
+-            is ("b001".U) {
+-              lowAddrStore.uop.fuOpType := SD
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xff.U
+-              lowResultWidth    := BYTE7
+-
+-              highAddrStore.uop.fuOpType := SB
+-              highAddrStore.vaddr := req.vaddr + 7.U
+-              highAddrStore.mask  := 0x1.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE1
+-            }
+-
+-            is ("b010".U) {
+-              lowAddrStore.uop.fuOpType := SD
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xff.U
+-              lowResultWidth    := BYTE6
+-
+-              highAddrStore.uop.fuOpType := SH
+-              highAddrStore.vaddr := req.vaddr + 6.U
+-              highAddrStore.mask  := 0x3.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE2
+-            }
+-
+-            is ("b011".U) {
+-              lowAddrStore.uop.fuOpType := SD
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xff.U
+-              lowResultWidth    := BYTE5
+-
+-              highAddrStore.uop.fuOpType := SW
+-              highAddrStore.vaddr := req.vaddr + 5.U
+-              highAddrStore.mask  := 0xf.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE3
+-            }
+-
+-            is ("b100".U) {
+-              lowAddrStore.uop.fuOpType := SD
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xff.U
+-              lowResultWidth    := BYTE4
+-
+-              highAddrStore.uop.fuOpType := SW
+-              highAddrStore.vaddr := req.vaddr + 4.U
+-              highAddrStore.mask  := 0xf.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE4
+-            }
+-
+-            is ("b101".U) {
+-              lowAddrStore.uop.fuOpType := SD
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xff.U
+-              lowResultWidth    := BYTE3
+-
+-              highAddrStore.uop.fuOpType := SD
+-              highAddrStore.vaddr := req.vaddr + 3.U
+-              highAddrStore.mask  := 0xff.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE5
+-            }
+-
+-            is ("b110".U) {
+-              lowAddrStore.uop.fuOpType := SD
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xff.U
+-              lowResultWidth    := BYTE2
+-
+-              highAddrStore.uop.fuOpType := SD
+-              highAddrStore.vaddr := req.vaddr + 2.U
+-              highAddrStore.mask  := 0xff.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE6
+-            }
+-
+-            is ("b111".U) {
+-              lowAddrStore.uop.fuOpType := SD
+-              lowAddrStore.vaddr := req.vaddr
+-              lowAddrStore.mask  := 0xff.U
+-              lowResultWidth    := BYTE1
+-
+-              highAddrStore.uop.fuOpType := SD
+-              highAddrStore.vaddr := req.vaddr + 1.U
+-              highAddrStore.mask  := 0xff.U << highAddrStore.vaddr(3, 0)
+-              highResultWidth    := BYTE7
+-            }
+-          }
+-        }
+-      }
+-
+-      splitStoreReqs(0) := lowAddrStore
+-      splitStoreReqs(1) := highAddrStore
+-    }
+-  }
+-
+-  io.splitStoreReq.valid := req_valid && (bufferState === s_req)
+-  io.splitStoreReq.bits  := splitStoreReqs(curPtr)
+-  io.splitStoreReq.bits.isvec  := req.isvec
+-  // Restore the information of H extension store
+-  // bit encoding: | hsv 1 | store 00 | size(2bit) |
+-  val reqIsHsv  = LSUOpType.isHsv(req.uop.fuOpType)
+-  val scalaStOpType = LSUOpType.makeLsUop(isHlv = reqIsHsv, isHlvx = false.B, size = LSUOpType.size(splitStoreReqs(curPtr).uop.fuOpType))
+-  io.splitStoreReq.bits.uop.fuOpType := Mux(req.isvec, req.uop.fuOpType, scalaStOpType)
+-  io.splitStoreReq.bits.alignedType  := Mux(req.isvec, LSUOpType.size(splitStoreReqs(curPtr).uop.fuOpType), req.alignedType)
+-  io.splitStoreReq.bits.isFinalSplit := curPtr(0)
+-
+-  when (io.splitStoreResp.valid && bufferState === s_resp && req.uop.robIdx === io.splitStoreResp.bits.uop.robIdx) {
+-    val resp = io.splitStoreResp.bits
+-    splitStoreResp(curPtr) := io.splitStoreResp.bits
+-    when (isUncache) {
+-      unWriteStores := 0.U
+-      unSentStores := 0.U
+-      exceptionVec := ExceptionNO.selectByFu(0.U.asTypeOf(exceptionVec.cloneType), StaCfg)
+-      // delegate to software
+-      exceptionVec(storeAddrMisaligned) := true.B
+-    } .elsewhen (hasException) {
+-      unWriteStores := 0.U
+-      unSentStores := 0.U
+-      StaCfg.exceptionOut.map(no => exceptionVec(no) := exceptionVec(no) || resp.uop.exceptionVec(no))
+-    } .elsewhen (!io.splitStoreResp.bits.need_rep) {
+-      unSentStores := unSentStores & (~UIntToOH(curPtr)).asUInt
+-      curPtr := curPtr + 1.U
+-      exceptionVec := 0.U.asTypeOf(ExceptionVec())
+-    }
+-  }
+-
+-  val splitStoreData = RegInit(VecInit(List.fill(maxSplitNum)(0.U.asTypeOf(new XSBundle {
+-    val wdata = UInt(VLEN.W)
+-    val wmask = UInt((VLEN / 8).W)
+-  }))))
+-
+-  val wmaskLow  = Wire(Vec(VLEN / 8, Bool()))
+-  val wmaskHigh = Wire(Vec(VLEN / 8, Bool()))
+-  (0 until (VLEN / 8)).map {
+-    case i  => {
+-      when (i.U < highResultWidth) {
+-        wmaskHigh(i) := true.B
+-      } .otherwise {
+-        wmaskHigh(i) := false.B
+-      }
+-      when (i.U < lowResultWidth) {
+-        wmaskLow(i) := true.B
+-      } .otherwise {
+-        wmaskLow(i) := false.B
+-      }
+-    }
+-  }
+-
+-  val writeBack = Wire(new NewExuOutput(staParams.head))
+-  writeBack.toRob.valid := req_valid && (bufferState === s_wb) && !req.isvec
+-  writeBack.pdest := req.uop.pdest
+-  writeBack.toRob.bits.robIdx := req.uop.robIdx
+-  writeBack.toRob.bits.exceptionVec.foreach(x => {
+-    x := 0.U.asTypeOf(x)
+-    StaCfg.exceptionOut.map(no => x(no) := (globalUncache || globalException) && exceptionVec(no))
+-  })
+-  writeBack.toRob.bits.lqIdx.foreach(_ := req.uop.lqIdx)
+-  writeBack.toRob.bits.sqIdx.foreach(_ := req.uop.sqIdx)
+-  writeBack.toRob.bits.trigger.foreach(_ := req.uop.trigger)
+-  writeBack.toRob.bits.isRVC.foreach(_ := req.uop.isRVC)
+-  writeBack.debug.isMMIO := globalMMIO
+-  writeBack.debug.isNCIO := globalNC && !globalMemBackTypeMM
+-  writeBack.debug.isPerfCnt := false.B
+-  writeBack.debug.paddr := req.paddr
+-  writeBack.debug.vaddr := req.vaddr
+-  writeBack.perfDebugInfo.foreach(_  := req.uop.perfDebugInfo)
+-  writeBack.debug_seqNum.foreach(_  := req.uop.debug_seqNum)
+-
+-  connectMemDecoupledNewExuOutput(io.writeBack, writeBack)
+-
+-  io.vecWriteBack.zipWithIndex.map{
+-    case (wb, index) => {
+-      wb.valid := req_valid && (bufferState === s_wb) && req.isvec && UIntToOH(req.portIndex)(index)
+-
+-      wb.bits.mBIndex           := req.mbIndex
+-      wb.bits.hit               := true.B
+-      wb.bits.isvec             := true.B
+-      wb.bits.sourceType        := RSFeedbackType.tlbMiss
+-      wb.bits.flushState        := DontCare
+-      wb.bits.trigger           := TriggerAction.None
+-      wb.bits.mmio              := globalMMIO
+-      wb.bits.exceptionVec      := ExceptionNO.selectByFu(exceptionVec, VstuCfg)
+-      wb.bits.hasException      := globalException
+-      wb.bits.elemIdx           := req.elemIdx
+-      wb.bits.alignedType       := req.alignedType
+-      wb.bits.mask              := req.mask
+-      wb.bits.vaddr             := req.vaddr
+-      wb.bits.vaNeedExt         := req.vaNeedExt
+-      wb.bits.gpaddr            := req.gpaddr
+-      wb.bits.isForVSnonLeafPTE := req.isForVSnonLeafPTE
+-      wb.bits.vstart            := req.uop.vpu.vstart
+-      wb.bits.vecTriggerMask    := 0.U
+-      wb.bits.nc                := globalNC
+-    }
+-  }
+-
+-  val flush = req_valid && req.uop.robIdx.needFlush(io.redirect)
+-
+-  when (flush || s2_needRevoke) {
+-    bufferState := s_idle
+-    req_valid := false.B
+-    curPtr := 0.U
+-    unSentStores := 0.U
+-    unWriteStores := 0.U
+-    globalException := false.B
+-    globalUncache := false.B
+-    isCrossPage := false.B
+-
+-    globalMMIO := false.B
+-    globalNC   := false.B
+-    globalMemBackTypeMM := false.B
+-  }
+-
+-  // NOTE: spectial case (unaligned store cross page, page fault happens in next page)
+-  // if exception happens in the higher page address part, overwrite the storeExceptionBuffer vaddr
+-  val shouldOverwrite = req_valid && cross16BytesBoundary && globalException && (curPtr === 1.U)
+-  val overwriteExpBuf = GatedValidRegNext(shouldOverwrite)
+-  val overwriteVaddr = RegEnable(splitStoreResp(curPtr).vaddr, shouldOverwrite)
+-  val overwriteIsHyper = RegEnable(splitStoreResp(curPtr).isHyper, shouldOverwrite)
+-  val overwriteGpaddr = RegEnable(splitStoreResp(curPtr).gpaddr, shouldOverwrite)
+-  val overwriteIsForVSnonLeafPTE = RegEnable(splitStoreResp(curPtr).isForVSnonLeafPTE, shouldOverwrite)
+-
+-  //TODO In theory, there is no need to overwrite, but for now, the signal is retained in the code in this way.
+-  // and the signal will be removed after sufficient verification.
+-  io.overwriteExpBuf.valid := false.B
+-  io.overwriteExpBuf.vaddr := overwriteVaddr
+-  io.overwriteExpBuf.isHyper := overwriteIsHyper
+-  io.overwriteExpBuf.gpaddr := overwriteGpaddr
+-  io.overwriteExpBuf.isForVSnonLeafPTE := overwriteIsForVSnonLeafPTE
+-
+-  XSPerfAccumulate("alloc",                  RegNext(!req_valid) && req_valid)
+-  XSPerfAccumulate("flush",                  flush)
+-  XSPerfAccumulate("flush_idle",             flush && (bufferState === s_idle))
+-  XSPerfAccumulate("flush_non_idle",         flush && (bufferState =/= s_idle))
+-}
+diff --git a/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala b/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala
+index 5fb2f40f2b1..7ccd9dfa629 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala
+@@ -26,7 +26,7 @@ import xiangshan.ExceptionNO._
+ import xiangshan.backend.fu.PMPRespBundle
+ import xiangshan.backend.fu.FuConfig.MouCfg
+ import xiangshan.backend.fu.FuType
+-import xiangshan.backend.Bundles.{DynInst, ExceptionInfo, ExuInput, ExuOutput, NewExuOutput}
++import xiangshan.backend.Bundles.{DynInst, ExceptionInfo, ExuInput, ExuOutput, MemWriteBack}
+ import xiangshan.backend.fu.NewCSR.TriggerUtil
+ import xiangshan.backend.fu.util.SdtrigExt
+ import xiangshan.backend.exu.ExeUnitParams
+@@ -46,7 +46,7 @@ class AtomicsUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSMo
+     val in            = Flipped(Decoupled(new ExuInput(param, hasCopySrc = true)))
+     val storeDataIn   = Flipped(Vec(StdCnt, Valid(new ExuInput(moudParam))))
+     // AtomicsUnit re-uses lda port to write back
+-    val out           = new NewExuOutput(ldaParams.head)
++    val out           = new MemWriteBack(ldaParams.head)
+     val dcache        = new AtomicWordIO
+     val dtlb          = new TlbRequestIO(2)
+     val pmpResp       = Flipped(new PMPRespBundle())
+@@ -514,26 +514,27 @@ class AtomicsUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSMo
+   assert(!out_valid || state_sta_wb || state_std_wb, "out_valid reg error\n")
+   io.out.toIntRf.foreach{case port =>
+     port.valid := state_sta_wb
+-    port.bits := Mux(state === s_finish2, resp_data >> XLEN, resp_data)
++    port.bits.data := Mux(state === s_finish2, resp_data >> XLEN, resp_data)
++    port.bits.pdest := Mux(state === s_finish2, pdest2, pdest1)
++    port.bits.isFromLoadUnit.get  := false.B
+   }
+   io.out.toFpRf.foreach{case port =>
+     port.valid := false.B // amo will never write fp
+-    port.bits := Mux(state === s_finish2, resp_data >> XLEN, resp_data)
++    port.bits.data := Mux(state === s_finish2, resp_data >> XLEN, resp_data)
++    port.bits.pdest := Mux(state === s_finish2, pdest2, pdest1)
+   }
+-  io.out.pdest := Mux(state === s_finish2, pdest2, pdest1)
+   io.out.toRob.bits.robIdx := uop.robIdx
+   io.out.toRob.bits.exceptionVec.foreach(_ := exceptionVec)
+   io.out.toRob.bits.trigger.foreach(_ := trigger)
+   io.out.toRob.bits.isRVC.foreach(_ := uop.isRVC)
+   io.out.toRob.bits.lqIdx.foreach(_ := uop.lqIdx)
+-  io.out.isFromLoadUnit.foreach(_ := false.B) // atomics are not issued from LoadUnit
+-  io.out.debug.isNCIO := false.B
+-  io.out.debug.isPerfCnt := DontCare
+-  io.out.debug.isMMIO := is_mmio
+-  io.out.debug.paddr := paddr
+-  io.out.debug.vaddr := vaddr
+-  io.out.debug_seqNum.foreach(_ := uop.debug_seqNum)
+-  io.out.perfDebugInfo.foreach(_ := uop.perfDebugInfo)
++  io.out.toRob.bits.debugInfo.isNCIO.foreach(_ := false.B)
++  io.out.toRob.bits.debugInfo.isPerfCnt.foreach(_ := DontCare)
++  io.out.toRob.bits.debugInfo.isMMIO.foreach(_ := is_mmio)
++  io.out.toRob.bits.debugInfo.paddr.foreach(_ := paddr)
++  io.out.toRob.bits.debugInfo.vaddr.foreach(_ := vaddr)
++  io.out.toRob.bits.debugInfo.debug_seqNum.foreach(_ := uop.debug_seqNum)
++  io.out.toRob.bits.debugInfo.perfDebugInfo.foreach(_ := uop.perfDebugInfo)
+ 
+   io.dcache.req.valid := Mux(
+     io.dcache.req.bits.cmd === M_XLR,
+diff --git a/src/main/scala/xiangshan/mem/pipeline/Bundles.scala b/src/main/scala/xiangshan/mem/pipeline/Bundles.scala
+index 9f81440786d..66fd7088994 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/Bundles.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/Bundles.scala
+@@ -27,6 +27,7 @@ import xiangshan.backend.Bundles.DynInst
+ import xiangshan.cache._
+ import xiangshan.cache.mmu._
+ import xiangshan.mem.LoadStage._
++import xiangshan.mem.StoreStage._
+ 
+ sealed trait HasLoadPipeBundleParam {
+   def hasPAddr: Boolean = false
+@@ -208,4 +209,101 @@ class VectorLoadIn(implicit p: Parameters)
+   extends LoadPipeBundle(VectorLoadInParam())
+ 
+ class LoadStageIO(implicit p: Parameters, implicit val s: LoadStage)
+-  extends LoadPipeBundle(LoadStageIOParam())
+\ No newline at end of file
++  extends LoadPipeBundle(LoadStageIOParam())
++
++sealed trait HasStorePipeBundleParam {
++  def hasVector: Boolean = false
++  def hasStoreSet: Boolean = false
++  def hasUnalignHandling: Boolean = false
++  def hasAddrTrans: Boolean = false
++  def hasPAddrChecked: Boolean = false
++}
++
++case class DefaultStorePipeBundleParam() extends HasStorePipeBundleParam
++
++class StorePipeBundle(
++  param: HasStorePipeBundleParam = DefaultStorePipeBundleParam()
++)(
++  implicit p: Parameters
++) extends XSBundle
++  with HasStorePipeBundleParam
++  with HasVLSUParameters {
++  // Basic info
++  val entrance = StoreEntrance()
++  val accessType = StoreAccessType()
++  val uop = new DynInst
++  val vaddr = UInt(VAddrBits.W)
++  val fullva = UInt(XLEN.W)
++  val size = UInt(MemorySize.Size.width.W)
++  val mask = UInt((VLEN/8).W)
++  val isFirstIssue = Bool()
++
++  // StoreSet
++  val ssid = Option.when(param.hasStoreSet)(UInt(SSIDWidth.W))
++  val storeSetHit = Option.when(param.hasStoreSet)(Bool())
++  
++  // Unalign handling
++  val align = Option.when(param.hasUnalignHandling)(Bool())
++  val unalignHead = Option.when(param.hasUnalignHandling)(Bool())
++  val cross16Byte = Option.when(param.hasUnalignHandling)(Bool())
++
++  // MMU & exception handling
++  val tlbHit = Option.when(param.hasAddrTrans)(Bool())
++  val tlbException = Option.when(param.hasAddrTrans)(new TlbRespExcp)
++  val pbmt = Option.when(param.hasAddrTrans)(Pbmt())
++  val isForVSnonLeafPTE = Option.when(param.hasAddrTrans)(Bool())
++  val paddr = Option.when(param.hasAddrTrans)(UInt(PAddrBits.W))
++  val gpaddr = Option.when(param.hasAddrTrans)(UInt(XLEN.W))
++  val hasException = Option.when(param.hasAddrTrans)(Bool())
++  val needRSReplay = Option.when(param.hasAddrTrans)(Bool())
++
++  val nc = Option.when(param.hasPAddrChecked)(Bool())
++  val mmio = Option.when(param.hasPAddrChecked)(Bool())
++  val memBackTypeMM = Option.when(param.hasPAddrChecked)(Bool())
++
++  // Vector
++  val vecBaseVaddr = Option.when(param.hasVector)(UInt(VAddrBits.W))
++  val usSecondInv = Option.when(param.hasVector)(Bool())
++  val elemIdx = Option.when(param.hasVector)(UInt(elemIdxBits.W))
++  val mbIndex = Option.when(param.hasVector)(UInt(vlmBindexBits.W))
++  val vecTriggerMask = Option.when(param.hasVector)(UInt((VLEN/8).W))
++  val vecVaddrOffset = Option.when(param.hasVector)(UInt(VAddrBits.W))
++  
++  def DontCareUnalign(): Unit = {
++    align.get := DontCare
++    unalignHead.get := DontCare
++    cross16Byte.get := DontCare
++  }
++  def DontCareVectorFields(): Unit = {
++    vecBaseVaddr.get := 0.U
++    usSecondInv.get := false.B
++    elemIdx.get := 0.U
++    mbIndex.get := 0.U
++    vecTriggerMask.get := 0.U
++    vecVaddrOffset.get := 0.U
++  }
++  def DontCareStoreSet(): Unit = {
++    ssid.get := 0.U
++    storeSetHit.get := false.B
++  }
++}
++
++case class VectorStoreInParam(
++  override val hasVector: Boolean = true
++) extends HasStorePipeBundleParam
++
++case class StoreStageIOParam()(
++  implicit val s: StoreStage
++) extends HasStorePipeBundleParam with OnStoreStage {
++  override val hasVector: Boolean = true
++  override val hasUnalignHandling: Boolean = true
++  override val hasStoreSet: Boolean = true
++  override val hasAddrTrans: Boolean = afterS1
++  override val hasPAddrChecked: Boolean = afterS2
++}
++
++class StoreStageIO(implicit p: Parameters, implicit val s: StoreStage)
++  extends StorePipeBundle(StoreStageIOParam())
++
++class VectorStoreIn(implicit p: Parameters)
++  extends StorePipeBundle(VectorStoreInParam())
+diff --git a/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
+index 243a9f5db5e..a5928208d41 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
+@@ -23,7 +23,7 @@ import top.{ArgParser, Generator}
+ import utility._
+ import xiangshan._
+ import xiangshan.ExceptionNO._
+-import xiangshan.backend.Bundles.{ExuInput, ExuOutput, MemWakeUpBundle, NewExuOutput, UopIdx, connectSamePort}
++import xiangshan.backend.Bundles.{ExuInput, ExuOutput, MemWakeUpBundle, MemWriteBack, UopIdx, connectSamePort}
+ import xiangshan.backend.fu.PMPRespBundle
+ import xiangshan.backend.fu.FuConfig._
+ import xiangshan.backend.fu.fpu.FPU
+@@ -1230,7 +1230,7 @@ class LoadUnitS3(param: ExeUnitParams)(
+     val unalignConcat = Flipped(ValidIO(new LoadStageIO))
+ 
+     // Writeback to Backend / LQ / VLMergeBuffer
+-    val ldout = new NewExuOutput(param)
++    val ldout = new MemWriteBack(param)
+     val lqWrite = DecoupledIO(new LqWriteBundle)
+     val vecldout = Decoupled(new VecPipelineFeedbackIO(isVStore = false))
+ 
+@@ -1412,30 +1412,31 @@ class LoadUnitS3(param: ExeUnitParams)(
+     */
+   // Writeback to Backend
+   val ldoutValid = pipeIn.valid && shouldWriteback && !isVector && endPipe
+-  val ldout = Wire(new NewExuOutput(param))
++  val ldout = Wire(new MemWriteBack(param))
+   ldout.toIntRf.foreach { case port =>
+     port.valid := uop.rfWen && pipeIn.valid && endPipe && shouldWakeup
+     port.bits := DontCare // assign data from LoadUnitDataPath
++    port.bits.pdest := uop.pdest
++    port.bits.isFromLoadUnit.get := true.B
+   }
+   ldout.toFpRf.foreach { case port =>
+     port.valid := uop.fpWen && pipeIn.valid && endPipe && shouldWakeup
+     port.bits := DontCare
++    port.bits.pdest := uop.pdest
+   }
+-  ldout.pdest := uop.pdest
+   ldout.toRob.valid := ldoutValid
+   ldout.toRob.bits.robIdx := uop.robIdx
+   ldout.toRob.bits.exceptionVec.get := exceptionVec
+   ldout.toRob.bits.lqIdx.get := uop.lqIdx
+   ldout.toRob.bits.trigger.get := uop.trigger
+   ldout.toRob.bits.isRVC.get := uop.isRVC
+-  ldout.isFromLoadUnit.get := true.B
+-  ldout.debug.isMMIO := in.isMMIOReplay()
+-  ldout.debug.isNCIO := in.isNCReplay() && in.pmp.get.mmio
+-  ldout.debug.isPerfCnt := false.B
+-  ldout.debug.paddr := paddr
+-  ldout.debug.vaddr := vaddr
+-  ldout.perfDebugInfo.foreach(_ := uop.perfDebugInfo)
+-  ldout.debug_seqNum.foreach(_ := uop.debug_seqNum)
++  ldout.toRob.bits.debugInfo.isMMIO.foreach(_ := in.isMMIOReplay())
++  ldout.toRob.bits.debugInfo.isNCIO.foreach(_ := in.isNCReplay() && in.pmp.get.mmio)
++  ldout.toRob.bits.debugInfo.isPerfCnt.foreach(_ := false.B)
++  ldout.toRob.bits.debugInfo.paddr.foreach(_ := paddr)
++  ldout.toRob.bits.debugInfo.vaddr.foreach(_ := vaddr)
++  ldout.toRob.bits.debugInfo.perfDebugInfo.foreach(_ := uop.perfDebugInfo)
++  ldout.toRob.bits.debugInfo.debug_seqNum.foreach(_ := uop.debug_seqNum)
+ 
+   // Writeback to LQ
+   val lqWriteValid = pipeIn.valid && !doFastReplay && endPipe
+@@ -1827,7 +1828,7 @@ class LoadUnitIO(val param: ExeUnitParams)(implicit p: Parameters) extends XSBun
+   val replay = Flipped(DecoupledIO(new LoadReplayIO))
+   val prefetchReq = Flipped(DecoupledIO(new L1PrefetchReq))
+   // Writeback to Backend / LQ / VLMergeBuffer
+-  val ldout = new NewExuOutput(param)
++  val ldout = new MemWriteBack(param)
+   val lqWrite = DecoupledIO(new LqWriteBundle)
+   val vecldout = Decoupled(new VecPipelineFeedbackIO(isVStore = false))
+   // TLB / PMA / PMP
+@@ -1984,8 +1985,8 @@ class NewLoadUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSMo
+   dataPath.io.s2UncacheBypassResp := io.uncacheBypass.s2Resp
+   dataPath.io.s2DCacheResp.valid := io.dcache.resp.valid
+   dataPath.io.s2DCacheResp.bits := io.dcache.resp.bits
+-  io.ldout.toFpRf.foreach(_.bits := dataPath.io.s3ShiftAndExtData(io.ldout.toFpRf.get.bits.getWidth - 1, 0))
+-  io.ldout.toIntRf.foreach(_.bits := dataPath.io.s3ShiftAndExtData(io.ldout.toIntRf.get.bits.getWidth - 1, 0))
++  io.ldout.toFpRf.foreach(_.bits.data := dataPath.io.s3ShiftAndExtData(io.ldout.toFpRf.get.bits.data.getWidth - 1, 0))
++  io.ldout.toIntRf.foreach(_.bits.data := dataPath.io.s3ShiftAndExtData(io.ldout.toIntRf.get.bits.data.getWidth - 1, 0))
+   io.vecldout.bits.vecdata.get := dataPath.io.s3ShiftData
+ 
+   // Debug info
+@@ -2045,10 +2046,16 @@ abstract class LoadUnitStage(val param: ExeUnitParams)(
+ 
+ trait HasNukePAddrMatch { this: LoadUnitStage =>
+   def nukePAddrMatch(storePAddr: UInt, storeMatchType: UInt, loadPAddr: UInt): Bool = {
++    val storeVWordAddr = storePAddr >> DCacheVWordOffset
++    val loadVWordAddr = loadPAddr >> DCacheVWordOffset
+     Mux(
+       StLdNukeMatchType.isCacheLine(storeMatchType),
+       (storePAddr >> blockOffBits) === (loadPAddr >> blockOffBits),
+-      (storePAddr >> DCacheVWordOffset) === (loadPAddr >> DCacheVWordOffset)
++      Mux(
++        StLdNukeMatchType.isOctaWord(storeMatchType),
++        storeVWordAddr === loadVWordAddr || (storeVWordAddr + 1.U) === loadVWordAddr,
++        storeVWordAddr === loadVWordAddr
++      )
+     )
+   }
+ }
+@@ -2133,4 +2140,4 @@ object NewLoadUnitMain extends App {
+   )
+ 
+   println("done")
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/scala/xiangshan/mem/pipeline/NewStoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/NewStoreUnit.scala
+new file mode 100644
+index 00000000000..8751b991ef6
+--- /dev/null
++++ b/src/main/scala/xiangshan/mem/pipeline/NewStoreUnit.scala
+@@ -0,0 +1,1031 @@
++/***************************************************************************************
++* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
++* Copyright (c) 2020-2021 Peng Cheng Laboratory
++*
++* XiangShan is licensed under Mulan PSL v2.
++* You can use this software according to the terms and conditions of the Mulan PSL v2.
++* You may obtain a copy of Mulan PSL v2 at:
++*          http://license.coscl.org.cn/MulanPSL2
++*
++* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++*
++* See the Mulan PSL v2 for more details.
++***************************************************************************************/
++
++package xiangshan.mem
++
++import org.chipsalliance.cde.config.Parameters
++import chisel3._
++import chisel3.util._
++import utility._
++import xiangshan._
++import xiangshan.backend.Bundles.{DynInst, ExuInput, MemWriteBack, StoreUnitToLFST, connectSamePort}
++import xiangshan.backend.ctrlblock.DebugLsInfoBundle
++import xiangshan.backend.exu.ExeUnitParams
++import xiangshan.backend.fu.FuConfig._
++import xiangshan.backend.fu.PMPRespBundle
++import xiangshan.backend.fu.NewCSR._
++import xiangshan.cache._
++import xiangshan.cache.mmu._
++import xiangshan.ExceptionNO._
++import xiangshan.mem.Bundles._
++import xiangshan.mem.StoreStage._
++
++class StoreUnitS0(param: ExeUnitParams)(
++  implicit p: Parameters,
++  override implicit val s: StoreStage.StoreStage = StoreS0()
++) extends StoreUnitStage(param) {
++  val io = IO(new Bundle {
++    val redirect = Flipped(ValidIO(new Redirect))
++    /**
++      * Request sources
++      */
++    val unalignTail = Flipped(DecoupledIO(new StoreStageIO))
++    val stin = Flipped(Decoupled(new ExuInput(param, hasCopySrc = true)))
++    val vecstin = Flipped(Decoupled(new VectorStoreIn))
++    val prefetchReq = Flipped(DecoupledIO(new StorePrefetchReq))
++
++    // Tlb request
++    val tlbReq = DecoupledIO(new TlbReq)
++    val tlbReqKill = Output(Bool())
++
++    // DCache request
++    val dcacheReq = DecoupledIO(new DcacheStoreRequestIO)
++  })
++
++  /**
++    * Arbitrate all S0 request sources with the following priority::
++    *
++    * 0. unaligned tail injected from S1
++    * 1. vector store elements produced by VSplit
++    * 2. scalar store requests issued from the issue queue
++    * 3. hardware prefetch requests
++    */
++  val unalignTail,
++    vectorIssue,
++    scalarIssue,
++    prefetchReq = Wire(DecoupledIO(new StoreStageIO))
++
++  val sources = Seq(
++    unalignTail,
++    vectorIssue,
++    scalarIssue,
++    prefetchReq
++  )
++  val sink = Wire(DecoupledIO(new StoreStageIO))
++
++  // 0. unaligned tail injected from S1
++  unalignTail <> io.unalignTail
++
++  // 1. vector store elements produced by VSplit
++  vectorIssue.valid := io.vecstin.valid
++  connectSamePort(vectorIssue.bits, io.vecstin.bits)
++  vectorIssue.bits.DontCareUnalign()
++  vectorIssue.bits.DontCareStoreSet()
++
++  // 2. scalar store requests issued from the issue queue
++  val stin = io.stin.bits
++  val stinUop = stin.toDynInst()
++  val stinVAddr = stin.src(0) + SignExt(stin.imm(11,0), VAddrBits)
++  val stinFullva = stin.src(0) + SignExt(stin.imm(11,0), XLEN)
++  val stinSize = Cat(0.U, LSUOpType.size(stinUop.fuOpType))
++  scalarIssue.valid := io.stin.valid
++  scalarIssue.bits.entrance := StoreEntrance.scalarIssue.U
++  scalarIssue.bits.accessType.instrType := InstrType.scalar.U
++  scalarIssue.bits.accessType.isCbo := LSUOpType.isCboAll(stinUop.fuOpType)
++  scalarIssue.bits.accessType.isCboNoZero := LSUOpType.isCbo(stinUop.fuOpType)
++  scalarIssue.bits.uop := stinUop
++  scalarIssue.bits.vaddr := stinVAddr
++  scalarIssue.bits.fullva := stinFullva
++  scalarIssue.bits.size := stinSize
++  scalarIssue.bits.mask := Mux(
++    LSUOpType.isCboAll(stinUop.fuOpType),
++    Fill(VLEN/8, 1.U(1.W)),
++    genVWmask128(stinVAddr, stinSize)
++  ) // CBO operations always cover the whole cache line
++  scalarIssue.bits.isFirstIssue := stin.isFirstIssue
++  scalarIssue.bits.ssid.get := stinUop.ssid
++  scalarIssue.bits.storeSetHit.get := stinUop.storeSetHit
++  scalarIssue.bits.DontCareUnalign()
++  scalarIssue.bits.DontCareVectorFields()
++
++  // 3. hardware prefetch requests
++  prefetchReq.valid := io.prefetchReq.valid && io.dcacheReq.ready
++  prefetchReq.bits.entrance := StoreEntrance.prefetch.U
++  prefetchReq.bits.accessType.instrType := InstrType.prefetch.U
++  prefetchReq.bits.accessType.isCbo := false.B
++  prefetchReq.bits.accessType.isCboNoZero := false.B
++  prefetchReq.bits.vaddr := io.prefetchReq.bits.vaddr
++  prefetchReq.bits.fullva := io.prefetchReq.bits.vaddr
++  prefetchReq.bits.DontCareUnalign()
++  prefetchReq.bits.DontCareVectorFields()
++  prefetchReq.bits.DontCareStoreSet()
++  prefetchReq.bits.uop := 0.U.asTypeOf(new DynInst())
++  prefetchReq.bits.size := MemorySize.Q.U
++  prefetchReq.bits.mask := Fill(VLEN/8, 1.U(1.W))
++  prefetchReq.bits.isFirstIssue := true.B
++
++  // sources arbitration
++  arbiter(sources, sink, Some("RequestSources"))
++
++  // alias for arbitration result
++  val uop = sink.bits.uop
++  val kill = uop.robIdx.needFlush(io.redirect)
++  val entrance = sink.bits.entrance
++  val accessType = sink.bits.accessType
++  val isUnalignTail = StoreEntrance.isUnalignTail(entrance)
++  val isVector = accessType.isVector()
++  val isScalar = accessType.isScalar()
++  val isHWPrefetch = accessType.isPrefetch()
++  val isCbo = accessType.isCbo
++  val isCboNoZero = accessType.isCboNoZero
++
++  /**
++    * Pipeline connect
++    * Unlike later stages, S0 takes the arbitration result (`sink`) as its pipeline input.
++    */
++  val pipeIn = sink
++  val pipeOut = io_pipeOut.get
++  val pipeOutValid = RegInit(false.B)
++  val pipeOutBits = RegEnable(pipeIn.bits, pipeIn.fire)
++  when (kill) { pipeOutValid := false.B }
++  .elsewhen (pipeIn.fire) { pipeOutValid := true.B }
++  .elsewhen (pipeOut.fire) { pipeOutValid := false.B }
++  pipeIn.ready := !pipeOutValid || pipeOut.ready
++
++  /**
++    * Unalign handling
++    *
++    * 1. Align
++    *   Check if the address is aligned, which is used to detect misalign exception in later stages.
++    *   For prefetch req, we set align to true to avoid unnecessary exception check in later stages.
++    *   CBO instructions may have unaligned addresses, but they operate on a whole cache line, so we also set align to true for them.
++    *
++    * 2. Cross16Byte
++    *   For unaligned requests that cross a 16-byte boundary but do not cross a 4K page boundary,
++    *     the StoreQueue is responsible for splitting them into two writes to the store buffer.
++    *   Prefetch must be within 16 bytes, unalign tail must be cross16Byte
++    *
++    * 3. Cross4KPage
++    *   Check whether this address crosses an 4K page boundary, which is used to inject
++    *     an unalign tail in the next stage.
++    *
++    * Some terminology explanations:
++    * - **align** indicates whether the addr is aligned with the operation size. `!align` does not necessary mean
++    *   splitting is required, but is only used for determining exception in subsequent stages.
++    * - **misalign** is used specifically to denote misalign exception.
++    */
++  val alignCheckResults = alignCheck(sink.bits.vaddr, sink.bits.size, sink.valid)
++  val align = alignCheckResults._1
++  val cross16Byte = alignCheckResults._2
++  val cross4KPage = alignCheckResults._3
++  sink.bits.align.get := Mux(isCbo || isHWPrefetch, true.B, Mux(isUnalignTail, false.B, align))
++  sink.bits.unalignHead.get := Mux(isCbo || isHWPrefetch || isUnalignTail, false.B, cross4KPage)
++  sink.bits.cross16Byte.get := Mux(isCbo || isHWPrefetch, false.B, Mux(isUnalignTail, true.B, cross16Byte))
++
++  def alignCheck(vaddr: UInt, size: UInt, valid: Bool): (Bool, Bool, Bool) = {
++    require(size.getWidth == MemorySize.Size.width)
++    // 1.1 Align check
++    val align = LookupTree(size, List(
++      MemorySize.B.U -> true.B,
++      MemorySize.H.U -> (vaddr.take(1) === 0.U),
++      MemorySize.W.U -> (vaddr.take(2) === 0.U),
++      MemorySize.D.U -> (vaddr.take(3) === 0.U),
++      MemorySize.Q.U -> (vaddr.take(4) === 0.U)
++    ))
++    // 1.2 cross16Bytes check
++    // 1.3 cross4KPage check
++    val lowAddr = vaddr.take(pgIdxBits)
++    val upAddr = LookupTree(size, List(
++      MemorySize.B.U -> 0.U,
++      MemorySize.H.U -> 1.U,
++      MemorySize.W.U -> 3.U,
++      MemorySize.D.U -> 7.U,
++      MemorySize.Q.U -> 15.U
++    )) +& lowAddr
++    val cross16Byte = upAddr(DCacheVWordOffset) =/= lowAddr(DCacheVWordOffset)
++    val cross4KPage = upAddr.head(1).asBool
++    (align, cross16Byte, cross4KPage)
++  }
++
++  // IO assignment
++  pipeOut.valid := pipeOutValid
++  pipeOut.bits := pipeOutBits
++
++  io.stin.ready := scalarIssue.ready
++  io.vecstin.ready := vectorIssue.ready
++  io.prefetchReq.ready := prefetchReq.ready
++
++  io.tlbReq.valid := sink.valid
++  io.tlbReq.bits.vaddr := sink.bits.vaddr
++  io.tlbReq.bits.fullva := sink.bits.fullva
++  io.tlbReq.bits.checkfullva := isVector || isScalar
++  io.tlbReq.bits.cmd := Mux(isCboNoZero, TlbCmd.read, TlbCmd.write)
++  io.tlbReq.bits.hyperinst := LSUOpType.isHsv(uop.fuOpType)
++  io.tlbReq.bits.hlvx := false.B
++  io.tlbReq.bits.isPrefetch := isHWPrefetch
++  io.tlbReq.bits.size := sink.bits.size
++  io.tlbReq.bits.kill := false.B
++  io.tlbReq.bits.memidx.is_ld := false.B
++  io.tlbReq.bits.memidx.is_st := true.B
++  io.tlbReq.bits.memidx.idx := uop.sqIdx.value
++  io.tlbReq.bits.no_translate := false.B
++  io.tlbReq.bits.pmp_addr := DontCare
++  io.tlbReq.bits.debug.pc := uop.pc
++  io.tlbReq.bits.debug.robIdx := uop.robIdx
++  io.tlbReq.bits.debug.isFirstIssue := sink.bits.isFirstIssue
++  io.tlbReqKill := false.B
++
++  io.dcacheReq.valid := pipeIn.fire
++  io.dcacheReq.bits.cmd := MemoryOpConstants.M_PFW
++  io.dcacheReq.bits.vaddr := sink.bits.vaddr
++  io.dcacheReq.bits.instrtype := Mux(isHWPrefetch, DCACHE_PREFETCH_SOURCE.U, STORE_SOURCE.U)
++
++  // Perf counters
++  val fire = pipeIn.fire && !kill
++  XSPerfAccumulate("s0_valid", pipeIn.valid)
++  XSPerfAccumulate("s0_fire", fire)
++  XSPerfAccumulate("s0_unalignTail", fire && isUnalignTail)
++  XSPerfAccumulate("s0_vector", fire && isVector)
++  XSPerfAccumulate("s0_scalar", fire && isScalar)
++  XSPerfAccumulate("s0_prefetch", fire && isHWPrefetch)
++  XSPerfAccumulate("s0_isFirstIssue", fire && pipeIn.bits.isFirstIssue)
++  XSPerfAccumulate("s0_isCbo", fire && isCbo)
++  XSPerfAccumulate("s0_isCboNoZero", fire && isCboNoZero)
++  XSPerfAccumulate("s0_unalign", fire && !pipeIn.bits.align.get)
++  XSPerfAccumulate("s0_cross16Byte", fire && pipeIn.bits.cross16Byte.get)
++  XSPerfAccumulate("s0_cross4KPage", fire && pipeIn.bits.unalignHead.get)
++}
++
++class StoreUnitS1(param: ExeUnitParams)(
++  implicit p: Parameters,
++  override implicit val s: StoreStage.StoreStage = StoreS1()
++) extends StoreUnitStage(param) {
++  val io = IO(new Bundle {
++    val redirect = Flipped(ValidIO(new Redirect))
++    val csrTrigger = Input(new CsrTriggerBundle)
++
++    // Tlb response
++    val tlbResp = Flipped(DecoupledIO(new TlbResp))
++
++    // DCache request: paddr and s1 kill signal
++    val dcachePAddr = Output(UInt(PAddrBits.W))
++    val dcacheKill = Output(Bool())
++
++    // MDP
++    val updateLFST = Valid(new StoreUnitToLFST)
++
++    // Nuke check req to LoadUnit
++    val staNukeQueryReq = ValidIO(new StoreNukeQueryReq)
++
++    // Send store addr to StoreQueue
++    val toSqAddr = ValidIO(new StoreAddrIO)
++
++    // Unalign tail inject to s0
++    val unalignTail = DecoupledIO(new StoreStageIO()(p, prevStage(s)))
++
++    // UnalignTail req addr to Store Queue
++    val toUnalignQueue = DecoupledIO(new UnalignQueueIO)
++
++    // Feedback to RS for store issue control
++    val feedBackSlow = ValidIO(new RSFeedback)
++
++    // unalign head sent tlb info to unalign tail
++    val unalignHeadTlbHit = Input(Bool())
++
++    // prefetch train hint
++    val prefetchTrainHint = Output(Bool())
++
++    val debugInfo = Output(new DebugLsInfoBundle)
++  })
++
++  val pipeIn = io_pipeIn.get
++  val pipeOut = io_pipeOut.get
++  val in = pipeIn.bits
++
++  // alias
++  val entrance = in.entrance
++  val accessType = in.accessType
++  val uop = in.uop
++  val robIdx = uop.robIdx
++  val fuOpType = uop.fuOpType
++  val vaddr = in.vaddr
++  val mask = in.mask
++  val size = in.size
++  val isFirstIssue = in.isFirstIssue
++  val ssid = in.ssid.get
++  val storeSetHit = in.storeSetHit.get
++  val isUnalignTail = StoreEntrance.isUnalignTail(entrance)
++  val isVector = accessType.isVector()
++  val isScalar = accessType.isScalar()
++  val isHWPrefetch = accessType.isPrefetch()
++  val isCbo = accessType.isCbo
++  val isCboNoZero = accessType.isCboNoZero
++  val align = in.align.get
++  val isUnalignHead = in.unalignHead.get
++  val cross4KPage = isUnalignTail || isUnalignHead
++  val cross16Byte = in.cross16Byte.get
++  val vecBaseVaddr = in.vecBaseVaddr.get
++
++  val kill = robIdx.needFlush(io.redirect)
++  val fire = pipeIn.fire && !kill
++
++  // Tlb & DCache
++  val tlbResp = io.tlbResp
++  val tlbHit = tlbResp.valid && !tlbResp.bits.miss
++  val tlbMiss = tlbResp.valid && tlbResp.bits.miss
++  val vaNeedExt = tlbResp.bits.excp(0).vaNeedExt
++  val isHyper = tlbResp.bits.excp(0).isHyper
++  val isForVSnonLeafPTE = tlbResp.bits.isForVSnonLeafPTE
++  val pbmt = Mux(tlbHit, tlbResp.bits.pbmt.head, Pbmt.pma)
++  val paddr = tlbResp.bits.paddr(0)
++  val gpaddr = tlbResp.bits.gpaddr(0)
++  val fullva = tlbResp.bits.fullva
++  val tlbException = tlbResp.bits.excp.head
++  // The reason for considering the ld case is because of CboNoZero
++  // pf: page fault, af: access fault, gpf: guest page fault
++  val pf = tlbHit && (tlbException.pf.st || tlbException.pf.ld)
++  val af = tlbHit && (tlbException.af.st || tlbException.af.ld)
++  val gpf = tlbHit && (tlbException.gpf.st || tlbException.gpf.ld)
++  val hasException = pf || af || gpf
++
++  val killDCache = kill || tlbMiss || hasException
++
++  assert(!(pipeIn.valid && !tlbResp.valid))
++
++  // Store trigger
++  val storeTrigger = Module(new MemTrigger(MemType.STORE))
++  val isVectorUnitStride = isVector && VstuType.isUnitStride(fuOpType)
++  storeTrigger.io.fromCsrTrigger.tdataVec := io.csrTrigger.tdataVec
++  storeTrigger.io.fromCsrTrigger.tEnableVec := io.csrTrigger.tEnableVec
++  storeTrigger.io.fromCsrTrigger.triggerCanRaiseBpExp := io.csrTrigger.triggerCanRaiseBpExp
++  storeTrigger.io.fromCsrTrigger.debugMode := io.csrTrigger.debugMode
++  storeTrigger.io.fromLoadStore.vaddr := vaddr
++  storeTrigger.io.fromLoadStore.mask := mask
++  storeTrigger.io.fromLoadStore.isVectorUnitStride := isVectorUnitStride
++  storeTrigger.io.isCbo.get := isCbo
++
++  val triggerAction = storeTrigger.io.toLoadStore.triggerAction
++  val isDebugMode = TriggerAction.isDmode(triggerAction)
++  val isBreakPoint = TriggerAction.isExp(triggerAction)
++
++  val vecVaddrOffset = Mux(
++    isDebugMode || isBreakPoint,
++    storeTrigger.io.toLoadStore.triggerVaddr - vecBaseVaddr,
++    vaddr + genVFirstUnmask(mask).asUInt - vecBaseVaddr
++  )
++  val vecTriggerMask = Mux(
++    isDebugMode || isBreakPoint,
++    storeTrigger.io.toLoadStore.triggerMask,
++    0.U
++  )
++
++  // Unalign tail inject to s0
++  val unalignTailInjectValid = fire && isUnalignHead
++  val unalignTail = Wire(io.unalignTail.bits.cloneType)
++  connectSamePort(unalignTail, in)
++  unalignTail.entrance := StoreEntrance.unalignTail.U
++  unalignTail.vaddr := ((vaddr >> DCacheVWordOffset) + 1.U) << DCacheVWordOffset
++  unalignTail.fullva := ((fullva >> DCacheVWordOffset) + 1.U) << DCacheVWordOffset
++  unalignTail.size := size
++  unalignTail.mask := genVWmask(vaddr, LSUOpType.size(fuOpType)) >> DCacheVWordBytes
++  unalignTail.align.get := false.B
++  unalignTail.unalignHead.get := false.B
++  unalignTail.cross16Byte.get := true.B
++  unalignTail.DontCareStoreSet()
++  assert(!(unalignTailInjectValid && (isCbo || isCboNoZero)))
++
++  // Nuke check to LoadUnit
++  val nukeQueryReqValid = fire && tlbHit && !isHWPrefetch
++  val nukeQueryReq = Wire(new StoreNukeQueryReq)
++  nukeQueryReq.robIdx := robIdx
++  nukeQueryReq.paddr := paddr
++  nukeQueryReq.mask := mask
++  nukeQueryReq.matchType := Mux(
++    isCbo,
++    StLdNukeMatchType.CacheLine,
++    Mux(
++      cross16Byte && !cross4KPage,
++      StLdNukeMatchType.OctaWord,
++      StLdNukeMatchType.Normal
++    )
++  )
++
++  val updateLFSTValid = fire && tlbHit && isScalar && !isUnalignTail
++
++  /**
++    * Generate replay feedback for the RS.
++    * A miss here means the request must be replayed after translation ready.
++    */
++  val canFeedBack = isScalar && !isUnalignHead // unalign head should not feed back.
++  val feedBackValid = fire && canFeedBack
++  val unalignTailHit = tlbHit && io.unalignHeadTlbHit && io.toUnalignQueue.ready
++  val feedBackHit = Mux(isUnalignTail, unalignTailHit, tlbHit)
++  val needRSReplay = feedBackValid && !feedBackHit
++
++  /**
++    * Information sent to the StoreQueue:
++    *
++    * Available in S1:
++    * - Basic info: paddr, vaddr, mask, size, uop info
++    * - Unaligned info: whether this request is unaligned, crosses 16B/4KiB, and
++    *   whether it is the last request in a split request.
++    *
++    * Filled later in S2:
++    * - Exception status
++    * - Memory type: NC or MMIO
++    *
++    * [NOTE]: the normal request is also the last request,
++    */
++  val toSqAddrValid = fire && !isHWPrefetch
++  val toSqAddr = Wire(io.toSqAddr.bits.cloneType)
++  def alignVWordAddr(addr: UInt) = {
++    Cat(addr(addr.getWidth - 1, DCacheVWordOffset), 0.U(DCacheVWordOffset.W))
++  }
++  toSqAddr.paddr := Mux(isCbo, alignVWordAddr(paddr), paddr)
++  toSqAddr.vaddr := Mux(isCbo, alignVWordAddr(vaddr), vaddr)
++  toSqAddr.tlbMiss := !feedBackHit
++  toSqAddr.mask := mask
++  toSqAddr.size := Mux(isCbo, MemorySize.Q.U, size)
++  toSqAddr.wlineflag := isCbo
++  connectSamePort(toSqAddr.uop, uop)
++  toSqAddr.uop.pc.foreach(_ := uop.pc)
++  toSqAddr.uop.debugInfo.foreach(_  := uop.perfDebugInfo)
++  toSqAddr.uop.debug_seqNum.foreach(_ := uop.debug_seqNum)
++  toSqAddr.uop.isFirstIssue := isFirstIssue
++  toSqAddr.isHyper := isHyper
++  // Unalign info
++  toSqAddr.isLastRequest := !isUnalignHead
++  toSqAddr.cross4KPage := cross4KPage
++  toSqAddr.unalignWithin16Byte := !align && !cross16Byte
++  toSqAddr.isUnalign := !align
++  // The following will be set in stage 2
++  toSqAddr.nc := DontCare
++  toSqAddr.mmio := DontCare
++  toSqAddr.hasException := DontCare
++  toSqAddr.memBackTypeMM := DontCare
++  toSqAddr.cacheMiss := false.B
++
++  // Pipeline connect
++  val pipeOutValid = RegInit(false.B)
++  val pipeOutBits = Reg(new StoreStageIO)
++  when (kill) { pipeOutValid := false.B }
++  .elsewhen (pipeIn.fire) { pipeOutValid := true.B }
++  .elsewhen (pipeOut.fire) { pipeOutValid := false.B }
++
++  val stageInfo = Wire(pipeOut.bits.cloneType)
++  connectSamePort(stageInfo, in)
++  stageInfo.tlbHit.get := tlbHit
++  stageInfo.tlbException.get := tlbException
++  stageInfo.pbmt.get := pbmt
++  stageInfo.isForVSnonLeafPTE.get := isForVSnonLeafPTE
++  stageInfo.paddr.get := paddr
++  stageInfo.gpaddr.get := gpaddr
++  stageInfo.vecTriggerMask.get := vecTriggerMask
++  stageInfo.vecVaddrOffset.get := vecVaddrOffset
++  stageInfo.needRSReplay.get := needRSReplay
++  stageInfo.hasException.get := hasException || isDebugMode || isBreakPoint
++  stageInfo.uop.trigger := triggerAction
++  stageInfo.uop.exceptionVec(breakPoint) := isBreakPoint
++  stageInfo.uop.exceptionVec(storePageFault) := pf
++  stageInfo.uop.exceptionVec(storeGuestPageFault) := gpf
++  stageInfo.uop.exceptionVec(storeAccessFault) := af
++  stageInfo.uop.perfDebugInfo.tlbRespTime := Mux(
++    tlbHit,
++    GTimer(),
++    Mux(tlbMiss, uop.perfDebugInfo.tlbFirstReqTime, uop.perfDebugInfo.tlbRespTime)
++  )
++
++  when (pipeIn.fire) { pipeOutBits := stageInfo }
++
++  // IO assignment
++  io_pipeOut.get.valid := pipeOutValid
++  io_pipeOut.get.bits := pipeOutBits
++  io_pipeIn.get.ready := !pipeOutValid || kill || pipeOut.ready
++
++  io.tlbResp.ready := true.B
++  io.dcachePAddr := paddr
++  io.dcacheKill := killDCache
++
++  io.updateLFST.valid := updateLFSTValid
++  io.updateLFST.bits.robIdx := robIdx
++  io.updateLFST.bits.ssid := ssid
++  io.updateLFST.bits.storeSetHit := storeSetHit
++
++  io.staNukeQueryReq.valid := nukeQueryReqValid
++  io.staNukeQueryReq.bits := nukeQueryReq
++
++  io.unalignTail.valid := unalignTailInjectValid
++  io.unalignTail.bits := unalignTail
++
++  io.toSqAddr.valid := toSqAddrValid
++  io.toSqAddr.bits := toSqAddr
++
++  io.toUnalignQueue.valid := fire && isUnalignTail
++  io.toUnalignQueue.bits.sqIdx := uop.sqIdx
++  io.toUnalignQueue.bits.paddr := paddr
++  io.toUnalignQueue.bits.robIdx := robIdx
++
++  io.feedBackSlow.valid := feedBackValid
++  io.feedBackSlow.bits.hit := feedBackHit
++  io.feedBackSlow.bits.flushState := tlbResp.bits.ptwBack
++  io.feedBackSlow.bits.robIdx := robIdx
++  io.feedBackSlow.bits.sourceType := RSFeedbackType.tlbMiss
++  io.feedBackSlow.bits.sqIdx := uop.sqIdx
++  io.feedBackSlow.bits.lqIdx := uop.lqIdx
++  io.feedBackSlow.bits.dataInvalidSqIdx := DontCare
++
++  io.prefetchTrainHint := fire && isFirstIssue
++
++  io.debugInfo := DontCare
++  io.debugInfo.s1_robIdx := robIdx.value
++  io.debugInfo.s1_isTlbFirstMiss := tlbMiss && !isHWPrefetch && isFirstIssue
++
++  // Perf counters
++  XSPerfAccumulate("s1_valid", pipeIn.valid)
++  XSPerfAccumulate("s1_fire", fire)
++  XSPerfAccumulate("s1_tlbHit", fire && tlbHit)
++  XSPerfAccumulate("s1_tlbMiss", fire && tlbMiss)
++  XSPerfAccumulate("s1_needRSReplay", needRSReplay)
++}
++
++class StoreUnitS2(param: ExeUnitParams)(
++  implicit p: Parameters,
++  override implicit val s: StoreStage.StoreStage = StoreS2()
++) extends StoreUnitStage(param) {
++  val io = IO(new Bundle {
++    val redirect = Flipped(ValidIO(new Redirect))
++
++    // PMP result
++    val pmp = Flipped(new PMPRespBundle)
++
++    // DCache
++    val dcacheKill = Output(Bool())
++    val dcachePC = Output(UInt(VAddrBits.W))
++    val dcacheResp = Flipped(DecoupledIO(new DcacheStoreRespIO()))
++
++    // Exception info and memory type to to Store Queue
++    val toSqAddrRe = Output(new StoreAddrIO)
++
++    // unalign head sent tlb info to unalign tail
++    val unalignHeadTlbHit = Output(Bool())
++
++    // Prefetch Train
++    val prefetchTrainHint = Output(Bool())
++    val prefetchTrain = ValidIO(new LsPrefetchTrainBundle())
++  })
++
++  val pipeIn = io_pipeIn.get
++  val pipeOut = io_pipeOut.get
++  val in = pipeIn.bits
++
++  // alias
++  val entrance = in.entrance
++  val accessType = in.accessType
++  val uop = in.uop
++  val robIdx = uop.robIdx
++  val align = in.align.get
++  val isUnalignTail = StoreEntrance.isUnalignTail(entrance)
++  val isVector = accessType.isVector()
++  val isScalar = accessType.isScalar()
++  val isHWPrefetch = accessType.isPrefetch()
++  val isCbo = accessType.isCbo
++  val isCboNoZero = accessType.isCboNoZero
++  val tlbException = in.tlbException.get
++  val tlbHit = pipeIn.valid && in.tlbHit.get
++  val tlbMiss = pipeIn.valid && !in.tlbHit.get
++  val isUnalignHead = in.unalignHead.get
++  val cross4KPage = isUnalignTail || isUnalignHead
++  val cross16Byte = in.cross16Byte.get
++
++  val kill = robIdx.needFlush(io.redirect)
++  val fire = pipeIn.fire && !kill
++
++  /**
++    * PMP result & Exception Handling
++    *
++    * The response signal of `pmp/pma` is credible only after the physical address is actually generated.
++    * Therefore, the response signals of pmp/pma generated after an address translation has produced an
++    * `access fault` or a `page fault` are completely unreliable.
++    *
++    * Therefore:
++    * - `tlbAccessible` is used to guard all PMP/PMA-based checks.
++    * - Once TLB translation reports an unaccessible condition, we should not trust PMA/PMP attributes
++    *
++    * Abbreviations:
++    * - af  : access fault
++    * - am  : misaligned access exception
++    * - pf  : page fault
++    * - gpf : guest page fault
++    */
++  val pmp = io.pmp
++  val pbmt = in.pbmt.get
++  val pmpInaccessible = tlbHit && (pmp.st || pmp.ld && isCboNoZero)
++  val tlbInaccessible = uop.exceptionVec(storeAccessFault) ||
++    uop.exceptionVec(storePageFault) ||
++    uop.exceptionVec(storeGuestPageFault)
++  val tlbAccessible = !tlbInaccessible
++  val isNC = tlbHit && tlbAccessible && Pbmt.isNC(pbmt)
++  val isMMIO = tlbHit && tlbAccessible && (Pbmt.isIO(pbmt) || Pbmt.isPMA(pbmt) && pmp.mmio)
++  val isUncache = isNC || isMMIO
++  val memBackTypeMM = !pmp.mmio
++
++  val afInaccessible = uop.exceptionVec(storeAccessFault) || pmpInaccessible
++  val afVectorUncache = isVector && isUncache
++  val afCboUncache = isCbo && isUncache
++  val afUnalignMMIO = isMMIO && !align
++
++  val af = afInaccessible || afVectorUncache || afCboUncache || afUnalignMMIO
++  val am = !align && isScalar && isNC && !pmpInaccessible
++  val hasException = in.hasException.get || af || am
++
++  // DCache
++  val cacheMiss = io.dcacheResp.fire && io.dcacheResp.bits.miss
++  val killDCache = kill || hasException || isUncache
++
++  // Pipeline connect
++  val pipeOutValid = RegInit(false.B)
++  val pipeOutBits = Reg(new StoreStageIO)
++  when (kill) { pipeOutValid := false.B }
++  .elsewhen (pipeIn.fire) { pipeOutValid := true.B }
++  .elsewhen (pipeOut.fire) { pipeOutValid := false.B }
++
++  val stageInfo = Wire(pipeOut.bits.cloneType)
++  connectSamePort(stageInfo, in)
++  stageInfo.uop.exceptionVec(storeAddrMisaligned) := am
++  stageInfo.uop.exceptionVec(storeAccessFault) := af
++  stageInfo.uop.vpu.vstart := in.vecVaddrOffset.get >> uop.vpu.veew
++  stageInfo.hasException.get := hasException
++  stageInfo.nc.get := isNC
++  stageInfo.mmio.get := isMMIO
++  stageInfo.memBackTypeMM.get := memBackTypeMM
++
++  when (pipeIn.fire) { pipeOutBits := stageInfo }
++
++  // IO assignment
++  io_pipeOut.get.valid := pipeOutValid
++  io_pipeOut.get.bits := pipeOutBits
++  io_pipeIn.get.ready := !pipeOutValid || kill || pipeOut.ready
++
++  io.dcacheKill := killDCache
++  io.dcachePC := uop.pc
++  io.dcacheResp.ready := true.B
++
++  io.toSqAddrRe.memBackTypeMM := memBackTypeMM
++  io.toSqAddrRe.mmio := isMMIO
++  io.toSqAddrRe.nc := isNC
++  io.toSqAddrRe.cacheMiss := cacheMiss
++  io.toSqAddrRe.hasException := fire && hasException
++  io.toSqAddrRe.isLastRequest := !isUnalignHead
++  io.toSqAddrRe.cross4KPage := cross4KPage
++  io.toSqAddrRe.unalignWithin16Byte := !align && !cross16Byte
++  io.toSqAddrRe.isUnalign := !align
++  io.toSqAddrRe.wlineflag := DontCare
++  io.toSqAddrRe.paddr := DontCare
++  io.toSqAddrRe.vaddr := DontCare
++  io.toSqAddrRe.tlbMiss := DontCare
++  io.toSqAddrRe.mask := DontCare
++  io.toSqAddrRe.size := DontCare
++  io.toSqAddrRe.uop := DontCare
++  io.toSqAddrRe.isHyper := DontCare
++
++  val prefetchTrainValid = fire && io.dcacheResp.fire && tlbHit && tlbAccessible && !hasException && !isUncache
++  io.prefetchTrainHint := prefetchTrainValid
++  io.prefetchTrain.valid := prefetchTrainValid
++  io.prefetchTrain.bits := DontCare
++  io.prefetchTrain.bits.uop := uop
++  io.prefetchTrain.bits.vaddr := in.vaddr
++  io.prefetchTrain.bits.paddr := in.paddr.get
++  io.prefetchTrain.bits.miss := cacheMiss
++  io.prefetchTrain.bits.isFirstIssue := in.isFirstIssue
++  io.prefetchTrain.bits.meta_prefetch := false.B
++  io.prefetchTrain.bits.meta_access := false.B
++  io.prefetchTrain.bits.is_from_hw_pf := isHWPrefetch
++  io.prefetchTrain.bits.refillLatency := 0.U // TODO: store not for berti, so there is no refillLatency
++
++  io.unalignHeadTlbHit := fire && isUnalignHead && tlbHit
++
++  // Perf counters
++  XSPerfAccumulate("s2_valid", pipeIn.valid)
++  XSPerfAccumulate("s2_fire", fire)
++  XSPerfAccumulate("s2_cacheHit", fire && !cacheMiss)
++  XSPerfAccumulate("s2_cacheMiss", fire && cacheMiss)
++}
++
++class StoreUnitS3(param: ExeUnitParams)(
++  implicit p: Parameters,
++  override implicit val s: StoreStage.StoreStage = StoreS3()
++) extends StoreUnitStage(param) {
++  val io = IO(new Bundle {
++    val redirect = Flipped(ValidIO(new Redirect))
++
++    // Unalign head from S4
++    val unalignConcat = Flipped(ValidIO(new StoreStageIO))
++
++    // Writeback
++    val stout = new MemWriteBack(param)
++    val vecstout = DecoupledIO(new VecPipelineFeedbackIO(isVStore = true))
++    val exceptionInfo = ValidIO(new MemExceptionInfo)
++  })
++
++  val pipeIn = io_pipeIn.get
++  val pipeOut = io_pipeOut.get
++  val in = pipeIn.bits
++
++  // alias
++  val uop = in.uop
++  val robIdx = uop.robIdx
++  val entrance = in.entrance
++  val accessType = in.accessType
++  val isUnalignTail = StoreEntrance.isUnalignTail(entrance)
++  val isVector = accessType.isVector()
++  val isScalar = accessType.isScalar()
++  val isHWPrefetch = accessType.isPrefetch()
++  val isCbo = accessType.isCbo
++  val isMMIO = in.mmio.get
++  val hasException = in.hasException.get
++  val isUnalignHead = in.unalignHead.get
++
++  val kill = robIdx.needFlush(io.redirect)
++  val fire = pipeIn.fire && !kill
++  // Only the unaligned head continues into S4; all other requests terminate in S3
++  val endPipe = !isUnalignHead
++
++  // Scalar/vector store write back
++  val wbType = !isUnalignHead && !isHWPrefetch && !in.needRSReplay.get
++  val wbValid = fire && ((!isMMIO && !isCbo) || hasException) && wbType
++  val wbData = Wire(in.cloneType)
++  wbData := in
++
++  // Unalign head/tail concatenation
++  val headValid = io.unalignConcat.valid
++  val head = io.unalignConcat.bits
++  val headExceptionVec = head.uop.exceptionVec
++  val headHasException = headValid && head.hasException.get
++
++  wbData.vaddr := Mux(headValid, head.vaddr, in.vaddr)
++  wbData.mask := Mux(headValid, head.mask, in.mask)
++  wbData.fullva := Mux(headHasException, head.fullva, in.fullva)
++  wbData.hasException.get := hasException || headHasException
++  wbData.uop.exceptionVec := Mux(headHasException, headExceptionVec, in.uop.exceptionVec)
++  wbData.uop.trigger := Mux(headHasException, head.uop.trigger, in.uop.trigger)
++  wbData.tlbException.get := Mux(headHasException, head.tlbException.get, in.tlbException.get)
++  wbData.uop.vpu.vstart := Mux(headHasException, head.uop.vpu.vstart, in.uop.vpu.vstart)
++  wbData.vecTriggerMask.get := Mux(headHasException, head.vecTriggerMask.get, in.vecTriggerMask.get)
++  wbData.isForVSnonLeafPTE.get := Mux(
++    headHasException,
++    head.isForVSnonLeafPTE.get,
++    in.isForVSnonLeafPTE.get
++  )
++  wbData.paddr.get := Mux(headHasException, head.paddr.get, in.paddr.get)
++  wbData.gpaddr.get := Mux(headHasException, head.gpaddr.get, in.gpaddr.get)
++
++  /**
++    * stage x
++    * To sync with RAW violation checks and send to the backend, delay by x cycles.
++    */
++  val delayPipe = Module(new DelayPipeline(
++    wbData.cloneType, RAWTotalDelayCycles,
++    (data: StoreStageIO, redirect: ValidIO[Redirect]) => data.uop.robIdx.needFlush(redirect)
++  ))
++  delayPipe.io.in.valid := wbValid
++  delayPipe.io.in.bits := wbData
++  delayPipe.io.out.ready := true.B
++  delayPipe.io.redirect := io.redirect
++  val sxValid = delayPipe.io.out.valid
++  val sxData = delayPipe.io.out.bits
++  val sxVector = sxData.accessType.isVector()
++
++  // Pipeline connect
++  val pipeOutValid = RegInit(false.B)
++  val pipeOutBits = Reg(new StoreStageIO)
++  when (kill || endPipe) { pipeOutValid := false.B }
++  .elsewhen (pipeIn.fire) { pipeOutValid := true.B }
++  .elsewhen (pipeOut.fire) { pipeOutValid := false.B }
++
++  val stageInfo = Wire(pipeOut.bits.cloneType)
++  connectSamePort(stageInfo, in)
++
++  when (pipeIn.fire) { pipeOutBits := stageInfo }
++
++  // IO assignment
++  io_pipeOut.get.valid := pipeOutValid
++  io_pipeOut.get.bits := pipeOutBits
++  io_pipeIn.get.ready := !pipeOutValid || kill || pipeOut.ready
++
++  io.stout.toRob.valid := sxValid && !sxVector
++  io.stout.toRob.bits.robIdx := sxData.uop.robIdx
++  io.stout.toRob.bits.isRVC.foreach(_ := sxData.uop.isRVC)
++  io.stout.toRob.bits.trigger.foreach(_ := sxData.uop.trigger)
++  io.stout.toRob.bits.sqIdx.foreach(_ := sxData.uop.sqIdx)
++  io.stout.toRob.bits.lqIdx.foreach(_ := sxData.uop.lqIdx)
++  io.stout.toRob.bits.exceptionVec.foreach(_ := ExceptionNO.selectByFu(sxData.uop.exceptionVec, StaCfg))
++  io.stout.toRob.bits.debugInfo.isMMIO.foreach(_ := sxData.mmio.get)
++  io.stout.toRob.bits.debugInfo.isNCIO.foreach(_ := sxData.nc.get && !sxData.memBackTypeMM.get)
++  io.stout.toRob.bits.debugInfo.isPerfCnt.foreach(_ := false.B)
++  io.stout.toRob.bits.debugInfo.paddr.foreach(_ := sxData.paddr.get)
++  io.stout.toRob.bits.debugInfo.vaddr.foreach(_ := sxData.vaddr)
++  io.stout.toRob.bits.debugInfo.debug_seqNum.foreach(_ := sxData.uop.debug_seqNum)
++  io.stout.toRob.bits.debugInfo.perfDebugInfo.foreach(_ := sxData.uop.perfDebugInfo)
++
++  io.exceptionInfo.valid := sxValid && !sxVector
++  io.exceptionInfo.bits.robIdx := sxData.uop.robIdx
++  io.exceptionInfo.bits.exceptionVec := ExceptionNO.selectByFu(sxData.uop.exceptionVec, StaCfg)
++  io.exceptionInfo.bits.vaddr := sxData.fullva
++  io.exceptionInfo.bits.gpaddr := sxData.gpaddr.get
++  io.exceptionInfo.bits.isForVSnonLeafPTE := sxData.isForVSnonLeafPTE.get
++  io.exceptionInfo.bits.vaNeedExt := sxData.tlbException.get.vaNeedExt
++  io.exceptionInfo.bits.isHyper := sxData.tlbException.get.isHyper
++  io.exceptionInfo.bits.uopIdx := 0.U.asTypeOf(io.exceptionInfo.bits.uopIdx)
++  io.exceptionInfo.bits.vl := 0.U.asTypeOf(io.exceptionInfo.bits.vl)
++  io.exceptionInfo.bits.vstart := 0.U.asTypeOf(io.exceptionInfo.bits.vstart)
++
++  io.vecstout.valid := sxValid && sxVector
++  io.vecstout.bits.mBIndex := sxData.mbIndex.get
++  io.vecstout.bits.hit := sxData.tlbHit.get
++  io.vecstout.bits.isvec := sxVector
++  io.vecstout.bits.sourceType := RSFeedbackType.tlbMiss
++  io.vecstout.bits.flushState := DontCare
++  io.vecstout.bits.trigger := sxData.uop.trigger
++  io.vecstout.bits.nc := sxData.nc.get
++  io.vecstout.bits.mmio := sxData.mmio.get
++  io.vecstout.bits.exceptionVec := ExceptionNO.selectByFu(sxData.uop.exceptionVec, VstuCfg)
++  io.vecstout.bits.hasException := sxData.hasException.get
++  io.vecstout.bits.elemIdx := sxData.elemIdx.get
++  io.vecstout.bits.alignedType := sxData.size
++  io.vecstout.bits.mask := sxData.mask
++  io.vecstout.bits.vaddr := sxData.fullva
++  io.vecstout.bits.vaNeedExt := sxData.tlbException.get.vaNeedExt
++  io.vecstout.bits.gpaddr := sxData.gpaddr.get
++  io.vecstout.bits.isForVSnonLeafPTE := sxData.isForVSnonLeafPTE.get
++  io.vecstout.bits.vstart := sxData.uop.vpu.vstart
++  io.vecstout.bits.vecTriggerMask := sxData.vecTriggerMask.get
++}
++
++class StoreUnitS4(param: ExeUnitParams)(
++  implicit p: Parameters,
++  override implicit val s: StoreStage.StoreStage = StoreS4()
++) extends StoreUnitStage(param) {
++  val io = IO(new Bundle() {
++    val unalignConcat = ValidIO(new StoreStageIO())
++  })
++  /**
++    * Hold the unaligned-head payload for one extra stage
++    * so that S3 can recombine it with the tail request.
++    */
++  io_pipeIn.get.ready := true.B
++  io.unalignConcat.valid := io_pipeIn.get.valid
++  io.unalignConcat.bits := io_pipeIn.get.bits
++}
++
++class StoreUnitIO(val param: ExeUnitParams)(implicit p: Parameters) extends XSBundle {
++  val redirect = Flipped(ValidIO(new Redirect))
++  val csrTrigger = Input(new CsrTriggerBundle)
++  // Request sources
++  val stin = Flipped(Decoupled(new ExuInput(param, hasCopySrc = true)))
++  val vecstin = Flipped(Decoupled(new VectorStoreIn))
++  val prefetchReq = Flipped(DecoupledIO(new StorePrefetchReq))
++  // TLB / PMA / PMP
++  val tlb = new TlbRequestIO
++  val pmp = Flipped(new PMPRespBundle)
++  // DCache
++  val dcache = new DCacheStoreIO
++  // MDP
++  val updateLFST = Valid(new StoreUnitToLFST)
++  // Store addr, send to sq in s1
++  val toSqAddr = ValidIO(new StoreAddrIO)
++  // Exception info and memory type, send to sq in s2
++  val toSqAddrRe = Output(new StoreAddrIO)
++  // UnalignTail req addr, send to sq in s2
++  val toUnalignQueue = DecoupledIO(new UnalignQueueIO)
++  // Nuke check req to LoadUnit
++  val staNukeQueryReq = ValidIO(new StoreNukeQueryReq)
++  // Prefetch Train
++  val prefetchTrainHintS1 = Output(Bool())
++  val prefetchTrainHintS2 = Output(Bool())
++  val prefetchTrain = ValidIO(new LsPrefetchTrainBundle())
++  // Feedback to RS in s2, for store issue control
++  val feedBackSlow = ValidIO(new RSFeedback)
++  // Writeback
++  val stout = new MemWriteBack(param)
++  val vecstout = DecoupledIO(new VecPipelineFeedbackIO(isVStore = true))
++  val exceptionInfo = ValidIO(new MemExceptionInfo)
++
++  val debugInfo = Output(new DebugLsInfoBundle)
++}
++
++class NewStoreUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSModule {
++  val io = IO(new StoreUnitIO(param))
++
++  val s0 = Module(new StoreUnitS0(param))
++  val s1 = Module(new StoreUnitS1(param))
++  val s2 = Module(new StoreUnitS2(param))
++  val s3 = Module(new StoreUnitS3(param))
++  val s4 = Module(new StoreUnitS4(param))
++
++  // Internal wiring
++  s1 <> s0
++  s2 <> s1
++  s3 <> s2
++  s4 <> s3
++  s0.io.unalignTail <> s1.io.unalignTail
++  s1.io.unalignHeadTlbHit := s2.io.unalignHeadTlbHit
++  s3.io.unalignConcat <> s4.io.unalignConcat
++
++  // IO wiring
++  // S0
++  s0.io.redirect := io.redirect
++  s0.io.stin <> io.stin
++  s0.io.vecstin <> io.vecstin
++  s0.io.prefetchReq <> io.prefetchReq
++  io.tlb.req <> s0.io.tlbReq
++  io.tlb.req_kill := s0.io.tlbReqKill
++  io.dcache.req <> s0.io.dcacheReq
++  // s1
++  s1.io.redirect := io.redirect
++  s1.io.csrTrigger := io.csrTrigger
++  s1.io.tlbResp <> io.tlb.resp
++  io.dcache.s1_paddr := s1.io.dcachePAddr
++  io.dcache.s1_kill := s1.io.dcacheKill
++  io.updateLFST := s1.io.updateLFST
++  io.staNukeQueryReq := s1.io.staNukeQueryReq
++  io.toSqAddr := s1.io.toSqAddr
++  io.debugInfo := s1.io.debugInfo
++  io.prefetchTrainHintS1 := s1.io.prefetchTrainHint
++  io.toUnalignQueue <> s1.io.toUnalignQueue
++  io.feedBackSlow.valid := RegNext(s1.io.feedBackSlow.valid) // for better timing
++  io.feedBackSlow.bits := RegEnable(s1.io.feedBackSlow.bits, s1.io.feedBackSlow.valid)
++  // s2
++  s2.io.redirect := io.redirect
++  s2.io.pmp := io.pmp
++  s2.io.dcacheResp <> io.dcache.resp
++  io.dcache.s2_kill := s2.io.dcacheKill
++  io.dcache.s2_pc := s2.io.dcachePC
++  io.toSqAddrRe := s2.io.toSqAddrRe
++  io.prefetchTrainHintS2 := s2.io.prefetchTrainHint
++  io.prefetchTrain.valid := RegNext(s2.io.prefetchTrain.valid) // for better timing
++  io.prefetchTrain.bits := RegEnable(s2.io.prefetchTrain.bits, s2.io.prefetchTrain.valid)
++  // s3
++  s3.io.redirect := io.redirect
++  io.stout := s3.io.stout
++  io.vecstout <> s3.io.vecstout
++  io.exceptionInfo := s3.io.exceptionInfo
++}
++
++class DelayPipeline[T <: Data](gen: T, numDelays: Int, killFn: (T, ValidIO[Redirect]) => Bool)(implicit p: Parameters) extends XSModule {
++  val io = IO(new Bundle {
++    val in = Flipped(DecoupledIO(gen))
++    val out = DecoupledIO(gen)
++    val redirect = Flipped(ValidIO(new Redirect))
++  })
++
++  val n = numDelays + 1
++  val valids = Wire(Vec(n, Bool()))
++  val readys = Wire(Vec(n, Bool()))
++  val datas = Wire(Vec(n, gen.cloneType))
++
++  private def kill(data: T): Bool = killFn(data, io.redirect)
++
++  valids(0) := io.in.valid
++  datas(0) := io.in.bits
++  readys(0) := !io.in.valid || kill(datas(0)) ||
++               (if (numDelays == 0) io.out.ready else readys(1))
++
++  for (i <- 1 until n) {
++    val isLast = (i == numDelays)
++    val curKill = kill(datas(i))
++    val curCanGo = if (isLast) io.out.ready else readys(i + 1)
++    val curFire = valids(i) && !curKill && curCanGo
++    val prevFire = valids(i - 1) && !kill(datas(i - 1)) && readys(i)
++
++    readys(i) := !valids(i) || curKill || curCanGo
++
++    val validUpdate = prevFire || curFire || curKill
++    valids(i) := RegEnable(Mux(prevFire, true.B, false.B), false.B, validUpdate)
++    datas(i) := RegEnable(datas(i - 1), prevFire)
++  }
++
++  io.out.valid := valids(n - 1)
++  io.out.bits := datas(n - 1)
++  io.in.ready := readys(0)
++}
++
++abstract class StoreUnitStage(val param: ExeUnitParams)(
++  implicit p: Parameters,
++  implicit val s: StoreStage
++) extends XSModule with OnStoreStage
++  with HasDCacheParameters
++  with HasCircularQueuePtrHelper {
++  val io_pipeIn = if (afterS1) {
++    Some(IO(Flipped(DecoupledIO(new StoreStageIO()(p, prevStage(s))))))
++  } else None
++  val io_pipeOut = if (!lastStage) {
++    Some(IO(DecoupledIO(new StoreStageIO)))
++  } else None
++
++  def <>(that: StoreUnitStage): Unit = {
++    this.io_pipeIn.foreach(_ <> that.io_pipeOut.get)
++  }
++}
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StdExeUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StdExeUnit.scala
+index 805ea573548..3795864ffde 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StdExeUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StdExeUnit.scala
+@@ -29,7 +29,7 @@ class StdExeUnitIO(val param: ExeUnitParams)(implicit p: Parameters) extends XSB
+   val flush = Flipped(ValidIO(new Redirect()))
+   val in = Flipped(DecoupledIO(new ExuInput(param, hasCopySrc = true)))
+   val vstdIn = Flipped(ValidIO(new StoreQueueDataWrite))
+-  val out = new NewExuOutput(param) // std -> wb
++  val out = new MemWriteBack(param) // std -> wb
+   val atomicData = Valid(new ExuInput(param)) // std -> atomicsUnit
+   val sqData = Valid(new StoreQueueDataWrite) // std -> sq
+ }
+@@ -45,10 +45,9 @@ class StdExeUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSMod
+   io.out.toRob.bits.robIdx := io.in.bits.robIdx
+   io.out.toRob.bits.isRVC.foreach(_ := DontCare)
+   io.out.toRob.bits.sqIdx.foreach(_ := io.in.bits.sqIdx.get)
+-  io.out.pdest := io.in.bits.pdest
+-  io.out.debug := DontCare
+-  io.out.perfDebugInfo.foreach(_ := io.in.bits.perfDebugInfo.get)
+-  io.out.debug_seqNum.foreach(_ := io.in.bits.debug_seqNum.get)
++  io.out.toRob.bits.debugInfo := DontCare
++  io.out.toRob.bits.debugInfo.perfDebugInfo.foreach(_ := io.in.bits.perfDebugInfo.get)
++  io.out.toRob.bits.debugInfo.debug_seqNum.foreach(_ := io.in.bits.debug_seqNum.get)
+ 
+   io.atomicData.valid := io.in.fire && FuType.storeIsAMO(io.in.bits.fuType)
+   io.atomicData.bits := io.in.bits
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+deleted file mode 100644
+index f00e00d11cd..00000000000
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ /dev/null
+@@ -1,802 +0,0 @@
+-/***************************************************************************************
+-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+-* Copyright (c) 2020-2021 Peng Cheng Laboratory
+-*
+-* XiangShan is licensed under Mulan PSL v2.
+-* You can use this software according to the terms and conditions of the Mulan PSL v2.
+-* You may obtain a copy of Mulan PSL v2 at:
+-*          http://license.coscl.org.cn/MulanPSL2
+-*
+-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+-*
+-* See the Mulan PSL v2 for more details.
+-***************************************************************************************/
+-
+-package xiangshan.mem
+-
+-import org.chipsalliance.cde.config.Parameters
+-import chisel3._
+-import chisel3.util._
+-import utils._
+-import utility._
+-import xiangshan._
+-import xiangshan.ExceptionNO._
+-import xiangshan.backend.Bundles.{ExuInput, ExuOutput, NewExuOutput, StoreUnitToLFST, UopIdx, connectSamePort}
+-import xiangshan.backend.fu.PMPRespBundle
+-import xiangshan.backend.fu.FuConfig._
+-import xiangshan.backend.fu.FuType._
+-import xiangshan.backend.ctrlblock.DebugLsInfoBundle
+-import xiangshan.backend.fu.NewCSR._
+-import xiangshan.backend.rob.RobPtr
+-import xiangshan.backend.exu.ExeUnitParams
+-import xiangshan.mem.Bundles._
+-import xiangshan.cache.mmu.{Pbmt, TlbCmd, TlbReq, TlbRequestIO, TlbResp}
+-import xiangshan.cache.{DCacheStoreIO, DcacheStoreRequestIO, HasDCacheParameters, MemoryOpConstants, StorePrefetchReq}
+-
+-class StoreUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSModule
+-  with HasDCacheParameters
+-  with HasVLSUParameters
+-  {
+-  val io = IO(new Bundle() {
+-    val redirect        = Flipped(ValidIO(new Redirect))
+-    val csrCtrl         = Flipped(new CustomCSRCtrlIO)
+-    val stin            = Flipped(Decoupled(new ExuInput(param, hasCopySrc = true)))
+-    val updateLFST      = Valid(new StoreUnitToLFST)
+-    // misalignBuffer issue path
+-    val misalign_stin   = Flipped(Decoupled(new LsPipelineBundle))
+-    val misalign_stout  = Valid(new SqWriteBundle)
+-    val tlb             = new TlbRequestIO()
+-    val dcache          = new DCacheStoreIO
+-    val pmp             = Flipped(new PMPRespBundle())
+-    val toLsq           = ValidIO(new StoreAddrIO)
+-    val toLsqRe         = Output(new StoreAddrIO) // write some exception info and memory type generate in s2
+-    // ready indicate unaligned queue reject this unaligned request;
+-    val toStoreUnalignQueue = DecoupledIO(new UnalignQueueIO)
+-    val feedback_slow   = ValidIO(new RSFeedback)
+-    val prefetch_req    = Flipped(DecoupledIO(new StorePrefetchReq))
+-    // provide prefetch info to sms
+-    val prefetch_train  = ValidIO(new LsPrefetchTrainBundle())
+-    // speculative for gated control
+-    val s1_prefetch_spec = Output(Bool())
+-    val s2_prefetch_spec = Output(Bool())
+-    val stld_nuke_query = Valid(new StoreNukeQueryReq)
+-    val stout           = new NewExuOutput(param) // writeback store
+-    val vecstout        = DecoupledIO(new VecPipelineFeedbackIO(isVStore = true))
+-    // store mask, send to sq in store_s0
+-    val st_mask_out     = Valid(new StoreMaskBundle)
+-    val debug_ls        = Output(new DebugLsInfoBundle)
+-    // vector
+-    val vecstin           = Flipped(Decoupled(new VecPipeBundle(isVStore = true)))
+-    val vec_isFirstIssue  = Input(Bool())
+-    // writeback to misalign buffer
+-    val misalign_enq = new MisalignBufferEnqIO
+-    // trigger
+-    val fromCsrTrigger = Input(new CsrTriggerBundle)
+-    val sqCommitPtr    = Input(new SqPtr)
+-    val sqCommitUopIdx = Input(UopIdx())
+-    val sqCommitRobIdx = Input(new RobPtr)
+-
+-    // exception, last stage signal
+-    val exceptionInfo  = ValidIO(new MemExceptionInfo)
+-
+-    val s0_s1_s2_valid = Output(Bool())
+-  })
+-  io.stin.bits.debug_seqNum.foreach(x => PerfCCT.updateInstPos(x, PerfCCT.InstPos.AtFU.id.U, io.stin.valid, clock, reset))
+-
+-  val s1_ready, s2_ready, s3_ready = WireInit(false.B)
+-
+-  // Pipeline
+-  // --------------------------------------------------------------------------------
+-  // stage 0
+-  // --------------------------------------------------------------------------------
+-  // generate addr, use addr to query DCache and DTLB
+-  val s0_iss_valid        = io.stin.valid
+-  val s0_prf_valid        = io.prefetch_req.valid && io.dcache.req.ready
+-  val s0_vec_valid        = io.vecstin.valid
+-  val s0_ma_st_valid      = io.misalign_stin.valid
+-  val s0_valid            = s0_iss_valid || s0_prf_valid || s0_vec_valid || s0_ma_st_valid
+-  val s0_flow_ma_ready = true.B
+-  val s0_flow_vec_ready = !s0_ma_st_valid
+-  val s0_flow_rs_ready = !s0_vec_valid && !s0_ma_st_valid
+-  val s0_flow_prf_ready = !s0_iss_valid && !s0_vec_valid && !s0_ma_st_valid
+-  val s0_use_flow_ma      = s0_ma_st_valid && s0_flow_ma_ready
+-  val s0_use_flow_vec     = s0_vec_valid && s0_flow_vec_ready
+-  val s0_use_flow_rs      = s0_iss_valid && s0_flow_rs_ready
+-  val s0_use_flow_prf     = s0_prf_valid && s0_flow_prf_ready
+-  val s0_use_non_prf_flow = s0_use_flow_rs || s0_use_flow_vec || s0_use_flow_ma
+-  val s0_stin             = Mux(s0_use_flow_rs, io.stin.bits, 0.U.asTypeOf(io.stin.bits))
+-  val s0_vecstin          = Mux(s0_use_flow_vec, io.vecstin.bits, 0.U.asTypeOf(io.vecstin.bits))
+-  val s0_uop              = Mux(
+-    s0_use_flow_ma,
+-    io.misalign_stin.bits.uop,
+-    Mux(
+-      s0_use_flow_rs,
+-      s0_stin.toDynInst(),
+-      s0_vecstin.uop
+-    )
+-  )
+-  val s0_isFirstIssue = Mux(
+-    s0_use_flow_ma,
+-    false.B,
+-    s0_use_flow_rs && io.stin.bits.isFirstIssue || s0_use_flow_vec && io.vec_isFirstIssue
+-  )
+-  val s0_size         = Mux(s0_use_non_prf_flow, LSUOpType.size(s0_uop.fuOpType), 0.U)// Todo: may broken if use it in feature
+-  val s0_mem_idx      = Mux(s0_use_non_prf_flow, s0_uop.sqIdx.value, 0.U)
+-  val s0_rob_idx      = Mux(s0_use_non_prf_flow, s0_uop.robIdx, 0.U.asTypeOf(s0_uop.robIdx))
+-  val s0_pc           = Mux(s0_use_non_prf_flow, s0_uop.pc, 0.U)
+-  val s0_instr_type   = Mux(s0_use_non_prf_flow, STORE_SOURCE.U, DCACHE_PREFETCH_SOURCE.U)
+-  val s0_wlineflag    = Mux(s0_use_flow_rs, LSUOpType.isCboAll(s0_uop.fuOpType), false.B)
+-  val s0_out          = Wire(new LsPipelineBundle)
+-  val s0_kill         = s0_uop.robIdx.needFlush(io.redirect)
+-  val s0_can_go       = s1_ready
+-  val s0_fire         = s0_valid && !s0_kill && s0_can_go
+-  val s0_is128bit     = Wire(Bool())
+-  // vector
+-  val s0_vecActive    = !s0_use_flow_vec || s0_vecstin.vecActive
+-  // val s0_flowPtr      = s0_vecstin.flowPtr
+-  // val s0_isLastElem   = s0_vecstin.isLastElem
+-  val s0_secondInv    = s0_vecstin.usSecondInv
+-  val s0_elemIdx      = s0_vecstin.elemIdx
+-  val s0_alignedType  = Mux(s0_use_flow_vec, s0_vecstin.alignedType, Cat(0.U, s0_uop.fuOpType(1, 0)))
+-  val s0_mBIndex      = s0_vecstin.mBIndex
+-  val s0_vecBaseVaddr = s0_vecstin.basevaddr
+-  val s0_isFinalSplit = io.misalign_stin.valid && io.misalign_stin.bits.isFinalSplit
+-
+-  // generate addr
+-  val s0_saddr = s0_stin.src(0) + SignExt(s0_stin.imm(11,0), VAddrBits)
+-  val s0_fullva = Wire(UInt(XLEN.W))
+-
+-  val s0_vaddr = PriorityMuxDefault(Seq(
+-    s0_ma_st_valid -> io.misalign_stin.bits.vaddr,
+-    s0_vec_valid -> s0_vecstin.vaddr(VAddrBits - 1, 0),
+-    s0_iss_valid -> s0_saddr
+-  ), io.prefetch_req.bits.vaddr)
+-
+-  val s0_isCbo = s0_use_flow_rs && LSUOpType.isCboAll(s0_stin.fuOpType)
+-  val s0_isCbo_noZero = s0_use_flow_rs && LSUOpType.isCbo(s0_stin.fuOpType)
+-  // only simulation
+-  val cbo_assert_flag = LSUOpType.isCboAll(s0_out.uop.fuOpType)
+-  XSError(!s0_use_flow_rs && cbo_assert_flag && s0_valid, "cbo instruction selection error.")
+-
+-  val s0_alignType = Mux(s0_use_flow_vec, s0_vecstin.alignedType(1,0), LSUOpType.size(s0_uop.fuOpType))
+-  // exception check
+-  val s0_addr_aligned = LookupTree(s0_alignType, List(
+-    "b00".U   -> true.B,              //b
+-    "b01".U   -> (s0_vaddr(0) === 0.U),   //h
+-    "b10".U   -> (s0_vaddr(1,0) === 0.U), //w
+-    "b11".U   -> (s0_vaddr(2,0) === 0.U)  //d
+-  )) || s0_isCbo
+-  // if vector store sends 128-bit requests, its address must be 128-aligned
+-  XSError(s0_use_flow_vec && s0_vaddr(3, 0) =/= 0.U && s0_vecstin.alignedType(2), "unit stride 128 bit element is not aligned!")
+-
+-  val s0_isMisalign = Mux(s0_use_non_prf_flow, (!s0_addr_aligned || s0_vecstin.uop.exceptionVec(storeAddrMisaligned) && s0_vecActive), false.B)
+-  val s0_addr_low = s0_vaddr(12, 0)
+-  val s0_addr_Up_low = LookupTree(s0_alignType, List(
+-    "b00".U -> 0.U,
+-    "b01".U -> 1.U,
+-    "b10".U -> 3.U,
+-    "b11".U -> 7.U
+-  )) + s0_addr_low
+-  val s0_rs_corss4KPage = s0_addr_Up_low(12) =/= s0_addr_low(12)
+-  val s0_rs_corss16Bytes = s0_addr_Up_low(4) =/= s0_addr_low(4)
+-  val s0_misalignWith16Byte = !s0_rs_corss16Bytes && !s0_addr_aligned && !s0_use_flow_prf
+-  val s0_misalignNeedReplay = (s0_use_flow_vec || s0_rs_corss4KPage && !s0_use_flow_ma) && !(s0_uop.sqIdx === io.sqCommitPtr || s0_uop.robIdx === io.sqCommitRobIdx && s0_uop.uopIdx === io.sqCommitUopIdx)
+-  s0_is128bit := Mux(s0_use_flow_ma, io.misalign_stin.bits.is128bit, is128Bit(s0_vecstin.alignedType) || s0_misalignWith16Byte)
+-
+-  s0_fullva := Mux(
+-    s0_use_flow_rs,
+-    s0_stin.src(0) + SignExt(s0_stin.imm(11,0), XLEN),
+-    Mux(
+-      s0_use_flow_vec,
+-      s0_vecstin.vaddr,
+-      s0_vaddr
+-    )
+-  )
+-
+-  val s0_mask = Mux(
+-    s0_use_flow_ma,
+-    io.misalign_stin.bits.mask,
+-    Mux(
+-      s0_use_flow_rs,
+-      Mux(s0_isCbo, Fill(VLEN/8, 1.U(1.W)), genVWmask128(s0_saddr, LSUOpType.size(s0_uop.fuOpType))),
+-      Mux(
+-        s0_use_flow_vec,
+-        s0_vecstin.mask,
+-        // -1.asSInt.asUInt
+-        Fill(VLEN/8, 1.U(1.W))
+-      )
+-    )
+-  )
+-
+-  io.tlb.req.valid                   := s0_valid
+-  io.tlb.req.bits.vaddr              := s0_vaddr
+-  io.tlb.req.bits.fullva             := s0_fullva
+-  io.tlb.req.bits.checkfullva        := s0_use_flow_rs || s0_use_flow_vec
+-  io.tlb.req.bits.cmd                := Mux(s0_isCbo_noZero, TlbCmd.read, TlbCmd.write)
+-  io.tlb.req.bits.isPrefetch         := s0_use_flow_prf
+-  io.tlb.req.bits.size               := s0_size
+-  io.tlb.req.bits.kill               := false.B
+-  io.tlb.req.bits.memidx.is_ld       := false.B
+-  io.tlb.req.bits.memidx.is_st       := true.B
+-  io.tlb.req.bits.memidx.idx         := s0_mem_idx
+-  io.tlb.req.bits.debug.robIdx       := s0_rob_idx
+-  io.tlb.req.bits.no_translate       := false.B
+-  io.tlb.req.bits.debug.pc           := s0_pc
+-  io.tlb.req.bits.debug.isFirstIssue := s0_isFirstIssue
+-  io.tlb.req_kill                    := false.B
+-  io.tlb.req.bits.hyperinst          := LSUOpType.isHsv(s0_uop.fuOpType)
+-  io.tlb.req.bits.hlvx               := false.B
+-  io.tlb.req.bits.pmp_addr           := DontCare
+-
+-  // Dcache access here: not **real** dcache write
+-  // just read meta and tag in dcache, to find out the store will hit or miss
+-
+-  // NOTE: The store request does not wait for the dcache to be ready.
+-  //       If the dcache is not ready at this time, the dcache is not queried.
+-  //       But, store prefetch request will always wait for dcache to be ready to make progress.
+-  io.dcache.req.valid              := s0_fire
+-  io.dcache.req.bits.cmd           := MemoryOpConstants.M_PFW
+-  io.dcache.req.bits.vaddr         := s0_vaddr
+-  io.dcache.req.bits.instrtype     := s0_instr_type
+-
+-  s0_out              := DontCare
+-  s0_out.vaddr        := s0_vaddr
+-  s0_out.fullva       := s0_fullva
+-  // Now data use its own io
+-  s0_out.data         := DontCare
+-  s0_out.uop          := s0_uop
+-  s0_out.miss         := false.B
+-  // For unaligned, we need to generate a base-aligned mask in storeunit and then do a shift split in StoreQueue.
+-  s0_out.mask         := s0_mask
+-  s0_out.isFirstIssue := s0_isFirstIssue
+-  s0_out.isHWPrefetch := s0_use_flow_prf
+-  s0_out.wlineflag    := s0_wlineflag
+-  s0_out.isvec        := s0_use_flow_vec
+-  s0_out.is128bit     := s0_is128bit
+-  s0_out.vecActive    := s0_vecActive
+-  s0_out.usSecondInv  := s0_secondInv
+-  s0_out.elemIdx      := s0_elemIdx
+-  s0_out.alignedType  := s0_alignedType
+-  s0_out.mbIndex      := s0_mBIndex
+-  s0_out.misalignWith16Byte      := s0_misalignWith16Byte
+-  s0_out.isMisalign      := s0_isMisalign
+-  s0_out.vecBaseVaddr := s0_vecBaseVaddr
+-  when(s0_valid && s0_isFirstIssue) {
+-    s0_out.uop.perfDebugInfo.tlbFirstReqTime := GTimer()
+-  }
+-  s0_out.isFrmMisAlignBuf := s0_use_flow_ma
+-  s0_out.isFinalSplit := s0_isFinalSplit
+-//  s0_out.uop.exceptionVec(storeAddrMisaligned) := Mux(s0_use_non_prf_flow, (!s0_addr_aligned || s0_vecstin.uop.exceptionVec(storeAddrMisaligned) && s0_vecActive), false.B) && !s0_misalignWith16Byte
+-
+-  io.st_mask_out.valid       := s0_use_flow_rs || s0_use_flow_vec
+-  io.st_mask_out.bits.mask   := s0_out.mask
+-  io.st_mask_out.bits.sqIdx  := s0_out.uop.sqIdx
+-
+-  io.stin.ready := s1_ready && s0_flow_rs_ready
+-  io.vecstin.ready := s1_ready && s0_flow_vec_ready
+-  io.prefetch_req.ready := s1_ready && io.dcache.req.ready && s0_flow_prf_ready
+-  io.misalign_stin.ready := s1_ready && s0_flow_ma_ready
+-
+-  // Pipeline
+-  // --------------------------------------------------------------------------------
+-  // stage 1
+-  // --------------------------------------------------------------------------------
+-  // TLB resp (send paddr to dcache)
+-  val s1_valid  = RegInit(false.B)
+-  val s1_in     = RegEnable(s0_out, s0_fire)
+-  val s1_out    = Wire(new LsPipelineBundle)
+-  val s1_kill   = Wire(Bool())
+-  val s1_can_go = s2_ready
+-  val s1_fire   = s1_valid && !s1_kill && s1_can_go
+-  val s1_vecActive    = RegEnable(s0_out.vecActive, true.B, s0_fire)
+-  val s1_frm_mabuf    = s1_in.isFrmMisAlignBuf
+-  val s1_is128bit     = s1_in.is128bit
+-
+-  // mmio cbo decoder
+-  val s1_isCbo   = RegEnable(s0_isCbo, s0_fire)
+-  val s1_vaNeedExt = io.tlb.resp.bits.excp(0).vaNeedExt
+-  val s1_isHyper   = io.tlb.resp.bits.excp(0).isHyper
+-  val s1_paddr     = io.tlb.resp.bits.paddr(0)
+-  val s1_gpaddr    = io.tlb.resp.bits.gpaddr(0)
+-  val s1_fullva    = Mux(s1_frm_mabuf, s1_out.vaddr, io.tlb.resp.bits.fullva)
+-  val s1_isForVSnonLeafPTE   = io.tlb.resp.bits.isForVSnonLeafPTE
+-  val s1_tlb_miss  = io.tlb.resp.bits.miss && io.tlb.resp.valid && s1_valid
+-  val s1_tlb_hit   = !io.tlb.resp.bits.miss && io.tlb.resp.valid && s1_valid
+-  val s1_pbmt      = Mux(s1_tlb_hit, io.tlb.resp.bits.pbmt.head, 0.U(Pbmt.width.W))
+-  val s1_exception = ExceptionNO.selectByFu(s1_out.uop.exceptionVec, StaCfg).asUInt.orR
+-  val s1_isvec     = RegEnable(s0_out.isvec, false.B, s0_fire)
+-  val s1_misalignNeedReplay = RegEnable(s0_misalignNeedReplay, false.B, s0_fire)
+-  //We don't want `StoreUnit` to have an additional effect on the Store of vector from a `misalignBuffer,`
+-  //But there are places where a marker bit is needed to enable additional processing of vector instructions.
+-  //For example: `StoreQueue` is exceptionBuffer
+-  val s1_frm_mab_vec = RegEnable(s0_use_flow_ma && io.misalign_stin.bits.isvec, false.B, s0_fire)
+-  // val s1_isLastElem = RegEnable(s0_isLastElem, false.B, s0_fire)
+-  val s1_cross4KPage = RegEnable(s0_rs_corss4KPage, s0_fire)
+-  s1_kill := s1_in.uop.robIdx.needFlush(io.redirect) || (s1_tlb_miss && !s1_isvec && !s1_frm_mabuf)
+-
+-  s1_ready := !s1_valid || s1_kill || s2_ready
+-  io.tlb.resp.ready := true.B // TODO: why dtlbResp needs a ready?
+-  when (s0_fire) { s1_valid := true.B }
+-  .elsewhen (s1_fire) { s1_valid := false.B }
+-  .elsewhen (s1_kill) { s1_valid := false.B }
+-
+-  // st-ld violation dectect request.
+-  io.stld_nuke_query.valid       := s1_valid && !s1_tlb_miss && !s1_in.isHWPrefetch
+-  io.stld_nuke_query.bits.robIdx := s1_in.uop.robIdx
+-  io.stld_nuke_query.bits.paddr  := s1_paddr
+-  io.stld_nuke_query.bits.mask   := s1_in.mask
+-  io.stld_nuke_query.bits.matchType := Mux(
+-                                          s1_isCbo,
+-                                          StLdNukeMatchType.CacheLine,
+-                                          Mux(s1_in.is128bit, StLdNukeMatchType.QuadWord, StLdNukeMatchType.Normal)
+-                                        )
+-
+-  io.updateLFST.valid := s1_valid && !s1_tlb_miss && !s1_in.isHWPrefetch && !s1_isvec && !s1_frm_mabuf
+-  io.updateLFST.bits.robIdx := RegEnable(s0_stin.robIdx, s0_valid)
+-  io.updateLFST.bits.ssid := RegEnable(s0_stin.ssid.getOrElse(0.U), s0_valid)
+-  io.updateLFST.bits.storeSetHit := RegEnable(s0_stin.storeSetHit.getOrElse(false.B), s0_valid)
+-
+-  // trigger
+-  val storeTrigger = Module(new MemTrigger(MemType.STORE))
+-  storeTrigger.io.fromCsrTrigger.tdataVec             := io.fromCsrTrigger.tdataVec
+-  storeTrigger.io.fromCsrTrigger.tEnableVec           := io.fromCsrTrigger.tEnableVec
+-  storeTrigger.io.fromCsrTrigger.triggerCanRaiseBpExp := io.fromCsrTrigger.triggerCanRaiseBpExp
+-  storeTrigger.io.fromCsrTrigger.debugMode            := io.fromCsrTrigger.debugMode
+-  storeTrigger.io.fromLoadStore.vaddr                 := s1_in.vaddr
+-  storeTrigger.io.fromLoadStore.isVectorUnitStride    := s1_in.isvec && s1_in.is128bit
+-  storeTrigger.io.fromLoadStore.mask                  := s1_in.mask
+-  storeTrigger.io.isCbo.get                           := s1_isCbo
+-
+-  val s1_trigger_action = storeTrigger.io.toLoadStore.triggerAction
+-  val s1_trigger_debug_mode = TriggerAction.isDmode(s1_trigger_action)
+-  val s1_trigger_breakpoint = TriggerAction.isExp(s1_trigger_action)
+-
+-  // Send TLB feedback to store issue queue
+-  // Store feedback is generated in store_s1, sent to RS in store_s2
+-  val s1_feedback = Wire(Valid(new RSFeedback))
+-  s1_feedback.valid                 := s1_valid & !s1_in.isHWPrefetch
+-  s1_feedback.bits.hit              := !s1_tlb_miss
+-  s1_feedback.bits.flushState       := io.tlb.resp.bits.ptwBack
+-  s1_feedback.bits.robIdx           := s1_out.uop.robIdx
+-  s1_feedback.bits.sourceType       := RSFeedbackType.tlbMiss
+-  s1_feedback.bits.dataInvalidSqIdx := DontCare
+-  s1_feedback.bits.sqIdx            := s1_out.uop.sqIdx
+-  s1_feedback.bits.lqIdx            := s1_out.uop.lqIdx
+-
+-  XSDebug(s1_feedback.valid,
+-    "S1 Store: tlbHit: %d robIdx: %d\n",
+-    s1_feedback.bits.hit,
+-    s1_feedback.bits.robIdx.value
+-  )
+-
+-  // io.feedback_slow := s1_feedback
+-
+-  // get paddr from dtlb, check if rollback is needed
+-  // writeback store inst to lsq
+-  s1_out           := s1_in
+-  s1_out.paddr     := s1_paddr
+-  s1_out.gpaddr    := s1_gpaddr
+-  s1_out.fullva    := s1_fullva
+-  s1_out.vaNeedExt := s1_vaNeedExt
+-  s1_out.isHyper   := s1_isHyper
+-  s1_out.miss      := false.B
+-  s1_out.nc        := Pbmt.isNC(s1_pbmt)
+-  s1_out.mmio      := Pbmt.isIO(s1_pbmt)
+-  s1_out.tlbMiss   := s1_tlb_miss
+-  s1_out.isForVSnonLeafPTE := s1_isForVSnonLeafPTE
+-  when (RegNext(io.tlb.req.bits.checkfullva) &&
+-    (s1_out.uop.exceptionVec(storePageFault) ||
+-      s1_out.uop.exceptionVec(storeAccessFault) ||
+-      s1_out.uop.exceptionVec(storeGuestPageFault))) {
+-    s1_out.uop.exceptionVec(storeAddrMisaligned) := false.B
+-  }
+-  s1_out.uop.exceptionVec(storePageFault)      := (io.tlb.resp.bits.excp(0).pf.st  || io.tlb.resp.bits.excp(0).pf.ld ) && s1_vecActive
+-  s1_out.uop.exceptionVec(storeAccessFault)    := (io.tlb.resp.bits.excp(0).af.st  || io.tlb.resp.bits.excp(0).af.ld ) && s1_vecActive
+-  s1_out.uop.exceptionVec(storeGuestPageFault) := (io.tlb.resp.bits.excp(0).gpf.st || io.tlb.resp.bits.excp(0).gpf.ld) && s1_vecActive
+-
+-  s1_out.uop.flushPipe                := false.B
+-  s1_out.uop.trigger                  := s1_trigger_action
+-  s1_out.uop.exceptionVec(breakPoint) := s1_trigger_breakpoint
+-  s1_out.uop.exceptionVec(storeAddrMisaligned) := s1_out.mmio && s1_in.isMisalign
+-  s1_out.vecVaddrOffset := Mux(
+-    s1_trigger_debug_mode || s1_trigger_breakpoint,
+-    storeTrigger.io.toLoadStore.triggerVaddr - s1_in.vecBaseVaddr,
+-    s1_in.vaddr + genVFirstUnmask(s1_in.mask).asUInt - s1_in.vecBaseVaddr ,
+-  )
+-  s1_out.vecTriggerMask := Mux(s1_trigger_debug_mode || s1_trigger_breakpoint, storeTrigger.io.toLoadStore.triggerMask, 0.U)
+-
+-  // scalar store and scalar load nuke check, and also other purposes
+-  //A 128-bit aligned unaligned memory access requires changing the unaligned flag bit in sq
+-  //TODO: FIX this connect!!
+-  io.toLsq.valid          := s1_valid && !s1_in.isHWPrefetch
+-  io.toLsq.bits.paddr     := s1_out.paddr
+-  io.toLsq.bits.vaddr     := s1_out.vaddr
+-  io.toLsq.bits.cacheMiss := false.B // will be set in stage 2
+-  io.toLsq.bits.tlbMiss   := s1_out.tlbMiss
+-  io.toLsq.bits.wlineflag := s1_out.wlineflag
+-  io.toLsq.bits.mask      := s1_out.mask
+-  io.toLsq.bits.size      := s1_out.alignedType
+-  io.toLsq.bits.uop.sqIdx     := s1_out.uop.sqIdx
+-  io.toLsq.bits.uop.robIdx    := s1_out.uop.robIdx
+-  io.toLsq.bits.uop.fuOpType  := s1_out.uop.fuOpType
+-  io.toLsq.bits.uop.ftqPtr    := s1_out.uop.ftqPtr
+-  io.toLsq.bits.uop.ftqOffset := s1_out.uop.ftqOffset
+-  io.toLsq.bits.uop.isRVC     := s1_out.uop.isRVC
+-  io.toLsq.bits.uop.isFirstIssue := s1_out.isFirstIssue
+-  io.toLsq.bits.isHyper       := s1_out.isHyper
+-  io.toLsq.bits.nc            := DontCare // will be set in stage 2
+-  io.toLsq.bits.mmio          := DontCare // will be set in stage 2
+-  io.toLsq.bits.memBackTypeMM := DontCare // will be set in stage 2
+-  io.toLsq.bits.hasException  := DontCare // will be set in stage 2
+-  io.toLsq.bits.af            := DontCare // will be set in stage 2
+-  io.toLsq.bits.uop.pc.foreach(_ := s1_out.uop.pc)
+-  io.toLsq.bits.uop.debugInfo.foreach(_  := s1_out.uop.perfDebugInfo)
+-  io.toLsq.bits.uop.debug_seqNum.foreach(_ := s1_out.uop.debug_seqNum)
+-
+-
+-  //TODO: `isLastRequest` means it's last request to write to storeQueue. if is normal request, it will be true,
+-  // if it was unalign splited, first request will be false, second will be true.
+-  io.toLsq.bits.isLastRequest       := s1_frm_mabuf && s1_out.isFinalSplit || !s1_cross4KPage && !s1_frm_mabuf //TODO: support cross page unalign feature!
+-  io.toLsq.bits.cross4KPage         := s1_frm_mabuf //TODO: support cross page unalign feature!
+-  io.toLsq.bits.unalignWithin16Byte := s1_out.misalignWith16Byte && !s1_frm_mabuf
+-  io.toLsq.bits.isUnalign           := s1_out.isMisalign || s1_frm_mabuf
+-
+-  // kill dcache write intent request when tlb miss or exception
+-  io.dcache.s1_kill  := (s1_tlb_miss || s1_exception || s1_out.mmio || s1_out.nc || s1_in.uop.robIdx.needFlush(io.redirect))
+-  io.dcache.s1_paddr := s1_paddr
+-
+-  // write below io.out.bits assign sentence to prevent overwriting values
+-  val s1_tlb_memidx = io.tlb.resp.bits.memidx
+-  when(s1_tlb_memidx.is_st && io.tlb.resp.valid && !s1_tlb_miss && s1_tlb_memidx.idx === s1_out.uop.sqIdx.value) {
+-    // printf("Store idx = %d\n", s1_tlb_memidx.idx)
+-    s1_out.uop.perfDebugInfo.tlbRespTime := GTimer()
+-  }
+-  val s1_mis_align = s1_valid && !s1_tlb_miss && !s1_in.isHWPrefetch && !s1_isCbo && !s1_out.nc && !s1_out.mmio &&
+-                      GatedValidRegNext(io.csrCtrl.hd_misalign_st_enable) && s1_in.isMisalign && s1_cross4KPage &&
+-                      !s1_trigger_breakpoint && !s1_trigger_debug_mode
+-  val s1_toMisalignBufferValid = s1_valid && !s1_tlb_miss && !s1_in.isHWPrefetch &&
+-    !s1_frm_mabuf && !s1_isCbo && s1_in.isMisalign && s1_cross4KPage && // only cross page unalign need enter misalignBuffer.
+-    GatedValidRegNext(io.csrCtrl.hd_misalign_st_enable)
+-  io.misalign_enq.req.valid := s1_toMisalignBufferValid && !s1_misalignNeedReplay
+-  io.misalign_enq.req.bits.fromLsPipelineBundle(s1_in)
+-
+-  // Pipeline
+-  // --------------------------------------------------------------------------------
+-  // stage 2
+-  // --------------------------------------------------------------------------------
+-  // mmio check
+-  val s2_valid  = RegInit(false.B)
+-  val s2_in     = RegEnable(s1_out, s1_fire)
+-  val s2_out    = Wire(new LsPipelineBundle)
+-  val s2_kill   = Wire(Bool())
+-  val s2_can_go = s3_ready
+-  val s2_fire   = s2_valid && !s2_kill && s2_can_go
+-  val s2_vecActive    = RegEnable(s1_out.vecActive, true.B, s1_fire)
+-  val s2_frm_mabuf    = s2_in.isFrmMisAlignBuf
+-  val s2_frm_mab_vec  = RegEnable(s1_frm_mab_vec, true.B, s1_fire)
+-  val s2_pbmt   = RegEnable(s1_pbmt, s1_fire)
+-  val s2_trigger_debug_mode = RegEnable(s1_trigger_debug_mode, false.B, s1_fire)
+-  val s2_tlb_hit = RegEnable(s1_tlb_hit, s1_fire)
+-  val s2_cross4KPage = RegEnable(s1_cross4KPage, s1_fire)
+-
+-  s2_ready := !s2_valid || s2_kill || s3_ready
+-  when (s1_fire) { s2_valid := true.B }
+-  .elsewhen (s2_fire) { s2_valid := false.B }
+-  .elsewhen (s2_kill) { s2_valid := false.B }
+-
+-  val s2_pmp = WireInit(io.pmp)
+-
+-  val s2_exception = RegNext(s1_feedback.bits.hit) &&
+-                    (s2_trigger_debug_mode || ExceptionNO.selectByFu(s2_out.uop.exceptionVec, StaCfg).asUInt.orR) && s2_vecActive
+-  val s2_un_misalign_exception =  RegNext(s1_feedback.bits.hit) &&
+-                    (s2_trigger_debug_mode || ExceptionNO.selectByFuAndUnSelect(s2_out.uop.exceptionVec, StaCfg, Seq(storeAddrMisaligned)).asUInt.orR)
+-
+-  val s2_mmio = (s2_in.mmio || (Pbmt.isPMA(s2_pbmt) && s2_pmp.mmio)) && RegNext(s1_feedback.bits.hit)
+-  val s2_memBackTypeMM = !s2_pmp.mmio
+-  // The response signal of `pmp/pma` is credible only after the physical address is actually generated.
+-  // Therefore, the response signals of pmp/pma generated after an address translation has produced an `access fault` or a `page fault` are completely unreliable.
+-  val s2_un_access_exception =  s2_vecActive && (
+-    s2_in.uop.exceptionVec(storeAccessFault) ||
+-    s2_in.uop.exceptionVec(storePageFault)   ||
+-    s2_in.uop.exceptionVec(storeGuestPageFault)
+-  )
+-  // This real physical address is located in uncache space.
+-  val s2_actually_uncache = s2_tlb_hit && !s2_un_access_exception && (Pbmt.isPMA(s2_pbmt) && !s2_pmp.st && s2_pmp.mmio || s2_in.nc || s2_in.mmio) && RegNext(s1_feedback.bits.hit)
+-  val s2_isCbo  = RegEnable(s1_isCbo, s1_fire) // all cbo instr
+-  val s2_isCbo_noZero = LSUOpType.isCbo(s2_in.uop.fuOpType)
+-
+-  s2_kill := ((s2_mmio && !s2_exception) && !s2_in.isvec && !s2_frm_mabuf) || s2_in.uop.robIdx.needFlush(io.redirect)
+-
+-  s2_out        := s2_in
+-  s2_out.af     := s2_out.uop.exceptionVec(storeAccessFault)
+-  s2_out.mmio   := s2_mmio && !s2_exception
+-  s2_out.memBackTypeMM := s2_memBackTypeMM
+-  s2_out.uop.exceptionVec(storeAccessFault) := (s2_in.uop.exceptionVec(storeAccessFault) ||
+-                                                s2_pmp.st ||
+-                                                s2_pmp.ld && s2_isCbo_noZero || // cmo need read permission but produce store exception
+-                                                ((s2_in.isvec || s2_isCbo) && s2_actually_uncache && RegNext(s1_feedback.bits.hit))
+-                                                ) && s2_vecActive
+-  s2_out.uop.exceptionVec(storeAddrMisaligned) := s2_actually_uncache && !s2_in.isvec && (s2_in.isMisalign || s2_in.isFrmMisAlignBuf) && !s2_un_misalign_exception
+-  s2_out.uop.vpu.vstart     := s2_in.vecVaddrOffset >> s2_in.uop.vpu.veew
+-
+-  // kill dcache write intent request when mmio or exception
+-  io.dcache.s2_kill := (s2_actually_uncache || s2_exception || s2_in.uop.robIdx.needFlush(io.redirect))
+-  io.dcache.s2_pc   := s2_out.uop.pc
+-  // TODO: dcache resp
+-  io.dcache.resp.ready := true.B
+-
+-  val s2_mis_align = s2_valid && RegEnable(s1_mis_align, s1_fire)
+-  // goto misalignBuffer
+-  io.misalign_enq.revoke := s2_exception
+-
+-  val s2_misalignNeedReplay = RegEnable(s1_toMisalignBufferValid && (!io.misalign_enq.req.ready || s1_misalignNeedReplay), false.B, s1_fire)
+-  val s2_misalignBufferNack = !io.misalign_enq.revoke && s2_misalignNeedReplay
+-  //TODO: when implement new Unalign, it need to assign, cross page second request paddr.
+-  io.toStoreUnalignQueue.valid              := s2_frm_mabuf && s2_out.isFinalSplit && s2_valid//TODO: support cross page unalign feature!
+-  io.toStoreUnalignQueue.bits.sqIdx         := s2_out.uop.sqIdx
+-  io.toStoreUnalignQueue.bits.paddr         := s2_out.paddr
+-  io.toStoreUnalignQueue.bits.robIdx        := s2_out.uop.robIdx
+-
+-  // feedback tlb miss to RS in store_s2
+-  val feedback_slow_valid = WireInit(false.B)
+-
+-  feedback_slow_valid := s1_feedback.valid && !s1_out.uop.robIdx.needFlush(io.redirect) && !s1_out.isvec && !s1_frm_mabuf
+-  io.feedback_slow.valid := GatedValidRegNext(feedback_slow_valid)
+-  io.feedback_slow.bits  := RegEnable(s1_feedback.bits, feedback_slow_valid)
+-  io.feedback_slow.bits.hit  := RegEnable(s1_feedback.bits.hit, feedback_slow_valid) && !s2_misalignNeedReplay
+-
+-  val s2_vecFeedback = RegNext(!s1_out.uop.robIdx.needFlush(io.redirect) && s1_feedback.bits.hit && s1_feedback.valid) &&
+-                       !s2_misalignBufferNack && s2_in.isvec && !s2_frm_mabuf
+-
+-  val s2_misalign_stout = WireInit(0.U.asTypeOf(io.misalign_stout))
+-  s2_misalign_stout.valid := s2_valid && s2_can_go && s2_frm_mabuf
+-  connectSamePort(s2_misalign_stout.bits, s2_out)
+-  s2_misalign_stout.bits.need_rep := RegEnable(s1_tlb_miss, s1_fire)
+-  io.misalign_stout := s2_misalign_stout
+-
+-  val s2_misalign_cango = !s2_mis_align || s2_in.isvec && (s2_misalignNeedReplay || s2_exception) || !s2_in.isvec && !s2_misalignNeedReplay && s2_exception
+-
+-  // mmio and exception TODO:
+-  io.toLsqRe.memBackTypeMM   := s2_out.memBackTypeMM
+-  io.toLsqRe.isLastRequest   := s2_frm_mabuf && s2_out.isFinalSplit || !s2_cross4KPage && !s2_frm_mabuf //TODO: support cross page unalign feature!
+-  io.toLsqRe.af              := s2_out.af && s2_valid && !s2_kill
+-  io.toLsqRe.mmio            := (s2_mmio || s2_isCbo_noZero) && !s2_exception // reuse `mmiostall` logic in sq
+-  io.toLsqRe.nc              := s2_out.nc
+-  // prefetch related
+-  io.toLsqRe.cacheMiss       := io.dcache.resp.fire && io.dcache.resp.bits.miss // miss info
+-  // when support new unalign, hasException need to consider second request.
+-  io.toLsqRe.hasException    := (ExceptionNO.selectByFu(s2_out.uop.exceptionVec, StaCfg).asUInt.orR ||
+-    TriggerAction.isDmode(s2_out.uop.trigger) || s2_out.af) && s2_valid && !s2_kill
+-  io.toLsqRe.paddr               := DontCare
+-  io.toLsqRe.vaddr               := DontCare
+-  io.toLsqRe.tlbMiss             := DontCare
+-  io.toLsqRe.wlineflag           := DontCare
+-  io.toLsqRe.mask                := DontCare
+-  io.toLsqRe.size                := DontCare
+-  io.toLsqRe.uop                 := DontCare
+-  io.toLsqRe.isHyper             := DontCare
+-  io.toLsqRe.cross4KPage         := false.B
+-  io.toLsqRe.unalignWithin16Byte := s2_out.misalignWith16Byte && !s2_frm_mabuf
+-  io.toLsqRe.isUnalign          := s2_out.isMisalign || s2_frm_mabuf
+-
+-
+-  // RegNext prefetch train for better timing
+-  // ** Now, prefetch train is valid at store s3 **
+-  val s2_prefetch_train_valid = WireInit(false.B)
+-  // s2_un_access_exception can guarantee the physical address is valid
+-  s2_prefetch_train_valid := s2_valid && io.dcache.resp.fire && !s2_out.mmio && !s2_out.nc && !s2_in.tlbMiss && !s2_un_access_exception
+-  io.prefetch_train.valid := RegNext(s2_prefetch_train_valid)
+-  io.prefetch_train.bits.fromLsPipelineBundle(s2_in, latch = true, enable = s2_prefetch_train_valid)
+-  // override miss bit
+-  io.prefetch_train.bits.miss := RegEnable(io.dcache.resp.bits.miss, s2_prefetch_train_valid)
+-  // TODO: add prefetch and access bit
+-  io.prefetch_train.bits.meta_prefetch := false.B
+-  io.prefetch_train.bits.meta_access := false.B
+-  io.prefetch_train.bits.is_from_hw_pf := RegNext(s2_in.isHWPrefetch)
+-  io.prefetch_train.bits.refillLatency := 0.U // TODO: store not for berti, so there is no refillLatency
+-  io.prefetch_train.bits.isFinalSplit := false.B
+-  io.prefetch_train.bits.misalignWith16Byte := false.B
+-  io.prefetch_train.bits.isMisalign := false.B
+-  io.prefetch_train.bits.misalignNeedWakeUp := false.B
+-  io.prefetch_train.bits.updateAddrValid := false.B
+-  io.prefetch_train.bits.hasException := false.B
+-  io.s1_prefetch_spec := s1_fire
+-  io.s2_prefetch_spec := s2_prefetch_train_valid
+-
+-  // for misalign in vsMergeBuffer
+-  io.s0_s1_s2_valid := s0_valid || s1_valid || s2_valid
+-
+-  // Pipeline
+-  // --------------------------------------------------------------------------------
+-  // stage 3
+-  // --------------------------------------------------------------------------------
+-  // store write back
+-  val s3_valid  = RegInit(false.B)
+-  val s3_in     = RegEnable(s2_out, s2_fire)
+-  val s3_out    = Wire(new ExuOutput(param))
+-  val s3_kill   = s3_in.uop.robIdx.needFlush(io.redirect)
+-  val s3_can_go = s3_ready
+-  val s3_fire   = s3_valid && !s3_kill && s3_can_go
+-  val s3_vecFeedback = RegEnable(s2_vecFeedback, s2_fire)
+-  val s3_exception     = RegEnable(s2_exception, s2_fire)
+-
+-  // store misalign will not writeback to rob now
+-  when (s2_fire) { s3_valid := (!s2_mmio && !s2_isCbo || s2_exception) && !s2_out.isHWPrefetch && s2_misalign_cango && !s2_frm_mabuf }
+-  .elsewhen (s3_fire) { s3_valid := false.B }
+-  .elsewhen (s3_kill) { s3_valid := false.B }
+-
+-  // wb: writeback
+-  s3_out := DontCare
+-  s3_out.data := DontCare
+-  s3_out.pdest := s3_in.uop.pdest
+-  s3_out.robIdx := s3_in.uop.robIdx
+-  s3_out.intWen.foreach(_ := s3_in.uop.rfWen)
+-  s3_out.fpWen.foreach(_ := s3_in.uop.fpWen)
+-  s3_out.vecWen.foreach(_ := s3_in.uop.vecWen)
+-  s3_out.v0Wen.foreach(_ := s3_in.uop.v0Wen)
+-  s3_out.vlWen.foreach(_ := s3_in.uop.vlWen)
+-  s3_out.redirect.foreach(_ := 0.U.asTypeOf(ValidIO(new Redirect)))
+-  s3_out.exceptionVec.foreach(_ := s3_in.uop.exceptionVec)
+-  s3_out.flushPipe.foreach(_ := s3_in.uop.flushPipe)
+-  s3_out.replay.foreach(_ := s3_in.uop.replayInst)
+-  s3_out.lqIdx.foreach(_ := s3_in.uop.lqIdx)
+-  s3_out.sqIdx.foreach(_ := s3_in.uop.sqIdx)
+-  s3_out.trigger.foreach(_ := s3_in.uop.trigger)
+-  s3_out.isRVC.foreach(_ := s3_in.uop.isRVC)
+-  s3_out.debug.isMMIO := s3_in.mmio
+-  s3_out.debug.isNCIO := s3_in.nc && !s3_in.memBackTypeMM
+-  s3_out.debug.isPerfCnt := false.B
+-  s3_out.debug.paddr := s3_in.paddr
+-  s3_out.debug.vaddr := s3_in.vaddr
+-  s3_out.perfDebugInfo.foreach(_ := s3_in.uop.perfDebugInfo)
+-  s3_out.debug_seqNum.foreach(_ := s3_in.uop.debug_seqNum)
+-
+-  XSError(s3_valid && s3_in.isvec && s3_in.vecActive && !s3_in.mask.orR, "In vecActive, mask complement should not be 0")
+-  // Pipeline
+-  // --------------------------------------------------------------------------------
+-  // stage x
+-  // --------------------------------------------------------------------------------
+-  val sx_valid = Wire(Vec(RAWTotalDelayCycles + 1, Bool()))
+-  val sx_ready = Wire(Vec(RAWTotalDelayCycles + 1, Bool()))
+-  val sx_in    = Wire(Vec(RAWTotalDelayCycles + 1, new VecMemExuOutput(param)))
+-  val sx_in_vec = Wire(Vec(RAWTotalDelayCycles +1, Bool()))
+-  val sx_in_vls = Wire(Vec(RAWTotalDelayCycles + 1, (new ExuOutput(vstuParams.head)).vls.get.cloneType))
+-
+-  // backward ready signal
+-  s3_ready := sx_ready.head
+-  for (i <- 0 until RAWTotalDelayCycles + 1) {
+-    if (i == 0) {
+-      sx_valid(i)          := s3_valid
+-      sx_in(i).output      := s3_out
+-      sx_in(i).vecFeedback := s3_vecFeedback
+-      sx_in(i).nc          := s3_in.nc
+-      sx_in(i).mmio        := s3_in.mmio
+-      sx_in(i).usSecondInv := s3_in.usSecondInv
+-      sx_in(i).elemIdx     := s3_in.elemIdx
+-      sx_in(i).alignedType := s3_in.alignedType
+-      sx_in(i).mbIndex     := s3_in.mbIndex
+-      sx_in(i).mask        := s3_in.mask
+-      sx_in(i).vaddr       := s3_in.fullva
+-      sx_in(i).vaNeedExt   := s3_in.vaNeedExt
+-      sx_in(i).isHyper     := s3_in.isHyper
+-      sx_in(i).gpaddr      := s3_in.gpaddr
+-      sx_in(i).isForVSnonLeafPTE     := s3_in.isForVSnonLeafPTE
+-      sx_in(i).vecTriggerMask := s3_in.vecTriggerMask
+-      sx_in(i).hasException := s3_exception
+-      sx_in_vec(i)         := s3_in.isvec
+-      sx_in_vls(i).vpu := s3_in.uop.vpu
+-      sx_in_vls(i).oldVdPsrc := s3_in.uop.psrc(2)
+-      sx_in_vls(i).vdIdx := DontCare
+-      sx_in_vls(i).vdIdxInField := DontCare
+-      sx_in_vls(i).isIndexed := VlduType.isIndexed(s3_in.uop.fuOpType)
+-      sx_in_vls(i).isMasked := VlduType.isMasked(s3_in.uop.fuOpType)
+-      sx_in_vls(i).isStrided := VlduType.isStrided(s3_in.uop.fuOpType)
+-      sx_in_vls(i).isWhole := VlduType.isWhole(s3_in.uop.fuOpType)
+-      sx_in_vls(i).isVecLoad := VlduType.isVecLd(s3_in.uop.fuOpType)
+-      sx_in_vls(i).isVlm := VlduType.isMasked(s3_in.uop.fuOpType) && VlduType.isVecLd(s3_in.uop.fuOpType)
+-      sx_ready(i) := !s3_valid(i) || sx_in(i).output.robIdx.needFlush(io.redirect) || (if (RAWTotalDelayCycles == 0) true.B else sx_ready(i+1))
+-    } else {
+-      val cur_kill   = sx_in(i).output.robIdx.needFlush(io.redirect)
+-      val cur_can_go = (if (i == RAWTotalDelayCycles) true.B else sx_ready(i+1))
+-      val cur_fire   = sx_valid(i) && !cur_kill && cur_can_go
+-      val prev_fire  = sx_valid(i-1) && !sx_in(i-1).output.robIdx.needFlush(io.redirect) && sx_ready(i)
+-
+-      sx_ready(i) := !sx_valid(i) || cur_kill || (if (i == RAWTotalDelayCycles) true.B else sx_ready(i+1))
+-      val sx_valid_can_go = prev_fire || cur_fire || cur_kill
+-      sx_valid(i) := RegEnable(Mux(prev_fire, true.B, false.B), false.B, sx_valid_can_go)
+-      sx_in(i) := RegEnable(sx_in(i-1), prev_fire)
+-      sx_in_vec(i) := RegEnable(sx_in_vec(i-1), prev_fire)
+-      sx_in_vls(i) := RegEnable(sx_in_vls(i-1), prev_fire)
+-    }
+-  }
+-  val sx_last_valid = sx_valid.takeRight(1).head
+-  val sx_last_ready = sx_ready.takeRight(1).head
+-  val sx_last_in    = sx_in.takeRight(1).head
+-  val sx_last_in_vec = sx_in_vec.takeRight(1).head
+-  val sx_last_in_vls = sx_in_vls.takeRight(1).head
+-  sx_last_ready := true.B
+-
+-  // write back: normal store, nc store
+-  io.stout.toRob.valid := sx_last_valid && !sx_last_in_vec
+-  io.stout.toRob.bits.robIdx := sx_last_in.output.robIdx
+-  io.stout.toRob.bits.isRVC.foreach(_ := sx_last_in.output.isRVC.get)
+-  io.stout.toRob.bits.trigger.foreach(_ := sx_last_in.output.trigger.get)
+-  io.stout.toRob.bits.sqIdx.foreach(_ := sx_last_in.output.sqIdx.get)
+-  io.stout.toRob.bits.lqIdx.foreach(_  := sx_last_in.output.lqIdx.get)
+-  io.stout.pdest := DontCare
+-  io.stout.debug := sx_last_in.output.debug
+-  io.stout.debug_seqNum.foreach(_  := sx_last_in.output.debug_seqNum.get)
+-  io.stout.perfDebugInfo.foreach(_  := sx_last_in.output.perfDebugInfo.get)
+-  io.stout.toRob.bits.exceptionVec.foreach(_ := ExceptionNO.selectByFu(sx_last_in.output.exceptionVec.get, StaCfg))
+-
+-  // exceptionInfo Gen
+-  io.exceptionInfo.valid             := sx_last_valid && !sx_last_in_vec // normal writeback, not vector writeback
+-  io.exceptionInfo.bits.robIdx       := sx_last_in.output.robIdx
+-  io.exceptionInfo.bits.exceptionVec := ExceptionNO.selectByFu(sx_last_in.output.exceptionVec.get, StaCfg)
+-  io.exceptionInfo.bits.vaddr        := sx_last_in.vaddr
+-  io.exceptionInfo.bits.gpaddr       := sx_last_in.gpaddr
+-  io.exceptionInfo.bits.isForVSnonLeafPTE := sx_last_in.isForVSnonLeafPTE
+-  io.exceptionInfo.bits.vaNeedExt    := sx_last_in.vaNeedExt
+-  io.exceptionInfo.bits.isHyper      := sx_last_in.isHyper
+-  io.exceptionInfo.bits.uopIdx       := 0.U.asTypeOf(io.exceptionInfo.bits.uopIdx)
+-  io.exceptionInfo.bits.vl           := 0.U.asTypeOf(io.exceptionInfo.bits.vl)
+-  io.exceptionInfo.bits.vstart       := 0.U.asTypeOf(io.exceptionInfo.bits.vstart)
+-
+-  io.vecstout.valid := sx_last_valid && sx_last_in_vec
+-  // TODO: implement it!
+-  io.vecstout.bits.mBIndex := sx_last_in.mbIndex
+-  io.vecstout.bits.hit := sx_last_in.vecFeedback
+-  io.vecstout.bits.isvec := true.B
+-  io.vecstout.bits.sourceType := RSFeedbackType.tlbMiss
+-  io.vecstout.bits.flushState := DontCare
+-  io.vecstout.bits.trigger    := sx_last_in.output.trigger.get
+-  io.vecstout.bits.nc := sx_last_in.nc
+-  io.vecstout.bits.mmio := sx_last_in.mmio
+-  io.vecstout.bits.exceptionVec := ExceptionNO.selectByFu(sx_last_in.output.exceptionVec.get, VstuCfg)
+-  io.vecstout.bits.hasException := sx_last_in.hasException
+-  io.vecstout.bits.elemIdx     := sx_last_in.elemIdx
+-  io.vecstout.bits.alignedType := sx_last_in.alignedType
+-  io.vecstout.bits.mask        := sx_last_in.mask
+-  io.vecstout.bits.vaddr       := sx_last_in.vaddr
+-  io.vecstout.bits.vaNeedExt   := sx_last_in.vaNeedExt
+-  io.vecstout.bits.gpaddr      := sx_last_in.gpaddr
+-  io.vecstout.bits.isForVSnonLeafPTE     := sx_last_in.isForVSnonLeafPTE
+-  io.vecstout.bits.vstart      := sx_last_in_vls.vpu.vstart
+-  io.vecstout.bits.vecTriggerMask := sx_last_in.vecTriggerMask
+-
+-  io.debug_ls := DontCare
+-  io.debug_ls.s1_robIdx := s1_in.uop.robIdx.value
+-  io.debug_ls.s1_isTlbFirstMiss := io.tlb.resp.valid && io.tlb.resp.bits.miss && io.tlb.resp.bits.debug.isFirstIssue && !s1_in.isHWPrefetch
+-
+-  private def printPipeLine(pipeline: LsPipelineBundle, cond: Bool, name: String): Unit = {
+-    XSDebug(cond,
+-      p"$name" + p" pc ${Hexadecimal(pipeline.uop.pc)} " +
+-        p"addr ${Hexadecimal(pipeline.vaddr)} -> ${Hexadecimal(pipeline.paddr)} " +
+-        p"op ${Binary(pipeline.uop.fuOpType)} " +
+-        p"data ${Hexadecimal(pipeline.data)} " +
+-        p"mask ${Hexadecimal(pipeline.mask)}\n"
+-    )
+-  }
+-
+-  printPipeLine(s0_out, s0_valid, "S0")
+-  printPipeLine(s1_out, s1_valid, "S1")
+-
+-  // perf cnt
+-  XSPerfAccumulate("s0_in_valid",                s0_valid)
+-  XSPerfAccumulate("s0_in_fire",                 s0_fire)
+-  XSPerfAccumulate("s0_vecin_fire",              s0_fire && s0_use_flow_vec)
+-  XSPerfAccumulate("s0_in_fire_first_issue",     s0_fire && s0_isFirstIssue)
+-  XSPerfAccumulate("s0_addr_spec_success",       s0_fire && !s0_use_flow_vec && s0_saddr(VAddrBits-1, 12) === s0_stin.src(0)(VAddrBits-1, 12))
+-  XSPerfAccumulate("s0_addr_spec_failed",        s0_fire && !s0_use_flow_vec && s0_saddr(VAddrBits-1, 12) =/= s0_stin.src(0)(VAddrBits-1, 12))
+-  XSPerfAccumulate("s0_addr_spec_success_once",  s0_fire && !s0_use_flow_vec && s0_saddr(VAddrBits-1, 12) === s0_stin.src(0)(VAddrBits-1, 12) && s0_isFirstIssue)
+-  XSPerfAccumulate("s0_addr_spec_failed_once",   s0_fire && !s0_use_flow_vec && s0_saddr(VAddrBits-1, 12) =/= s0_stin.src(0)(VAddrBits-1, 12) && s0_isFirstIssue)
+-
+-  XSPerfAccumulate("s1_in_valid",                s1_valid)
+-  XSPerfAccumulate("s1_in_fire",                 s1_fire)
+-  XSPerfAccumulate("s1_in_fire_first_issue",     s1_fire && s1_in.isFirstIssue)
+-  XSPerfAccumulate("s1_tlb_miss",                s1_fire && s1_tlb_miss)
+-  XSPerfAccumulate("s1_tlb_miss_first_issue",    s1_fire && s1_tlb_miss && s1_in.isFirstIssue)
+-  // end
+-}
+diff --git a/src/main/scala/xiangshan/mem/pipeline/package.scala b/src/main/scala/xiangshan/mem/pipeline/package.scala
+index 3bbeba2cefb..f997d116028 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/package.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/package.scala
+@@ -147,4 +147,78 @@ object TlbAccessResult extends ChiselOHEnum {
+   def isHit(r: UInt): Bool = IsOneOf(r, hit)
+   def isMiss(r: UInt): Bool = IsOneOf(r, miss)
+   def isNotMiss(r: UInt): Bool = !isMiss(r)
++}
++
++object StoreStage extends Enumeration {
++  val s0, s1, s2, s3, s4 = Value
++  sealed abstract class StoreStage(val stage: Value) {
++    def id: Int = stage.id
++  }
++  case class StoreS0() extends StoreStage(s0)
++  case class StoreS1() extends StoreStage(s1)
++  case class StoreS2() extends StoreStage(s2)
++  case class StoreS3() extends StoreStage(s3)
++  case class StoreS4() extends StoreStage(s4)
++}
++
++trait OnStoreStage {
++  import StoreStage._
++  implicit val s: StoreStage
++  
++  def is(sn: StoreStage): Boolean = s.id == sn.id
++  def after(s1: StoreStage, s2: StoreStage): Boolean = s1.id >= s2.id
++  def isS0: Boolean = is(StoreS0())
++  def afterS1: Boolean = after(s, StoreS1())
++  def afterS2: Boolean = after(s, StoreS2())
++  def afterS3: Boolean = after(s, StoreS3())
++  def lastStage: Boolean = s match {
++    case _: StoreS4 => true
++    case _ => false
++  }
++  def prevStage(stage: StoreStage): StoreStage = stage match {
++    case StoreS0() =>
++      require(false)
++      StoreS0()
++    case StoreS1() => StoreS0()
++    case StoreS2() => StoreS1()
++    case StoreS3() => StoreS2()
++    case StoreS4() => StoreS3()
++  }
++}
++
++object StoreEntrance extends ChiselOHEnum {
++  type OHType = super.OHType
++
++  val unalignTail = addType(name = "unalignTail")
++  val prefetch = addType(name = "prefetch")
++  val vectorIssue = addType(name = "vectorIssue")
++  val scalarIssue = addType(name = "scalarIssue")
++
++  def num = this.values.size
++
++  def apply() = UInt(num.W)
++
++  def isUnalignTail(source: UInt): Bool = IsOneOf(source, unalignTail)
++  def isHWPrefetch(source: UInt): Bool = IsOneOf(source, prefetch)
++  def isVectorIssue(source: UInt): Bool = IsOneOf(source, vectorIssue)
++  def isScalarIssue(source: UInt): Bool = IsOneOf(source, scalarIssue)
++
++  def findNameById(id: Int): String = {
++    values.find(_.id == id).map(_.getName).getOrElse("UNKNOWN")
++  }
++}
++
++class StoreAccessType extends Bundle {
++  val instrType = InstrType()
++  val isCbo = Bool()
++  val isCboNoZero = Bool()
++
++  import InstrType._
++  def isScalar(): Bool = IsOneOf(instrType, scalar)
++  def isVector(): Bool = IsOneOf(instrType, vector)
++  def isPrefetch(): Bool = IsOneOf(instrType, prefetch)
++}
++
++object StoreAccessType {
++  def apply() = new StoreAccessType
+ }
+\ No newline at end of file
+diff --git a/src/main/scala/xiangshan/mem/vector/VSplit.scala b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+index 7e71c2e334f..4a144fbd125 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSplit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+@@ -463,11 +463,7 @@ abstract class VSplitBuffer(isVStore: Boolean = false)(implicit p: Parameters) e
+ }
+ 
+ class VSSplitBufferImp(implicit p: Parameters) extends VSplitBuffer(isVStore = true){
+-  override lazy val misalignedCanGo = io.vstdMisalign.get.storePipeEmpty &&
+-    (io.vstdMisalign.get.storeMisalignBufferEmpty ||
+-      io.vstdMisalign.get.storeMisalignBufferRobIdx > io.out.bits.uop.robIdx ||
+-      io.vstdMisalign.get.storeMisalignBufferRobIdx === io.out.bits.uop.robIdx &&
+-        io.vstdMisalign.get.storeMisalignBufferUopIdx > io.out.bits.uop.uopIdx)
++  override lazy val misalignedCanGo = true.B
+ 
+   // split data
+   val splitData = genVSData(
+@@ -568,7 +564,5 @@ class VSSplitImp(val param: ExeUnitParams)(implicit p: Parameters) extends VLSUM
+   splitBuffer.io.redirect <> io.redirect
+   io.out <> splitBuffer.io.out
+   io.vstd.get <> splitBuffer.io.vstd.get
+-
+-  io.vstdMisalign.get <> splitBuffer.io.vstdMisalign.get
+ }
+ 
+diff --git a/src/main/scala/xiangshan/mem/vector/VecBundle.scala b/src/main/scala/xiangshan/mem/vector/VecBundle.scala
+index 2419411c6fd..36590df8e5e 100644
+--- a/src/main/scala/xiangshan/mem/vector/VecBundle.scala
++++ b/src/main/scala/xiangshan/mem/vector/VecBundle.scala
+@@ -179,6 +179,29 @@ class VecPipeBundle(isVStore: Boolean=false)(implicit p: Parameters) extends VLS
+     out.occupySource := DontCare
+     out
+   }
++
++  def toVectorStoreIn(): VectorStoreIn = {
++    require(isVStore)
++    val out = Wire(new VectorStoreIn())
++    out.entrance := StoreEntrance.vectorIssue.U
++    out.accessType.instrType := InstrType.vector.U
++    out.accessType.isCbo := false.B
++    out.accessType.isCboNoZero := false.B
++    out.uop := uop
++    out.vaddr := vaddr
++    out.fullva := vaddr
++    out.size := alignedType
++    out.mask := mask
++    out.isFirstIssue := true.B // TODO: In new vector implement, modifications are required
++
++    out.vecBaseVaddr.get := basevaddr
++    out.usSecondInv.get := usSecondInv
++    out.elemIdx.get := elemIdx
++    out.mbIndex.get := mBIndex
++    out.vecTriggerMask.get := 0.U
++    out.vecVaddrOffset.get := 0.U
++    out
++  }
+ }
+ 
+ object VecFeedbacks {
+@@ -247,7 +270,6 @@ class VSplitIO(param: ExeUnitParams, isVStore: Boolean=false)(implicit p: Parame
+   val toMergeBuffer       = new ToMergeBufferIO(isVStore) //to merge buffer req mergebuffer entry
+   val out                 = Decoupled(new VecPipeBundle(isVStore))// to scala pipeline
+   val vstd                = OptionWrapper(isVStore, Valid(new StoreQueueDataWrite))
+-  val vstdMisalign        = OptionWrapper(isVStore, new storeMisaignIO)
+   val threshold            = OptionWrapper(!isVStore, Flipped(ValidIO(new LqPtr)))
+ }
+ 
+@@ -263,7 +285,6 @@ class VSplitBufferIO(isVStore: Boolean=false)(implicit p: Parameters) extends VL
+   val in                  = Flipped(Decoupled(new VLSBundle()))
+   val out                 = Decoupled(new VecPipeBundle(isVStore))//to scala pipeline
+   val vstd                = OptionWrapper(isVStore, ValidIO(new StoreQueueDataWrite))
+-  val vstdMisalign        = OptionWrapper(isVStore, new storeMisaignIO)
+ }
+ 
+ class VMergeBufferIO(isVStore : Boolean=false)(implicit p: Parameters) extends VLSUBundle{
+diff --git a/src/main/scala/xiangshan/package.scala b/src/main/scala/xiangshan/package.scala
+index da34a871f31..af83b8bcd02 100644
+--- a/src/main/scala/xiangshan/package.scala
++++ b/src/main/scala/xiangshan/package.scala
+@@ -122,6 +122,7 @@ package object xiangshan {
+     def vsse      = "b10_10_00000".U // strided
+     def vsoxe     = "b10_11_00000".U // index
+ 
++    def isUnitStride(fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U
+     def isWhole  (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01000".U && (fuOpType(8) ^ fuOpType(7))
+     def isMasked (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01011".U && (fuOpType(8) ^ fuOpType(7))
+     def isStrided(fuOpType: UInt): Bool = fuOpType(6, 5) === "b10".U && (fuOpType(8) ^ fuOpType(7))
+```

@@ -1,0 +1,3 @@
+In https://github.com/OpenXiangShan/XiangShan/pull/4422, For the virtualized allStage scenario, we attempt to suppress PMP checks until the G-stage translation result is returned. However, the approach used in https://github.com/OpenXiangShan/XiangShan/pull/4422 is to try ignoring the `accessFault` result when `io.hptw.req.valid` is asserted.
+
+In reality, the `accessFault` signal remains valid because it is implemented as a `RegEnable`. Therefore, we need to prevent `sent_to_pmp` from being asserted when sending the G-stage translation request to HPTW. To address this, we introduce the `vs_finish` signal. When `vs_finish` is `true.B`, `sent_to_pmp` will be false, thus avoiding false `accessFault` reports.

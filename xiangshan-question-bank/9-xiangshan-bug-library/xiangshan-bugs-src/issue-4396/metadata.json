@@ -1,0 +1,21 @@
+{
+  "number": 4396,
+  "title": "fix(L2TLB): Napot entries in LLPTW should not be compressed",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4396",
+  "state": "closed",
+  "labels": [],
+  "author": "good-circle",
+  "created_at": "2025-03-11T11:05:32Z",
+  "updated_at": "2025-03-13T13:37:33Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4396/commit-log.md"
+  ],
+  "submitted_at": "2025-03-11",
+  "branch": "",
+  "rtl_commit": ""
+}

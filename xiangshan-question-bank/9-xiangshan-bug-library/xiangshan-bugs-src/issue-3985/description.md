@@ -1,0 +1,1 @@
+In previous design, refill.valid will be false when `need_gpa` is true. However, need_gpa is a reg so we add signal `need_gpa_wire` which will be true one cycle before need_gpa. refill.valid will be false either need_gpa or need_gpa_wire is true.

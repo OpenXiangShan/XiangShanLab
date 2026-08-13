@@ -1,0 +1,5 @@
+vsetvli
+vle8.v v8, (src)
+vse8.v v8, (dst)
+fence rw, rw
+scalar byte compare

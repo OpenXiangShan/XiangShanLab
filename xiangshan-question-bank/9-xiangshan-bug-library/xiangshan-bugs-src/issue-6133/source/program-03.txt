@@ -1,0 +1,4 @@
+io_rollback_bits_robIdx_value = 35
+io_rollback_bits_ftqIdx_value = 5
+io_rollback_bits_ftqOffset = 7
+io_rollback_bits_level = 1

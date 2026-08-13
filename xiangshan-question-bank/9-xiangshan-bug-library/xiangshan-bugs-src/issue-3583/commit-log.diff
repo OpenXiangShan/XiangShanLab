@@ -1,0 +1,44 @@
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+index d9dd65965fb..1a44aaefc8d 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueBlockParams.scala
+@@ -350,6 +350,10 @@ case class IssueBlockParams(
+     MixedVec(exuBlockParams.filterNot(_.fakeUnit).map(x => DecoupledIO(new IssueQueueIssueBundle(this, x))))
+   }
+ 
++  def genIssueValidBundle(implicit p: Parameters): MixedVec[ValidIO[IssueQueueIssueBundle]] = {
++    MixedVec(exuBlockParams.filterNot(_.fakeUnit).map(x => ValidIO(new IssueQueueIssueBundle(this, x))))
++  }
++
+   def genWBWakeUpSinkValidBundle(implicit p: Parameters): MixedVec[ValidIO[IssueQueueWBWakeUpBundle]] = {
+     val intBundle: Seq[ValidIO[IssueQueueWBWakeUpBundle]] = schdType match {
+       case IntScheduler() | MemScheduler() => needWakeupFromIntWBPort.map(x => ValidIO(new IssueQueueWBWakeUpBundle(x._2.map(_.exuIdx), backendParam))).toSeq
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+index 1cdc5006219..65d73f5a0cc 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+@@ -770,12 +770,21 @@ class IssueQueueImp(override val wrapper: IssueQueue)(implicit p: Parameters, va
+     deq.bits.common.perfDebugInfo.issueTime := GTimer() + 1.U
+   }
+ 
+-  io.deqDelay.zip(deqBeforeDly).foreach { case (deqDly, deq) =>
+-    deqDly.valid := RegNext(deq.valid)
+-    deqDly.bits := RegNext(deq.bits)
++  val deqDelay = Reg(params.genIssueValidBundle)
++  deqDelay.zip(deqBeforeDly).foreach { case (deqDly, deq) =>
++    deqDly.valid := deq.valid
++    when(validVec.asUInt.orR) {
++      deqDly.bits := deq.bits
++    }
++    // deqBeforeDly.ready is always true
+     deq.ready := true.B
+   }
++  io.deqDelay.zip(deqDelay).foreach { case (sink, source) =>
++    sink.valid := source.valid
++    sink.bits := source.bits
++  }
+   if(backendParams.debugEn) {
++    dontTouch(deqDelay)
+     dontTouch(io.deqDelay)
+     dontTouch(deqBeforeDly)
+   }

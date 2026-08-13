@@ -1,0 +1,67 @@
+# Commit Log
+- Issue: #3305
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3305
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3305
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3305
+- Changed files: 2
+- Additions: 5
+- Deletions: 5
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala`
+- `src/main/scala/xiangshan/cache/mmu/Repeater.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+index e53ae929115..7eaecdd5c97 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+@@ -465,19 +465,19 @@ class LLPTW(implicit p: Parameters) extends XSModule with HasPtwConst with HasPe
+   val enq_ptr = ParallelPriorityEncoder(is_emptys)
+ 
+   val mem_ptr = ParallelPriorityEncoder(is_having) // TODO: optimize timing, bad: entries -> ptr -> entry
+-  val mem_arb = Module(new RRArbiter(new LLPTWEntry(), l2tlbParams.llptwsize))
++  val mem_arb = Module(new RRArbiterInit(new LLPTWEntry(), l2tlbParams.llptwsize))
+   for (i <- 0 until l2tlbParams.llptwsize) {
+     mem_arb.io.in(i).bits := entries(i)
+     mem_arb.io.in(i).valid := is_mems(i) && !io.mem.req_mask(i)
+   }
+   
+   // process hptw requests in serial
+-  val hyper_arb1 = Module(new RRArbiter(new LLPTWEntry(), l2tlbParams.llptwsize))
++  val hyper_arb1 = Module(new RRArbiterInit(new LLPTWEntry(), l2tlbParams.llptwsize))
+   for (i <- 0 until l2tlbParams.llptwsize) {
+     hyper_arb1.io.in(i).bits := entries(i)
+     hyper_arb1.io.in(i).valid := is_hptw_req(i) && !(Cat(is_hptw_resp).orR) && !(Cat(is_last_hptw_resp).orR)
+   }
+-  val hyper_arb2 = Module(new RRArbiter(new LLPTWEntry(), l2tlbParams.llptwsize))
++  val hyper_arb2 = Module(new RRArbiterInit(new LLPTWEntry(), l2tlbParams.llptwsize))
+   for(i <- 0 until l2tlbParams.llptwsize) {
+     hyper_arb2.io.in(i).bits := entries(i)
+     hyper_arb2.io.in(i).valid := is_last_hptw_req(i) && !(Cat(is_hptw_resp).orR) && !(Cat(is_last_hptw_resp).orR)
+diff --git a/src/main/scala/xiangshan/cache/mmu/Repeater.scala b/src/main/scala/xiangshan/cache/mmu/Repeater.scala
+index feb13e6f564..6fee07779ec 100644
+--- a/src/main/scala/xiangshan/cache/mmu/Repeater.scala
++++ b/src/main/scala/xiangshan/cache/mmu/Repeater.scala
+@@ -51,7 +51,7 @@ class PTWRepeater(Width: Int = 1, FenceDelay: Int)(implicit p: Parameters) exten
+   val req_in = if (Width == 1) {
+     io.tlb.req(0)
+   } else {
+-    val arb = Module(new RRArbiter(io.tlb.req(0).bits.cloneType, Width))
++    val arb = Module(new RRArbiterInit(io.tlb.req(0).bits.cloneType, Width))
+     arb.io.in <> io.tlb.req
+     arb.io.out
+   }
+@@ -94,7 +94,7 @@ class PTWRepeaterNB(Width: Int = 1, passReady: Boolean = false, FenceDelay: Int)
+   val req_in = if (Width == 1) {
+     io.tlb.req(0)
+   } else {
+-    val arb = Module(new RRArbiter(io.tlb.req(0).bits.cloneType, Width))
++    val arb = Module(new RRArbiterInit(io.tlb.req(0).bits.cloneType, Width))
+     arb.io.in <> io.tlb.req
+     arb.io.out
+   }
+```

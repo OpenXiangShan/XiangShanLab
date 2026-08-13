@@ -1,0 +1,1 @@
+./build/emu -i bug-6126-hlv-spvp-pmp-riscv64-xs.bin --diff ready-to-run/riscv64-nemu-interpreter-so

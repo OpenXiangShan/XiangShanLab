@@ -1,0 +1,5 @@
+bad_read_observations         = 2
+bad_read_to_ftq_meta_consumed = 2
+bad_read_train_meta_consumed  = 2
+delta                         = 106
+recovered                     = 1

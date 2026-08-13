@@ -1,0 +1,3 @@
+timeout 120 ./XiangShan/build/verilator-compile/emu \
+  -i ptw_pte_partial_high_store_readback.elf \
+  --no-diff -C 500000

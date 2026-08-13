@@ -1,0 +1,27 @@
+{
+  "number": 5807,
+  "title": "[difftest] CSR mcause Exception Code Mismatch Between XiangShan RTL and NEMU When Exception Occurs",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5807",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "Lruos",
+  "created_at": "2026-04-14T01:42:31Z",
+  "updated_at": "2026-04-15T09:04:23Z",
+  "source_files": [
+    "issue-5807/source/difftest.log",
+    "issue-5807/source/nemu_lw.log",
+    "issue-5807/source/bug-report.tar.gz",
+    "issue-5807/source/lw_45.c",
+    "issue-5807/source/program-01.c"
+  ],
+  "archive_files": [
+    "issue-5807/source/difftest.log",
+    "issue-5807/source/nemu_lw.log",
+    "issue-5807/source/bug-report.tar.gz",
+    "issue-5807/source/lw_45.c"
+  ],
+  "has_comments": true
+}

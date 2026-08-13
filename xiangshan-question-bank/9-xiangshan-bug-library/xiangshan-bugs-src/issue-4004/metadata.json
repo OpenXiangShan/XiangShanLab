@@ -1,0 +1,19 @@
+{
+  "number": 4004,
+  "title": "Inconsistent values ​​of mip registers",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4004",
+  "state": "closed",
+  "labels": [
+    "type: bug/invalid"
+  ],
+  "author": "fly-1011",
+  "created_at": "2024-12-09T02:53:55Z",
+  "updated_at": "2025-09-05T07:12:32Z",
+  "source_files": [
+    "issue-4004/source/test.zip"
+  ],
+  "archive_files": [
+    "issue-4004/source/test.zip"
+  ],
+  "has_comments": true
+}

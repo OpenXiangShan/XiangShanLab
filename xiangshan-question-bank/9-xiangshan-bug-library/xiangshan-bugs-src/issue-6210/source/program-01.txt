@@ -1,0 +1,3 @@
+mepc different   right = 0x0000010040001000, wrong = 0x0000000040001000
+mtval different  right = 0x0000010040001000, wrong = 0x0000000000000000
+mcause different right = 0x000000000000000c, wrong = 0x0000000000000009

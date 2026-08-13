@@ -1,0 +1,7 @@
+EMU=/path/to/XiangShan/build_vcd/emu \
+PREFIX=utage_train_then_disable_buildvcd \
+TRAIN_ITERS=345 \
+CYCLES=9500 \
+WAVE_BEGIN=8000 \
+WAVE_END=9500 \
+./run_writebuffer_poc.sh

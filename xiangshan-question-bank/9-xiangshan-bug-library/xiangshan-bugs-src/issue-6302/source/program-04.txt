@@ -1,0 +1,5 @@
+vtype = 0xd8 = 0b 1101_1000
+  bits[7:5] = 110  → vlmul = 6  (mf4)
+  bits[4:2] = 110  → vsew  = 6  ← RESERVED
+  bit[1]     = 0   → vta   = 0
+  bit[0]     = 0   → vma   = 0

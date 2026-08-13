@@ -1,0 +1,398 @@
+# Commit Log
+- Issue: #5090
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5090
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5090
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5090
+- Changed files: 8
+- Additions: 82
+- Deletions: 95
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/Bpu.scala`
+- `src/main/scala/xiangshan/frontend/bpu/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/bpu/tage/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala`
+- `src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala`
+- `src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+index 89ca30b2f52..1c30f5ca59b 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+@@ -112,6 +112,7 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+   private val s3_prediction = Wire(new Prediction)
+ 
+   private val s3_meta = Wire(new BpuMeta)
++  println("bpu meta width: " + s3_meta.getWidth)
+ 
+   private val debug_bpId = RegInit(0.U(XLEN.W))
+ 
+@@ -323,6 +324,9 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+   // mbtb meta
+   private val s3_mbtbMeta = RegEnable(mbtb.io.meta, s2_fire)
+ 
++  // tage meta
++  private val s3_tageMeta = RegEnable(tage.io.meta, s2_fire)
++
+   // ittage meta
+   private val s3_ittageMeta = ittage.io.meta
+ 
+@@ -343,6 +347,7 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+ 
+   s3_meta.abtb   := s3_abtbMeta
+   s3_meta.mbtb   := s3_mbtbMeta
++  s3_meta.tage   := s3_tageMeta
+   s3_meta.ras    := s3_rasMeta
+   s3_meta.phr    := s3_phrMeta
+   s3_meta.ittage := s3_ittageMeta
+@@ -351,8 +356,6 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+   s3_meta.debug_startVAddr := s3_pc
+   s3_meta.debug_bpId       := debug_bpId
+ 
+-  s3_meta.perf_s3Prediction := s3_prediction
+-
+   io.toFtq.meta.valid := s3_valid
+   io.toFtq.meta.bits  := s3_meta
+ 
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+index 461a3181031..2199c55b45d 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+@@ -27,6 +27,7 @@ import xiangshan.frontend.bpu.phr.PhrPtr
+ import xiangshan.frontend.bpu.ras.RasInternalMeta
+ import xiangshan.frontend.bpu.ras.RasMeta
+ import xiangshan.frontend.bpu.sc.ScMeta
++import xiangshan.frontend.bpu.tage.TageMeta
+ 
+ /* *** public const & type *** */
+ class BranchAttribute extends Bundle {
+@@ -180,6 +181,7 @@ class BpuSpeculationMeta(implicit p: Parameters) extends BpuBundle {
+ class BpuMeta(implicit p: Parameters) extends BpuBundle {
+   val abtb:   AheadBtbMeta = new AheadBtbMeta
+   val mbtb:   MainBtbMeta  = new MainBtbMeta
++  val tage:   TageMeta     = new TageMeta
+   val ras:    RasMeta      = new RasMeta
+   val phr:    PhrPtr       = new PhrPtr
+   val sc:     ScMeta       = new ScMeta
+@@ -187,8 +189,6 @@ class BpuMeta(implicit p: Parameters) extends BpuBundle {
+   // used for BpTrace
+   val debug_bpId:       UInt       = UInt(XLEN.W)
+   val debug_startVAddr: PrunedAddr = new PrunedAddr(VAddrBits)
+-  // used for performance counter
+-  val perf_s3Prediction: Prediction = new Prediction
+ }
+ 
+ /* *** internal const & type *** */
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Bundles.scala
+index 75650878f39..4b372dac6ae 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Bundles.scala
+@@ -28,8 +28,7 @@ class TageEntry(implicit p: Parameters) extends TageBundle {
+   val usefulCtr: SaturateCounter = new SaturateCounter(UsefulCtrWidth)
+ }
+ 
+-class BaseTableSramWriteReq(implicit p: Parameters) extends WriteReqBundle
+-    with HasTageParameters {
++class BaseTableSramWriteReq(implicit p: Parameters) extends TageBundle {
+   val setIdx:    UInt                 = UInt(BaseTableSetIdxWidth.W)
+   val wayMask:   UInt                 = UInt(FetchBlockAlignInstNum.W)
+   val takenCtrs: Vec[SaturateCounter] = Vec(FetchBlockAlignInstNum, new SaturateCounter(BaseTableTakenCtrWidth))
+@@ -59,7 +58,11 @@ class AllocFailCtrSramWriteReq(numSets: Int)(implicit p: Parameters) extends Wri
+   val allocFailCtr: SaturateCounter = new SaturateCounter(AllocFailCtrWidth)
+ }
+ 
+-class TableUpadteEntriesReq(implicit p: Parameters) extends TageBundle {
++class TableUpdateEntriesReq(implicit p: Parameters) extends TageBundle {
+   val wayMask: UInt           = UInt(NumWays.W)
+   val entries: Vec[TageEntry] = Vec(NumWays, new TageEntry)
+ }
++
++class TageMeta(implicit p: Parameters) extends TageBundle {
++  val baseTableCtrs: Vec[SaturateCounter] = Vec(FetchBlockInstNum, new SaturateCounter(BaseTableTakenCtrWidth))
++}
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+index 9ca64dc8588..eea73982442 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+@@ -38,6 +38,7 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+     val foldedPathHistForTrain: PhrAllFoldedHistories = Input(new PhrAllFoldedHistories(AllFoldedHistoryInfo))
+     val condTakenMask:          Vec[Bool]             = Output(Vec(NumBtbResultEntries, Bool()))
+     val readBankIdx:            UInt                  = Output(UInt(log2Ceil(NumBanks).W)) // to resolveQueue
++    val meta:                   TageMeta              = Output(new TageMeta)
+   }
+   val io: TageIO = IO(new TageIO)
+ 
+@@ -149,11 +150,14 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+       val hasProvider = result._1
+       val pred        = result._2
+       val altPred     = s2_baseTableCtrs(position).isPositive
+-      hit && Mux(hasProvider, pred, altPred)
++//      hit && Mux(hasProvider, pred, altPred)
++      hit && altPred // temporarily only use base table prediction
+   }
+ 
+   io.condTakenMask := s2_condTakenMask
+ 
++  io.meta.baseTableCtrs := s2_baseTableCtrs
++
+   /* --------------------------------------------------------------------------------------------------------------
+      train pipeline stage 0
+      - send train request to base table
+@@ -187,7 +191,7 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+       getSetIndex(t0_startVAddr, hist, tableInfo.NumSets)
+   }
+ 
+-  baseTable.io.train.valid := t0_valid
++  baseTable.io.train.valid := t0_trainValid
+   baseTable.io.train.bits  := io.train.bits
+ 
+   tables.zipWithIndex.foreach {
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala b/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala
+index befe03ea37f..794ca72d8fb 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala
+@@ -18,11 +18,11 @@ package xiangshan.frontend.bpu.tage
+ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
++import utility.XSPerfAccumulate
+ import utility.sram.SRAMTemplate
+ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.bpu.BpuTrain
+ import xiangshan.frontend.bpu.SaturateCounter
+-import xiangshan.frontend.bpu.WriteBuffer
+ 
+ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+   class TageBaseTableIO extends TageBundle {
+@@ -42,6 +42,7 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+         way = FetchBlockAlignInstNum,
+         singlePort = true,
+         shouldReset = true,
++        holdRead = true,
+         withClockGate = true,
+         hasMbist = hasMbist,
+         hasSramCtl = hasSramCtl
+@@ -51,19 +52,18 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+   // use a write buffer to store the write requests when read and write are both valid
+   private val writeBuffers =
+     Seq.fill(BaseTableNumAlignBanks, NumBanks)(
+-      Module(new WriteBuffer(new BaseTableSramWriteReq, WriteBufferSize, numPorts = 1))
++      Module(new Queue(new BaseTableSramWriteReq, WriteBufferSize, pipe = true, flow = true))
+     )
+ 
+   // Connect write buffers to SRAMs
+-  sramBanks.flatten.zip(writeBuffers.flatten).foreach {
+-    case (bank, buffer) =>
+-      val valid   = buffer.io.read.head.valid && !bank.io.r.req.valid
+-      val data    = buffer.io.read.head.bits.takenCtrs
+-      val setIdx  = buffer.io.read.head.bits.setIdx
+-      val wayMask = buffer.io.read.head.bits.wayMask
+-      bank.io.w.apply(valid, data, setIdx, wayMask)
+-
+-      buffer.io.read.head.ready := bank.io.w.req.ready && !bank.io.r.req.valid
++  sramBanks.flatten.zip(writeBuffers.flatten).foreach { case (bank, buffer) =>
++    val valid   = buffer.io.deq.valid && !bank.io.r.req.valid
++    val data    = buffer.io.deq.bits.takenCtrs
++    val setIdx  = buffer.io.deq.bits.setIdx
++    val wayMask = buffer.io.deq.bits.wayMask
++    bank.io.w.apply(valid, data, setIdx, wayMask)
++
++    buffer.io.deq.ready := bank.io.w.req.ready && !bank.io.r.req.valid
+   }
+ 
+   io.resetDone := sramBanks.flatten.map(_.io.r.req.ready).reduce(_ && _)
+@@ -84,6 +84,13 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+   private val s0_bankIdx  = getBaseTableBankIndex(s0_startPc)
+   private val s0_bankMask = UIntToOH(s0_bankIdx, NumBanks)
+ 
++  sramBanks.zipWithIndex.foreach { case (alignBank, alignBankIdx) =>
++    alignBank.zipWithIndex.foreach { case (bank, bankIdx) =>
++      bank.io.r.req.valid       := s0_fire && s0_bankMask(bankIdx)
++      bank.io.r.req.bits.setIdx := s0_setIdx(alignBankIdx)
++    }
++  }
++
+   /* --------------------------------------------------------------------------------------------------------------
+      stage 1
+      - get raw ctrs from SRAM
+@@ -108,90 +115,60 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+    train stage 0
+-   - read old ctrs
++   - delay 1 cycle for better timing
+    -------------------------------------------------------------------------------------------------------------- */
+ 
+-  private val t0_valid      = io.train.valid
+-  private val t0_startVAddr = io.train.bits.startVAddr
+-  private val t0_branches   = io.train.bits.branches
+-
+-  private val t0_alignBankIdx = getBaseTableAlignBankIndex(t0_startVAddr)
+-  private val t0_rawSetIdx    = getBaseTableSetIndex(t0_startVAddr)
+-  private val t0_setIdx =
+-    Seq.tabulate(BaseTableNumAlignBanks)(bankIdx => Mux(bankIdx.U < t0_alignBankIdx, t0_rawSetIdx + 1.U, t0_rawSetIdx))
+-
+-  private val t0_bankIdx  = getBankIndex(t0_startVAddr)
+-  private val t0_bankMask = UIntToOH(t0_bankIdx, NumBanks)
+-
+-  sramBanks.zipWithIndex.foreach {
+-    case (alignBank, alignIdx) =>
+-      alignBank.zipWithIndex.foreach {
+-        case (bank, bankIdx) =>
+-          bank.io.r.req.valid       := s0_fire && s0_bankMask(bankIdx) || t0_valid && t0_bankMask(bankIdx)
+-          bank.io.r.req.bits.setIdx := Mux(t0_valid, t0_setIdx(alignIdx), s0_setIdx(alignIdx))
+-      }
+-  }
++  private val t0_valid = io.train.valid
++  private val t0_train = io.train.bits
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+    train stage 1
+-   - get old ctrs from SRAM
+-   -------------------------------------------------------------------------------------------------------------- */
+-
+-  private val t1_valid    = RegNext(t0_valid)
+-  private val t1_branches = RegEnable(t0_branches, t0_valid)
+-
+-  private val t1_alignBankIdx = RegEnable(s0_alignBankIdx, s0_fire)
+-  private val t1_bankMask     = RegEnable(s0_bankMask, s0_fire)
+-  private val t1_setIdx       = t0_setIdx.map(RegEnable(_, t0_valid))
+-
+-  private val t1_rawCtrs = VecInit(sramBanks.map(alignBank =>
+-    Mux1H(s1_bankMask, alignBank.map(_.io.r.resp.data))
+-  ))
+-
+-  private val t1_oldCtrs = vecRotateRight(t1_rawCtrs, t1_alignBankIdx).flatten
+-
+-  /* --------------------------------------------------------------------------------------------------------------
+-   train stage 2
+    - update ctrs
+    -------------------------------------------------------------------------------------------------------------- */
+ 
+-  private val t2_valid    = RegNext(t1_valid)
+-  private val t2_branches = RegEnable(t1_branches, t1_valid)
++  private val t1_valid = RegNext(t0_valid)
++  private val t1_train = RegEnable(t0_train, t0_valid)
+ 
+-  private val t2_alignBankIdx = RegEnable(t1_alignBankIdx, t1_valid)
+-  private val t2_bankMask     = RegEnable(t1_bankMask, t1_valid)
+-  private val t2_setIdx       = t1_setIdx.map(RegEnable(_, t1_valid))
++  private val t1_startVAddr = t1_train.startVAddr
++  private val t1_branches   = t1_train.branches
++  private val t1_oldCtrs    = t1_train.meta.tage.baseTableCtrs
+ 
+-  private val t2_oldCtrs = t1_oldCtrs.map(RegEnable(_, t1_valid))
++  private val t1_alignBankIdx = getBaseTableAlignBankIndex(t1_startVAddr)
++  private val t1_rawSetIdx    = getBaseTableSetIndex(t1_startVAddr)
++  private val t1_setIdx = VecInit.tabulate(BaseTableNumAlignBanks)(bankIdx =>
++    Mux(bankIdx.U < t1_alignBankIdx, t1_rawSetIdx + 1.U, t1_rawSetIdx)
++  )
++  private val t1_bankIdx  = getBankIndex(t1_startVAddr)
++  private val t1_bankMask = UIntToOH(t1_bankIdx, NumBanks)
+ 
+-  private val t2_updateMask = Wire(Vec(BaseTableNumAlignBanks, Vec(FetchBlockAlignInstNum, Bool())))
+-  private val t2_newCtrs =
++  private val t1_updateMask = Wire(Vec(BaseTableNumAlignBanks, Vec(FetchBlockAlignInstNum, Bool())))
++  private val t1_newCtrs =
+     Wire(Vec(BaseTableNumAlignBanks, Vec(FetchBlockAlignInstNum, new SaturateCounter(BaseTableTakenCtrWidth))))
+ 
+-  t2_newCtrs.flatten.zip(t2_updateMask.flatten).zipWithIndex.foreach {
+-    case ((newCtr, needUpdate), position) =>
+-      t2_branches.foreach { branch =>
+-        when(position.U === branch.bits.cfiPosition) {
+-          needUpdate   := true.B
+-          newCtr.value := t2_oldCtrs(position).getUpdate(branch.bits.taken)
+-        }.otherwise {
+-          needUpdate   := false.B
+-          newCtr.value := 0.U
+-        }
+-      }
++  t1_newCtrs.flatten.zip(t1_updateMask.flatten).zipWithIndex.foreach { case ((newCtr, needUpdate), position) =>
++    val hitMask = t1_branches.map { branch =>
++      branch.valid && branch.bits.attribute.isConditional && position.U === branch.bits.cfiPosition
++    }
++    val taken = Mux1H(hitMask, t1_branches.map(_.bits.taken))
++    needUpdate   := hitMask.reduce(_ || _)
++    newCtr.value := t1_oldCtrs(position).getUpdate(taken)
+   }
+ 
+-  private val t2_rotatedNewCtrs    = vecRotateRight(t2_newCtrs, t2_alignBankIdx)
+-  private val t2_rotatedUpdateMask = vecRotateRight(t2_updateMask, t2_alignBankIdx)
+-
+-  writeBuffers.zipWithIndex.foreach {
+-    case (alignBuffers, alignIdx) =>
+-      alignBuffers.zipWithIndex.foreach {
+-        case (buffer, bankIdx) =>
+-          buffer.io.write.head.valid          := t2_valid && t2_bankMask(bankIdx)
+-          buffer.io.write.head.bits.setIdx    := t2_setIdx(alignIdx)
+-          buffer.io.write.head.bits.takenCtrs := t2_rotatedNewCtrs(alignIdx)
+-          buffer.io.write.head.bits.wayMask   := t2_rotatedUpdateMask(alignIdx).asUInt
+-      }
++  private val t1_rotatedNewCtrs    = vecRotateRight(t1_newCtrs, t1_alignBankIdx)
++  private val t1_rotatedUpdateMask = vecRotateRight(t1_updateMask, t1_alignBankIdx)
++
++  writeBuffers.zipWithIndex.foreach { case (alignBuffers, alignIdx) =>
++    alignBuffers.zipWithIndex.foreach { case (buffer, bankIdx) =>
++      buffer.io.enq.valid          := t1_valid && t1_bankMask(bankIdx)
++      buffer.io.enq.bits.setIdx    := t1_setIdx(alignIdx)
++      buffer.io.enq.bits.takenCtrs := t1_rotatedNewCtrs(alignIdx)
++      buffer.io.enq.bits.wayMask   := t1_rotatedUpdateMask(alignIdx).asUInt
++    }
+   }
++
++  XSPerfAccumulate("train_update_ctr", t1_valid && t1_updateMask.flatten.reduce(_ || _))
++  XSPerfAccumulate(
++    "write_buffer_drop_write",
++    PopCount(writeBuffers.flatten.map(b => !b.io.enq.ready && b.io.enq.valid))
++  )
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala b/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala
+index 3a12d1da7b4..d236607ce99 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/TageTable.scala
+@@ -28,7 +28,7 @@ class TageTable(val numSets: Int)(implicit p: Parameters) extends TageModule wit
+     val readResp:                 TableReadResp                = Output(new TableReadResp)
+     val writeSetIdx:              UInt                         = Input(UInt(log2Ceil(numSets / NumBanks).W))
+     val writeBankMask:            UInt                         = Input(UInt(NumBanks.W))
+-    val updateReq:                Valid[TableUpadteEntriesReq] = Flipped(Valid(new TableUpadteEntriesReq))
++    val updateReq:                Valid[TableUpdateEntriesReq] = Flipped(Valid(new TableUpdateEntriesReq))
+     val needResetUsefulCtr:       Bool                         = Input(Bool())
+     val needIncreaseAllocFailCtr: Bool                         = Input(Bool())
+     val oldAllocFailCtr:          SaturateCounter              = Input(new SaturateCounter(AllocFailCtrWidth))
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+index a4eddacf525..c172cec5639 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+@@ -30,8 +30,8 @@ class FtqEntry(implicit p: Parameters) extends FtqBundle {
+ }
+ 
+ class MetaEntry(implicit p: Parameters) extends FtqBundle {
+-  val meta       = new BpuMeta
+-  val paddingBit = if (meta.getWidth % 2 != 0) Some(UInt(1.W)) else None
++  val meta        = new BpuMeta
++  val paddingBits = if (meta.getWidth % 4 != 0) Some(UInt((4 - meta.getWidth % 4).W)) else None
+ }
+ 
+ class ResolveEntry(implicit p: Parameters) extends FtqBundle {
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 9ed163a297f..d0b691a9549 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -164,8 +164,8 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   metaQueue.io.wen        := io.fromBpu.meta.valid
+   metaQueue.io.waddr      := io.fromBpu.s3FtqPtr.value
+   metaQueue.io.wdata.meta := io.fromBpu.meta.bits
+-  if (metaQueue.io.wdata.paddingBit.isDefined) {
+-    metaQueue.io.wdata.paddingBit.get := 0.U
++  if (metaQueue.io.wdata.paddingBits.isDefined) {
++    metaQueue.io.wdata.paddingBits.get := 0.U
+   }
+ 
+   // --------------------------------------------------------------------------------
+```

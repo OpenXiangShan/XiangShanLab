@@ -1,0 +1,2 @@
+make riscv64-xs-ref_defconfig
+make -j

@@ -1,0 +1,1 @@
+./build/emu -i crosspage_double_deq.elf --max-cycles=50000 --no-diff

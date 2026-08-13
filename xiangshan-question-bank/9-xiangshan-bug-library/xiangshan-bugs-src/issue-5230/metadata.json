@@ -1,0 +1,30 @@
+{
+  "number": 5230,
+  "title": "timing(TLB): removing ICG caused by need_gpa",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5230",
+  "state": "closed",
+  "labels": [
+    "module: memory"
+  ],
+  "author": "Anzooooo",
+  "created_at": "2025-11-18T10:49:13Z",
+  "updated_at": "2025-12-01T03:30:15Z",
+  "submitted_at": "2025-11-18",
+  "source_files": [
+    "issue-5230/source/program-01.txt",
+    "issue-5230/source/program-02.txt"
+  ],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5230/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

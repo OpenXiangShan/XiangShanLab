@@ -1,0 +1,29 @@
+{
+  "number": 5103,
+  "title": "feat(ifu): distinguish between fixedTaken and predTaken for BPU training",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5103",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "module: backend",
+    "topic: functionality"
+  ],
+  "author": "my-mayfly",
+  "created_at": "2025-10-11T05:03:41Z",
+  "updated_at": "2025-10-13T06:11:39Z",
+  "submitted_at": "2025-10-11",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5103/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

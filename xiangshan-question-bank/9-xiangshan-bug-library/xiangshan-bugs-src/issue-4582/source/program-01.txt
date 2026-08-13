@@ -1,0 +1,5 @@
+csrw  siselect, zero
+li t6, 0x100
+csrw siselect, t6
+csrr t6, siselect
+nop

@@ -1,0 +1,13 @@
+entry enqueue time      = 19086
+entry commit time       = 19111
+read request time       = 19151
+read response time      = 19152
+
+table                  = 0
+bank                   = 0
+way                    = 0
+setIdx                 = 22
+tag                    = 6
+observed takenCtr      = 3
+expected usefulCtr     = 1
+observed usefulCtr     = 0

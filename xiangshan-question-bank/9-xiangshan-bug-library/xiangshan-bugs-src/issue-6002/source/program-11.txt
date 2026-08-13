@@ -1,0 +1,12 @@
+riscv64-unknown-elf-gcc \
+  -march=rv64gc \
+  -mabi=lp64 \
+  -mcmodel=medany \
+  -nostdlib \
+  -nostartfiles \
+  -T linker.ld \
+  -o poc.elf \
+  poc.S
+
+riscv64-unknown-elf-objcopy -O binary poc.elf poc.bin
+riscv64-unknown-elf-objdump -d -s poc.elf > poc.objdump

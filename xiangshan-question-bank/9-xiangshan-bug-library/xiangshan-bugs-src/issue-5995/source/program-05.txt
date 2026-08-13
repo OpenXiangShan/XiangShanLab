@@ -1,0 +1,4 @@
+Difftest enabled
+trap_count=0 ... hlvx=0xc33ca55a
+FAIL hlvx bypassed PMA execute permission
+HIT BAD TRAP

@@ -1,0 +1,4 @@
+  A* setIdx=0x00, replacerSetIdx=0x00
+  B* setIdx=0x40, replacerSetIdx=0x00
+  A* setIdx=0x00, replacerSetIdx=0x00
+  B* setIdx=0x41, replacerSetIdx=0x04

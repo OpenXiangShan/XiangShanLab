@@ -1,0 +1,22 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala
+index be12ac88177..0ade0e8fd56 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala
+@@ -54,7 +54,7 @@ trait HypervisorLevel { self: NewCSR =>
+   })
+     .setAddr(CSRs.hie)
+ 
+-  val htimedelta = Module(new CSRModule("Htimedelta"))
++  val htimedelta = Module(new CSRModule("Htimedelta", new Htimedelta))
+     .setAddr(CSRs.htimedelta)
+ 
+   val hcounteren = Module(new CSRModule("Hcounteren", new Counteren))
+@@ -349,6 +349,8 @@ class HEnvCfg extends EnvCfg {
+   }
+ }
+ 
++class Htimedelta extends FieldInitBundle
++
+ trait HypervisorBundle { self: CSRModule[_] =>
+   val hstatus = IO(Input(new HstatusBundle))
+ }

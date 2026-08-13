@@ -1,0 +1,21 @@
+{
+  "number": 3360,
+  "title": "CSR: fix custom IRQ injection mechanism",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3360",
+  "state": "closed",
+  "labels": [],
+  "author": "huxuan0307",
+  "created_at": "2024-08-08T02:07:11Z",
+  "updated_at": "2024-08-08T09:24:45Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3360/commit-log.md"
+  ],
+  "submitted_at": "2024-08-08",
+  "branch": "",
+  "rtl_commit": ""
+}

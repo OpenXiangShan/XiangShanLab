@@ -1,0 +1,27 @@
+{
+  "number": 5823,
+  "title": "fix(csr): fix indirect csr RegOut",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5823",
+  "state": "closed",
+  "labels": [
+    "module: backend"
+  ],
+  "author": "sinceforYy",
+  "created_at": "2026-04-17T04:24:13Z",
+  "updated_at": "2026-04-23T02:00:21Z",
+  "submitted_at": "2026-04-17",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5823/commit-log.md"
+  ],
+  "bug_categories": [
+    "backend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

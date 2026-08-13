@@ -1,0 +1,26 @@
+{
+  "number": 6062,
+  "title": "S-mode cbo.clean to a PMP-denied block aborts StoreQueue instead of raising access fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6062",
+  "state": "closed",
+  "labels": [
+    "module: memory",
+    "type: bug/fixed"
+  ],
+  "author": "jimmymtest",
+  "created_at": "2026-06-07T06:10:35Z",
+  "updated_at": "2026-06-25T09:08:52Z",
+  "source_files": [
+    "issue-6062/source/bug-report.zip",
+    "issue-6062/source/program-01.txt",
+    "issue-6062/source/program-02.S",
+    "issue-6062/source/program-03.S",
+    "issue-6062/source/program-04.txt",
+    "issue-6062/source/program-05.txt",
+    "issue-6062/source/program-06.txt"
+  ],
+  "archive_files": [
+    "issue-6062/source/bug-report.zip"
+  ],
+  "has_comments": true
+}

@@ -1,0 +1,3 @@
+def TriggerCheckChainLegal(chainVec: Seq[Bool], chainLen: Int): Bool = {
+  !ConsecutiveOnes(chainVec, chainLen)
+}

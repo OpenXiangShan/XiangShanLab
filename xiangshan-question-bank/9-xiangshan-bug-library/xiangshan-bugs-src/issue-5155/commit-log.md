@@ -1,0 +1,201 @@
+# Commit Log
+- Issue: #5155
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5155
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5155
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5155
+- Changed files: 5
+- Additions: 39
+- Deletions: 24
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/Helpers.scala`
+- `src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala`
+- `src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala`
+- `src/main/scala/xiangshan/frontend/bpu/tage/Helpers.scala`
+- `src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/Helpers.scala
+index 4cc840618cb..d4836f7c787 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Helpers.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Helpers.scala
+@@ -32,6 +32,11 @@ trait HalfAlignHelper extends HasBpuParameters {
+       0.U(FetchBlockAlignWidth.W)
+     ))
+ 
++  def getNextAlignedAddr(startVAddr: PrunedAddr): PrunedAddr = {
++    val nextAlignedVAddrUpperBits = getAlignedAddrUpper(startVAddr) + 1.U
++    PrunedAddrInit(Cat(nextAlignedVAddrUpperBits, 0.U(FetchBlockAlignWidth.W)))
++  }
++
+   def getAlignedInstOffset(addr: PrunedAddr): UInt =
+     // given an instruction address, return the offset of the instruction in the fetch block
+     // example:
+diff --git a/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala
+index 2c07ddc9960..28df6745f37 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala
+@@ -32,9 +32,15 @@ trait Helpers extends HasMainBtbParameters
+   def getSetIndex(pc: PrunedAddr): UInt =
+     pc(SetIdxLen + InternalBankIdxLen + FetchBlockSizeWidth - 1, InternalBankIdxLen + FetchBlockSizeWidth)
+ 
++  def getNextSetIndex(pc: PrunedAddr): UInt =
++    getSetIndex(getNextAlignedAddr(pc))
++
+   def getReplacerSetIndex(pc: PrunedAddr): UInt =
+     pc(SetIdxLen + FetchBlockAlignWidth - 1, FetchBlockAlignWidth)
+ 
++  def getNextReplacerSetIndex(pc: PrunedAddr): UInt =
++    getReplacerSetIndex(pc) + 1.U
++
+   def getAlignBankIndex(pc: PrunedAddr): UInt =
+     pc(FetchBlockSizeWidth - 1, FetchBlockAlignWidth)
+ 
+diff --git a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
+index 91859f4d6b4..7cad9e754c0 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
+@@ -92,7 +92,7 @@ class MainBtb(implicit p: Parameters) extends BasePredictor with HasMainBtbParam
+   private val s0_fire             = io.stageCtrl.s0_fire && io.enable
+   private val s0_startVAddr       = io.startVAddr
+   private val s0_thisSetIdx       = getSetIndex(s0_startVAddr)
+-  private val s0_nextSetIdx       = s0_thisSetIdx + 1.U
++  private val s0_nextSetIdx       = getNextSetIndex(s0_startVAddr)
+   private val s0_internalBankIdx  = getInternalBankIndex(s0_startVAddr)
+   private val s0_internalBankMask = UIntToOH(s0_internalBankIdx) & Fill(NumInternalBanks, s0_fire)
+   private val s0_alignBankIdx     = getAlignBankIndex(s0_startVAddr)
+@@ -180,7 +180,7 @@ class MainBtb(implicit p: Parameters) extends BasePredictor with HasMainBtbParam
+     ) // FIXME: parameterize target carry
+ 
+   private val s2_thisReplacerSetIdx = getReplacerSetIndex(s2_startVAddr)
+-  private val s2_nextReplacerSetIdx = s2_thisReplacerSetIdx + 2.U
++  private val s2_nextReplacerSetIdx = getNextReplacerSetIndex(s2_startVAddr)
+   private val s2_replacerSetIdxVec: Vec[UInt] = VecInit.tabulate(NumAlignBanks)(bankIdx =>
+     Mux(bankIdx.U < s2_alignBankIdx, s2_nextReplacerSetIdx, s2_thisReplacerSetIdx)
+   )
+@@ -232,7 +232,7 @@ class MainBtb(implicit p: Parameters) extends BasePredictor with HasMainBtbParam
+   private val t1_internalBankIdx  = getInternalBankIndex(t1_train.startVAddr)
+   private val t1_internalBankMask = UIntToOH(t1_internalBankIdx)
+   private val t1_thisSetIdx       = getSetIndex(t1_train.startVAddr)
+-  private val t1_nextSetIdx       = t1_thisSetIdx + 1.U
++  private val t1_nextSetIdx       = getNextSetIndex(t1_train.startVAddr)
+   private val t1_alignBankIdx     = getAlignBankIndex(t1_train.startVAddr)
+   private val t1_meta             = t1_train.meta.mbtb
+   private val t1_setIdxVec =
+@@ -263,7 +263,7 @@ class MainBtb(implicit p: Parameters) extends BasePredictor with HasMainBtbParam
+   private val t1_writeAlignBankMask    = vecRotateRight(t1_rawWriteAlignBankMask, t1_alignBankIdx)
+ 
+   private val t1_thisReplacerSetIdx = getReplacerSetIndex(t1_train.startVAddr)
+-  private val t1_nextReplacerSetIdx = t1_thisReplacerSetIdx + 2.U
++  private val t1_nextReplacerSetIdx = getNextReplacerSetIndex(t1_train.startVAddr)
+   private val t1_replacerSetIdxVec: Vec[UInt] = VecInit.tabulate(NumAlignBanks)(bankIdx =>
+     Mux(bankIdx.U < t1_alignBankIdx, t1_nextReplacerSetIdx, t1_thisReplacerSetIdx)
+   )
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Helpers.scala
+index 2b991219436..ea4a491e353 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Helpers.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Helpers.scala
+@@ -19,9 +19,10 @@ import chisel3._
+ import chisel3.util._
+ import xiangshan.HasXSParameter
+ import xiangshan.frontend.PrunedAddr
++import xiangshan.frontend.bpu.HalfAlignHelper
+ import xiangshan.frontend.bpu.RotateHelper
+ 
+-trait Helpers extends HasTageParameters with HasXSParameter with RotateHelper {
++trait Helpers extends HasTageParameters with HasXSParameter with RotateHelper with HalfAlignHelper {
+   def getBaseTableSetIndex(pc: PrunedAddr): UInt =
+     pc(BaseTableSetIdxWidth - 1 + BankIdxWidth + FetchBlockSizeWidth, BankIdxWidth + FetchBlockSizeWidth)
+ 
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala b/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala
+index 794ca72d8fb..5d66ea359bf 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/TageBaseTable.scala
+@@ -76,10 +76,12 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+   private val s0_fire    = io.readReqValid
+   private val s0_startPc = io.startPc
+ 
+-  private val s0_alignBankIdx = getBaseTableAlignBankIndex(s0_startPc)
+-  private val s0_rawSetIdx    = getBaseTableSetIndex(s0_startPc)
+-  private val s0_setIdx =
+-    Seq.tabulate(BaseTableNumAlignBanks)(bankIdx => Mux(bankIdx.U < s0_alignBankIdx, s0_rawSetIdx + 1.U, s0_rawSetIdx))
++  private val s0_firstAlignBankIdx = getBaseTableAlignBankIndex(s0_startPc)
++  private val s0_setIdx            = getBaseTableSetIndex(s0_startPc)
++  private val s0_nextSetIdx        = getBaseTableSetIndex(getNextAlignedAddr(s0_startPc))
++  private val s0_setIdxVec = VecInit.tabulate(BaseTableNumAlignBanks)(idx =>
++    Mux(idx.U < s0_firstAlignBankIdx, s0_nextSetIdx, s0_setIdx)
++  )
+ 
+   private val s0_bankIdx  = getBaseTableBankIndex(s0_startPc)
+   private val s0_bankMask = UIntToOH(s0_bankIdx, NumBanks)
+@@ -87,7 +89,7 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+   sramBanks.zipWithIndex.foreach { case (alignBank, alignBankIdx) =>
+     alignBank.zipWithIndex.foreach { case (bank, bankIdx) =>
+       bank.io.r.req.valid       := s0_fire && s0_bankMask(bankIdx)
+-      bank.io.r.req.bits.setIdx := s0_setIdx(alignBankIdx)
++      bank.io.r.req.bits.setIdx := s0_setIdxVec(alignBankIdx)
+     }
+   }
+ 
+@@ -97,8 +99,8 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+      - rotate ctrs
+      -------------------------------------------------------------------------------------------------------------- */
+ 
+-  private val s1_alignBankIdx = RegEnable(s0_alignBankIdx, s0_fire)
+-  private val s1_bankMask     = RegEnable(s0_bankMask, s0_fire)
++  private val s1_firstAlignBankIdx = RegEnable(s0_firstAlignBankIdx, s0_fire)
++  private val s1_bankMask          = RegEnable(s0_bankMask, s0_fire)
+ 
+   private val s1_rawCtrs = VecInit(sramBanks.map(alignBank =>
+     Mux1H(s1_bankMask, alignBank.map(_.io.r.resp.data))
+@@ -111,7 +113,7 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+    * if BaseTableNumAlignBanks = 4, alignBankIdx = 1,
+    * then io.ctrs := s1_rawCtrs(1) ++ s1_rawCtrs(2) ++ s1_rawCtrs(3) ++ s1_rawCtrs(0)
+    */
+-  io.takenCtrs := vecRotateRight(s1_rawCtrs, s1_alignBankIdx).flatten
++  io.takenCtrs := vecRotateRight(s1_rawCtrs, s1_firstAlignBankIdx).flatten
+ 
+   /* --------------------------------------------------------------------------------------------------------------
+    train stage 0
+@@ -133,10 +135,11 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+   private val t1_branches   = t1_train.branches
+   private val t1_oldCtrs    = t1_train.meta.tage.baseTableCtrs
+ 
+-  private val t1_alignBankIdx = getBaseTableAlignBankIndex(t1_startVAddr)
+-  private val t1_rawSetIdx    = getBaseTableSetIndex(t1_startVAddr)
+-  private val t1_setIdx = VecInit.tabulate(BaseTableNumAlignBanks)(bankIdx =>
+-    Mux(bankIdx.U < t1_alignBankIdx, t1_rawSetIdx + 1.U, t1_rawSetIdx)
++  private val t1_firstAlignBankIdx = getBaseTableAlignBankIndex(t1_startVAddr)
++  private val t1_setIdx            = getBaseTableSetIndex(t1_startVAddr)
++  private val t1_nextSetIdx        = getBaseTableSetIndex(getNextAlignedAddr(t1_startVAddr))
++  private val t1_setIdxVec = VecInit.tabulate(BaseTableNumAlignBanks)(idx =>
++    Mux(idx.U < t1_firstAlignBankIdx, t1_nextSetIdx, t1_setIdx)
+   )
+   private val t1_bankIdx  = getBankIndex(t1_startVAddr)
+   private val t1_bankMask = UIntToOH(t1_bankIdx, NumBanks)
+@@ -154,15 +157,15 @@ class TageBaseTable(implicit p: Parameters) extends TageModule with Helpers {
+     newCtr.value := t1_oldCtrs(position).getUpdate(taken)
+   }
+ 
+-  private val t1_rotatedNewCtrs    = vecRotateRight(t1_newCtrs, t1_alignBankIdx)
+-  private val t1_rotatedUpdateMask = vecRotateRight(t1_updateMask, t1_alignBankIdx)
++  private val t1_rotatedNewCtrs    = vecRotateRight(t1_newCtrs, t1_firstAlignBankIdx)
++  private val t1_rotatedUpdateMask = vecRotateRight(t1_updateMask, t1_firstAlignBankIdx)
+ 
+-  writeBuffers.zipWithIndex.foreach { case (alignBuffers, alignIdx) =>
+-    alignBuffers.zipWithIndex.foreach { case (buffer, bankIdx) =>
++  writeBuffers.zipWithIndex.foreach { case (buffersPerAlignBank, alignBankIdx) =>
++    buffersPerAlignBank.zipWithIndex.foreach { case (buffer, bankIdx) =>
+       buffer.io.enq.valid          := t1_valid && t1_bankMask(bankIdx)
+-      buffer.io.enq.bits.setIdx    := t1_setIdx(alignIdx)
+-      buffer.io.enq.bits.takenCtrs := t1_rotatedNewCtrs(alignIdx)
+-      buffer.io.enq.bits.wayMask   := t1_rotatedUpdateMask(alignIdx).asUInt
++      buffer.io.enq.bits.setIdx    := t1_setIdxVec(alignBankIdx)
++      buffer.io.enq.bits.takenCtrs := t1_rotatedNewCtrs(alignBankIdx)
++      buffer.io.enq.bits.wayMask   := t1_rotatedUpdateMask(alignBankIdx).asUInt
+     }
+   }
+```

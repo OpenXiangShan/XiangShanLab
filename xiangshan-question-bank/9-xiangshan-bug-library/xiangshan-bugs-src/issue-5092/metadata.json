@@ -1,0 +1,28 @@
+{
+  "number": 5092,
+  "title": "fix(resolve): enqueue branch slot index",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5092",
+  "state": "closed",
+  "labels": [
+    "topic: code quality",
+    "module: frontend"
+  ],
+  "author": "Yan-Muzi",
+  "created_at": "2025-10-02T01:10:15Z",
+  "updated_at": "2025-10-09T13:23:51Z",
+  "submitted_at": "2025-10-02",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5092/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

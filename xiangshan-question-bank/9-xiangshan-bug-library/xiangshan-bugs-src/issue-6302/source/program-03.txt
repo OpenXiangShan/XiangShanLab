@@ -1,0 +1,2 @@
+mcause different at pc = 0x80001714, right = 0x2 (NEMU), wrong = 0x7 (XiangShan)
+mepc   different at pc = 0x80001714, right = 0x80001ba4 (NEMU), wrong = 0x80001b78 (XiangShan)

@@ -1,0 +1,258 @@
+# Commit Log
+- Issue: #5241
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5241
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5241
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5241
+- Changed files: 9
+- Additions: 62
+- Deletions: 18
+
+## Files
+- `src/main/scala/system/SoC.scala`
+- `src/main/scala/xiangshan/Bundle.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala`
+- `src/main/scala/xiangshan/backend/fu/PMP.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala`
+- `src/main/scala/xiangshan/cache/mmu/BitmapCheck.scala`
+- `src/main/scala/xiangshan/cache/mmu/L2TLB.scala`
+- `src/main/scala/xiangshan/frontend/Frontend.scala`
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/system/SoC.scala b/src/main/scala/system/SoC.scala
+index ef319eb109c..728d754052b 100644
+--- a/src/main/scala/system/SoC.scala
++++ b/src/main/scala/system/SoC.scala
+@@ -189,7 +189,8 @@ trait HasSoCParameter {
+ 
+   def HasMEMencryption = cvm.HasMEMencryption
+   require((cvm.HasMEMencryption && (cvm.KeyIDBits > 0)) || (!cvm.HasMEMencryption),
+-    "HasMEMencryption most set with KeyIDBits > 0")
++    "HasMEMencryption must set with KeyIDBits > 0")
++  require((cvm.KeyIDBits == 0) || tiles.head.HasBitmapCheck, "KeyIDBits > 0 must set with HasBitmapCheck")
+ }
+ 
+ trait HasPeripheralRanges {
+diff --git a/src/main/scala/xiangshan/Bundle.scala b/src/main/scala/xiangshan/Bundle.scala
+index 574a73354a9..d78f5633ba6 100644
+--- a/src/main/scala/xiangshan/Bundle.scala
++++ b/src/main/scala/xiangshan/Bundle.scala
+@@ -524,6 +524,7 @@ class TlbHgatpBundle(implicit p: Parameters) extends HgatpStruct {
+ 
+ // add mbmc csr
+ class MbmcStruct(implicit p: Parameters) extends XSBundle {
++  val KEYIDEN = UInt(1.W)
+   val BME = UInt(1.W)
+   val CMODE = UInt(1.W)
+   val BCLEAR = UInt(1.W)
+@@ -534,6 +535,7 @@ class TlbMbmcBundle(implicit p: Parameters) extends MbmcStruct {
+   def apply(mbmc_value: UInt): Unit = {
+     require(mbmc_value.getWidth == XLEN)
+     val mc = mbmc_value.asTypeOf(new MbmcStruct)
++    KEYIDEN := mc.KEYIDEN
+     BME := mc.BME
+     CMODE := mc.CMODE
+     BCLEAR := mc.BCLEAR
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+index f882638a7d8..f28c0402d0d 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+@@ -33,6 +33,7 @@ trait MachineLevel { self: NewCSR =>
+       reg.BMA := BMAField.TestBMA
+     }
+     reg.BCLEAR := Mux(reg.BCLEAR.asBool, 0.U, Mux(wen && wdata.BCLEAR.asBool, 1.U, 0.U))
++    reg.KEYIDEN := Mux(wen, wdata.KEYIDEN, reg.KEYIDEN)
+   })
+     .setAddr(Mbmc))  else  None
+ 
+@@ -472,10 +473,11 @@ trait MachineLevel { self: NewCSR =>
+ }
+ 
+ class MbmcBundle extends  CSRBundle {
+-  val BMA  = BMAField(63,6,null).withReset(BMAField.ResetBMA)
+-  val BME  = RW(2).withReset(0.U)
+-  val BCLEAR = RW(1).withReset(0.U)
+-  val CMODE  = RW(0).withReset(0.U)
++  val BMA     = BMAField(63, 6, null).withReset(BMAField.ResetBMA)
++  val KEYIDEN = RW(3).withReset(0.U)
++  val BME     = RW(2).withReset(0.U)
++  val BCLEAR  = RW(1).withReset(0.U)
++  val CMODE   = RW(0).withReset(0.U)
+ }
+ 
+ class MstatusBundle extends CSRBundle {
+diff --git a/src/main/scala/xiangshan/backend/fu/PMP.scala b/src/main/scala/xiangshan/backend/fu/PMP.scala
+index 7d2deadf300..224c26e9f6a 100644
+--- a/src/main/scala/xiangshan/backend/fu/PMP.scala
++++ b/src/main/scala/xiangshan/backend/fu/PMP.scala
+@@ -459,12 +459,22 @@ trait PMPCheckMethod extends PMPConst {
+ }
+ 
+ class PMPCheckerEnv(implicit p: Parameters) extends PMPBundle {
++  val keyIDen = Bool()
+   val cmode = Bool()
+   val mode = UInt(2.W)
+   val pmp = Vec(NumPMPReal, new PMPEntry())
+   val pma = Vec(NumPMAReal, new PMPEntry())
+ 
++  def apply(keyIDen: Bool, cmode: Bool, mode: UInt, pmp: Vec[PMPEntry], pma: Vec[PMPEntry]): Unit = {
++    this.keyIDen := keyIDen
++    this.cmode := cmode
++    this.mode := mode
++    this.pmp := pmp
++    this.pma := pma
++  }
++
+   def apply(cmode: Bool, mode: UInt, pmp: Vec[PMPEntry], pma: Vec[PMPEntry]): Unit = {
++    this.keyIDen := false.B
+     this.cmode := cmode
+     this.mode := mode
+     this.pmp := pmp
+@@ -472,6 +482,7 @@ class PMPCheckerEnv(implicit p: Parameters) extends PMPBundle {
+   }
+ 
+   def apply(mode: UInt, pmp: Vec[PMPEntry], pma: Vec[PMPEntry]): Unit = {
++    this.keyIDen := false.B
+     this.cmode := true.B
+     this.mode := mode
+     this.pmp := pmp
+@@ -484,6 +495,12 @@ class PMPCheckIO(lgMaxSize: Int)(implicit p: Parameters) extends PMPBundle {
+   val req = Flipped(Valid(new PMPReqBundle(lgMaxSize))) // usage: assign the valid to fire signal
+   val resp = new PMPRespBundle()
+ 
++  def apply(keyIDen: Bool, cmode: Bool, mode: UInt, pmp: Vec[PMPEntry], pma: Vec[PMPEntry], req: Valid[PMPReqBundle]) = {
++    check_env.apply(keyIDen, cmode, mode, pmp, pma)
++    this.req := req
++    resp
++  }
++
+   def apply(cmode: Bool, mode: UInt, pmp: Vec[PMPEntry], pma: Vec[PMPEntry], req: Valid[PMPReqBundle]) = {
+     check_env.apply(cmode, mode, pmp, pma)
+     this.req := req
+@@ -566,8 +583,9 @@ class PMPChecker
+    * So only the RealPAddr need PMP&PMA check.
+    */
+ 
+-  val res_pmp = pmp_match_res(leaveHitMux, io.req.valid)(req.addr(PMPAddrBits-PMPKeyIDBits-1, 0), req.size, io.check_env.pmp, io.check_env.mode, lgMaxSize)
+-  val res_pma = pma_match_res(leaveHitMux, io.req.valid)(req.addr(PMPAddrBits-PMPKeyIDBits-1, 0), req.size, io.check_env.pma, io.check_env.mode, lgMaxSize)
++  val check_addr = Mux(io.check_env.keyIDen, req.addr(PMPAddrBits-PMPKeyIDBits-1, 0), req.addr)
++  val res_pmp = pmp_match_res(leaveHitMux, io.req.valid)(check_addr, req.size, io.check_env.pmp, io.check_env.mode, lgMaxSize)
++  val res_pma = pma_match_res(leaveHitMux, io.req.valid)(check_addr, req.size, io.check_env.pma, io.check_env.mode, lgMaxSize)
+ 
+   val cmd = if(leaveHitMux) RegEnable(req.cmd, io.req.valid) else req.cmd
+   val resp_pmp = pmp_check(cmd, res_pmp.cfg)
+@@ -576,9 +594,9 @@ class PMPChecker
+   def keyid_check(leaveHitMux: Boolean = false, valid: Bool = true.B, addr: UInt) = {
+     val resp = Wire(new PMPRespBundle)
+     val keyid_nz = if (PMPKeyIDBits > 0) addr(PMPAddrBits-1, PMPAddrBits-PMPKeyIDBits) =/= 0.U else false.B
+-    resp.ld := keyid_nz && !io.check_env.cmode && (io.check_env.mode < 3.U)
+-    resp.st := keyid_nz && !io.check_env.cmode && (io.check_env.mode < 3.U)
+-    resp.instr := keyid_nz && !io.check_env.cmode && (io.check_env.mode < 3.U)
++    resp.ld := keyid_nz && !io.check_env.cmode && (io.check_env.mode < 3.U) && io.check_env.keyIDen
++    resp.st := keyid_nz && !io.check_env.cmode && (io.check_env.mode < 3.U) && io.check_env.keyIDen
++    resp.instr := keyid_nz && !io.check_env.cmode && (io.check_env.mode < 3.U) && io.check_env.keyIDen
+     resp.mmio := false.B
+     resp.atomic := false.B
+     if (leaveHitMux) {
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index f4e22eb3aa2..e2711049f1a 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -258,6 +258,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   tlb.hgatp.mode    := csrMod.io.tlb.hgatp.MODE.asUInt
+   tlb.hgatp.vmid    := csrMod.io.tlb.hgatp.VMID.asUInt
+   tlb.hgatp.ppn     := csrMod.io.tlb.hgatp.PPN.asUInt
++  tlb.mbmc.KEYIDEN  := csrMod.io.tlb.mbmc.KEYIDEN.asUInt
+   tlb.mbmc.BME      := csrMod.io.tlb.mbmc.BME.asUInt
+   tlb.mbmc.CMODE    := csrMod.io.tlb.mbmc.CMODE.asUInt
+   tlb.mbmc.BCLEAR   := csrMod.io.tlb.mbmc.BCLEAR.asUInt
+@@ -539,4 +540,4 @@ class CSRToDecode(implicit p: Parameters) extends XSBundle {
+      */
+     val cboI2F = Bool()
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/scala/xiangshan/cache/mmu/BitmapCheck.scala b/src/main/scala/xiangshan/cache/mmu/BitmapCheck.scala
+index 26691e31cc4..b9269f1d55b 100644
+--- a/src/main/scala/xiangshan/cache/mmu/BitmapCheck.scala
++++ b/src/main/scala/xiangshan/cache/mmu/BitmapCheck.scala
+@@ -102,11 +102,12 @@ class bitmapIO(implicit p: Parameters) extends MMUIOBaseBundle with HasPtwConst
+ class Bitmap(implicit p: Parameters) extends XSModule with HasPtwConst {
+   def getRealPPN(ppn: UInt, vpn: UInt, level: UInt, n: Bool): UInt = {
+     val nokeyid_ppn = Cat(0.U(KeyIDBits.W), ppn(ppnLen-KeyIDBits-1, 0))
++    val check_ppn = Mux(csr.mbmc.KEYIDEN.asBool, nokeyid_ppn, ppn)
+     val effective_ppn = MuxLookup(level, 0.U)(Seq(
+-      3.U -> Cat(nokeyid_ppn(nokeyid_ppn.getWidth - 1, vpnnLen * 3), vpn(vpnnLen * 3 - 1, 0)),
+-      2.U -> Cat(nokeyid_ppn(nokeyid_ppn.getWidth - 1, vpnnLen * 2), vpn(vpnnLen * 2 - 1, 0)),
+-      1.U -> Cat(nokeyid_ppn(nokeyid_ppn.getWidth - 1, vpnnLen), vpn(vpnnLen - 1, 0)),
+-      0.U -> Mux(n === 0.U, nokeyid_ppn(nokeyid_ppn.getWidth - 1, 0), Cat(nokeyid_ppn(nokeyid_ppn.getWidth - 1, pteNapotBits), vpn(pteNapotBits - 1, 0)))
++      3.U -> Cat(check_ppn(ppnLen - 1, vpnnLen * 3), vpn(vpnnLen * 3 - 1, 0)),
++      2.U -> Cat(check_ppn(ppnLen - 1, vpnnLen * 2), vpn(vpnnLen * 2 - 1, 0)),
++      1.U -> Cat(check_ppn(ppnLen - 1, vpnnLen), vpn(vpnnLen - 1, 0)),
++      0.U -> Mux(n === 0.U, check_ppn(ppnLen - 1, 0), Cat(check_ppn(ppnLen - 1, pteNapotBits), vpn(pteNapotBits - 1, 0)))
+     ))
+     effective_ppn
+   }
+diff --git a/src/main/scala/xiangshan/cache/mmu/L2TLB.scala b/src/main/scala/xiangshan/cache/mmu/L2TLB.scala
+index 3e1811e08f2..2e285e8efd3 100644
+--- a/src/main/scala/xiangshan/cache/mmu/L2TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/L2TLB.scala
+@@ -94,7 +94,11 @@ class L2TLBImp(outer: L2TLB)(implicit p: Parameters) extends PtwModule(outer) wi
+   val pmp_check = VecInit(Seq.fill(if (HasBitmapCheck) 5 else 4)(Module(new PMPChecker(lgMaxSize = 3, sameCycle = true)).io))
+   pmp.io.distribute_csr := io.csr.distribute_csr
+   if (HasBitmapCheck) {
+-    pmp_check.foreach(_.check_env.apply(csr_dup(0).mbmc.CMODE.asBool, ModeS, pmp.io.pmp, pmp.io.pma))
++    if (KeyIDBits > 0) {
++      pmp_check.foreach(_.check_env.apply(csr_dup(0).mbmc.KEYIDEN.asBool, csr_dup(0).mbmc.CMODE.asBool, ModeS, pmp.io.pmp, pmp.io.pma))
++    } else {
++      pmp_check.foreach(_.check_env.apply(csr_dup(0).mbmc.CMODE.asBool, ModeS, pmp.io.pmp, pmp.io.pma))
++    }
+   } else {
+     pmp_check.foreach(_.check_env.apply(ModeS, pmp.io.pmp, pmp.io.pma))
+   }
+diff --git a/src/main/scala/xiangshan/frontend/Frontend.scala b/src/main/scala/xiangshan/frontend/Frontend.scala
+index 92dd55c7427..146c4a9db79 100644
+--- a/src/main/scala/xiangshan/frontend/Frontend.scala
++++ b/src/main/scala/xiangshan/frontend/Frontend.scala
+@@ -142,7 +142,18 @@ class FrontendInlinedImp(outer: FrontendInlined) extends LazyModuleImp(outer)
+ 
+   for (i <- pmp_check.indices) {
+     if (HasBitmapCheck) {
+-      pmp_check(i).apply(tlbCsr.mbmc.CMODE.asBool, tlbCsr.priv.imode, pmp.io.pmp, pmp.io.pma, pmp_req_vec(i))
++      if (KeyIDBits > 0) {
++        pmp_check(i).apply(
++          tlbCsr.mbmc.KEYIDEN.asBool,
++          tlbCsr.mbmc.CMODE.asBool,
++          tlbCsr.priv.imode,
++          pmp.io.pmp,
++          pmp.io.pma,
++          pmp_req_vec(i)
++        )
++      } else {
++        pmp_check(i).apply(tlbCsr.mbmc.CMODE.asBool, tlbCsr.priv.imode, pmp.io.pmp, pmp.io.pma, pmp_req_vec(i))
++      }
+     } else {
+       pmp_check(i).apply(tlbCsr.priv.imode, pmp.io.pmp, pmp.io.pma, pmp_req_vec(i))
+     }
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index eac243d82fe..3ab5b52aa48 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -785,7 +785,11 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   val pmp_check = pmp_checkers.map(_.io)
+   for ((p,d) <- pmp_check zip dtlb_pmps) {
+     if (HasBitmapCheck) {
+-      p.apply(tlbcsr.mbmc.CMODE.asBool, tlbcsr.priv.dmode, pmp.io.pmp, pmp.io.pma, d)
++      if (KeyIDBits > 0) {
++        p.apply(tlbcsr.mbmc.KEYIDEN.asBool, tlbcsr.mbmc.CMODE.asBool, tlbcsr.priv.dmode, pmp.io.pmp, pmp.io.pma, d)
++      } else {
++        p.apply(tlbcsr.mbmc.CMODE.asBool, tlbcsr.priv.dmode, pmp.io.pmp, pmp.io.pma, d)
++      }
+     } else {
+       p.apply(tlbcsr.priv.dmode, pmp.io.pmp, pmp.io.pma, d)
+     }
+```

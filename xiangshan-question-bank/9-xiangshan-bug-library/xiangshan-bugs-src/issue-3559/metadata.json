@@ -1,0 +1,21 @@
+{
+  "number": 3559,
+  "title": "feat(Zicbom,Zicboz): add permission check and convert CBO.INVAL to CBO.FLUSH when CBIE=0b01",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3559",
+  "state": "closed",
+  "labels": [],
+  "author": "huxuan0307",
+  "created_at": "2024-09-12T05:38:59Z",
+  "updated_at": "2024-09-14T05:16:35Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3559/commit-log.md"
+  ],
+  "submitted_at": "2024-09-12",
+  "branch": "",
+  "rtl_commit": ""
+}

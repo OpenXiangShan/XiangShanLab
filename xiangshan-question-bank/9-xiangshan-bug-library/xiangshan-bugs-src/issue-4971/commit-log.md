@@ -1,0 +1,30 @@
+# Commit Log
+- Issue: #4971
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4971
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4971
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4971
+- Changed files: 1
+- Additions: 1
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/frontend/FTB.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/FTB.scala b/src/main/scala/xiangshan/frontend/FTB.scala
+index d9ce43e8e00..c92abb4282d 100644
+--- a/src/main/scala/xiangshan/frontend/FTB.scala
++++ b/src/main/scala/xiangshan/frontend/FTB.scala
+@@ -858,7 +858,7 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
+   ftb_write.entry := Mux(update_now, update.ftb_entry, delay2_entry)
+   ftb_write.tag   := ftbAddr.getTag(Mux(update_now, update_pc, delay2_pc))(tagLength - 1, 0)
+ 
+-  val write_valid = update_now || DelayN(u_valid && !u_meta.hit, 2)
++  val write_valid = (update_now || DelayN(u_valid && !u_meta.hit, 2)) && !update_need_read
+   val write_pc    = Mux(update_now, update_pc, delay2_pc)
+ 
+   ftbBank.io.update_write_data.valid := write_valid
+```

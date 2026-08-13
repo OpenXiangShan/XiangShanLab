@@ -1,0 +1,56 @@
+# Commit Log
+- Issue: #5720
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5720
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5720
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5720
+- Changed files: 2
+- Additions: 7
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+- `src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 9505b08d275..6a97e830764 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -474,8 +474,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+         val loadPc = RegNext(io.ooo_to_mem.issueLda(i).bits.uop.pc) // for s1
+         l1Prefetcher.stride_train(i).bits.uop.pc := Mux(
+           loadUnits(i).io.s2_ptr_chasing,
+-          RegEnable(loadPc, loadUnits(i).io.s2_prefetch_spec),
+-          RegEnable(RegEnable(loadPc, loadUnits(i).io.s1_prefetch_spec), loadUnits(i).io.s2_prefetch_spec)
++          RegEnable(loadPc, loadUnits(i).io.s2_prefetch_spec_l1),
++          RegEnable(RegEnable(loadPc, loadUnits(i).io.s1_prefetch_spec_l1), loadUnits(i).io.s2_prefetch_spec_l1)
+         )
+       }
+       for (i <- 0 until HyuCnt) {
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index dc0b42bbc98..3fa3ebc426e 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -159,6 +159,8 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+     // speculative for gated control
+     val s1_prefetch_spec = Output(Bool())
+     val s2_prefetch_spec = Output(Bool())
++    val s1_prefetch_spec_l1 = Output(Bool())
++    val s2_prefetch_spec_l1 = Output(Bool())
+ 
+     val prefetch_req              = Flipped(ValidIO(new L1PrefetchReq)) // hardware prefetch to l1 cache req
+     val canAcceptLowConfPrefetch  = Output(Bool())
+@@ -1497,6 +1499,9 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   io.prefetch_train_l1.bits.updateAddrValid := false.B
+   io.prefetch_train_l1.bits.hasException := false.B
+   io.prefetch_train_l1.bits.isMisalign := false.B
++  io.s1_prefetch_spec_l1 := s1_fire
++  io.s2_prefetch_spec_l1 := s2_prefetch_train_l1_valid
++
+   if (env.FPGAPlatform){
+     io.dcache.s0_pc := DontCare
+     io.dcache.s1_pc := DontCare
+```

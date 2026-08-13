@@ -1,0 +1,45 @@
+diff --git a/src/main/scala/xiangshan/backend/VecExcpDataMergeModule.scala b/src/main/scala/xiangshan/backend/VecExcpDataMergeModule.scala
+index b700c406ccc..f12009b205a 100644
+--- a/src/main/scala/xiangshan/backend/VecExcpDataMergeModule.scala
++++ b/src/main/scala/xiangshan/backend/VecExcpDataMergeModule.scala
+@@ -87,7 +87,11 @@ class VecExcpDataMergeModule(implicit p: Parameters) extends XSModule {
+     sNoExcp_eewOH,
+   )
+   private val sNoExcp_voffset = Module(new GetE8OffsetInVreg(VLEN))(sNoExcp_deewOH, sNoExcp_vecExcpInfo.bits.vstart)
+-  private val sNoExcp_idxRangeVec: Vec[HWRange] = Module(new NfMappedElemIdx(VLEN))(sNoExcp_vecExcpInfo.bits.nf, sNoExcp_deewOH)
++  private val sNoExcp_idxRangeVec: Vec[HWRange] = 
++    Module(new NfMappedElemIdx(VLEN))(
++      Mux(!sNoExcp_vecExcpInfo.bits.isWhole, sNoExcp_vecExcpInfo.bits.nf, 0.U), 
++      sNoExcp_deewOH
++    )
+   private val sNoExcp_vstartIsAligned: Bool = Mux(!sNoExcp_vecExcpInfo.bits.isVlm, sNoExcp_voffset === 0.U, false.B)
+ 
+   private val sNoExcp_inRangeVec: Vec[Bool] = VecInit((0 until 8).map(idx =>
+diff --git a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+index 1031ff0c377..c202ae423ec 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+@@ -456,7 +456,7 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+ 
+     exception_va  := exceptionVec(storePageFault) || exceptionVec(loadPageFault) ||
+                      exceptionVec(storeAccessFault) || exceptionVec(loadAccessFault) ||
+-                     exceptionVec(breakPoint) || triggerDebugMode || missAligned
++                     triggerBreakpoint || triggerDebugMode || missAligned
+     exception_gpa := exceptionVec(storeGuestPageFault) || exceptionVec(loadGuestPageFault)
+     exception_pa  := pmp.st || pmp.ld || pmp.mmio
+ 
+@@ -703,12 +703,13 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+   }.otherwise{
+     writebackOut.uop                    := uopq(deqPtr.value).uop
+     writebackOut.uop.vpu                := instMicroOp.uop.vpu
++    writebackOut.uop.trigger            := instMicroOp.uop.trigger
+     writebackOut.uop.exceptionVec       := instMicroOp.uop.exceptionVec
+     writebackOut.mask.get               := instMicroOp.mask
+     writebackOut.data                   := data(deqPtr.value)
+     writebackOut.vdIdx.get              := vdIdxInField
+     writebackOut.uop.vpu.vl             := Mux(instMicroOp.exceptionVl.valid, instMicroOp.exceptionVl.bits, instMicroOp.vl)
+-    writebackOut.uop.vpu.vstart         := Mux(instMicroOp.uop.exceptionVec.asUInt.orR, instMicroOp.exceptionVstart, instMicroOp.vstart)
++    writebackOut.uop.vpu.vstart         := Mux(instMicroOp.uop.exceptionVec.asUInt.orR || TriggerAction.isDmode(instMicroOp.uop.trigger), instMicroOp.exceptionVstart, instMicroOp.vstart)
+     writebackOut.uop.vpu.vmask          := maskUsed
+     writebackOut.uop.vpu.vuopIdx        := uopq(deqPtr.value).uop.vpu.vuopIdx
+     // when exception updates vl, should use vtu strategy.

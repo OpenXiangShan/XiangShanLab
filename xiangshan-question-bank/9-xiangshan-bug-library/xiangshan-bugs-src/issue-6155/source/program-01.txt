@@ -1,0 +1,9 @@
+li      t0, 0x7d
+csrw    0x5c0, t0
+fence.i
+li      s0, 512
+
+branch_loop:
+    addi    s1, s1, 1
+    addi    s0, s0, -1
+    bnez    s0, branch_loop

@@ -1,0 +1,74 @@
+# Commit Log
+- Issue: #4645
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4645
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4645
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4645
+- Changed files: 3
+- Additions: 2
+- Deletions: 6
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
+index b4abbaa087f..c5b1ee62f97 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
+@@ -531,7 +531,7 @@ class InterruptFilter extends Module {
+   intrVecReg := intrVec
+   debugIntrReg := enableDebugIntr
+   nmiReg := io.in.nmi
+-  viIsHvictlInjectReg := vsIRModeCond && SelectCandidate5
++  viIsHvictlInjectReg := vsIRModeCond && SelectCandidate5 && io.in.mnstatusNMIE
+   irToHSReg := irToHS
+   irToVSReg := irToVS
+   val delayedIntrVec = DelayN(intrVecReg, 5)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index e963c0d9ea9..ebfdb8451f3 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -420,7 +420,6 @@ class NewCSR(implicit val p: Parameters) extends Module
+   trapHandleMod.io.in.mtvec := mtvec.regOut
+   trapHandleMod.io.in.stvec := stvec.regOut
+   trapHandleMod.io.in.vstvec := vstvec.regOut
+-  trapHandleMod.io.in.virtualInterruptIsHvictlInject := virtualInterruptIsHvictlInject
+   trapHandleMod.io.in.trapInfo.bits.singleStep  := hasTrap && !trapIsInterrupt && singleStep
+ 
+   val entryPrivState = trapHandleMod.io.out.entryPrivState
+@@ -1124,7 +1123,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   io.status.vecState.vlenb := vlenb.rdata.asUInt
+   io.status.vecState.off := mstatus.regOut.VS === ContextStatus.Off
+   io.status.interrupt := intrMod.io.out.interruptVec.valid
+-  io.status.wfiEvent := debugIntr || (mie.rdata.asUInt & mip.rdata.asUInt).orR
++  io.status.wfiEvent := debugIntr || (mie.rdata.asUInt & mip.rdata.asUInt).orR || nmip.asUInt.orR
+   io.status.debugMode := debugMode
+   io.status.singleStepFlag := !debugMode && dcsr.regOut.STEP
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala
+index c2bfe54f036..e4b13e51500 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala
+@@ -22,7 +22,6 @@ class TrapHandleModule extends Module {
+   private val hedeleg = io.in.hedeleg.asUInt
+   private val mvien = io.in.mvien.asUInt
+   private val hvien = io.in.hvien.asUInt
+-  private val virtualInterruptIsHvictlInject = io.in.virtualInterruptIsHvictlInject
+ 
+   private val hasTrap = trapInfo.valid
+   private val hasNMI = hasTrap && trapInfo.bits.nmi
+@@ -141,8 +140,6 @@ class TrapHandleIO extends Bundle {
+     val mtvec = Input(new XtvecBundle)
+     val stvec = Input(new XtvecBundle)
+     val vstvec = Input(new XtvecBundle)
+-    // virtual interrupt is hvictl inject
+-    val virtualInterruptIsHvictlInject = Input(Bool())
+   })
+ 
+   val out = new Bundle {
+```

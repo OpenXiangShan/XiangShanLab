@@ -1,0 +1,239 @@
+# Commit Log
+- Issue: #4301
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4301
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4301
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4301
+- Changed files: 4
+- Additions: 43
+- Deletions: 26
+
+## Files
+- `src/main/scala/xiangshan/frontend/FrontendBundle.scala`
+- `src/main/scala/xiangshan/frontend/IFU.scala`
+- `src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala`
+- `src/main/scala/xiangshan/frontend/icache/InstrUncache.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/FrontendBundle.scala b/src/main/scala/xiangshan/frontend/FrontendBundle.scala
+index 70e09f15fb2..9be2d5aead5 100644
+--- a/src/main/scala/xiangshan/frontend/FrontendBundle.scala
++++ b/src/main/scala/xiangshan/frontend/FrontendBundle.scala
+@@ -169,6 +169,9 @@ object ExceptionType {
+   def fromECC(enable: Bool, corrupt: Bool): UInt =
+     Mux(enable && corrupt, af, none)
+ 
++  def fromTilelink(corrupt: Bool): UInt =
++    Mux(corrupt, af, none)
++
+   /**Generates exception mux tree
+    *
+    * Exceptions that are further to the left in the parameter list have higher priority
+diff --git a/src/main/scala/xiangshan/frontend/IFU.scala b/src/main/scala/xiangshan/frontend/IFU.scala
+index 01cc6423831..dc41d30b948 100644
+--- a/src/main/scala/xiangshan/frontend/IFU.scala
++++ b/src/main/scala/xiangshan/frontend/IFU.scala
+@@ -642,10 +642,11 @@ class NewIFU(implicit p: Parameters) extends XSModule
+   }
+ 
+   /*** MMIO State Machine***/
+-  val f3_mmio_data          = Reg(Vec(2, UInt(16.W)))
+-  val mmio_is_RVC           = RegInit(false.B)
+-  val mmio_resend_addr      = RegInit(0.U(PAddrBits.W))
+-  val mmio_resend_exception = RegInit(0.U(ExceptionType.width.W))
++  val f3_mmio_data     = Reg(Vec(2, UInt(16.W)))
++  val mmio_exception   = RegInit(0.U(ExceptionType.width.W))
++  val mmio_is_RVC      = RegInit(false.B)
++  val mmio_has_resend  = RegInit(false.B)
++  val mmio_resend_addr = RegInit(0.U(PAddrBits.W))
+   // NOTE: we dont use GPAddrBits here, refer to ICacheMainPipe.scala L43-48 and PR#3795
+   val mmio_resend_gpaddr            = RegInit(0.U(PAddrBitsMax.W))
+   val mmio_resend_isForVSnonLeafPTE = RegInit(false.B)
+@@ -739,9 +740,12 @@ class NewIFU(implicit p: Parameters) extends XSModule
+     is(m_waitResp) {
+       when(fromUncache.fire) {
+         val isRVC      = fromUncache.bits.data(1, 0) =/= 3.U
+-        val needResend = !isRVC && f3_paddrs(0)(2, 1) === 3.U
++        val exception  = ExceptionType.fromTilelink(fromUncache.bits.corrupt)
++        val needResend = !isRVC && f3_paddrs(0)(2, 1) === 3.U && !ExceptionType.hasException(exception)
+         mmio_state      := Mux(needResend, m_sendTLB, m_waitCommit)
++        mmio_exception  := exception
+         mmio_is_RVC     := isRVC
++        mmio_has_resend := needResend
+         f3_mmio_data(0) := fromUncache.bits.data(15, 0)
+         f3_mmio_data(1) := fromUncache.bits.data(31, 16)
+       }
+@@ -766,8 +770,8 @@ class NewIFU(implicit p: Parameters) extends XSModule
+         // if tlb has exception, abort checking pmp, just send instr & exception to ibuffer and wait for commit
+         mmio_state := Mux(ExceptionType.hasException(exception), m_waitCommit, m_sendPMP)
+         // also save itlb response
++        mmio_exception                := exception
+         mmio_resend_addr              := io.iTLBInter.resp.bits.paddr(0)
+-        mmio_resend_exception         := exception
+         mmio_resend_gpaddr            := io.iTLBInter.resp.bits.gpaddr(0)
+         mmio_resend_isForVSnonLeafPTE := io.iTLBInter.resp.bits.isForVSnonLeafPTE(0)
+       }
+@@ -785,7 +789,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
+       // if pmp has exception, abort sending request, just send instr & exception to ibuffer and wait for commit
+       mmio_state := Mux(ExceptionType.hasException(exception), m_waitCommit, m_resendReq)
+       // also save pmp response
+-      mmio_resend_exception := exception
++      mmio_exception := exception
+     }
+ 
+     is(m_resendReq) {
+@@ -795,6 +799,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
+     is(m_waitResendResp) {
+       when(fromUncache.fire) {
+         mmio_state      := m_waitCommit
++        mmio_exception  := ExceptionType.fromTilelink(fromUncache.bits.corrupt)
+         f3_mmio_data(1) := fromUncache.bits.data(15, 0)
+       }
+     }
+@@ -808,9 +813,10 @@ class NewIFU(implicit p: Parameters) extends XSModule
+     // normal mmio instruction
+     is(m_commited) {
+       mmio_state                    := m_idle
++      mmio_exception                := ExceptionType.none
+       mmio_is_RVC                   := false.B
++      mmio_has_resend               := false.B
+       mmio_resend_addr              := 0.U
+-      mmio_resend_exception         := ExceptionType.none
+       mmio_resend_gpaddr            := 0.U
+       mmio_resend_isForVSnonLeafPTE := false.B
+     }
+@@ -820,9 +826,10 @@ class NewIFU(implicit p: Parameters) extends XSModule
+   // Condition is from RegNext(fromFtq.redirect), 1 cycle after backend rediect
+   when(f3_ftq_flush_self || f3_ftq_flush_by_older) {
+     mmio_state                    := m_idle
++    mmio_exception                := ExceptionType.none
+     mmio_is_RVC                   := false.B
++    mmio_has_resend               := false.B
+     mmio_resend_addr              := 0.U
+-    mmio_resend_exception         := ExceptionType.none
+     mmio_resend_gpaddr            := 0.U
+     mmio_resend_isForVSnonLeafPTE := false.B
+     f3_mmio_data.map(_ := 0.U)
+@@ -950,7 +957,7 @@ class NewIFU(implicit p: Parameters) extends XSModule
+   // f3_gpaddr is valid iff gpf is detected
+   io.toBackend.gpaddrMem_wen := f3_toIbuffer_valid && Mux(
+     f3_req_is_mmio,
+-    mmio_resend_exception === ExceptionType.gpf,
++    mmio_exception === ExceptionType.gpf,
+     f3_exception.map(_ === ExceptionType.gpf).reduce(_ || _)
+   )
+   io.toBackend.gpaddrMem_waddr        := f3_ftq_req.ftqIdx.value
+@@ -992,29 +999,29 @@ class NewIFU(implicit p: Parameters) extends XSModule
+ 
+   /** external predecode for MMIO instruction */
+   when(f3_req_is_mmio) {
+-    val inst         = Cat(f3_mmio_data(1), f3_mmio_data(0))
+-    val currentIsRVC = isRVC(inst)
++    val inst = Cat(f3_mmio_data(1), f3_mmio_data(0))
+ 
+     val brType :: isCall :: isRet :: Nil = brInfo(inst)
+-    val jalOffset                        = jal_offset(inst, currentIsRVC)
+-    val brOffset                         = br_offset(inst, currentIsRVC)
++    val jalOffset                        = jal_offset(inst, mmio_is_RVC)
++    val brOffset                         = br_offset(inst, mmio_is_RVC)
+ 
+     io.toIbuffer.bits.instrs(0) := Mux(mmioRVCExpander.io.ill, mmioRVCExpander.io.in, mmioRVCExpander.io.out.bits)
+ 
+     io.toIbuffer.bits.pd(0).valid  := true.B
+-    io.toIbuffer.bits.pd(0).isRVC  := currentIsRVC
++    io.toIbuffer.bits.pd(0).isRVC  := mmio_is_RVC
+     io.toIbuffer.bits.pd(0).brType := brType
+     io.toIbuffer.bits.pd(0).isCall := isCall
+     io.toIbuffer.bits.pd(0).isRet  := isRet
+ 
+-    io.toIbuffer.bits.exceptionType(0)   := mmio_resend_exception
+-    io.toIbuffer.bits.crossPageIPFFix(0) := ExceptionType.hasException(mmio_resend_exception)
++    io.toIbuffer.bits.exceptionType(0) := mmio_exception
++    // exception can happens in next page only when resend
++    io.toIbuffer.bits.crossPageIPFFix(0) := mmio_has_resend && ExceptionType.hasException(mmio_exception)
+     io.toIbuffer.bits.illegalInstr(0)    := mmioRVCExpander.io.ill
+ 
+     io.toIbuffer.bits.enqEnable := f3_mmio_range.asUInt
+ 
+     mmioFlushWb.bits.pd(0).valid  := true.B
+-    mmioFlushWb.bits.pd(0).isRVC  := currentIsRVC
++    mmioFlushWb.bits.pd(0).isRVC  := mmio_is_RVC
+     mmioFlushWb.bits.pd(0).brType := brType
+     mmioFlushWb.bits.pd(0).isCall := isCall
+     mmioFlushWb.bits.pd(0).isRet  := isRet
+diff --git a/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala b/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala
+index 7f36f078176..458b52efd3f 100644
+--- a/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala
++++ b/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala
+@@ -520,7 +520,7 @@ class ICacheMainPipe(implicit p: Parameters) extends ICacheModule with HasICache
+   private val s2_fetch_finish = !s2_should_fetch.reduce(_ || _)
+ 
+   // also raise af if l2 corrupt is detected
+-  private val s2_l2_exception = VecInit(s2_l2_corrupt.map(ExceptionType.fromECC(true.B, _)))
++  private val s2_l2_exception = VecInit(s2_l2_corrupt.map(ExceptionType.fromTilelink))
+   // NOTE: do NOT raise af if meta/data corrupt is detected, they are automatically recovered by re-fetching from L2
+ 
+   // merge s2 exceptions, itlb has the highest priority, then l2
+diff --git a/src/main/scala/xiangshan/frontend/icache/InstrUncache.scala b/src/main/scala/xiangshan/frontend/icache/InstrUncache.scala
+index 2fc9bfadacb..c48c828c8c3 100644
+--- a/src/main/scala/xiangshan/frontend/icache/InstrUncache.scala
++++ b/src/main/scala/xiangshan/frontend/icache/InstrUncache.scala
+@@ -38,7 +38,8 @@ class InsUncacheReq(implicit p: Parameters) extends ICacheBundle {
+ }
+ 
+ class InsUncacheResp(implicit p: Parameters) extends ICacheBundle {
+-  val data: UInt = UInt(maxInstrLen.W)
++  val data:    UInt = UInt(maxInstrLen.W)
++  val corrupt: Bool = Bool()
+ }
+ 
+ class InstrMMIOEntryIO(edge: TLEdgeOut)(implicit p: Parameters) extends ICacheBundle {
+@@ -61,8 +62,9 @@ class InstrMMIOEntry(edge: TLEdgeOut)(implicit p: Parameters) extends ICacheModu
+ 
+   private val state = RegInit(s_invalid)
+ 
+-  private val req         = Reg(new InsUncacheReq)
+-  private val respDataReg = Reg(UInt(mmioBusWidth.W))
++  private val req            = Reg(new InsUncacheReq)
++  private val respDataReg    = RegInit(0.U(mmioBusWidth.W))
++  private val respCorruptReg = RegInit(false.B)
+ 
+   // assign default values to output signals
+   io.req.ready  := false.B
+@@ -110,8 +112,9 @@ class InstrMMIOEntry(edge: TLEdgeOut)(implicit p: Parameters) extends ICacheModu
+     io.mmio_grant.ready := true.B
+ 
+     when(io.mmio_grant.fire) {
+-      respDataReg := io.mmio_grant.bits.data
+-      state       := s_send_resp
++      respDataReg    := io.mmio_grant.bits.data
++      respCorruptReg := io.mmio_grant.bits.corrupt // this includes bits.denied, as tilelink spec defines
++      state          := s_send_resp
+     }
+   }
+ 
+@@ -130,8 +133,9 @@ class InstrMMIOEntry(edge: TLEdgeOut)(implicit p: Parameters) extends ICacheModu
+   }
+ 
+   when(state === s_send_resp) {
+-    io.resp.valid     := !needFlush
+-    io.resp.bits.data := getDataFromBus(req.addr)
++    io.resp.valid        := !needFlush
++    io.resp.bits.data    := getDataFromBus(req.addr)
++    io.resp.bits.corrupt := respCorruptReg
+     // metadata should go with the response
+     when(io.resp.fire || needFlush) {
+       state := s_invalid
+@@ -209,6 +213,9 @@ class InstrUncacheImp(outer: InstrUncache)
+     entry
+   }
+ 
++  // override mmio_grant.ready to prevent x-propagation
++  mmio_grant.ready := true.B
++
+   entry_alloc_idx := PriorityEncoder(entries.map(m => m.io.req.ready))
+ 
+   req.ready := req_ready
+```

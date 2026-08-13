@@ -1,0 +1,1156 @@
+# Commit Log
+- Issue: #4509
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4509
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4509
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4509
+- Changed files: 25
+- Additions: 185
+- Deletions: 376
+
+## Files
+- `.github/workflows/emu.yml`
+- `.gitmodules`
+- `ChiselAIA`
+- `Makefile`
+- `build.sc`
+- `src/main/resources/aia`
+- `src/main/resources/config/Default.yml`
+- `src/main/scala/device/IMSIC.scala`
+- `src/main/scala/device/IMSICAsync.scala`
+- `src/main/scala/device/imsic_axi_top.scala`
+- `src/main/scala/system/SoC.scala`
+- `src/main/scala/top/ArgParser.scala`
+- `src/main/scala/top/Top.scala`
+- `src/main/scala/top/XSNoCTop.scala`
+- `src/main/scala/top/YamlParser.scala`
+- `src/main/scala/xiangshan/L2Top.scala`
+- `src/main/scala/xiangshan/XSCore.scala`
+- `src/main/scala/xiangshan/XSTile.scala`
+- `src/main/scala/xiangshan/XSTileWrap.scala`
+- `src/main/scala/xiangshan/backend/Backend.scala`
+- `src/main/scala/xiangshan/backend/fu/CSR.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala`
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+
+## Diff
+```diff
+diff --git a/.github/workflows/emu.yml b/.github/workflows/emu.yml
+index 7dd81ebf356..50157af3b75 100644
+--- a/.github/workflows/emu.yml
++++ b/.github/workflows/emu.yml
+@@ -464,8 +464,8 @@ jobs:
+         run: cd coupledL2 && git fetch --all && git merge-base --is-ancestor `git rev-parse HEAD` origin/master
+       - name: check openLLC
+         run: cd openLLC && git fetch --all && git merge-base --is-ancestor `git rev-parse HEAD` origin/master
+-      - name: check src/main/resources/aia
+-        run: cd src/main/resources/aia && git fetch --all && git merge-base --is-ancestor `git rev-parse HEAD` origin/main
++      - name: check ChiselAIA
++        run: cd ChiselAIA && git fetch --all && git merge-base --is-ancestor `git rev-parse HEAD` origin/main
+ 
+   scalafmt:
+     runs-on: ubuntu-latest
+diff --git a/.gitmodules b/.gitmodules
+index 599b75dda3f..7a190d2a849 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -25,6 +25,6 @@
+ [submodule "openLLC"]
+ 	path = openLLC
+ 	url = https://github.com/OpenXiangShan/OpenLLC.git
+-[submodule "src/main/resources/aia"]
+-	path = src/main/resources/aia
+-	url = https://github.com/OpenXiangShan/OpenAIA.git
++[submodule "ChiselAIA"]
++	path = ChiselAIA
++	url = https://github.com/OpenXiangShan/ChiselAIA.git
+diff --git a/ChiselAIA b/ChiselAIA
+new file mode 160000
+index 00000000000..c86c7d4de9c
+--- /dev/null
++++ b/ChiselAIA
+@@ -0,0 +1 @@
++Subproject commit c86c7d4de9c26934beb75e2ad1b57e1e2d652599
+diff --git a/Makefile b/Makefile
+index c170be032fa..61d4fb0a7a9 100644
+--- a/Makefile
++++ b/Makefile
+@@ -72,9 +72,9 @@ ifneq ($(XSTOP_PREFIX),)
+ COMMON_EXTRA_ARGS += --xstop-prefix $(XSTOP_PREFIX)
+ endif
+ 
+-# IMSIC use TileLink rather than AXI4Lite
+-ifeq ($(IMSIC_USE_TL),1)
+-COMMON_EXTRA_ARGS += --imsic-use-tl
++# IMSIC bus type (AXI, TL or NONE)
++ifneq ($(IMSIC_BUS_TYPE),)
++COMMON_EXTRA_ARGS += --imsic-bus-type $(IMSIC_BUS_TYPE)
+ endif
+ 
+ # enable or disable dfx manually
+diff --git a/build.sc b/build.sc
+index d6797e2ae1b..25c43293e3e 100644
+--- a/build.sc
++++ b/build.sc
+@@ -193,6 +193,15 @@ object fudian extends HasChisel {
+ 
+ }
+ 
++object chiselAIA extends HasChisel {
++  override def millSourcePath = pwd / "ChiselAIA"
++
++  override def moduleDeps = super.moduleDeps ++ Seq(
++    rocketchip,
++    utility
++  )
++}
++
+ object macros extends ScalaModule {
+ 
+   override def millSourcePath = pwd / "macros"
+@@ -223,6 +232,8 @@ trait XiangShanModule extends ScalaModule {
+ 
+   def yunsuanModule: ScalaModule
+ 
++  def chiselAIAModule: ScalaModule
++
+   def macrosModule: ScalaModule
+ 
+   override def moduleDeps = super.moduleDeps ++ Seq(
+@@ -234,6 +245,7 @@ trait XiangShanModule extends ScalaModule {
+     yunsuanModule,
+     fudianModule,
+     utilityModule,
++    chiselAIAModule,
+     macrosModule,
+   )
+ 
+@@ -263,6 +275,8 @@ object xiangshan extends XiangShanModule with HasChisel with ScalafmtModule {
+ 
+   def yunsuanModule = yunsuan
+ 
++  def chiselAIAModule = chiselAIA
++
+   def macrosModule = macros
+ 
+   // properties may be changed by user. Use `Task.Input` here.
+diff --git a/src/main/resources/aia b/src/main/resources/aia
+deleted file mode 160000
+index 9464aee3c77..00000000000
+--- a/src/main/resources/aia
++++ /dev/null
+@@ -1 +0,0 @@
+-Subproject commit 9464aee3c77b021a037f28aa1b3fe53c71b516f6
+diff --git a/src/main/resources/config/Default.yml b/src/main/resources/config/Default.yml
+index 6dc50a0b4d4..4101147e9b7 100644
+--- a/src/main/resources/config/Default.yml
++++ b/src/main/resources/config/Default.yml
+@@ -31,3 +31,15 @@ SeperateTLBus: false
+ 
+ SeperateTLBusRanges:
+   - { base: 0x38020000, mask: 0xFFF } # Default Debug Module Address
++
++IMSICBusType: AXI
++
++IMSICParams:
++  imsicIntSrcWidth: 8
++  mAddr: 0x3A800000
++  sgAddr: 0x3B000000
++  geilen: 5
++  vgeinWidth: 6
++  iselectWidth: 12
++  EnableImsicAsyncBridge: true
++  HasTEEIMSIC: false
+diff --git a/src/main/scala/device/IMSIC.scala b/src/main/scala/device/IMSIC.scala
+deleted file mode 100644
+index 5da0742f5cf..00000000000
+--- a/src/main/scala/device/IMSIC.scala
++++ /dev/null
+@@ -1,154 +0,0 @@
+-package device
+-
+-import chisel3._
+-import chisel3.util._
+-import chisel3.experimental._
+-
+-class IMSIC(
+-  NumVSIRFiles: Int = 5,
+-  NumHart: Int = 1,
+-  XLEN: Int = 64,
+-  NumIRSrc: Int = 256,
+-) extends Module {
+-  private val NumIRFiles: Int = /*M*/ 1 + /*S*/ 1 + NumVSIRFiles
+-  private val NR_SRC_WIDTH = log2Up(NumIRSrc)
+-  private val NR_HARTS_WIDTH = log2Up(NumHart)
+-  private val INTP_FILE_WIDTH = log2Up(NumIRFiles)
+-  private val MSI_INFO_WIDTH = NR_HARTS_WIDTH + INTP_FILE_WIDTH + NR_SRC_WIDTH
+-
+-  // has default clock and reset
+-  val i = IO(Input(new Bundle {
+-    val msiInfo           = ValidIO(new MsiInfoBundle(NumIRFiles = NumIRFiles, NumHart = NumHart, NumIRSrc = NumIRSrc))
+-    val hartId            = UInt(log2Up(NumHart).W)
+-    val csr = new Bundle {
+-      val addr = ValidIO(new Bundle {
+-        val addr = UInt(12.W)
+-        val prvm = UInt(2.W)
+-        val v    = UInt(1.W)
+-      })
+-      val vgein = UInt(6.W)
+-      val mClaim  = Bool()
+-      val sClaim  = Bool()
+-      val vsClaim = Bool()
+-      val wdata = ValidIO(new Bundle{
+-        val op    = UInt(2.W)
+-        val data  = UInt(XLEN.W)
+-      })
+-    }
+-  }))
+-  val o = IO(Output(new Bundle {
+-    val csr = new Bundle {
+-      val rdata = ValidIO(new Bundle {
+-        val rdata   = UInt(XLEN.W)
+-        val illegal = Bool()
+-      })
+-    }
+-    val meip  = Bool()
+-    val seip  = Bool()
+-    val vseip = UInt(NumVSIRFiles.W)
+-    val mtopei  = UInt(32.W)
+-    val stopei  = UInt(32.W)
+-    val vstopei = UInt(32.W)
+-  }))
+-
+-  val imsicTop = Module(new imsic_csr_top(
+-    NumIRFiles = this.NumIRFiles,
+-    NumHart = this.NumHart,
+-    XLEN = this.XLEN,
+-    NumIRSrc = this.NumIRSrc,
+-  ))
+-
+-  imsicTop.io.csr_clk         := clock
+-  imsicTop.io.csr_rst         := reset
+-  imsicTop.io.hart_id         := i.hartId
+-  imsicTop.io.i.msi_info_vld  := i.msiInfo.valid
+-  imsicTop.io.i.msi_info      := i.msiInfo.bits.info
+-  imsicTop.io.i.csr.addr_vld  := i.csr.addr.valid
+-  imsicTop.io.i.csr.addr      := i.csr.addr.bits.addr
+-  imsicTop.io.i.csr.priv_lvl  := i.csr.addr.bits.prvm
+-  imsicTop.io.i.csr.v         := i.csr.addr.bits.v
+-  imsicTop.io.i.csr.vgein     := i.csr.vgein
+-  imsicTop.io.i.csr.claim     := Cat(i.csr.vsClaim, i.csr.sClaim, i.csr.mClaim)
+-  imsicTop.io.i.csr.wdata_vld := i.csr.wdata.valid
+-  imsicTop.io.i.csr.wdata     := i.csr.wdata.bits.data
+-  imsicTop.io.i.csr.wdata_op  := i.csr.wdata.bits.op
+-
+-  o.csr.rdata.valid        := imsicTop.io.o.csr.rdata_vld
+-  o.csr.rdata.bits.rdata   := imsicTop.io.o.csr.rdata
+-  o.csr.rdata.bits.illegal := imsicTop.io.o.csr.illegal
+-  o.meip                   := imsicTop.io.o.irq(0)
+-  o.seip                   := imsicTop.io.o.irq(1)
+-  o.vseip                  := imsicTop.io.o.irq(NumIRFiles - 1, 2)
+-  o.mtopei                 := imsicTop.io.o.mtopei
+-  o.stopei                 := imsicTop.io.o.stopei
+-  o.vstopei                := imsicTop.io.o.vstopei
+-}
+-
+-class imsic_csr_top(
+-  NumIRFiles: Int = 7,
+-  XLEN: Int = 64,
+-  NumIRSrc: Int = 256,
+-  NumHart: Int = 4,
+-  EidVldDlyNum: Int = 0,
+-) extends BlackBox(Map(
+-  "NR_INTP_FILES"  -> NumIRFiles,
+-  "NR_HARTS"       -> NumHart,
+-  "XLEN"           -> XLEN,
+-  "NR_SRC"         -> NumIRSrc,
+-  "EID_VLD_DLY_NUM"-> EidVldDlyNum,
+-)) with HasBlackBoxResource {
+-  private val NR_SRC_WIDTH = log2Up(NumIRSrc)
+-  private val NR_HARTS_WIDTH = log2Up(NumHart)
+-  private val INTP_FILE_WIDTH = log2Up(NumIRFiles)
+-  private val MSI_INFO_WIDTH = NR_HARTS_WIDTH + INTP_FILE_WIDTH + NR_SRC_WIDTH
+-
+-  val io = IO(new Bundle {
+-    val csr_clk = Input(Clock())
+-    val csr_rst = Input(Reset())
+-    val hart_id = Input(UInt(NR_HARTS_WIDTH.W))
+-
+-    val i = Input(new Bundle {
+-      val msi_info = UInt(MSI_INFO_WIDTH.W)
+-      val msi_info_vld = Bool()
+-      val csr = new Bundle {
+-        val addr_vld = Bool()
+-        val addr = UInt(12.W)
+-        val priv_lvl = UInt(2.W)
+-        val v = UInt(1.W)
+-        val vgein = UInt(6.W)
+-        val claim = UInt(3.W)
+-        val wdata_vld = Bool()
+-        val wdata_op = UInt(2.W)
+-        val wdata = UInt(XLEN.W)
+-      }
+-    })
+-
+-    val o = Output(new Bundle {
+-      val csr = new Bundle {
+-        val rdata_vld = Bool()
+-        val rdata = UInt(XLEN.W)
+-        val illegal = Bool()
+-      }
+-      val irq = UInt(NumIRFiles.W)
+-      val mtopei = UInt(32.W)
+-      val stopei = UInt(32.W)
+-      val vstopei = UInt(32.W)
+-    })
+-  })
+-  addResource("/aia/src/rtl/imsic/imsic_csr_top.sv")
+-  addResource("/aia/src/rtl/imsic/imsic_csr_gate.sv")
+-  addResource("/aia/src/rtl/imsic/imsic_csr_reg.sv")
+-}
+-
+-class MsiInfoBundle(
+-  NumIRFiles: Int = 7,
+-  NumHart: Int = 64,
+-  NumIRSrc: Int = 256,
+-) extends Bundle {
+-  private val NR_SRC_WIDTH = log2Up(NumIRSrc)
+-  private val NR_HARTS_WIDTH = log2Up(NumHart)
+-  private val INTP_FILE_WIDTH = log2Up(NumIRFiles)
+-  private val MSI_INFO_WIDTH = NR_HARTS_WIDTH + INTP_FILE_WIDTH + NR_SRC_WIDTH
+-
+-  val info = UInt(MSI_INFO_WIDTH.W)
+-}
+diff --git a/src/main/scala/device/IMSICAsync.scala b/src/main/scala/device/IMSICAsync.scala
+index dbcbd3384fd..17966b9d1f8 100644
+--- a/src/main/scala/device/IMSICAsync.scala
++++ b/src/main/scala/device/IMSICAsync.scala
+@@ -19,27 +19,20 @@ package device
+ import chisel3._
+ import chisel3.util._
+ import freechips.rocketchip.util.AsyncResetSynchronizerShiftReg
++import system.HasSoCParameter
++import xiangshan.XSModule
++import org.chipsalliance.cde.config.Parameters
+ 
+-class IMSICAsync(
+-  NumVSIRFiles: Int = 5,
+-  NumHart: Int = 1,
+-  NumIRSrc: Int = 256,
+-) extends Module {
+-  private val NumIRFiles: Int = /*M*/ 1 + /*S*/ 1 + NumVSIRFiles
+-  private val NR_SRC_WIDTH = log2Up(NumIRSrc)
+-  private val NR_HARTS_WIDTH = log2Up(NumHart)
+-  private val INTP_FILE_WIDTH = log2Up(NumIRFiles)
+-  private val MSI_INFO_WIDTH = NR_HARTS_WIDTH + INTP_FILE_WIDTH + NR_SRC_WIDTH
+-
++class IMSICAsync(implicit p: Parameters) extends XSModule with HasSoCParameter {
+   // has default clock and reset
+   // input ports, ValidIO is an inner function
+   val i = IO(Input(new Bundle {
+-    val msiInfo = ValidIO(new MsiInfoBundle(NumIRFiles = NumIRFiles, NumHart = NumHart, NumIRSrc = NumIRSrc))
++    val msiInfo = ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))
+   }))
+ 
+   // output ports 
+   val o = IO(Output(new Bundle {
+-    val msiInfo = ValidIO(new MsiInfoBundle(NumIRFiles = NumIRFiles, NumHart = NumHart, NumIRSrc = NumIRSrc))
++    val msiInfo = ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))
+   }))
+ 
+   // code about msi_vld_sync, delay 3 cycles after i.msiInfo.valid.
+diff --git a/src/main/scala/device/imsic_axi_top.scala b/src/main/scala/device/imsic_axi_top.scala
+index 72de20ac36a..6a9f0530b4e 100644
+--- a/src/main/scala/device/imsic_axi_top.scala
++++ b/src/main/scala/device/imsic_axi_top.scala
+@@ -18,168 +18,67 @@ package device
+ 
+ import chisel3._
+ import chisel3.util._
+-import chisel3.experimental.dataview._
+ import org.chipsalliance.cde.config.Parameters
+ import freechips.rocketchip.diplomacy._
+ import freechips.rocketchip.amba.axi4._
+ import freechips.rocketchip.tilelink._
+-import utils.{AXI4LiteBundle, VerilogAXI4LiteRecord}
++import system.HasSoCParameter
+ 
+-class imsic_axi_top(
+-  AXI_ID_WIDTH: Int = 5,
+-  AXI_ADDR_WIDTH: Int = 32,
+-  NR_INTP_FILES: Int = 7,
+-  NR_HARTS: Int = 1,
+-  NR_SRC: Int = 256,
+-  SETIP_KEEP_CYCLES: Int = 8
+-) extends BlackBox(Map(
+-  "AXI_ID_WIDTH" -> AXI_ID_WIDTH,
+-  "AXI_ADDR_WIDTH" -> AXI_ADDR_WIDTH,
+-  "NR_INTP_FILES" -> NR_INTP_FILES,
+-  "NR_HARTS" -> NR_HARTS,
+-  "NR_SRC" -> NR_SRC,
+-  "SETIP_KEEP_CYCLES" -> SETIP_KEEP_CYCLES
+-)) with HasBlackBoxResource {
+-  private val NR_SRC_WIDTH = log2Ceil(NR_SRC)
+-  private val NR_HARTS_WIDTH = if (NR_HARTS == 1) 1 else log2Ceil(NR_HARTS)
+-  private val INTP_FILE_WIDTH = log2Ceil(NR_INTP_FILES)
+-  private val MSI_INFO_WIDTH = NR_HARTS_WIDTH + INTP_FILE_WIDTH + NR_SRC_WIDTH
+-  val io = IO(new Bundle {
+-    // crg
+-    val axi_clk = Input(Clock())
+-    val axi_rstn = Input(AsyncReset())
+-    val fifo_rstn = Input(AsyncReset())
+-    // bus to access the m interrupt file
+-    val m_s = Flipped(new VerilogAXI4LiteRecord(AXI_ADDR_WIDTH, 32, AXI_ID_WIDTH))
+-    // bus to access the s interrupt file
+-    val s_s = Flipped(new VerilogAXI4LiteRecord(AXI_ADDR_WIDTH, 32, AXI_ID_WIDTH))
+-    // imsic_csr_top
+-    val o_msi_info = Output(UInt(MSI_INFO_WIDTH.W))
+-    val o_msi_info_vld = Output(Bool())
+-  })
+-  addResource("/aia/src/rtl/imsic/imsic_axi_top.sv")
+-  addResource("/aia/src/rtl/imsic/imsic_axi2reg.sv")
+-  addResource("/aia/src/rtl/imsic/imsic_regmap.sv")
+-  addResource("/aia/src/rtl/imsic/common/generic_fifo_dc_gray.sv")
+-  addResource("/aia/src/rtl/imsic/common/generic_dpram.sv")
++object IMSICBusType extends Enumeration {
++  val NONE, TL, AXI = Value
+ }
+ 
+-class imsic_bus_top(
+-  useTL: Boolean = false,
+-  baseAddress: (BigInt, BigInt), /* (M-mode, S/VS-mode) */
+-  maxHarts: Int = 512,
+-  AXI_ID_WIDTH: Int = 5,
+-  AXI_ADDR_WIDTH: Int = 32,
+-  NR_INTP_FILES: Int = 7,
+-  NR_HARTS: Int = 1,
+-  NR_SRC: Int = 256,
+-  SETIP_KEEP_CYCLES: Int = 8
+-)(implicit p: Parameters) extends LazyModule {
+-  private val NR_SRC_WIDTH = log2Ceil(NR_SRC)
+-  private val NR_HARTS_WIDTH = if (NR_HARTS == 1) 1 else log2Ceil(NR_HARTS)
+-  private val INTP_FILE_WIDTH = log2Ceil(NR_INTP_FILES)
+-  private val MSI_INFO_WIDTH = NR_HARTS_WIDTH + INTP_FILE_WIDTH + NR_SRC_WIDTH
++class imsic_bus_top(implicit p: Parameters) extends LazyModule with HasSoCParameter {
++  // Tilelink Bus
++  val tl_reg_imsic = Option.when(soc.IMSICBusType == device.IMSICBusType.TL)(LazyModule(new aia.TLRegIMSIC(soc.IMSICParams, seperateBus = true)))
+ 
+-  private val m_base = baseAddress._1;
+-  private val m_size = maxHarts * 0x1000;
+-  private val s_base = baseAddress._2;
+-  private val s_size = maxHarts * 0x8000;
+-
+-  println(f"IMSIC: address-mapping for ${maxHarts} HARTs")
+-  println(f"IMSIC:   M-mode:    [0x${m_base}%08X, 0x${m_base + m_size - 1}%08X]")
+-  println(f"IMSIC:   S/VS-mode: [0x${s_base}%08X, 0x${s_base + s_size - 1}%08X]")
+-
+-  private val axi4nodes = Seq(
+-    AXI4SlaveNode(Seq(AXI4SlavePortParameters(
+-      Seq(AXI4SlaveParameters(
+-        Seq(AddressSet(m_base, m_size - 1)),
+-        regionType = RegionType.UNCACHED,
+-        supportsWrite = TransferSizes(1, 4),
+-        supportsRead = TransferSizes(1, 4),
+-        interleavedId = Some(0)
+-      )),
+-      beatBytes = 4
+-    ))),
+-    AXI4SlaveNode(Seq(AXI4SlavePortParameters(
+-      Seq(AXI4SlaveParameters(
+-        Seq(AddressSet(s_base, s_size - 1)),
+-        regionType = RegionType.UNCACHED,
+-        supportsWrite = TransferSizes(1, 4),
+-        supportsRead = TransferSizes(1, 4),
+-        interleavedId = Some(0)
+-      )),
+-      beatBytes = 4
+-    ))))
+-
+-  val tl = Option.when(useTL) {
++  val tl = tl_reg_imsic.map { tl_reg_imsic =>
+     val tlnodes = Seq.fill(2)(TLClientNode(Seq(TLMasterPortParameters.v1(
+       clients = Seq(TLMasterParameters.v1(
+         "tl",
+-        sourceId = IdRange(0, 16)
++        sourceId = IdRange(0, 65536)
+       ))
+     ))))
+-    axi4nodes zip tlnodes foreach { case (axi4node, tlnode) =>
+-      axi4node :=
+-        AXI4IdIndexer(AXI_ID_WIDTH) :=
+-        AXI4Buffer() :=
+-        AXI4Buffer() :=
+-        AXI4UserYanker(Some(1)) :=
+-        TLToAXI4() :=
++    tl_reg_imsic.fromMem zip tlnodes foreach { case (fromMem, tlnode) =>
++      fromMem :=
+         TLWidthWidget(4) :=
+         TLFIFOFixer() :=
+         TLBuffer() :=
+         tlnode
+     }
+-
+     tlnodes
+   }
+ 
+   val tl_m = tl.map(x => InModuleBody(x(0).makeIOs()))
+   val tl_s = tl.map(x => InModuleBody(x(1).makeIOs()))
+ 
+-  val axiMasterNode = Option.when(!useTL) {
+-    val node = AXI4MasterNode(Seq(AXI4MasterPortParameters(
++  // AXI4 Bus
++  val axi_reg_imsic = Option.when(soc.IMSICBusType == device.IMSICBusType.AXI)(LazyModule(new aia.AXIRegIMSIC(soc.IMSICParams, seperateBus = false)))
++
++  val axi = axi_reg_imsic.map { axi_reg_imsic =>
++    val axinode = AXI4MasterNode(Seq(AXI4MasterPortParameters(
+       Seq(AXI4MasterParameters(
+         name = "s_axi_",
+-        id = IdRange(0, 1 << AXI_ID_WIDTH)
++        id = IdRange(0, 65536)
+       ))
+     )))
+-    val xbar = AXI4Xbar(TLArbiter.lowestIndexFirst)
+-    axi4nodes.foreach { _ := xbar }
+-    xbar := AXI4Buffer() := node
+-    node
++    axi_reg_imsic.axi4tolite.head.node := AXI4Buffer() := axinode
++    axinode
+   }
+ 
+-  class imsic_bus_top_imp(wrapper: imsic_bus_top) extends LazyModuleImp(wrapper) {
+-    // imsic csr top io
+-    val o_msi_info = IO(Output(UInt(MSI_INFO_WIDTH.W)))
+-    val o_msi_info_vld = IO(Output(Bool()))
++  val axi4 = axi.map(x => InModuleBody(x.makeIOs()))
+ 
+-    // axi4lite io
+-    val axi4lite = Option.when(!useTL)(IO(Flipped(new VerilogAXI4LiteRecord(AXI_ADDR_WIDTH, 32, AXI_ID_WIDTH))))
+-
+-    // imsic axi top
+-    val u_imsic_axi_top = Module(new imsic_axi_top)
+-
+-    // connection: crg
+-    u_imsic_axi_top.io.axi_clk := clock
+-    u_imsic_axi_top.io.axi_rstn := (~reset.asBool).asAsyncReset
+-    u_imsic_axi_top.io.fifo_rstn := (~reset.asBool).asAsyncReset // TODO: axi_rstn & sw_rstn
+-
+-    // connection: imsic csr top
+-    o_msi_info := u_imsic_axi_top.io.o_msi_info
+-    o_msi_info_vld := u_imsic_axi_top.io.o_msi_info_vld
++  class imsic_bus_top_imp(wrapper: imsic_bus_top) extends LazyModuleImp(wrapper) {
++    val msiio = IO(Flipped(new aia.MSITransBundle(soc.IMSICParams)))
+ 
+-    // connection: axi4lite
+-    axi4lite.foreach {
+-      _.viewAs[AXI4LiteBundle].connectToAXI4(wrapper.axiMasterNode.get.out.head._1)
+-    }
++    // No Bus
++    val msi = Option.when(soc.IMSICBusType == device.IMSICBusType.NONE)(
++      IO(new aia.MSITransBundle(soc.IMSICParams))
++    )
+ 
+-    // connection: axi4
+-    wrapper.axi4nodes.map(_.in.head._1) zip
+-      Seq(u_imsic_axi_top.io.m_s, u_imsic_axi_top.io.s_s) foreach {
+-        case (axi4, axi4lite) => axi4lite.viewAs[AXI4LiteBundle].connectFromAXI4(axi4)
+-    }
++    tl_reg_imsic.foreach(_.module.msiio <> msiio)
++    axi_reg_imsic.foreach(_.module.msiio <> msiio)
++    msi.foreach(_ <> msiio)
+   }
+ 
+   lazy val module = new imsic_bus_top_imp(this)
+diff --git a/src/main/scala/system/SoC.scala b/src/main/scala/system/SoC.scala
+index 4997a4a40ed..3da57de3a65 100644
+--- a/src/main/scala/system/SoC.scala
++++ b/src/main/scala/system/SoC.scala
+@@ -100,6 +100,17 @@ case class SoCParameters
+   SeperateTLBus: Boolean = false,
+   SeperateDM: Boolean = false, // for non-XSNoCTop only, should work with SeperateTLBus
+   SeperateTLBusRanges: Seq[AddressSet] = Seq(),
++  IMSICBusType: device.IMSICBusType.Value = device.IMSICBusType.AXI,
++  IMSICParams: aia.IMSICParams = aia.IMSICParams(
++    imsicIntSrcWidth = 8,
++    mAddr = 0x3A800000,
++    sgAddr = 0x3B000000,
++    geilen = 5,
++    vgeinWidth = 6,
++    iselectWidth = 12,
++    EnableImsicAsyncBridge = true,
++    HasTEEIMSIC = false
++  ),
+   EnableCHIAsyncBridge: Option[AsyncQueueParams] = Some(AsyncQueueParams(depth = 16, sync = 3, safe = false)),
+   EnableClintAsyncBridge: Option[AsyncQueueParams] = Some(AsyncQueueParams(depth = 1, sync = 3, safe = false)),
+   SeperateTLAsyncBridge: Option[AsyncQueueParams] = Some(AsyncQueueParams(depth = 1, sync = 3, safe = false)),
+diff --git a/src/main/scala/top/ArgParser.scala b/src/main/scala/top/ArgParser.scala
+index eb6db36cd2d..b3a0e7a1cda 100644
+--- a/src/main/scala/top/ArgParser.scala
++++ b/src/main/scala/top/ArgParser.scala
+@@ -27,6 +27,7 @@ import scala.annotation.tailrec
+ import scala.sys.exit
+ import chisel3.util.log2Up
+ import utility._
++import device.IMSICBusType
+ 
+ object ArgParser {
+   // TODO: add more explainations
+@@ -144,9 +145,9 @@ object ArgParser {
+           nextOption(config.alter((site, here, up) => {
+             case SoCParamsKey => up(SoCParamsKey).copy(XSTopPrefix = Some(value))
+           }), tail)
+-        case "--imsic-use-tl" :: tail =>
++        case "--imsic-bus-type" :: value :: tail =>
+           nextOption(config.alter((site, here, up) => {
+-            case SoCParamsKey => up(SoCParamsKey).copy(IMSICUseTL = true)
++            case SoCParamsKey => up(SoCParamsKey).copy(IMSICBusType = device.IMSICBusType.withName(value))
+           }), tail)
+         case "--firtool-opt" :: option :: tail =>
+           firtoolOpts ++= option.split(" ").filter(_.nonEmpty)
+diff --git a/src/main/scala/top/Top.scala b/src/main/scala/top/Top.scala
+index bf1cfb4f970..57a951fdf52 100644
+--- a/src/main/scala/top/Top.scala
++++ b/src/main/scala/top/Top.scala
+@@ -321,7 +321,7 @@ class XSTop()(implicit p: Parameters) extends BaseXSSoc() with HasSoCParameter
+ 
+     io.pll0_ctrl <> misc.module.pll0_ctrl
+ 
+-    val msiInfo = WireInit(0.U.asTypeOf(ValidIO(new MsiInfoBundle)))
++    val msiInfo = WireInit(0.U.asTypeOf(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))))
+ 
+ 
+     for ((core, i) <- core_with_l2.zipWithIndex) {
+diff --git a/src/main/scala/top/XSNoCTop.scala b/src/main/scala/top/XSNoCTop.scala
+index ea567522316..2be43f3d22a 100644
+--- a/src/main/scala/top/XSNoCTop.scala
++++ b/src/main/scala/top/XSNoCTop.scala
+@@ -18,6 +18,7 @@ package top
+ 
+ import chisel3._
+ import chisel3.util._
++import chisel3.experimental.dataview._
+ import xiangshan._
+ import utils._
+ import utility._
+@@ -68,10 +69,7 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
+   })))
+ 
+   // imsic bus top
+-  val u_imsic_bus_top = LazyModule(new imsic_bus_top(
+-    useTL = soc.IMSICUseTL,
+-    baseAddress = (0x3A800000, 0x3B000000)
+-  ))
++  val u_imsic_bus_top = LazyModule(new imsic_bus_top)
+ 
+   // interrupts
+   val clintIntNode = IntSourceNode(IntSourcePortSimple(1, 1, 2))
+@@ -178,11 +176,13 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
+       val sramCtl = Option.when(hasSramCtl)(Input(UInt(64.W)))
+       val lp = Option.when(EnablePowerDown) (new LowPowerIO)
+     })
+-    // imsic axi4lite io
+-    val imsic_axi4lite = wrapper.u_imsic_bus_top.module.axi4lite.map(x => IO(chiselTypeOf(x)))
++    // imsic axi4 io
++    val imsic_axi4 = wrapper.u_imsic_bus_top.axi4.map(x => IO(Flipped(new VerilogAXI4Record(x.elts.head.params.copy(addrBits = 32)))))
+     // imsic tl io
+     val imsic_m_tl = wrapper.u_imsic_bus_top.tl_m.map(x => IO(chiselTypeOf(x.getWrappedValue)))
+     val imsic_s_tl = wrapper.u_imsic_bus_top.tl_s.map(x => IO(chiselTypeOf(x.getWrappedValue)))
++    // imsic bare io
++    val imsic = wrapper.u_imsic_bus_top.module.msi.map(x => IO(chiselTypeOf(x)))
+ 
+     val noc_reset_sync = EnableCHIAsyncBridge.map(_ => withClockAndReset(noc_clock, noc_reset) { ResetGen(2, io.dft_reset) })
+     val soc_reset_sync = withClockAndReset(soc_clock, soc_reset) { ResetGen(2, io.dft_reset) }
+@@ -193,12 +193,13 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
+     wrapper.u_imsic_bus_top.module.clock := soc_clock
+     wrapper.u_imsic_bus_top.module.reset := soc_reset_sync
+ 
+-    // imsic axi4lite io connection
+-    wrapper.u_imsic_bus_top.module.axi4lite.foreach(_ <> imsic_axi4lite.get)
+-
++    // imsic axi4 io connection
++    imsic_axi4.foreach(_.viewAs[AXI4Bundle] <> wrapper.u_imsic_bus_top.axi4.get.elements.head._2)
+     // imsic tl io connection
+     wrapper.u_imsic_bus_top.tl_m.foreach(_ <> imsic_m_tl.get)
+     wrapper.u_imsic_bus_top.tl_s.foreach(_ <> imsic_s_tl.get)
++    // imsic bare io connection
++    wrapper.u_imsic_bus_top.module.msi.foreach(_ <> imsic.get)
+ 
+     // input
+     dontTouch(io)
+@@ -335,8 +336,9 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
+       tlAsyncSinkOpt.get.module.reset := soc_reset_sync
+     }
+ 
+-    core_with_l2.module.io.msiInfo.valid := wrapper.u_imsic_bus_top.module.o_msi_info_vld
+-    core_with_l2.module.io.msiInfo.bits.info := wrapper.u_imsic_bus_top.module.o_msi_info
++    core_with_l2.module.io.msiInfo.valid := wrapper.u_imsic_bus_top.module.msiio.vld_req
++    core_with_l2.module.io.msiInfo.bits := wrapper.u_imsic_bus_top.module.msiio.data
++    wrapper.u_imsic_bus_top.module.msiio.vld_ack := core_with_l2.module.io.msiAck
+     // tie off core soft reset
+     core_rst_node.out.head._1 := false.B.asAsyncReset
+ 
+@@ -375,7 +377,10 @@ class XSNoCDiffTop(implicit p: Parameters) extends Module {
+   exposeIO(soc.io, "io")
+   exposeOptionIO(soc.noc_clock, "noc_clock")
+   exposeOptionIO(soc.noc_reset, "noc_reset")
+-  exposeOptionIO(soc.imsic_axi4lite, "imsic_axi4lite")
++  exposeOptionIO(soc.imsic_axi4, "imsic_axi4")
++  exposeOptionIO(soc.imsic_m_tl, "imsic_m_tl")
++  exposeOptionIO(soc.imsic_s_tl, "imsic_s_tl")
++  exposeOptionIO(soc.imsic, "imsic")
+ 
+   // TODO:
+   // XSDiffTop is only part of DUT, we can not instantiate difftest here.
+diff --git a/src/main/scala/top/YamlParser.scala b/src/main/scala/top/YamlParser.scala
+index 1b7927384d4..db328abe554 100644
+--- a/src/main/scala/top/YamlParser.scala
++++ b/src/main/scala/top/YamlParser.scala
+@@ -19,6 +19,7 @@ package top
+ import io.circe.generic.extras.Configuration
+ import io.circe.generic.extras.auto._
+ 
++import aia.IMSICParams
+ import org.chipsalliance.cde.config.Parameters
+ import system.SoCParamsKey
+ import xiangshan.backend.fu.{MemoryRange, PMAConfigEntry}
+@@ -26,6 +27,7 @@ import xiangshan.XSTileKey
+ import freechips.rocketchip.devices.debug.DebugModuleKey
+ import freechips.rocketchip.diplomacy.AddressSet
+ import freechips.rocketchip.util.AsyncQueueParams
++import device.IMSICBusType
+ 
+ case class YamlConfig(
+   PmemRanges: Option[List[MemoryRange]],
+@@ -37,7 +39,9 @@ case class YamlConfig(
+   WFIResume: Option[Boolean],
+   SeperateDM: Option[Boolean],
+   SeperateTLBus: Option[Boolean],
+-  SeperateTLBusRanges: Option[List[AddressSet]]
++  SeperateTLBusRanges: Option[List[AddressSet]],
++  IMSICBusType: Option[String],
++  IMSICParams: Option[IMSICParams],
+ )
+ 
+ object YamlParser {
+@@ -97,6 +101,16 @@ object YamlParser {
+         case SoCParamsKey => up(SoCParamsKey).copy(SeperateTLBusRanges = ranges)
+       })
+     }
++    yamlConfig.IMSICBusType.foreach { busType =>
++      newConfig = newConfig.alter((site, here, up) => {
++        case SoCParamsKey => up(SoCParamsKey).copy(IMSICBusType = device.IMSICBusType.withName(busType))
++      })
++    }
++    yamlConfig.IMSICParams.foreach { params =>
++      newConfig = newConfig.alter((site, here, up) => {
++        case SoCParamsKey => up(SoCParamsKey).copy(IMSICParams = params)
++      })
++    }
+     newConfig
+   }
+ }
+diff --git a/src/main/scala/xiangshan/L2Top.scala b/src/main/scala/xiangshan/L2Top.scala
+index 7852098cdb4..6f8b5d39e18 100644
+--- a/src/main/scala/xiangshan/L2Top.scala
++++ b/src/main/scala/xiangshan/L2Top.scala
+@@ -25,7 +25,6 @@ import freechips.rocketchip.diplomacy._
+ import freechips.rocketchip.interrupts._
+ import freechips.rocketchip.tile.{BusErrorUnit, BusErrorUnitParams, BusErrors, MaxHartIdBits}
+ import freechips.rocketchip.tilelink._
+-import device.MsiInfoBundle
+ import coupledL2.{EnableCHI, L2ParamKey, PrefetchCtrlFromCore}
+ import coupledL2.tl2tl.TL2TLCoupledL2
+ import coupledL2.tl2chi.{CHIIssue, PortIO, TL2CHICoupledL2}
+@@ -172,8 +171,12 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+         val toCore = Output(UInt(64.W))
+       }
+       val msiInfo = new Bundle() {
+-        val fromTile = Input(ValidIO(new MsiInfoBundle))
+-        val toCore = Output(ValidIO(new MsiInfoBundle))
++        val fromTile = Input(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W)))
++        val toCore = Output(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W)))
++      }
++      val msiAck = new Bundle {
++        val fromCore = Input(Bool())
++        val toTile = Output(Bool())
+       }
+       val cpu_halt = new Bundle() {
+         val fromCore = Input(Bool())
+@@ -243,6 +246,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+     io.msiInfo.toCore := io.msiInfo.fromTile
+     io.cpu_halt.toTile := io.cpu_halt.fromCore
+     io.cpu_critical_error.toTile := io.cpu_critical_error.fromCore
++    io.msiAck.toTile := io.msiAck.fromCore
+     io.l3Miss.toCore := io.l3Miss.fromTile
+     io.clintTime.toCore := io.clintTime.fromTile
+     // trace interface
+diff --git a/src/main/scala/xiangshan/XSCore.scala b/src/main/scala/xiangshan/XSCore.scala
+index 2c30e676762..60911a444e1 100644
+--- a/src/main/scala/xiangshan/XSCore.scala
++++ b/src/main/scala/xiangshan/XSCore.scala
+@@ -21,7 +21,6 @@ import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+ import coupledL2.PrefetchCtrlFromCore
+-import device.MsiInfoBundle
+ import freechips.rocketchip.diplomacy.{BundleBridgeSource, LazyModule, LazyModuleImp}
+ import freechips.rocketchip.tile.HasFPUParameters
+ import system.HasSoCParameter
+@@ -85,7 +84,8 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
+   with HasSoCParameter {
+   val io = IO(new Bundle {
+     val hartId = Input(UInt(hartIdLen.W))
+-    val msiInfo = Input(ValidIO(new MsiInfoBundle))
++    val msiInfo = Input(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W)))
++    val msiAck = Output(Bool())
+     val clintTime = Input(ValidIO(UInt(64.W)))
+     val reset_vector = Input(UInt(PAddrBits.W))
+     val cpu_halt = Output(Bool())
+@@ -265,6 +265,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
+   io.l2_flush_en := memBlock.io.outer_l2_flush_en
+   io.power_down_en := memBlock.io.outer_power_down_en
+   io.cpu_critical_error := memBlock.io.outer_cpu_critical_error
++  io.msiAck := memBlock.io.outer_msi_ack
+   io.beu_errors.icache <> memBlock.io.outer_beu_errors_icache
+   io.beu_errors.dcache <> memBlock.io.error.bits.toL1BusErrorUnitInfo(memBlock.io.error.valid)
+   io.beu_errors.l2 <> DontCare
+diff --git a/src/main/scala/xiangshan/XSTile.scala b/src/main/scala/xiangshan/XSTile.scala
+index e322c24a763..1829a42e578 100644
+--- a/src/main/scala/xiangshan/XSTile.scala
++++ b/src/main/scala/xiangshan/XSTile.scala
+@@ -24,7 +24,6 @@ import freechips.rocketchip.interrupts._
+ import freechips.rocketchip.tile.{BusErrorUnit, BusErrorUnitParams, BusErrors}
+ import freechips.rocketchip.tilelink._
+ import freechips.rocketchip.amba.axi4._
+-import device.MsiInfoBundle
+ import system.HasSoCParameter
+ import top.{ArgParser, BusPerfMonitor, Generator}
+ import utility.{ChiselDB, Constantin, DFTResetSignals, DelayN, FileRegisters, IntBuffer, ResetGen, TLClientsMerger, TLEdgeBuffer, TLLogger}
+@@ -102,7 +101,8 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+   class XSTileImp(wrapper: LazyModule) extends LazyModuleImp(wrapper) {
+     val io = IO(new Bundle {
+       val hartId = Input(UInt(hartIdLen.W))
+-      val msiInfo = Input(ValidIO(new MsiInfoBundle))
++      val msiInfo = Input(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W)))
++      val msiAck = Output(Bool())
+       val reset_vector = Input(UInt(PAddrBits.W))
+       val cpu_halt = Output(Bool())
+       val cpu_crtical_error = Output(Bool())
+@@ -143,6 +143,8 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+     io.cpu_halt := l2top.module.io.cpu_halt.toTile
+     l2top.module.io.cpu_critical_error.fromCore := core.module.io.cpu_critical_error
+     io.cpu_crtical_error := l2top.module.io.cpu_critical_error.toTile
++    l2top.module.io.msiAck.fromCore := core.module.io.msiAck
++    io.msiAck := l2top.module.io.msiAck.toTile
+ 
+     l2top.module.io.hartIsInReset.resetInFrontend := core.module.io.resetInFrontend
+     io.hartIsInReset := l2top.module.io.hartIsInReset.toTile
+diff --git a/src/main/scala/xiangshan/XSTileWrap.scala b/src/main/scala/xiangshan/XSTileWrap.scala
+index 00ac842bc45..fdb76440554 100644
+--- a/src/main/scala/xiangshan/XSTileWrap.scala
++++ b/src/main/scala/xiangshan/XSTileWrap.scala
+@@ -24,7 +24,7 @@ import freechips.rocketchip.interrupts._
+ import freechips.rocketchip.tilelink._
+ import freechips.rocketchip.util._
+ import system.HasSoCParameter
+-import device.{IMSICAsync, MsiInfoBundle}
++import device.IMSICAsync
+ import coupledL2.tl2chi.{AsyncPortIO, CHIAsyncBridgeSource, PortIO}
+ import utility.sram.{SramBroadcastBundle, SramMbistBundle}
+ import utility.{DFTResetSignals, IntBuffer, ResetGen}
+@@ -70,7 +70,8 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+     val soc_reset = IO(Input(AsyncReset()))
+     val io = IO(new Bundle {
+       val hartId = Input(UInt(hartIdLen.W))
+-      val msiInfo = Input(ValidIO(new MsiInfoBundle))
++      val msiInfo = Input(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W)))
++      val msiAck = Output(Bool())
+       val reset_vector = Input(UInt(PAddrBits.W))
+       val cpu_halt = Output(Bool())
+       val cpu_crtical_error = Output(Bool())
+@@ -120,6 +121,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+     tile.module.io.sramTest := io.sramTest
+     io.cpu_halt := tile.module.io.cpu_halt
+     io.cpu_crtical_error := tile.module.io.cpu_crtical_error
++    io.msiAck := tile.module.io.msiAck
+     io.hartIsInReset := tile.module.io.hartIsInReset
+     io.traceCoreInterface <> tile.module.io.traceCoreInterface
+     io.debugTopDown <> tile.module.io.debugTopDown
+diff --git a/src/main/scala/xiangshan/backend/Backend.scala b/src/main/scala/xiangshan/backend/Backend.scala
+index d301285fded..8b7e5af3369 100644
+--- a/src/main/scala/xiangshan/backend/Backend.scala
++++ b/src/main/scala/xiangshan/backend/Backend.scala
+@@ -26,7 +26,6 @@ package xiangshan.backend
+ import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+-import device.MsiInfoBundle
+ import difftest._
+ import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+ import system.HasSoCParameter
+@@ -951,6 +950,7 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+   backendCriticalError := criticalErrors.map(_._2).reduce(_ || _)
+ 
+   io.toTop.cpuCriticalError := csrio.criticalErrorState
++  io.toTop.msiAck := csrio.msiAck
+ }
+ 
+ class BackendMemIO(implicit p: Parameters, params: BackendParams) extends XSBundle {
+@@ -1046,10 +1046,10 @@ class BackendMemIO(implicit p: Parameters, params: BackendParams) extends XSBund
+   })
+ }
+ 
+-class TopToBackendBundle(implicit p: Parameters) extends XSBundle {
++class TopToBackendBundle(implicit p: Parameters) extends XSBundle with HasSoCParameter {
+   val hartId            = Output(UInt(hartIdLen.W))
+   val externalInterrupt = Output(new ExternalInterruptIO)
+-  val msiInfo           = Output(ValidIO(new MsiInfoBundle))
++  val msiInfo           = Output(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W)))
+   val clintTime         = Output(ValidIO(UInt(64.W)))
+   val l2FlushDone       = Output(Bool())
+ }
+@@ -1057,6 +1057,7 @@ class TopToBackendBundle(implicit p: Parameters) extends XSBundle {
+ class BackendToTopBundle extends Bundle {
+   val cpuHalted = Output(Bool())
+   val cpuCriticalError = Output(Bool())
++  val msiAck = Output(Bool())
+ }
+ 
+ class BackendIO(implicit p: Parameters, params: BackendParams) extends XSBundle with HasSoCParameter {
+diff --git a/src/main/scala/xiangshan/backend/fu/CSR.scala b/src/main/scala/xiangshan/backend/fu/CSR.scala
+index f502762e225..d977efea94a 100644
+--- a/src/main/scala/xiangshan/backend/fu/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/CSR.scala
+@@ -118,6 +118,8 @@ class CSRFileIO(implicit p: Parameters) extends XSBundle {
+   val customCtrl = Output(new CustomCSRCtrlIO)
+   // instruction fetch address translation type
+   val instrAddrTransType = Output(new AddrTransType)
++  // ack for axireg from imsic. which indicates imsic can work actively
++  val msiAck = Output(Bool())
+ }
+ 
+ class VtypeStruct(implicit p: Parameters) extends XSBundle {
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
+index fe3ed11f970..a5ee3f3319b 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
+@@ -3,10 +3,13 @@ package xiangshan.backend.fu.NewCSR
+ import chisel3._
+ import chisel3.util._
+ import freechips.rocketchip.rocket.CSRs
++import org.chipsalliance.cde.config.Parameters
+ import CSRConfig._
++import system.HasSoCParameter
+ import xiangshan.backend.fu.NewCSR.CSRBundles._
+ import xiangshan.backend.fu.NewCSR.CSRConfig._
+ import xiangshan.backend.fu.NewCSR.CSRDefines.{CSRROField => RO, CSRRWField => RW, _}
++import xiangshan.XSBundle
+ 
+ import scala.collection.immutable.SeqMap
+ 
+@@ -278,16 +281,14 @@ class SIprio2Bundle extends CSRBundle {
+   val Prio15    = RW(63, 56).withReset(0.U)
+ }
+ 
+-class CSRToAIABundle extends Bundle {
+-  private final val AddrWidth = 12
+-
++class CSRToAIABundle(implicit p: Parameters) extends XSBundle with HasSoCParameter {
+   val addr = ValidIO(new Bundle {
+-    val addr = UInt(AddrWidth.W)
++    val addr = UInt(soc.IMSICParams.iselectWidth.W)
+     val v = VirtMode()
+     val prvm = PrivMode()
+   })
+ 
+-  val vgein = UInt(VGEINWidth.W)
++  val vgein = UInt(soc.IMSICParams.vgeinWidth.W)
+ 
+   val wdata = ValidIO(new Bundle {
+     val op = UInt(2.W)
+@@ -299,15 +300,14 @@ class CSRToAIABundle extends Bundle {
+   val vsClaim = Bool()
+ }
+ 
+-class AIAToCSRBundle extends Bundle {
+-  private val NumVSIRFiles = 5
++class AIAToCSRBundle(implicit p: Parameters) extends XSBundle with HasSoCParameter {
+   val rdata = ValidIO(new Bundle {
+     val data = UInt(XLEN.W)
+     val illegal = Bool()
+   })
+   val meip    = Bool()
+   val seip    = Bool()
+-  val vseip   = UInt(NumVSIRFiles.W)
++  val vseip   = UInt(soc.IMSICParams.geilen.W)
+   val mtopei  = new TopEIBundle
+   val stopei  = new TopEIBundle
+   val vstopei = new TopEIBundle
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 79637b34cf7..3d3250aea8d 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -36,9 +36,6 @@ object CSRConfig {
+ 
+   final val VMIDMAX = 14 // the max value of VMIDLEN defined by spec
+ 
+-  // the width of VGEIN
+-  final val VGEINWidth = 6
+-
+   final val VaddrMaxWidth = 48 + 2 // support Sv39/Sv48/Sv39x4/Sv48x4
+ 
+   final val InstWidth = 32
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index f92782acee6..eb14d1bda89 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -20,7 +20,7 @@ import xiangshan.frontend.FtqPtr
+ import CSRConst._
+ 
+ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+-  with HasCircularQueuePtrHelper with HasCriticalErrors
++  with HasCircularQueuePtrHelper with HasCriticalErrors with HasSoCParameter
+ {
+   val csrIn = io.csrio.get
+   val csrOut = io.csrio.get
+@@ -91,7 +91,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+ 
+   private val waddrReg = RegEnable(addr, 0.U(12.W), io.in.fire)
+   private val wdataReg = RegEnable(wdata, 0.U(64.W), io.in.fire)
+-  
++
+   private val robIdxReg = RegEnable(io.in.bits.ctrl.robIdx, io.in.fire)
+   private val thisRobIdx = Wire(new RobPtr)
+   when (io.in.valid) {
+@@ -201,30 +201,32 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   trapTvalMod.io.fromCtrlBlock.flush := io.flush
+   trapTvalMod.io.fromCtrlBlock.robDeqPtr := io.csrio.get.robDeqPtr
+ 
+-  private val imsic = Module(new IMSIC(NumVSIRFiles = 5, NumHart = 1, XLEN = 64, NumIRSrc = 256))
+-  imsic.i.hartId := io.csrin.get.hartId
+-  imsic.i.msiInfo := io.csrin.get.msiInfo
+-  imsic.i.csr.addr.valid := csrMod.toAIA.addr.valid
+-  imsic.i.csr.addr.bits.addr := csrMod.toAIA.addr.bits.addr
+-  imsic.i.csr.addr.bits.prvm := csrMod.toAIA.addr.bits.prvm.asUInt
+-  imsic.i.csr.addr.bits.v := csrMod.toAIA.addr.bits.v.asUInt
+-  imsic.i.csr.vgein := csrMod.toAIA.vgein
+-  imsic.i.csr.mClaim := csrMod.toAIA.mClaim
+-  imsic.i.csr.sClaim := csrMod.toAIA.sClaim
+-  imsic.i.csr.vsClaim := csrMod.toAIA.vsClaim
+-  imsic.i.csr.wdata.valid := csrMod.toAIA.wdata.valid
+-  imsic.i.csr.wdata.bits.op := csrMod.toAIA.wdata.bits.op
+-  imsic.i.csr.wdata.bits.data := csrMod.toAIA.wdata.bits.data
+-
+-  csrMod.fromAIA.rdata.valid        := imsic.o.csr.rdata.valid
+-  csrMod.fromAIA.rdata.bits.data    := imsic.o.csr.rdata.bits.rdata
+-  csrMod.fromAIA.rdata.bits.illegal := imsic.o.csr.rdata.bits.illegal
+-  csrMod.fromAIA.meip    := imsic.o.meip
+-  csrMod.fromAIA.seip    := imsic.o.seip
+-  csrMod.fromAIA.vseip   := imsic.o.vseip
+-  csrMod.fromAIA.mtopei  := imsic.o.mtopei
+-  csrMod.fromAIA.stopei  := imsic.o.stopei
+-  csrMod.fromAIA.vstopei := imsic.o.vstopei
++  val imsic = Module(new aia.IMSIC(soc.IMSICParams))
++  imsic.fromCSR.addr.valid := csrMod.toAIA.addr.valid
++  imsic.fromCSR.addr.bits.addr := csrMod.toAIA.addr.bits.addr
++  imsic.fromCSR.addr.bits.virt := csrMod.toAIA.addr.bits.v.asUInt.asBool
++  imsic.fromCSR.addr.bits.priv := aia.PrivType(csrMod.toAIA.addr.bits.prvm.asUInt)
++  imsic.fromCSR.vgein := csrMod.toAIA.vgein
++  imsic.fromCSR.wdata.valid := csrMod.toAIA.wdata.valid
++  imsic.fromCSR.wdata.bits.op := aia.OpType(csrMod.toAIA.wdata.bits.op)
++  imsic.fromCSR.wdata.bits.data := csrMod.toAIA.wdata.bits.data
++  imsic.fromCSR.claims(0) := csrMod.toAIA.mClaim
++  imsic.fromCSR.claims(1) := csrMod.toAIA.sClaim
++  imsic.fromCSR.claims(2) := csrMod.toAIA.vsClaim
++
++  csrMod.fromAIA.rdata.valid        := imsic.toCSR.rdata.valid
++  csrMod.fromAIA.rdata.bits.data    := imsic.toCSR.rdata.bits
++  csrMod.fromAIA.rdata.bits.illegal := imsic.toCSR.illegal
++  csrMod.fromAIA.meip    := imsic.toCSR.pendings(0)
++  csrMod.fromAIA.seip    := imsic.toCSR.pendings(1)
++  csrMod.fromAIA.vseip   := imsic.toCSR.pendings(soc.IMSICParams.intFilesNum - 1, 2)
++  csrMod.fromAIA.mtopei  := imsic.toCSR.topeis(0)
++  csrMod.fromAIA.stopei  := imsic.toCSR.topeis(1)
++  csrMod.fromAIA.vstopei := imsic.toCSR.topeis(2)
++
++  imsic.msiio.vld_req := io.csrin.get.msiInfo.valid
++  imsic.msiio.data := io.csrin.get.msiInfo.bits
++  io.csrio.get.msiAck := imsic.msiio.vld_ack
+ 
+   private val exceptionVec = WireInit(0.U.asTypeOf(ExceptionVec())) // Todo:
+ 
+@@ -371,9 +373,9 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   csrToDecode := csrMod.io.toDecode
+ }
+ 
+-class CSRInput(implicit p: Parameters) extends XSBundle with HasSoCParameter{
++class CSRInput(implicit p: Parameters) extends XSBundle with HasSoCParameter {
+   val hartId = Input(UInt(8.W))
+-  val msiInfo = Input(ValidIO(new MsiInfoBundle))
++  val msiInfo = Input(ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W)))
+   val criticalErrorState = Input(Bool())
+   val clintTime = Input(ValidIO(UInt(64.W)))
+   val l2FlushDone = Input(Bool())
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 5f690426fb1..e6e3bb46e45 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -24,12 +24,11 @@ import freechips.rocketchip.diplomacy.{BundleBridgeSource, LazyModule, LazyModul
+ import freechips.rocketchip.interrupts.{IntSinkNode, IntSinkPortSimple}
+ import freechips.rocketchip.tile.HasFPUParameters
+ import freechips.rocketchip.tilelink._
+-import device.MsiInfoBundle
+ import utils._
+ import utility._
+ import utility.mbist.{MbistInterface, MbistPipeline}
+ import utility.sram.{SramMbistBundle, SramBroadcastBundle, SramHelper}
+-import system.SoCParamsKey
++import system.{HasSoCParameter, SoCParamsKey}
+ import xiangshan._
+ import xiangshan.ExceptionNO._
+ import xiangshan.frontend.HasInstrMMIOConst
+@@ -52,7 +51,8 @@ import xiangshan.mem.prefetch.{BasePrefecher, L1Prefetcher, SMSParams, SMSPrefet
+ import xiangshan.cache._
+ import xiangshan.cache.mmu._
+ import coupledL2.PrefetchRecv
+-import system.HasSoCParameter
++import utility.mbist.{MbistInterface, MbistPipeline}
++import utility.sram.{SramBroadcastBundle, SramHelper}
+ 
+ trait HasMemBlockParameters extends HasXSParameter {
+   // number of memory units
+@@ -294,6 +294,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   with HasXSParameter
+   with HasFPUParameters
+   with HasPerfEvents
++  with HasSoCParameter
+   with HasL1PrefetchSourceParameter
+   with HasCircularQueuePtrHelper
+   with HasMemBlockParameters
+@@ -332,7 +333,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+ 
+     // All the signals from/to frontend/backend to/from bus will go through MemBlock
+     val fromTopToBackend = Input(new Bundle {
+-      val msiInfo   = ValidIO(new MsiInfoBundle)
++      val msiInfo   = ValidIO(UInt(soc.IMSICParams.MSI_INFO_WIDTH.W))
+       val clintTime = ValidIO(UInt(64.W))
+     })
+     val inner_hartId = Output(UInt(hartIdLen.W))
+@@ -342,6 +343,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     val outer_l2_flush_en = Output(Bool())
+     val outer_power_down_en = Output(Bool())
+     val outer_cpu_critical_error = Output(Bool())
++    val outer_msi_ack = Output(Bool())
+     val inner_beu_errors_icache = Input(new L1BusErrorUnitInfo)
+     val outer_beu_errors_icache = Output(new L1BusErrorUnitInfo)
+     val inner_hc_perfEvents = Output(Vec(numPCntHc * coreParams.L2NBanks + 1, new PerfEvent))
+@@ -1976,6 +1978,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   io.outer_l2_flush_en := io.ooo_to_mem.csrCtrl.flush_l2_enable
+   io.outer_power_down_en := io.ooo_to_mem.csrCtrl.power_down_enable
+   io.outer_cpu_critical_error := io.ooo_to_mem.backendToTopBypass.cpuCriticalError
++  io.outer_msi_ack := io.ooo_to_mem.backendToTopBypass.msiAck
+   io.outer_beu_errors_icache := RegNext(io.inner_beu_errors_icache)
+   io.inner_hc_perfEvents <> RegNext(io.outer_hc_perfEvents)
+```

@@ -1,0 +1,14 @@
+    # Lower-priority allow-all plus a lower-numbered TOR entry covering only
+    # the high 4-byte half of the 8-byte data PTE.
+    la      t0, l0_data_pt
+    li      t1, DATA_VA
+    srli    t1, t1, 12
+    andi    t1, t1, 0x1ff
+    slli    t1, t1, 3
+    add     t0, t0, t1
+    addi    t0, t0, PARTIAL_OFFSET
+    srli    t1, t0, 2
+    csrw    pmpaddr0, t1
+    addi    t0, t0, 4
+    srli    t1, t0, 2
+    csrw    pmpaddr1, t1

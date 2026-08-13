@@ -1,0 +1,15 @@
+csr_disable_seen: true
+ras_enable_zero_seen: true
+disabled_ras_prediction_to_expected_ret_site: true
+expected_ret_site_ftq_fetch_after_prediction: true
+expected_gadget_ftq_fetch_after_disable: true
+expected_gadget_decode_after_disable: true
+expected_gadget_dispatch_after_disable: true
+expected_probe_load_after_prediction: true
+expected_dcache_probe_request_after_prediction: true
+selected_probe_faster_than_other: true
+icache_ftq_sidechannel_success: true
+dcache_sidechannel_success: true
+timing_sidechannel_success: true
+unexpected_ret_site_ftq_fetch_after_prediction: false
+success: true

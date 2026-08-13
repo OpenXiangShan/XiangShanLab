@@ -1,0 +1,107 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
+index d1742d2ccf8..5d42a5113ff 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/InterruptFilter.scala
+@@ -44,15 +44,8 @@ class InterruptFilter extends Module {
+    * Sort by implemented interrupt default priority
+    * index low, priority high
+    */
+-  val mipFields = mip.asTypeOf(new MipBundle)
+-  val mieFields = mie.asTypeOf(new MieBundle)
+-  val sipFields = sip.asTypeOf(new SipBundle)
+-  val sieFields = sie.asTypeOf(new SieBundle)
+-  val hipFields = hip.asTypeOf(new HipBundle)
+-  val hieFields = hie.asTypeOf(new HieBundle)
+-  val vsipFields = vsip.asTypeOf(new VSipBundle)
+-  val vsieFields = vsie.asTypeOf(new VSieBundle)
+-  val hidelegFields = hideleg.asTypeOf(new HidelegBundle)
++  val vsipFields = Wire(new VSipBundle); vsipFields := vsip
++  val vsieFields = Wire(new VSieBundle); vsieFields := vsie
+ 
+   private val hsip = hip.asUInt | sip.asUInt
+   private val hsie = hie.asUInt | sie.asUInt
+@@ -182,9 +175,9 @@ class InterruptFilter extends Module {
+   )
+ 
+   // refactor this code & has some problem
+-  val Candidate1: Bool = vsipFields.VSEIP.asBool && vsieFields.VSEIE.asBool && (hstatus.VGEIN.asUInt =/= 0.U) && (vstopei.asUInt =/= 0.U)
+-  val Candidate2: Bool = vsipFields.VSEIP.asBool && vsieFields.VSEIE.asBool && (hstatus.VGEIN.asUInt === 0.U) && (hvictl.IID.asUInt === 9.U) && (hvictl.IPRIO.asUInt =/= 0.U)
+-  val Candidate3: Bool = vsipFields.VSEIP.asBool && vsieFields.VSEIE.asBool && !Candidate1 && !Candidate2
++  val Candidate1: Bool = vsip.SEIP && vsie.SEIE && (hstatus.VGEIN.asUInt =/= 0.U) && (vstopei.asUInt =/= 0.U)
++  val Candidate2: Bool = vsip.SEIP && vsie.SEIE && (hstatus.VGEIN.asUInt === 0.U) && (hvictl.IID.asUInt === 9.U) && (hvictl.IPRIO.asUInt =/= 0.U)
++  val Candidate3: Bool = vsip.SEIP && vsie.SEIE && !Candidate1 && !Candidate2
+   val Candidate4: Bool = (hvictl.VTI.asUInt === 0.U) && (vsie & vsip & "hfffffffffffffdff".U).orR
+   val Candidate5: Bool = (hvictl.VTI.asUInt === 1.U) && (hvictl.IID.asUInt =/= 9.U)
+   val CandidateNoValid: Bool = !Candidate1 && !Candidate2 && !Candidate3 && !Candidate4 && !Candidate5
+@@ -334,16 +327,16 @@ class InterruptFilterIO extends Bundle {
+     val mstatusMIE  = Bool()
+     val sstatusSIE  = Bool()
+     val vsstatusSIE = Bool()
+-    val mip = UInt(64.W)
+-    val mie = UInt(64.W)
+-    val mideleg = UInt(64.W)
+-    val sip = UInt(64.W)
+-    val sie = UInt(64.W)
+-    val hip = UInt(64.W)
+-    val hie = UInt(64.W)
+-    val hideleg = UInt(64.W)
+-    val vsip = UInt(64.W)
+-    val vsie = UInt(64.W)
++    val mip = new MipBundle
++    val mie = new MieBundle
++    val mideleg = new MidelegBundle
++    val sip = new SipBundle
++    val sie = new SieBundle
++    val hip = new HipBundle
++    val hie = new HieBundle
++    val hideleg = new HidelegBundle
++    val vsip = new VSipBundle
++    val vsie = new VSieBundle
+     val hvictl = new HvictlBundle
+     val hstatus = new HstatusBundle
+     val mtopei = new TopEIBundle
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 9f5a7beaf0d..bf4e1886293 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -290,23 +290,23 @@ class NewCSR(implicit val p: Parameters) extends Module
+   intrMod.io.in.mstatusMIE := mstatus.regOut.MIE.asBool
+   intrMod.io.in.sstatusSIE := mstatus.regOut.SIE.asBool
+   intrMod.io.in.vsstatusSIE := vsstatus.regOut.SIE.asBool
+-  intrMod.io.in.mip := mip.rdata.asUInt
+-  intrMod.io.in.mie := mie.rdata.asUInt
+-  intrMod.io.in.mideleg := mideleg.rdata.asUInt
+-  intrMod.io.in.sip := sip.rdata.asUInt
+-  intrMod.io.in.sie := sie.rdata.asUInt
+-  intrMod.io.in.hip := hip.rdata.asUInt
+-  intrMod.io.in.hie := hie.rdata.asUInt
+-  intrMod.io.in.hideleg := hideleg.rdata.asUInt
+-  intrMod.io.in.vsip := vsip.rdata.asUInt
+-  intrMod.io.in.vsie := vsie.rdata.asUInt
+-  intrMod.io.in.hvictl := hvictl.rdata.asUInt
+-  intrMod.io.in.hstatus := hstatus.rdata.asUInt
+-  intrMod.io.in.mtopei := mtopei.rdata.asUInt
+-  intrMod.io.in.stopei := stopei.rdata.asUInt
+-  intrMod.io.in.vstopei := vstopei.rdata.asUInt
+-  intrMod.io.in.hviprio1 := hviprio1.rdata.asUInt
+-  intrMod.io.in.hviprio2 := hviprio2.rdata.asUInt
++  intrMod.io.in.mip := mip.regOut
++  intrMod.io.in.mie := mie.regOut
++  intrMod.io.in.mideleg := mideleg.regOut
++  intrMod.io.in.sip := sip.regOut
++  intrMod.io.in.sie := sie.regOut
++  intrMod.io.in.hip := hip.regOut
++  intrMod.io.in.hie := hie.regOut
++  intrMod.io.in.hideleg := hideleg.regOut
++  intrMod.io.in.vsip := vsip.regOut
++  intrMod.io.in.vsie := vsie.regOut
++  intrMod.io.in.hvictl := hvictl.regOut
++  intrMod.io.in.hstatus := hstatus.regOut
++  intrMod.io.in.mtopei := mtopei.regOut
++  intrMod.io.in.stopei := stopei.regOut
++  intrMod.io.in.vstopei := vstopei.regOut
++  intrMod.io.in.hviprio1 := hviprio1.regOut
++  intrMod.io.in.hviprio2 := hviprio2.regOut
+   intrMod.io.in.miprios := Cat(miregiprios.map(_.rdata).reverse)
+   intrMod.io.in.hsiprios := Cat(siregiprios.map(_.rdata).reverse)
+   intrMod.io.in.mnstatusNMIE := mnstatus.regOut.NMIE.asBool

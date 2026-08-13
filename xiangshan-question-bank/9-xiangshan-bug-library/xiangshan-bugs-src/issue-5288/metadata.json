@@ -1,0 +1,23 @@
+{
+  "number": 5288,
+  "title": "Unexpected interaction between vs1r.v and fence.i instructions",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5288",
+  "state": "closed",
+  "labels": [
+    "type: bug/invalid",
+    "module: unknown"
+  ],
+  "author": "youzi27",
+  "created_at": "2025-12-01T06:00:57Z",
+  "updated_at": "2025-12-01T11:08:40Z",
+  "source_files": [
+    "issue-5288/source/seeds_2102_.zip",
+    "issue-5288/source/program-01.txt",
+    "issue-5288/source/program-02.txt",
+    "issue-5288/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-5288/source/seeds_2102_.zip"
+  ],
+  "has_comments": true
+}

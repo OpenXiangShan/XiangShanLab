@@ -1,0 +1,8 @@
+   [src/cpu/cpu-exec.c:726,fetch_decode] (U) 0x00000000800016cc:   02 90           c_ebreak  
+   [src/isa/riscv64/system/intr.c:73,raise_intr] raise intr cause NO: 3, epc: 800016cc
+
+   ...
+   [src/cpu/cpu-exec.c:726,fetch_decode] (S) 0x000000008000011a:   73 00 20 10     sret      
+   [src/cpu/cpu-exec.c:490,execute] end_of_loop: prev pc = 0x800016d0, pc = 0x800016d0
+   ...
+   [src/cpu/cpu-exec.c:726,fetch_decode] (U) 0x00000000800016d0:   00 00           inv

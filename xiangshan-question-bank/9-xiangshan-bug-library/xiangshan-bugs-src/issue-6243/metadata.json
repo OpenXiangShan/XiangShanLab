@@ -1,0 +1,34 @@
+{
+  "number": 6243,
+  "title": "chore: cherry-pick v2 fixes to v3 (260714)",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/6243",
+  "state": "closed",
+  "labels": [
+    "note: do not squash",
+    "module: frontend",
+    "module: backend",
+    "module: memory",
+    "module: tool",
+    "module: other",
+    "module: top",
+    "note: submodule bump"
+  ],
+  "author": "wissygh",
+  "created_at": "2026-07-16T01:40:28Z",
+  "updated_at": "2026-07-17T10:02:07Z",
+  "submitted_at": "2026-07-16",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6243/commit-log.md"
+  ],
+  "bug_categories": [
+    "backend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

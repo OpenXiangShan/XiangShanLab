@@ -1,0 +1,25 @@
+{
+  "number": 6227,
+  "title": "Bare-mode trap zero-extends (truncates) trap-address CSRs (mepc/mtval/sepc/stval) in genTrapVA on kunminghu-v3 (refiled)",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6227",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "wndmll643",
+  "created_at": "2026-07-12T11:09:54Z",
+  "updated_at": "2026-08-03T07:52:57Z",
+  "source_files": [
+    "issue-6227/source/xs_difftest_capture_id_6_374.log",
+    "issue-6227/source/xs_workload_trap_highaddr.elf.zip",
+    "issue-6227/source/program-01.txt",
+    "issue-6227/source/program-02.txt",
+    "issue-6227/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-6227/source/xs_difftest_capture_id_6_374.log",
+    "issue-6227/source/xs_workload_trap_highaddr.elf.zip"
+  ],
+  "has_comments": true
+}

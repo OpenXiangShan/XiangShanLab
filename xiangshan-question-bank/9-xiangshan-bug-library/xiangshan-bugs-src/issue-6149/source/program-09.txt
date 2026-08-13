@@ -1,0 +1,6 @@
+SECRET_BIT=0 PREFIX=ras_enable_secret0 ./run_secret_fetch.sh
+SECRET_BIT=1 PREFIX=ras_enable_secret1 ./run_secret_fetch.sh
+
+python3 ./summarize_pair.py \
+  --secret0 ras_enable_secret0_8000_15000.monitor.json \
+  --secret1 ras_enable_secret1_8000_15000.monitor.json

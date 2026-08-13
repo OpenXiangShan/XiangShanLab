@@ -1,0 +1,4 @@
+val tselect1H = UIntToOH(tselect.asUInt, TriggerNum).asBools
+val chainVec = mcontrol6WireVec.map(_.CHAIN.asBool)
+val newTriggerChainVec = tselect1H.zip(chainVec).map{case(a, b) => a | b}
+val newTriggerChainIsLegal = TriggerUtil.TriggerCheckChainLegal(newTriggerChainVec, TriggerChainMaxLength)

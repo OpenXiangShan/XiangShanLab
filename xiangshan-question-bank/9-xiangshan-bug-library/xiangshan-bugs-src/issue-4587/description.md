@@ -1,0 +1,1 @@
+In the previous design, `s2_paddr` was used whenever virtualization was enabled (`s2xlate =/= noS2xlate`). This was incorrect — we should use `s2_paddr` only when `onlyStage2` or `allStage` is active, and use `s1_paddr` when in `onlyStage1` or `noS2xlate` mode. This commit fixes that bug.

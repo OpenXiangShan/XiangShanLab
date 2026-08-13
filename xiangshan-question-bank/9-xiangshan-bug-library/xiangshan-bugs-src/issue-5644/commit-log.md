@@ -1,0 +1,30 @@
+# Commit Log
+- Issue: #5644
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5644
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5644
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5644
+- Changed files: 1
+- Additions: 1
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/MMUConst.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUConst.scala b/src/main/scala/xiangshan/cache/mmu/MMUConst.scala
+index 68c04d7bd88..ddd7f6f3754 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUConst.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUConst.scala
+@@ -321,7 +321,7 @@ trait HasPtwConst extends HasTlbConst with MemoryOpConstants{
+ 
+   def MakeGPAddr(ppn: UInt, off: UInt) = {
+     require(off.getWidth == 9 || off.getWidth == 11)
+-    (Cat(ppn, 0.U(offLen.W)) + Cat(off, 0.U(log2Up(XLEN / 8).W)))(GPAddrBits - 1, 0)
++    (Cat(ppn, 0.U(offLen.W)) | Cat(off, 0.U(log2Up(XLEN / 8).W)))(GPAddrBits - 1, 0)
+   }
+ 
+   def getVpnn(vpn: UInt, idx: Int): UInt = {
+```

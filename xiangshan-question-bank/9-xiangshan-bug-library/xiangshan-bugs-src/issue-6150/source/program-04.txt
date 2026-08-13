@@ -1,0 +1,15 @@
+SECRET_VALUE=0
+  illegal DRET writeback time = 17132
+  stale redirect target       = 0x80000400
+  selected-target FTQ redirect = 17136
+  selected-target fetch        = 17142
+  selected-target ICache refill = 17146
+  unselected target 0x80000800 fetch/refill count in oracle window = 0
+
+SECRET_VALUE=1
+  illegal DRET writeback time = 17120
+  stale redirect target       = 0x80000800
+  selected-target FTQ redirect = 17124
+  selected-target fetch        = 17130
+  selected-target ICache refill = 17134
+  unselected target 0x80000400 fetch/refill count in oracle window = 0

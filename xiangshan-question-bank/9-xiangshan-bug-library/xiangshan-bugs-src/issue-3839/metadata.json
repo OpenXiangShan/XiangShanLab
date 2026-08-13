@@ -1,0 +1,18 @@
+{
+  "number": 3839,
+  "title": "When the fs field in the mstatus register is 0, executing instructions such as flh will not cause an illegal instruction exception",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/3839",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported"
+  ],
+  "author": "fly-1011",
+  "created_at": "2024-11-06T08:53:22Z",
+  "updated_at": "2024-11-08T08:01:07Z",
+  "source_files": [
+    "issue-3839/source/program-01.txt",
+    "issue-3839/source/program-02.txt"
+  ],
+  "archive_files": [],
+  "has_comments": true
+}

@@ -1,0 +1,4 @@
+private val rwSireg_EX_VI = privState.isVirtual && (
+  Iselect.isInAIA(vsiselect) ||
+  Iselect.isInImsic(vsiselect) && !hstateen0.IMSIC.asBool
+) && addr === CSRs.sireg.U

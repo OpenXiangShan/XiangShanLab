@@ -1,0 +1,657 @@
+[404] 0x339 CSR.perfEvents_22: Reg[UInt<64>]
+[404] 0x33a CSR.perfEvents_23: Reg[UInt<64>]
+[404] 0x33b CSR.perfEvents_24: Reg[UInt<64>]
+[404] 0x33c CSR.perfEvents_25: Reg[UInt<64>]
+[404] 0x33d CSR.perfEvents_26: Reg[UInt<64>]
+[404] 0x33e CSR.perfEvents_27: Reg[UInt<64>]
+[404] 0x33f CSR.perfEvents_28: Reg[UInt<64>]
+[404] 0x340 CSR.mscratch: Reg[UInt<64>]                                                    
+[404] 0x341 CSR.mepc: Reg[UInt<64>]
+[404] 0x342 CSR.mcause: Reg[UInt<64>]
+[404] 0x343 CSR.mtval: Reg[UInt<64>]
+[404] 0x344 CSR.basicPrivMapping_38_2_1: OpResult[UInt<12>]
+[404] 0x3a0 CSR.pmpMapping_cfgMerged[0]: Reg[UInt<64>]
+[404] 0x3a2 CSR.pmpMapping_cfgMerged[1]: Reg[UInt<64>]
+[404] 0x3b0 CSR.pmpMapping_addr[0]: Reg[UInt<34>]
+[404] 0x3b1 CSR.pmpMapping_addr[1]: Reg[UInt<34>]
+[404] 0x3b2 CSR.pmpMapping_addr[2]: Reg[UInt<34>]
+[404] 0x3b3 CSR.pmpMapping_addr[3]: Reg[UInt<34>]
+[404] 0x3b4 CSR.pmpMapping_addr[4]: Reg[UInt<34>]
+[404] 0x3b5 CSR.pmpMapping_addr[5]: Reg[UInt<34>]
+[404] 0x3b6 CSR.pmpMapping_addr[6]: Reg[UInt<34>]
+[404] 0x3b7 CSR.pmpMapping_addr[7]: Reg[UInt<34>]                                          
+[404] 0x3b8 CSR.pmpMapping_addr[8]: Reg[UInt<34>]
+[404] 0x3b9 CSR.pmpMapping_addr[9]: Reg[UInt<34>]
+[404] 0x3ba CSR.pmpMapping_addr[10]: Reg[UInt<34>]
+[404] 0x3bb CSR.pmpMapping_addr[11]: Reg[UInt<34>]
+[404] 0x3bc CSR.pmpMapping_addr[12]: Reg[UInt<34>]
+[404] 0x3bd CSR.pmpMapping_addr[13]: Reg[UInt<34>]
+[404] 0x3be CSR.pmpMapping_addr[14]: Reg[UInt<34>]
+[404] 0x3bf CSR.pmpMapping_addr[15]: Reg[UInt<34>]
+[404] 0x5c0 CSR.sbpctl: Reg[UInt<64>]
+[404] 0x5c1 CSR.spfctl: Reg[UInt<64>]
+[404] 0x5c2 CSR.slvpredctl: Reg[UInt<64>]
+[404] 0x5c3 CSR.smblockctl: Reg[UInt<64>]
+[404] 0x5c4 CSR.srnctl: Reg[UInt<64>]
+[404] 0x5c5 CSR.cacheopRegs_0_2: Reg[UInt<64>]
+[404] 0x5c6 CSR.cacheopRegs_1_2: Reg[UInt<64>]
+[404] 0x5c7 CSR.cacheopRegs_17_2: Reg[UInt<64>]
+[404] 0x5c8 CSR.cacheopRegs_2_2: Reg[UInt<64>]
+[404] 0x5c9 CSR.cacheopRegs_15_2: Reg[UInt<64>]
+[404] 0x5ca CSR.cacheopRegs_11_2: Reg[UInt<64>]
+[404] 0x5cb CSR.cacheopRegs_9_2: Reg[UInt<64>]
+[404] 0x5cc CSR.cacheopRegs_3_2: Reg[UInt<64>]
+[404] 0x5cd CSR.cacheopRegs_8_2: Reg[UInt<64>]                                             
+[404] 0x5ce CSR.cacheopRegs_20_2: Reg[UInt<64>]
+[404] 0x5cf CSR.cacheopRegs_13_2: Reg[UInt<64>]
+[404] 0x5d0 CSR.cacheopRegs_14_2: Reg[UInt<64>]
+[404] 0x5d1 CSR.cacheopRegs_19_2: Reg[UInt<64>]
+[404] 0x5d2 CSR.cacheopRegs_12_2: Reg[UInt<64>]
+[404] 0x5d3 CSR.cacheopRegs_10_2: Reg[UInt<64>]
+[404] 0x5d4 CSR.cacheopRegs_18_2: Reg[UInt<64>]
+[404] 0x5d5 CSR.cacheopRegs_16_2: Reg[UInt<64>]
+[404] 0x5d6 CSR.cacheopRegs_6_2: Reg[UInt<64>]
+[404] 0x5d7 CSR.cacheopRegs_5_2: Reg[UInt<64>]
+[404] 0x5d8 CSR.cacheopRegs_7_2: Reg[UInt<64>]
+[404] 0x5d9 CSR.cacheopRegs_4_2: Reg[UInt<64>]
+[404] 0x747 CSR.mseccfg: Reg[UInt<64>]
+[404] 0x7a0 CSR.tselectPhy: Reg[UInt<4>]
+[404] 0x7a1 CSR.tdata1RegVec[tselectPhy]: Reg[UInt<64>]
+[404] 0x7a2 CSR.tdata2RegVec[tselectPhy]: Reg[UInt<64>]
+[404] 0x7a4 CSR.tinfo: Reg[UInt<64>]
+[404] 0x7b0 CSR.dcsr: Reg[UInt<32>]                                                        
+[404] 0x7b1 CSR.dpc: Reg[UInt<64>]
+[404] 0x7b2 CSR.dscratch0: Reg[UInt<64>]                                                   
+[404] 0x7b3 CSR.dscratch1: Reg[UInt<64>]                                                   
+[404] 0x7c0 CSR.pmaMapping_cfgMerged[0]: Reg[UInt<64>]
+[404] 0x7c2 CSR.pmaMapping_cfgMerged[1]: Reg[UInt<64>]
+[404] 0x7c8 CSR.pmaMapping_addr[0]: Reg[UInt<34>]
+[404] 0x7c9 CSR.pmaMapping_addr[1]: Reg[UInt<34>]
+[404] 0x7ca CSR.pmaMapping_addr[2]: Reg[UInt<34>]
+[404] 0x7cb CSR.pmaMapping_addr[3]: Reg[UInt<34>]
+[404] 0x7cc CSR.pmaMapping_addr[4]: Reg[UInt<34>]
+[404] 0x7cd CSR.pmaMapping_addr[5]: Reg[UInt<34>]
+[404] 0x7ce CSR.pmaMapping_addr[6]: Reg[UInt<34>]
+[404] 0x7cf CSR.pmaMapping_addr[7]: Reg[UInt<34>]
+[404] 0x7d0 CSR.pmaMapping_addr[8]: Reg[UInt<34>]
+[404] 0x7d1 CSR.pmaMapping_addr[9]: Reg[UInt<34>]
+[404] 0x7d2 CSR.pmaMapping_addr[10]: Reg[UInt<34>]
+[404] 0x7d3 CSR.pmaMapping_addr[11]: Reg[UInt<34>]
+[404] 0x7d4 CSR.pmaMapping_addr[12]: Reg[UInt<34>]                                         
+[404] 0x7d5 CSR.pmaMapping_addr[13]: Reg[UInt<34>]
+[404] 0x7d6 CSR.pmaMapping_addr[14]: Reg[UInt<34>]
+[404] 0x7d7 CSR.pmaMapping_addr[15]: Reg[UInt<34>]
+[404] 0x9c0 CSR.sdsid: Reg[UInt<64>]
+[404] 0xb00 CSR.mcycle: Reg[UInt<64>]
+[404] 0xb02 CSR.minstret: Reg[UInt<64>]
+[404] 0xb03 CSR.perfCnts_0: Reg[UInt<64>]
+[404] 0xb04 CSR.perfCnts_1: Reg[UInt<64>]
+[404] 0xb05 CSR.perfCnts_2: Reg[UInt<64>]                                                  
+[404] 0xb06 CSR.perfCnts_3: Reg[UInt<64>]
+[404] 0xb07 CSR.perfCnts_4: Reg[UInt<64>]
+[404] 0xb08 CSR.perfCnts_5: Reg[UInt<64>]
+[404] 0xb09 CSR.perfCnts_6: Reg[UInt<64>]
+[404] 0xb0a CSR.perfCnts_7: Reg[UInt<64>]
+[404] 0xb0b CSR.perfCnts_8: Reg[UInt<64>]
+[404] 0xb0c CSR.perfCnts_9: Reg[UInt<64>]
+[404] 0xb0d CSR.perfCnts_10: Reg[UInt<64>]
+[404] 0xb0e CSR.perfCnts_11: Reg[UInt<64>]
+[404] 0xb0f CSR.perfCnts_12: Reg[UInt<64>]
+[404] 0xb10 CSR.perfCnts_13: Reg[UInt<64>]
+[404] 0xb11 CSR.perfCnts_14: Reg[UInt<64>]
+[404] 0xb12 CSR.perfCnts_15: Reg[UInt<64>]
+[404] 0xb13 CSR.perfCnts_16: Reg[UInt<64>]
+[404] 0xb14 CSR.perfCnts_17: Reg[UInt<64>]
+[404] 0xb15 CSR.perfCnts_18: Reg[UInt<64>]
+[404] 0xb16 CSR.perfCnts_19: Reg[UInt<64>]
+[404] 0xb17 CSR.perfCnts_20: Reg[UInt<64>]
+[404] 0xb18 CSR.perfCnts_21: Reg[UInt<64>]                                                 
+[404] 0xb19 CSR.perfCnts_22: Reg[UInt<64>]                                                 
+[404] 0xb1a CSR.perfCnts_23: Reg[UInt<64>]
+[404] 0xb1b CSR.perfCnts_24: Reg[UInt<64>]
+[404] 0xb1c CSR.perfCnts_25: Reg[UInt<64>]
+[404] 0xb1d CSR.perfCnts_26: Reg[UInt<64>]
+[404] 0xb1e CSR.perfCnts_27: Reg[UInt<64>]
+[404] 0xb1f CSR.perfCnts_28: Reg[UInt<64>]
+[404] 0xc00 CSR.mcycle: Reg[UInt<64>]
+[404] 0xc02 CSR.minstret: Reg[UInt<64>]                                                    
+[404] 0xc03 CSR.perfCnts_0: Reg[UInt<64>]
+[404] 0xc04 CSR.perfCnts_1: Reg[UInt<64>]
+[404] 0xc05 CSR.perfCnts_2: Reg[UInt<64>]
+[404] 0xc06 CSR.perfCnts_3: Reg[UInt<64>]
+[404] 0xc07 CSR.perfCnts_4: Reg[UInt<64>]
+[404] 0xc08 CSR.perfCnts_5: Reg[UInt<64>]
+[404] 0xc09 CSR.perfCnts_6: Reg[UInt<64>]
+[404] 0xc0a CSR.perfCnts_7: Reg[UInt<64>]
+[404] 0xc0b CSR.perfCnts_8: Reg[UInt<64>]
+[404] 0xc0c CSR.perfCnts_9: Reg[UInt<64>]
+[404] 0xc0d CSR.perfCnts_10: Reg[UInt<64>]
+[404] 0xc0e CSR.perfCnts_11: Reg[UInt<64>]
+[404] 0xc0f CSR.perfCnts_12: Reg[UInt<64>]
+[404] 0xc10 CSR.perfCnts_13: Reg[UInt<64>]
+[404] 0xc11 CSR.perfCnts_14: Reg[UInt<64>]
+[404] 0xc12 CSR.perfCnts_15: Reg[UInt<64>]
+[404] 0xc13 CSR.perfCnts_16: Reg[UInt<64>]
+[404] 0xc14 CSR.perfCnts_17: Reg[UInt<64>]
+[404] 0xc15 CSR.perfCnts_18: Reg[UInt<64>]
+[404] 0xc16 CSR.perfCnts_19: Reg[UInt<64>]                                                 
+[404] 0xc17 CSR.perfCnts_20: Reg[UInt<64>]
+[404] 0xc18 CSR.perfCnts_21: Reg[UInt<64>]
+[404] 0xc19 CSR.perfCnts_22: Reg[UInt<64>]                                                 
+[404] 0xc1a CSR.perfCnts_23: Reg[UInt<64>]
+[404] 0xc1b CSR.perfCnts_24: Reg[UInt<64>]
+[404] 0xc1c CSR.perfCnts_25: Reg[UInt<64>]
+[404] 0xc1d CSR.perfCnts_26: Reg[UInt<64>]                                                 
+[404] 0xc1e CSR.perfCnts_27: Reg[UInt<64>]                                                 
+[404] 0xc1f CSR.perfCnts_28: Reg[UInt<64>]
+[404] 0xf11 CSR.mvendorid: Reg[UInt<64>]
+[404] 0xf12 CSR.marchid: Reg[UInt<64>]
+[404] 0xf13 CSR.mimpid: Reg[UInt<64>]
+[404] 0xf14 CSR.mhartid: Reg[UInt<64>]
+[404] 0xf15 CSR.mconfigptr: Reg[UInt<64>]
+[404] WARNING: fast not implemented!! jmp will be delayed for one cycle.
+[404] WARNING: fast not implemented!! csr will be delayed for one cycle.
+[404] WARNING: fast not implemented!! fence will be delayed for one cycle.
+[404] List(xiangshan.backend.fu.Jump@65cec657, xiangshan.backend.fu.CSR@5a0cf717, xiangshan.backend.fu.Fence@1f3df76c, xiangshan.backend.fu.fpu.IntToFP@8d3ed85) List(xiangshan.backend.fu.Jump@65cec657) hasRedirect: 1
+[404] scheduler.writeback(0) is connected from exu AluExeUnit
+[404] scheduler.writeback(1) is connected from exu AluExeUnit
+[404] scheduler.writeback(2) is connected from exu AluExeUnit
+[404] scheduler.writeback(3) is connected from exu AluExeUnit
+[404] writeback from exu 0 is replaced by RegNext(rs.fastUopOut)
+[404] writeback from exu 1 is replaced by RegNext(rs.fastUopOut)
+[404] writeback from exu 2 is replaced by RegNext(rs.fastUopOut)                           
+[404] writeback from exu 3 is replaced by RegNext(rs.fastUopOut)
+[404] Dispatch2Rs ports balance between 0 and 2
+[404] Dispatch2Rs ports balance between 1 and 3
+[404] Dispatch2Rs ports balance between 2 and 0
+[404] Dispatch2Rs ports balance between 3 and 1                                            
+[404] Scheduler:
+[404]   number of issue ports: 6
+[404]   number of replay ports: 0
+[404]   size of load and store RSes: 0
+[404]   number of std ports: 0                                                             
+[404]   number of load ports: 0                                                            
+[404] FP  Regfile: 14R8W
+[404] RS 0: type FmacExeUnit, size 64, enq 4, deq 4, numSrc 3, fast 4, wakeup 8
+[404]   innerIntUop: List()
+[404]   innerFpUop: List()                                                                 
+[404]   innerFastPorts: List()
+[404]   outFastPorts: List(8, 9, 10, 11)
+[404]   loadBalance: true
+[404] RS 1: type FmiscExeUnit, size 32, enq 4, deq 2, numSrc 2, fast 4, wakeup 8
+[404]   innerIntUop: List()
+[404]   innerFpUop: List()
+[404]   innerFastPorts: List()                                                             
+[404]   outFastPorts: List(8, 9, 10, 11)
+[404]   loadBalance: true
+[404] REGFILE: 192 entries, 14 read ports, 8 write ports
+[404] List(xiangshan.backend.fu.fpu.FMA@458eafb1) List() hasRedirect: 0
+[404] List(xiangshan.backend.fu.fpu.FMA@2ba5a4a6) List() hasRedirect: 0
+[404] List(xiangshan.backend.fu.fpu.FMA@b8b4638) List() hasRedirect: 0
+[404] List(xiangshan.backend.fu.fpu.FMA@37b7b97a) List() hasRedirect: 0
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/fudian/src/main/scala/fudian/FDIV.scala 625:24: [W002] Dynamic index with width 33 is too large for extractee of width 26 
+[404] [warn] There were 1 warning(s) during hardware elaboration.
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/fudian/src/main/scala/fudian/FDIV.scala 625:24: [W002] Dynamic index with width 33 is too large for extractee of width 55 
+[404] [warn] There were 1 warning(s) during hardware elaboration.
+[404] List(xiangshan.backend.fu.fpu.FPToInt@467462d3, xiangshan.backend.fu.fpu.FPToFP@293979ac, xiangshan.backend.fu.fpu.FDivSqrt@7c6a0250) List() hasRedirect: 0
+[404] List(xiangshan.backend.fu.fpu.FPToInt@767d9adb, xiangshan.backend.fu.fpu.FPToFP@5a977653, xiangshan.backend.fu.fpu.FDivSqrt@6114401c) List() hasRedirect: 0
+[404] Enable fast wakeup from function unit FmacExeUnit
+[404] Enable fast wakeup from function unit FmacExeUnit                                    
+[404] Enable fast wakeup from function unit FmacExeUnit
+[404] Enable fast wakeup from function unit FmacExeUnit
+[404] scheduler.writeback(8) is connected from exu FmacExeUnit
+[404] scheduler.writeback(9) is connected from exu FmacExeUnit                             
+[404] scheduler.writeback(10) is connected from exu FmacExeUnit
+[404] scheduler.writeback(11) is connected from exu FmacExeUnit                            
+[404] DCache:
+[404]   DCacheSets: 256
+[404]   DCacheWays: 4
+[404]   DCacheBanks: 8
+[404]   DCacheSRAMRowBits: 64
+[404]   DCacheWordOffset: 3
+[404]   DCacheBankOffset: 3
+[404]   DCacheSetOffset: 6
+[404]   DCacheTagOffset: 12
+[404]   DCacheAboveIndexOffset: 14
+[404] Cache op decoder (dcache):
+[404]   Id 1
+[404] List(xiangshan.backend.Std@751cf572, xiangshan.backend.Std@20295f65) List() hasRedirect: 0
+[404] List(xiangshan.backend.Std@24df8834, xiangshan.backend.Std@723a09c) List() hasRedirect: 0
+[404] LoadQueue: size:80
+[404] StoreQueue: size:64
+[404] tlb_sa: nSets:64 nWays:1
+[404] tlb_fa: nSets1 nWays:16
+[404] ldtlb: normal page: 1 sa setplru super page: 16 fa plru
+[404] tlb_sa: nSets:64 nWays:1
+[404] tlb_fa: nSets1 nWays:16
+[404] sttlb: normal page: 1 sa setplru super page: 16 fa plru
+[404] (MemBlock perfEvents Set,noEvent,UInt<1>(0),0)
+[404] (MemBlock perfEvents Set,load_s0_in_fire         ,LoadUnit.io_perf[0].value: IO[UInt<6>],1)
+[404] (MemBlock perfEvents Set,load_to_load_forward    ,LoadUnit.io_perf[1].value: IO[UInt<6>],2)
+[404] (MemBlock perfEvents Set,stall_dcache            ,LoadUnit.io_perf[2].value: IO[UInt<6>],3)
+[404] (MemBlock perfEvents Set,load_s1_in_fire         ,LoadUnit.io_perf[3].value: IO[UInt<6>],4)
+[404] (MemBlock perfEvents Set,load_s1_tlb_miss        ,LoadUnit.io_perf[4].value: IO[UInt<6>],5)
+[404] (MemBlock perfEvents Set,load_s2_in_fire         ,LoadUnit.io_perf[5].value: IO[UInt<6>],6)
+[404] (MemBlock perfEvents Set,load_s2_dcache_miss     ,LoadUnit.io_perf[6].value: IO[UInt<6>],7)
+[404] (MemBlock perfEvents Set,load_s2_replay          ,LoadUnit.io_perf[7].value: IO[UInt<6>],8)
+[404] (MemBlock perfEvents Set,load_s2_replay_tlb_miss ,LoadUnit.io_perf[8].value: IO[UInt<6>],9)
+[404] (MemBlock perfEvents Set,load_s2_replay_cache    ,LoadUnit.io_perf[9].value: IO[UInt<6>],10)
+[404] (MemBlock perfEvents Set,load_s0_in_fire         ,LoadUnit_1.io_perf[0].value: IO[UInt<6>],11)
+[404] (MemBlock perfEvents Set,load_to_load_forward    ,LoadUnit_1.io_perf[1].value: IO[UInt<6>],12)
+[404] (MemBlock perfEvents Set,stall_dcache            ,LoadUnit_1.io_perf[2].value: IO[UInt<6>],13)
+[404] (MemBlock perfEvents Set,load_s1_in_fire         ,LoadUnit_1.io_perf[3].value: IO[UInt<6>],14)
+[404] (MemBlock perfEvents Set,load_s1_tlb_miss        ,LoadUnit_1.io_perf[4].value: IO[UInt<6>],15)
+[404] (MemBlock perfEvents Set,load_s2_in_fire         ,LoadUnit_1.io_perf[5].value: IO[UInt<6>],16)
+[404] (MemBlock perfEvents Set,load_s2_dcache_miss     ,LoadUnit_1.io_perf[6].value: IO[UInt<6>],17)
+[404] (MemBlock perfEvents Set,load_s2_replay          ,LoadUnit_1.io_perf[7].value: IO[UInt<6>],18)
+[404] (MemBlock perfEvents Set,load_s2_replay_tlb_miss ,LoadUnit_1.io_perf[8].value: IO[UInt<6>],19)
+[404] (MemBlock perfEvents Set,load_s2_replay_cache    ,LoadUnit_1.io_perf[9].value: IO[UInt<6>],20)
+[404] (MemBlock perfEvents Set,sbuffer_req_valid ,Sbuffer.io_perf[0].value: IO[UInt<6>],21 
+[404] (MemBlock perfEvents Set,sbuffer_req_fire  ,Sbuffer.io_perf[1].value: IO[UInt<6>],22 
+[404] (MemBlock perfEvents Set,sbuffer_merge     ,Sbuffer.io_perf[2].value: IO[UInt<6>],23 
+[404] (MemBlock perfEvents Set,sbuffer_newline   ,Sbuffer.io_perf[3].value: IO[UInt<6>],24 
+[404] (MemBlock perfEvents Set,dcache_req_valid  ,Sbuffer.io_perf[4].value: IO[UInt<6>],25 
+[404] (MemBlock perfEvents Set,dcache_req_fire   ,Sbuffer.io_perf[5].value: IO[UInt<6>],26 
+[404] (MemBlock perfEvents Set,sbuffer_idle      ,Sbuffer.io_perf[6].value: IO[UInt<6>],27 
+[404] (MemBlock perfEvents Set,sbuffer_flush     ,Sbuffer.io_perf[7].value: IO[UInt<6>],28 
+[404] (MemBlock perfEvents Set,sbuffer_replace   ,Sbuffer.io_perf[8].value: IO[UInt<6>],29 
+[404] (MemBlock perfEvents Set,mpipe_resp_valid  ,Sbuffer.io_perf[9].value: IO[UInt<6>],30 
+[404] (MemBlock perfEvents Set,refill_resp_valid ,Sbuffer.io_perf[10].value: IO[UInt<6>],31)
+[404] (MemBlock perfEvents Set,replay_resp_valid ,Sbuffer.io_perf[11].value: IO[UInt<6>],32)
+[404] (MemBlock perfEvents Set,coh_timeout       ,Sbuffer.io_perf[12].value: IO[UInt<6>],33)
+[404] (MemBlock perfEvents Set,sbuffer_1_4_valid ,Sbuffer.io_perf[13].value: IO[UInt<6>],34)
+[404] (MemBlock perfEvents Set,sbuffer_2_4_valid ,Sbuffer.io_perf[14].value: IO[UInt<6>],35)
+[404] (MemBlock perfEvents Set,sbuffer_3_4_valid ,Sbuffer.io_perf[15].value: IO[UInt<6>],36)
+[404] (MemBlock perfEvents Set,sbuffer_full_valid,Sbuffer.io_perf[16].value: IO[UInt<6>],37)
+[404] (MemBlock perfEvents Set,rollback         ,LsqWrappper.io_perf[0].value: IO[UInt<6>],38)
+[404] (MemBlock perfEvents Set,mmioCycle        ,LsqWrappper.io_perf[1].value: IO[UInt<6>],39)
+[404] (MemBlock perfEvents Set,mmio_Cnt         ,LsqWrappper.io_perf[2].value: IO[UInt<6>],40)
+[404] (MemBlock perfEvents Set,refill           ,LsqWrappper.io_perf[3].value: IO[UInt<6>],41)
+[404] (MemBlock perfEvents Set,writeback_success,LsqWrappper.io_perf[4].value: IO[UInt<6>],42)
+[404] (MemBlock perfEvents Set,writeback_blocked,LsqWrappper.io_perf[5].value: IO[UInt<6>],43)
+[404] (MemBlock perfEvents Set,ltq_1_4_valid    ,LsqWrappper.io_perf[6].value: IO[UInt<6>],44)
+[404] (MemBlock perfEvents Set,ltq_2_4_valid    ,LsqWrappper.io_perf[7].value: IO[UInt<6>],45)
+[404] (MemBlock perfEvents Set,ltq_3_4_valid    ,LsqWrappper.io_perf[8].value: IO[UInt<6>],46)
+[404] (MemBlock perfEvents Set,ltq_4_4_valid    ,LsqWrappper.io_perf[9].value: IO[UInt<6>],47)
+[404] (MemBlock perfEvents Set,mmioCycle      ,LsqWrappper.io_perf[10].value: IO[UInt<6>],48)
+[404] (MemBlock perfEvents Set,mmioCnt        ,LsqWrappper.io_perf[11].value: IO[UInt<6>],49)
+[404] (MemBlock perfEvents Set,mmio_wb_success,LsqWrappper.io_perf[12].value: IO[UInt<6>],50)
+[404] (MemBlock perfEvents Set,mmio_wb_blocked,LsqWrappper.io_perf[13].value: IO[UInt<6>],51)
+[404] (MemBlock perfEvents Set,stq_1_4_valid  ,LsqWrappper.io_perf[14].value: IO[UInt<6>],52)
+[404] (MemBlock perfEvents Set,stq_2_4_valid  ,LsqWrappper.io_perf[15].value: IO[UInt<6>],53)
+[404] (MemBlock perfEvents Set,stq_3_4_valid  ,LsqWrappper.io_perf[16].value: IO[UInt<6>],54)
+[404] (MemBlock perfEvents Set,stq_4_4_valid  ,LsqWrappper.io_perf[17].value: IO[UInt<6>],55)
+[404] (MemBlock perfEvents Set,dcache_wbq_req      ,DCacheWrapper.io_perf[0].value: IO[UInt<6>],56)
+[404] (MemBlock perfEvents Set,dcache_wbq_1_4_valid,DCacheWrapper.io_perf[1].value: IO[UInt<6>],57)
+[404] (MemBlock perfEvents Set,dcache_wbq_2_4_valid,DCacheWrapper.io_perf[2].value: IO[UInt<6>],58)
+[404] (MemBlock perfEvents Set,dcache_wbq_3_4_valid,DCacheWrapper.io_perf[3].value: IO[UInt<6>],59)
+[404] (MemBlock perfEvents Set,dcache_wbq_4_4_valid,DCacheWrapper.io_perf[4].value: IO[UInt<6>],60)
+[404] (MemBlock perfEvents Set,dcache_mp_req          ,DCacheWrapper.io_perf[5].value: IO[UInt<6>],61)
+[404] (MemBlock perfEvents Set,dcache_mp_total_penalty,DCacheWrapper.io_perf[6].value: IO[UInt<6>],62)
+[404] (MemBlock perfEvents Set,dcache_missq_req      ,DCacheWrapper.io_perf[7].value: IO[UInt<6>],63)
+[404] (MemBlock perfEvents Set,dcache_missq_1_4_valid,DCacheWrapper.io_perf[8].value: IO[UInt<6>],64)
+[404] (MemBlock perfEvents Set,dcache_missq_2_4_valid,DCacheWrapper.io_perf[9].value: IO[UInt<6>],65)
+[404] (MemBlock perfEvents Set,dcache_missq_3_4_valid,DCacheWrapper.io_perf[10].value: IO[UInt<6>],66)
+[404] (MemBlock perfEvents Set,dcache_missq_4_4_valid,DCacheWrapper.io_perf[11].value: IO[UInt<6>],67)
+[404] (MemBlock perfEvents Set,dcache_probq_req      ,DCacheWrapper.io_perf[12].value: IO[UInt<6>],68)
+[404] (MemBlock perfEvents Set,dcache_probq_1_4_valid,DCacheWrapper.io_perf[13].value: IO[UInt<6>],69)
+[404] (MemBlock perfEvents Set,dcache_probq_2_4_valid,DCacheWrapper.io_perf[14].value: IO[UInt<6>],70)
+[404] (MemBlock perfEvents Set,dcache_probq_3_4_valid,DCacheWrapper.io_perf[15].value: IO[UInt<6>],71)
+[404] (MemBlock perfEvents Set,dcache_probq_4_4_valid,DCacheWrapper.io_perf[16].value: IO[UInt<6>],72)
+[404] (MemBlock perfEvents Set,load_req                 ,DCacheWrapper.io_perf[17].value: IO[UInt<6>],73)
+[404] (MemBlock perfEvents Set,load_replay              ,DCacheWrapper.io_perf[18].value: IO[UInt<6>],74)
+[404] (MemBlock perfEvents Set,load_replay_for_data_nack,DCacheWrapper.io_perf[19].value: IO[UInt<6>],75)
+[404] (MemBlock perfEvents Set,load_replay_for_no_mshr  ,DCacheWrapper.io_perf[20].value: IO[UInt<6>],76)
+[404] (MemBlock perfEvents Set,load_replay_for_conflict ,DCacheWrapper.io_perf[21].value: IO[UInt<6>],77)
+[404] (MemBlock perfEvents Set,load_req                 ,DCacheWrapper.io_perf[22].value: IO[UInt<6>],78)
+[404] (MemBlock perfEvents Set,load_replay              ,DCacheWrapper.io_perf[23].value: IO[UInt<6>],79)
+[404] (MemBlock perfEvents Set,load_replay_for_data_nack,DCacheWrapper.io_perf[24].value: IO[UInt<6>],80)
+[404] (MemBlock perfEvents Set,load_replay_for_no_mshr  ,DCacheWrapper.io_perf[25].value: IO[UInt<6>],81)
+[404] (MemBlock perfEvents Set,load_replay_for_conflict ,DCacheWrapper.io_perf[26].value: IO[UInt<6>],82)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[0].value: IO[UInt<6>],83)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[1].value: IO[UInt<6>],84)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[2].value: IO[UInt<6>],85)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[3].value: IO[UInt<6>],86)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[4].value: IO[UInt<6>],87)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[5].value: IO[UInt<6>],88)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[6].value: IO[UInt<6>],89)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[7].value: IO[UInt<6>],90)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[8].value: IO[UInt<6>],91)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[9].value: IO[UInt<6>],92)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[10].value: IO[UInt<6>],93)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[11].value: IO[UInt<6>],94)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[12].value: IO[UInt<6>],95)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[13].value: IO[UInt<6>],96)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[14].value: IO[UInt<6>],97)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[15].value: IO[UInt<6>],98)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[16].value: IO[UInt<6>],99)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[17].value: IO[UInt<6>],100)
+[404] (MemBlock perfEvents Set,perfEventsPTW,MemBlock.io.perfEventsPTW[18].value: IO[UInt<6>],101)
+[404] (MemBlock perfEvents Set,ldDeqCount,MemBlock.ldDeqCount: OpResult[UInt<2>],102)      
+[404] (MemBlock perfEvents Set,stDeqCount,MemBlock.stDeqCount: OpResult[UInt<3>],103)      
+[404] Rob: size 256, numWbPorts: List(19, 18), commitwidth: 6
+[404] exuPorts: List(List(AluExeUnit), List(AluExeUnit), List(AluExeUnit), List(AluExeUnit), List(LoadExu), List(LoadExu), List(MulDivExeUnit, JmpCSRExeUnit, FmiscExeUnit), List(MulDivExeUnit, FmiscExeUnit), List(FmacExeUnit), List(FmacExeUnit), List(FmacExeUnit), List(FmacExeUnit), List(FmiscExeUnit, JmpCSRExeUnit), List(FmiscExeUnit), List(StaExu), List(StaExu))
+[404] stdPorts: List(List(StdExu), List(StdExu))
+[404] fflags: List(List(JmpCSRExeUnit), List(FmacExeUnit), List(FmacExeUnit), List(FmacExeUnit), List(FmacExeUnit), List(FmiscExeUnit), List(FmiscExeUnit))
+[404] ExceptionGen:
+[404]   [0] List(JmpCSRExeUnit): exception List(2, 3, 8, 9, 11), flushPipe true, replayInst false
+[404]   [1] List(LoadExu): exception List(4, 5, 13), flushPipe true, replayInst true       
+[404]   [2] List(LoadExu): exception List(4, 5, 13), flushPipe true, replayInst true       
+[404]   [3] List(StaExu): exception List(4, 5, 6, 7, 13, 15), flushPipe false, replayInst false
+[404]   [4] List(StaExu): exception List(4, 5, 6, 7, 13, 15), flushPipe false, replayInst false
+[404] Dispatch2Rs ports balance between 0 and 2
+[404] Dispatch2Rs ports balance between 1 and 3
+[404] Dispatch2Rs ports balance between 2 and 0
+[404] Dispatch2Rs ports balance between 3 and 1
+[404] Dispatch2Rs ports balance between 0 and 2
+[404] Dispatch2Rs ports balance between 1 and 3
+[404] Dispatch2Rs ports balance between 2 and 0
+[404] Dispatch2Rs ports balance between 3 and 1                                            
+[404] (CtrlBlock perfEvents Set,noEvent,UInt<1>(0),0)
+[404] (CtrlBlock perfEvents Set,decoder_fused_instr,DecodeStage.io_perf[0].value: IO[UInt<6>],1)
+[404] (CtrlBlock perfEvents Set,decoder_waitInstr,DecodeStage.io_perf[1].value: IO[UInt<6>],2)
+[404] (CtrlBlock perfEvents Set,decoder_stall_cycle,DecodeStage.io_perf[2].value: IO[UInt<6>],3)
+[404] (CtrlBlock perfEvents Set,decoder_utilization,DecodeStage.io_perf[3].value: IO[UInt<6>],4)
+[404] (CtrlBlock perfEvents Set,rename_in                  ,Rename.io_perf[0].value: IO[UInt<6>],5)
+[404] (CtrlBlock perfEvents Set,rename_waitinstr           ,Rename.io_perf[1].value: IO[UInt<6>],6)
+[404] (CtrlBlock perfEvents Set,rename_stall_cycle_dispatch,Rename.io_perf[2].value: IO[UInt<6>],7)
+[404] (CtrlBlock perfEvents Set,rename_stall_cycle_fp      ,Rename.io_perf[3].value: IO[UInt<6>],8)
+[404] (CtrlBlock perfEvents Set,rename_stall_cycle_int     ,Rename.io_perf[4].value: IO[UInt<6>],9)
+[404] (CtrlBlock perfEvents Set,rename_stall_cycle_walk    ,Rename.io_perf[5].value: IO[UInt<6>],10)
+[404] (CtrlBlock perfEvents Set,me_freelist_1_4_valid,Rename.io_perf[6].value: IO[UInt<6>],11)
+[404] (CtrlBlock perfEvents Set,me_freelist_2_4_valid,Rename.io_perf[7].value: IO[UInt<6>],12)
+[404] (CtrlBlock perfEvents Set,me_freelist_3_4_valid,Rename.io_perf[8].value: IO[UInt<6>],13)
+[404] (CtrlBlock perfEvents Set,me_freelist_4_4_valid,Rename.io_perf[9].value: IO[UInt<6>],14)
+[404] (CtrlBlock perfEvents Set,std_freelist_1_4_valid,Rename.io_perf[10].value: IO[UInt<6>],15)
+[404] (CtrlBlock perfEvents Set,std_freelist_2_4_valid,Rename.io_perf[11].value: IO[UInt<6>],16)
+[404] (CtrlBlock perfEvents Set,std_freelist_3_4_valid,Rename.io_perf[12].value: IO[UInt<6>],17)
+[404] (CtrlBlock perfEvents Set,std_freelist_4_4_valid,Rename.io_perf[13].value: IO[UInt<6>],18)
+[404] (CtrlBlock perfEvents Set,dispatch_in,Dispatch.io_perf[0].value: IO[UInt<6>],19)     
+[404] (CtrlBlock perfEvents Set,dispatch_empty,Dispatch.io_perf[1].value: IO[UInt<6>],20)  
+[404] (CtrlBlock perfEvents Set,dispatch_utili,Dispatch.io_perf[2].value: IO[UInt<6>],21)  
+[404] (CtrlBlock perfEvents Set,dispatch_waitinstr,Dispatch.io_perf[3].value: IO[UInt<6>],22)
+[404] (CtrlBlock perfEvents Set,dispatch_stall_cycle_lsq,Dispatch.io_perf[4].value: IO[UInt<6>],23)
+[404] (CtrlBlock perfEvents Set,dispatch_stall_cycle_rob,Dispatch.io_perf[5].value: IO[UInt<6>],24)
+[404] (CtrlBlock perfEvents Set,dispatch_stall_cycle_int_dq,Dispatch.io_perf[6].value: IO[UInt<6>],25)
+[404] (CtrlBlock perfEvents Set,dispatch_stall_cycle_fp_dq,Dispatch.io_perf[7].value: IO[UInt<6>],26)
+[404] (CtrlBlock perfEvents Set,dispatch_stall_cycle_ls_dq,Dispatch.io_perf[8].value: IO[UInt<6>],27)
+[404] (CtrlBlock perfEvents Set,dispatchq_in,DispatchQueue.io_perf[0].value: IO[UInt<6>],28)
+[404] (CtrlBlock perfEvents Set,dispatchq_out,DispatchQueue.io_perf[1].value: IO[UInt<6>],29)
+[404] (CtrlBlock perfEvents Set,dispatchq_out_try,DispatchQueue.io_perf[2].value: IO[UInt<6>],30)
+[404] (CtrlBlock perfEvents Set,dispatchq_fake_block,DispatchQueue.io_perf[3].value: IO[UInt<6>],31)
+[404] (CtrlBlock perfEvents Set,dispatchq_1_4_valid ,DispatchQueue.io_perf[4].value: IO[UInt<6>],32)
+[404] (CtrlBlock perfEvents Set,dispatchq_2_4_valid ,DispatchQueue.io_perf[5].value: IO[UInt<6>],33)
+[404] (CtrlBlock perfEvents Set,dispatchq_3_4_valid ,DispatchQueue.io_perf[6].value: IO[UInt<6>],34)
+[404] (CtrlBlock perfEvents Set,dispatchq_4_4_valid ,DispatchQueue.io_perf[7].value: IO[UInt<6>],35)
+[404] (CtrlBlock perfEvents Set,dispatchq_in,DispatchQueue_1.io_perf[0].value: IO[UInt<6>],36)
+[404] (CtrlBlock perfEvents Set,dispatchq_out,DispatchQueue_1.io_perf[1].value: IO[UInt<6>],37)
+[404] (CtrlBlock perfEvents Set,dispatchq_out_try,DispatchQueue_1.io_perf[2].value: IO[UInt<6>],38)
+[404] (CtrlBlock perfEvents Set,dispatchq_fake_block,DispatchQueue_1.io_perf[3].value: IO[UInt<6>],39)
+[404] (CtrlBlock perfEvents Set,dispatchq_1_4_valid ,DispatchQueue_1.io_perf[4].value: IO[UInt<6>],40)
+[404] (CtrlBlock perfEvents Set,dispatchq_2_4_valid ,DispatchQueue_1.io_perf[5].value: IO[UInt<6>],41)
+[404] (CtrlBlock perfEvents Set,dispatchq_3_4_valid ,DispatchQueue_1.io_perf[6].value: IO[UInt<6>],42)
+[404] (CtrlBlock perfEvents Set,dispatchq_4_4_valid ,DispatchQueue_1.io_perf[7].value: IO[UInt<6>],43)
+[404] (CtrlBlock perfEvents Set,dispatchq_in,DispatchQueue_2.io_perf[0].value: IO[UInt<6>],44)
+[404] (CtrlBlock perfEvents Set,dispatchq_out,DispatchQueue_2.io_perf[1].value: IO[UInt<6>],45)
+[404] (CtrlBlock perfEvents Set,dispatchq_out_try,DispatchQueue_2.io_perf[2].value: IO[UInt<6>],46)
+[404] (CtrlBlock perfEvents Set,dispatchq_fake_block,DispatchQueue_2.io_perf[3].value: IO[UInt<6>],47)
+[404] (CtrlBlock perfEvents Set,dispatchq_1_4_valid ,DispatchQueue_2.io_perf[4].value: IO[UInt<6>],48)
+[404] (CtrlBlock perfEvents Set,dispatchq_2_4_valid ,DispatchQueue_2.io_perf[5].value: IO[UInt<6>],49)
+[404] (CtrlBlock perfEvents Set,dispatchq_3_4_valid ,DispatchQueue_2.io_perf[6].value: IO[UInt<6>],50)
+[404] (CtrlBlock perfEvents Set,dispatchq_4_4_valid ,DispatchQueue_2.io_perf[7].value: IO[UInt<6>],51)
+[404] (CtrlBlock perfEvents Set,rob_interrupt_num      ,Rob.io_perf[0].value: IO[UInt<6>],52)
+[404] (CtrlBlock perfEvents Set,rob_exception_num      ,Rob.io_perf[1].value: IO[UInt<6>],53)
+[404] (CtrlBlock perfEvents Set,rob_flush_pipe_num     ,Rob.io_perf[2].value: IO[UInt<6>],54)
+[404] (CtrlBlock perfEvents Set,rob_replay_inst_num    ,Rob.io_perf[3].value: IO[UInt<6>],55)
+[404] (CtrlBlock perfEvents Set,rob_commitUop          ,Rob.io_perf[4].value: IO[UInt<6>],56)
+[404] (CtrlBlock perfEvents Set,rob_commitInstr        ,Rob.io_perf[5].value: IO[UInt<6>],57)
+[404] (CtrlBlock perfEvents Set,rob_commitInstrMove    ,Rob.io_perf[6].value: IO[UInt<6>],58)
+[404] (CtrlBlock perfEvents Set,rob_commitInstrFused   ,Rob.io_perf[7].value: IO[UInt<6>],59)
+[404] (CtrlBlock perfEvents Set,rob_commitInstrLoad    ,Rob.io_perf[8].value: IO[UInt<6>],60)
+[404] (CtrlBlock perfEvents Set,rob_commitInstrBranch  ,Rob.io_perf[9].value: IO[UInt<6>],61)
+[404] (CtrlBlock perfEvents Set,rob_commitInstrLoadWait,Rob.io_perf[10].value: IO[UInt<6>],62)
+[404] (CtrlBlock perfEvents Set,rob_commitInstrStore   ,Rob.io_perf[11].value: IO[UInt<6>],63)
+[404] (CtrlBlock perfEvents Set,rob_walkInstr          ,Rob.io_perf[12].value: IO[UInt<6>],64)
+[404] (CtrlBlock perfEvents Set,rob_walkCycle          ,Rob.io_perf[13].value: IO[UInt<6>],65)
+[404] (CtrlBlock perfEvents Set,rob_1_4_valid          ,Rob.io_perf[14].value: IO[UInt<6>],66)
+[404] (CtrlBlock perfEvents Set,rob_2_4_valid          ,Rob.io_perf[15].value: IO[UInt<6>],67)
+[404] (CtrlBlock perfEvents Set,rob_3_4_valid          ,Rob.io_perf[16].value: IO[UInt<6>],68)
+[404] (CtrlBlock perfEvents Set,rob_4_4_valid          ,Rob.io_perf[17].value: IO[UInt<6>],69)
+[404] (CtrlBlock perfEvents Set,perfEventsEu0,CtrlBlock.perfinfo.perfEventsEu0[0].value: IO[UInt<6>],70)
+[404] (CtrlBlock perfEvents Set,perfEventsEu0,CtrlBlock.perfinfo.perfEventsEu0[1].value: IO[UInt<6>],71)
+[404] (CtrlBlock perfEvents Set,perfEventsEu0,CtrlBlock.perfinfo.perfEventsEu0[2].value: IO[UInt<6>],72)
+[404] (CtrlBlock perfEvents Set,perfEventsEu0,CtrlBlock.perfinfo.perfEventsEu0[3].value: IO[UInt<6>],73)
+[404] (CtrlBlock perfEvents Set,perfEventsEu0,CtrlBlock.perfinfo.perfEventsEu0[4].value: IO[UInt<6>],74)
+[404] (CtrlBlock perfEvents Set,perfEventsEu0,CtrlBlock.perfinfo.perfEventsEu0[5].value: IO[UInt<6>],75)
+[404] (CtrlBlock perfEvents Set,perfEventsEu1,CtrlBlock.perfinfo.perfEventsEu1[0].value: IO[UInt<6>],76)
+[404] (CtrlBlock perfEvents Set,perfEventsEu1,CtrlBlock.perfinfo.perfEventsEu1[1].value: IO[UInt<6>],77)
+[404] (CtrlBlock perfEvents Set,perfEventsEu1,CtrlBlock.perfinfo.perfEventsEu1[2].value: IO[UInt<6>],78)
+[404] (CtrlBlock perfEvents Set,perfEventsEu1,CtrlBlock.perfinfo.perfEventsEu1[3].value: IO[UInt<6>],79)
+[404] (CtrlBlock perfEvents Set,perfEventsEu1,CtrlBlock.perfinfo.perfEventsEu1[4].value: IO[UInt<6>],80)
+[404] (CtrlBlock perfEvents Set,perfEventsEu1,CtrlBlock.perfinfo.perfEventsEu1[5].value: IO[UInt<6>],81)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[0].value: IO[UInt<6>],82)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[1].value: IO[UInt<6>],83)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[2].value: IO[UInt<6>],84)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[3].value: IO[UInt<6>],85)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[4].value: IO[UInt<6>],86)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[5].value: IO[UInt<6>],87)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[6].value: IO[UInt<6>],88)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[7].value: IO[UInt<6>],89)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[8].value: IO[UInt<6>],90)
+[404] (CtrlBlock perfEvents Set,perfEventsRs,CtrlBlock.perfinfo.perfEventsRs[9].value: IO[UInt<6>],91)
+[404] FPGAPlatform:false EnableDebug:false
+[404] ====== Non-inclusive L2 (256.0KB * 4-bank) prefetch: Some(PrefetchReceiverParams(32)) ======
+[404] bankBits: 2
+[404] sets:512 ways:8 blockBytes:64
+[404] [client] size:48.0KB
+[404] [client] sets:128 ways:6 blockBytes:64
+[404] blockGranularityBits: 7
+[404] usr/alias: (2-bit)
+[404] usr/needHint: (1-bit)
+[404] usr/preferCache: (1-bit)
+[404] echo/blockisdirty: (1-bit)
+[404] clientBits: 2
+[404] Data ECC bits:0
+[404] Tag ECC bits:0
+[404] Tag ECC bits:0
+[404] clientBits: 2
+[404] Data ECC bits:0
+[404] Tag ECC bits:0
+[404] Tag ECC bits:0
+[404] clientBits: 2
+[404] Data ECC bits:0
+[404] Tag ECC bits:0
+[404] Tag ECC bits:0
+[404] clientBits: 2
+[404] Data ECC bits:0
+[404] Tag ECC bits:0
+[404] Tag ECC bits:0
+[404]   0 <= dcache
+[404]   1 <= icache
+[404]   2 <= ptw
+[404] ====== Non-inclusive L3 (1.5MB * 4-bank) prefetch: None ======
+[404] bankBits: 2
+[404] sets:4096 ways:6 blockBytes:64
+[404] [client] size:512.0KB
+[404] [client] sets:1024 ways:8 blockBytes:64
+[404] blockGranularityBits: 9
+[404] usr/preferCache: (1-bit)
+[404] echo/blockisdirty: (1-bit)
+[404] clientBits: 1
+[404] Data ECC bits:0
+[404] Tag ECC bits:0
+[404] Tag ECC bits:0
+[404] clientBits: 1
+[404] Data ECC bits:0
+[404] Tag ECC bits:0
+[404] Tag ECC bits:0
+[404] clientBits: 1
+[404] Data ECC bits:0
+[404] Tag ECC bits:0
+[404] Tag ECC bits:0
+[404] clientBits: 1
+[404] Data ECC bits:0
+[404] Tag ECC bits:0
+[404] Tag ECC bits:0
+[404]   0 <= L2
+[404]   1 <= dma ID#0
+[404]   2 <= dma ID#1
+[404]   3 <= dma ID#2
+[404]   4 <= dma ID#3
+[404]   5 <= dma ID#4                                                                      
+[404]   6 <= dma ID#5
+[404]   7 <= dma ID#6
+[404]   8 <= dma ID#7
+[404]   9 <= dma ID#8
+[404]   10 <= dma ID#9
+[404]   11 <= dma ID#10
+[404]   12 <= dma ID#11
+[404]   13 <= dma ID#12
+[404]   14 <= dma ID#13
+[404]   15 <= dma ID#14
+[404]   16 <= dma ID#15
+[404]   17 <= dma ID#16
+[404]   18 <= dma ID#17
+[404]   19 <= dma ID#18
+[404]   20 <= dma ID#19
+[404]   21 <= dma ID#20
+[404]   22 <= dma ID#21
+[404]   23 <= dma ID#22
+[404]   24 <= dma ID#23
+[404]   25 <= dma ID#24
+[404]   26 <= dma ID#25
+[404]   27 <= dma ID#26
+[404]   28 <= dma ID#27
+[404]   29 <= dma ID#28
+[404]   30 <= dma ID#29
+[404]   31 <= dma ID#30
+[404]   32 <= dma ID#31
+[404]   33 <= debug
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/rocket-chip/src/main/scala/devices/tilelink/Error.scala 60:48: [W004] Dynamic index with width 3 is too wide for Vec of size 3 (expected index width 2).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/rocket-chip/src/main/scala/devices/debug/SBA.scala 307:25: [W004] Dynamic index with width 4 is too wide for Vec of size 8 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/rocket-chip/src/main/scala/devices/debug/Debug.scala 918:17: [W004] Dynamic index with width 2 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/rocket-chip/src/main/scala/devices/debug/Debug.scala 1726:37: [W002] Dynamic index with width 2 is too large for extractee of width 1
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/rocket-chip/src/main/scala/tilelink/WidthWidget.scala 184:18: [W004] Dynamic index with width 1 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/rocket-chip/src/main/scala/tilelink/WidthWidget.scala 191:51: [W004] Dynamic index with width 1 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/icache/ICache.scala 288:65: [W004] Dynamic index with width 64 is too wide for Vec of size 4 (expected index width 2).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/rocket-chip/src/main/scala/util/Replacement.scala 391:55: [W004] Dynamic index with width 8 is too wide for Vec of size 128 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala 199:17: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala 200:17: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/Tage.scala 509:46: [W005] Dynamic index with width 11 is too narrow for Vec of size 4096 (expected index width 12).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/Ibuffer.scala 120:34: [W005] Dynamic index with width 1 is too narrow for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/Ibuffer.scala 120:34: [W005] Dynamic index with width 2 is too narrow for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/Ibuffer.scala 120:34: [W005] Dynamic index with width 3 is too narrow for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/Ibuffer.scala 150:102: [W005] Dynamic index with width 1 is too narrow for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/Ibuffer.scala 150:102: [W005] Dynamic index with width 2 is too narrow for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/frontend/Ibuffer.scala 150:102: [W005] Dynamic index with width 3 is too narrow for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 52:45: [W004] Dynamic index with width 10 is too wide for Vec of size 55 (expected index width 6).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 53:45: [W004] Dynamic index with width 10 is too wide for Vec of size 55 (expected index width 6).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 54:45: [W004] Dynamic index with width 10 is too wide for Vec of size 55 (expected index width 6).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 55:45: [W004] Dynamic index with width 10 is too wide for Vec of size 55 (expected index width 6).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/fu/Bku.scala 274:29: [W005] Dynamic index with width 2 is too narrow for Vec of size 8 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 52:45: [W004] Dynamic index with width 10 is too wide for Vec of size 100 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 53:45: [W004] Dynamic index with width 10 is too wide for Vec of size 100 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 54:45: [W004] Dynamic index with width 10 is too wide for Vec of size 100 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 55:45: [W004] Dynamic index with width 10 is too wide for Vec of size 100 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/fu/CSR.scala 1049:21: [W003] Dynamic index with width 4 is too small for extractee of width 64
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala 167:26: [W005] Dynamic index with width 1 is too narrow for Vec of size 4 (expected index width 2).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala 197:26: [W005] Dynamic index with width 1 is too narrow for Vec of size 4 (expected index width 2).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala 639:15: [W004] Dynamic index with width 6 is too wide for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala 640:15: [W004] Dynamic index with width 6 is too wide for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala 643:22: [W004] Dynamic index with width 6 is too wide for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala 671:21: [W004] Dynamic index with width 6 is too wide for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala 672:13: [W004] Dynamic index with width 6 is too wide for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala 675:20: [W004] Dynamic index with width 6 is too wide for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala 696:38: [W004] Dynamic index with width 6 is too wide for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala 697:30: [W004] Dynamic index with width 6 is too wide for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala 698:30: [W004] Dynamic index with width 6 is too wide for Vec of size 16 (expected index width 4).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala 294:55: [W004] Dynamic index with width 1 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala 298:52: [W004] Dynamic index with width 1 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/rocket-chip/src/main/scala/util/Replacement.scala 391:55: [W004] Dynamic index with width 6 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 52:45: [W004] Dynamic index with width 10 is too wide for Vec of size 104 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 53:45: [W004] Dynamic index with width 10 is too wide for Vec of size 104 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 54:45: [W004] Dynamic index with width 10 is too wide for Vec of size 104 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 55:45: [W004] Dynamic index with width 10 is too wide for Vec of size 104 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/rob/Rob.scala 399:72: [W005] Dynamic index with width 1 is too narrow for Vec of size 6 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/rob/Rob.scala 399:72: [W005] Dynamic index with width 2 is too narrow for Vec of size 6 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/mem/mdp/StoreSet.scala 151:18: [W004] Dynamic index with width 11 is too wide for Vec of size 1024 (expected index width 10).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala 48:45: [W005] Dynamic index with width 1 is too narrow for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/rename/freelist/MEFreeList.scala 48:45: [W005] Dynamic index with width 2 is too narrow for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/rename/freelist/StdFreeList.scala 69:45: [W005] Dynamic index with width 1 is too narrow for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/rename/freelist/StdFreeList.scala 69:45: [W005] Dynamic index with width 2 is too narrow for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala 90:58: [W005] Dynamic index with width 1 is too narrow for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala 90:58: [W005] Dynamic index with width 2 is too narrow for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala 100:38: [W005] Dynamic index with width 1 is too narrow for Vec of size 6 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala 100:38: [W005] Dynamic index with width 2 is too narrow for Vec of size 6 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala 225:94: [W005] Dynamic index with width 1 is too narrow for Vec of size 6 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/backend/dispatch/DispatchQueue.scala 225:94: [W005] Dynamic index with width 2 is too narrow for Vec of size 6 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 52:45: [W004] Dynamic index with width 10 is too wide for Vec of size 92 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 53:45: [W004] Dynamic index with width 10 is too wide for Vec of size 92 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 54:45: [W004] Dynamic index with width 10 is too wide for Vec of size 92 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/Utility/src/main/scala/utility/HardwarePerfMonitor.scala 55:45: [W004] Dynamic index with width 10 is too wide for Vec of size 92 (expected index width 7).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/cache/mmu/Repeater.scala 228:65: [W005] Dynamic index with width 1 is too narrow for Vec of size 5 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/src/main/scala/xiangshan/cache/mmu/Repeater.scala 228:65: [W005] Dynamic index with width 2 is too narrow for Vec of size 5 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/SinkA.scala 118:32: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/SinkA.scala 119:38: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/SinkA.scala 121:13: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/SinkA.scala 124:32: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/SinkA.scala 125:38: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/SinkA.scala 127:13: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/RefillBuffer.scala 45:20: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/RefillBuffer.scala 53:11: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/RefillBuffer.scala 66:19: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/RefillBuffer.scala 67:11: [W004] Dynamic index with width 4 is too wide for Vec of size 7 (expected index width 3).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 103:37: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 103:100: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 114:37: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 163:85: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 479:80: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 818:25: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 988:53: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 989:40: [W004] Dynamic index with width 2 is too wide for Vec of size 2 (expected index width 1).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 103:37: [W004] Dynamic index with width 2 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 103:100: [W004] Dynamic index with width 2 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 114:37: [W004] Dynamic index with width 2 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 163:85: [W004] Dynamic index with width 2 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 479:80: [W004] Dynamic index with width 2 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 818:25: [W004] Dynamic index with width 2 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 988:53: [W004] Dynamic index with width 2 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/huancun/src/main/scala/huancun/noninclusive/MSHR.scala 989:40: [W004] Dynamic index with width 2 is too wide for Vec of size 1 (expected index width 0).
+[404] [warn] There were 90 warning(s) during hardware elaboration.
+[404] Exception in thread "main" chisel3.package$ChiselException: Error: Not in a UserModule. Likely cause: Missed Module() wrap, bare chisel API call, or attempting to construct hardware inside a BlackBox.
+[404]   at chisel3.internal.Builder$.forcedUserModule(Builder.scala:734)
+[404]   at chisel3.WireDefaultImpl.applyImpl(Data.scala:1096)
+[404]   at chisel3.WireDefaultImpl.apply(Data.scala:1158)
+[404]   at chisel3.WireDefaultImpl.apply$(Data.scala:1157)
+[404]   at chisel3.WireInit$.apply(Data.scala:1239)
+[404]   at chisel3.WireDefaultImpl.apply(Data.scala:1170)
+[404]   at chisel3.WireDefaultImpl.apply$(Data.scala:1164)
+[404]   at chisel3.WireInit$.apply(Data.scala:1239)
+[404]   at difftest.gateway.Gateway$.$anonfun$collect$8(Gateway.scala:202)
+[404]   at chisel3.experimental.prefix$.apply(prefix.scala:52)
+[404]   at difftest.gateway.Gateway$.$anonfun$collect$7(Gateway.scala:202)
+[404]   at chisel3.package$.withName(package.scala:493)
+[404]   at difftest.gateway.Gateway$.$anonfun$collect$5(Gateway.scala:202)                 
+[404]   at chisel3.experimental.prefix$.apply(prefix.scala:52)
+[404]   at difftest.gateway.Gateway$.$anonfun$collect$4(Gateway.scala:199)
+[404]   at chisel3.package$.withName(package.scala:493)
+[404]   at difftest.gateway.Gateway$.collect(Gateway.scala:199)
+[404]   at difftest.DifftestModule$.collect(Difftest.scala:597)
+[404]   at top.TopMain$.delayedEndpoint$top$TopMain$1(Top.scala:223)
+[404]   at top.TopMain$delayedInit$body.apply(Top.scala:211)
+[404]   at scala.Function0.apply$mcV$sp(Function0.scala:42)
+[404]   at scala.Function0.apply$mcV$sp$(Function0.scala:42)
+[404]   at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)        
+[404]   at scala.App.$anonfun$main$1(App.scala:98)
+[404]   at scala.App.$anonfun$main$1$adapted(App.scala:98)
+[404]   at scala.collection.IterableOnceOps.foreach(IterableOnce.scala:619)                
+[404]   at scala.collection.IterableOnceOps.foreach$(IterableOnce.scala:617)
+[404]   at scala.collection.AbstractIterable.foreach(Iterable.scala:935)                   
+[404]   at scala.App.main(App.scala:98)
+[404]   at scala.App.main$(App.scala:96)
+[404]   at top.TopMain$.main(Top.scala:211)                                                
+[404]   at top.TopMain.main(Top.scala)
+[404/404, 1 failed] =============== xiangshan.runMa...nable-difftest =============== 1222s 
+1 tasks failed
+xiangshan.runMain Subprocess failed
+make: *** [Makefile:82：/mnt/hgfs/Linux_share/EDA/riscv/XiangShan_nanhu/build/rtl/XSTop.sv] 错误 1

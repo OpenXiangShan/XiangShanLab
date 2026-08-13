@@ -1,0 +1,7 @@
+
+> halt
+riscv.cpu halted due to debug-request.
+> reg scontext
+Could not read register 'scontext'
+> reg hcontext
+Could not read register 'hcontext'

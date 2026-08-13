@@ -1,0 +1,21 @@
+{
+  "number": 4266,
+  "title": "fix(TLB): onlyS1 scene should not consider G-stage access fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4266",
+  "state": "closed",
+  "labels": [],
+  "author": "good-circle",
+  "created_at": "2025-02-12T07:44:42Z",
+  "updated_at": "2025-02-16T09:40:19Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4266/commit-log.md"
+  ],
+  "submitted_at": "2025-02-12",
+  "branch": "",
+  "rtl_commit": ""
+}

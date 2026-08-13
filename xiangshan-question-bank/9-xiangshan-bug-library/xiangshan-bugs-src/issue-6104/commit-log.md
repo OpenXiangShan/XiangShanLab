@@ -1,0 +1,77 @@
+# Commit Log
+- Issue: #6104
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6104
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6104
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6104
+- Changed files: 2
+- Additions: 11
+- Deletions: 8
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
+index f9f4520ddb8..6db39b0b3ec 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
+@@ -57,9 +57,9 @@ class TrapEntryDEventModule(implicit val p: Parameters) extends Module with CSRE
+   private val satpFlushFirstFetchFault     = in.satpFlushFirstFetchFault
+ 
+   private val hasExceptionInDmode = debugMode && hasTrap
+-  val causeIntr = DcsrCause.Haltreq.asUInt
+-  val causeExp = MuxCase(DcsrCause.None.asUInt, Seq(
++  val cause = MuxCase(DcsrCause.None.asUInt, Seq(
+     criticalErrorStateEnterDebug -> DcsrCause.Other.asUInt,
++    hasDebugIntr                 -> DcsrCause.Haltreq.asUInt,
+     triggerEnterDebugMode        -> DcsrCause.Trigger.asUInt,
+     hasDebugEbreakException      -> DcsrCause.Ebreak.asUInt,
+     hasSingleStep                -> DcsrCause.Step.asUInt
+@@ -92,7 +92,7 @@ class TrapEntryDEventModule(implicit val p: Parameters) extends Module with CSRE
+ 
+   out.dcsr.bits.V             := current.privState.V.asUInt
+   out.dcsr.bits.PRV           := current.privState.PRVM.asUInt
+-  out.dcsr.bits.CAUSE         := Mux(hasDebugIntr, causeIntr, causeExp)
++  out.dcsr.bits.CAUSE         := cause
+   out.dpc.bits.epc            := Mux(satpFlushFirstFetchFault, trapPC(63, 1), Mux(isFetchMalAddr, in.fetchMalTval(63, 1), trapPC(63, 1)))
+ 
+   out.targetPc.bits.pc        := debugPc
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
+index b58a008f007..33c43d5b076 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
+@@ -57,9 +57,7 @@ trait DebugLevel { self: NewCSR =>
+     .setAddr(CSRs.tinfo)
+ 
+   val dcsr = Module(new CSRModule("Dcsr", new DcsrBundle) with TrapEntryDEventSinkBundle with DretEventSinkBundle with HasNmipBundle {
+-    when(nmip){
+-      reg.NMIP := nmip
+-    }
++    regOut.NMIP := nmip
+   })
+     .setAddr(CSRs.dcsr)
+ 
+@@ -292,12 +290,17 @@ class Tdata2Bundle extends CSRBundle {
+ 
+ // Tinfo
+ class TinfoBundle extends CSRBundle{
+-  val VERSION     = RO(31, 24).withReset(0.U)
+-    .withDescription("Trigger-information format version field. XiangShan reports version 0, matching the Debug Spec 0.13-style encoding.")
++  val VERSION     = TriggerVer(31, 24).withReset(TriggerVer.Spec_1dot0)
++    .withDescription("Trigger-information format version field. XiangShan reports version 1, matching the ratified Debug Spec 1.0 trigger encoding.")
+   val MCONTROL6EN = RO(6).withReset(1.U)
+     .withDescription("Indicates that the mcontrol6 trigger format is supported.")
+ }
+ 
++object TriggerVer extends CSREnum with ROApply {
++  val Spec_2302  = Value(0.U)
++  val Spec_1dot0 = Value(1.U)
++}
++
+ // Dscratch
+ class DscratchBundle extends OneFieldBundle(Some("Debug scratch register."))
+```

@@ -1,0 +1,369 @@
+diff --git a/coupledL2 b/coupledL2
+index ba56bb8c601..b4ce9c20129 160000
+--- a/coupledL2
++++ b/coupledL2
+@@ -1 +1 @@
+-Subproject commit ba56bb8c6013d715b784b31e152fb3206a6abb8b
++Subproject commit b4ce9c201291fee6765816d90bf4ec995c046d8c
+diff --git a/src/main/scala/top/Configs.scala b/src/main/scala/top/Configs.scala
+index b6e0a9afc59..b23b5632932 100644
+--- a/src/main/scala/top/Configs.scala
++++ b/src/main/scala/top/Configs.scala
+@@ -295,6 +295,7 @@ class WithNKBL2
+         prefetch = Seq(BOPParameters()) ++
+           (if (tp) Seq(TPParameters()) else Nil) ++
+           (if (p.prefetcher.nonEmpty) Seq(PrefetchReceiverParams()) else Nil),
++        hasRVA23CMO = p.HasRVA23CMO,
+         enablePerf = !site(DebugOptionsKey).FPGAPlatform && site(DebugOptionsKey).EnablePerfDebug,
+         enableRollingDB = site(DebugOptionsKey).EnableRollingDB,
+         enableMonitor = site(DebugOptionsKey).AlwaysBasicDB,
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 135eaae1e06..b7092c9ee51 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -252,6 +252,7 @@ case class XSCoreParameters
+   EnableAtCommitMissTrigger: Boolean = true,
+   EnableStorePrefetchSMS: Boolean = false,
+   EnableStorePrefetchSPB: Boolean = false,
++  HasRVA23CMO: Boolean = false,
+   MMUAsidLen: Int = 16, // max is 16, 0 is not supported now
+   MMUVmidLen: Int = 14,
+   ReSelectLen: Int = 7, // load replay queue replay select counter len
+@@ -796,6 +797,7 @@ trait HasXSParameter {
+   def EnableAtCommitMissTrigger = coreParams.EnableAtCommitMissTrigger
+   def EnableStorePrefetchSMS = coreParams.EnableStorePrefetchSMS
+   def EnableStorePrefetchSPB = coreParams.EnableStorePrefetchSPB
++  def HasRVA23CMO = coreParams.HasRVA23CMO
+   require(LoadPipelineWidth == backendParams.LdExuCnt, "LoadPipelineWidth must be equal exuParameters.LduCnt!")
+   require(StorePipelineWidth == backendParams.StaCnt, "StorePipelineWidth must be equal exuParameters.StuCnt!")
+   def Enable3Load3Store = (LoadPipelineWidth == 3 && StorePipelineWidth == 3)
+diff --git a/src/main/scala/xiangshan/XSTile.scala b/src/main/scala/xiangshan/XSTile.scala
+index 30b019315ca..a48ecf044dd 100644
+--- a/src/main/scala/xiangshan/XSTile.scala
++++ b/src/main/scala/xiangshan/XSTile.scala
+@@ -76,6 +76,18 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+     case None =>
+   }
+ 
++  // CMO
++  l2top.l2cache match {
++    case Some(l2) =>
++      l2.cmo_sink_node.foreach(recv => {
++        recv := core.memBlock.cmo_sender.get
++      })
++      l2.cmo_source_node.foreach(resp => {
++        core.memBlock.cmo_reciver.get := resp
++      })
++    case None =>
++  }
++
+   val core_l3_tpmeta_source_port = l2top.l2cache match {
+     case Some(l2) => l2.tpmeta_source_node
+     case None => None
+diff --git a/src/main/scala/xiangshan/backend/MemBlock.scala b/src/main/scala/xiangshan/backend/MemBlock.scala
+index 16202517173..d7138a4b65c 100644
+--- a/src/main/scala/xiangshan/backend/MemBlock.scala
++++ b/src/main/scala/xiangshan/backend/MemBlock.scala
+@@ -24,7 +24,7 @@ import freechips.rocketchip.diplomacy.{BundleBridgeSource, LazyModule, LazyModul
+ import freechips.rocketchip.interrupts.{IntSinkNode, IntSinkPortSimple}
+ import freechips.rocketchip.tile.HasFPUParameters
+ import freechips.rocketchip.tilelink._
+-import coupledL2.PrefetchRecv
++import coupledL2.{PrefetchRecv, RVA23CMOReq, RVA23CMOResp}
+ import device.MsiInfoBundle
+ import utils._
+ import utility._
+@@ -237,6 +237,8 @@ class MemBlock()(implicit p: Parameters) extends LazyModule
+   val l3_pf_sender_opt = if (p(SoCParamsKey).L3CacheParamsOpt.nonEmpty) coreParams.prefetcher.map(_ =>
+     BundleBridgeSource(() => new huancun.PrefetchRecv)
+   ) else None
++  val cmo_sender  = if (coreParams.HasRVA23CMO) Some(BundleBridgeSource(() => DecoupledIO(new RVA23CMOReq))) else None
++  val cmo_reciver = if (coreParams.HasRVA23CMO) Some(BundleBridgeSink(Some(() => DecoupledIO(new RVA23CMOResp)))) else None
+   val frontendBridge = LazyModule(new FrontendBridge)
+   // interrupt sinks
+   val clint_int_sink = IntSinkNode(IntSinkPortSimple(1, 2))
+@@ -1102,6 +1104,21 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
+ 
+   lsq.io.maControl                              <> storeMisalignBuffer.io.sqControl
+ 
++  // lsq to l2 CMO
++  outer.cmo_sender match {
++    case Some(x) =>
++      x.out.head._1 <> lsq.io.cmoOpReq
++    case None =>
++      lsq.io.cmoOpReq.ready  := false.B
++  }
++  outer.cmo_reciver match {
++    case Some(x) =>
++      x.in.head._1  <> lsq.io.cmoOpResp
++    case None =>
++      lsq.io.cmoOpResp.valid := false.B
++      lsq.io.cmoOpResp.bits  := 0.U.asTypeOf(new RVA23CMOResp)
++  }
++
+   // Prefetcher
+   val StreamDTLBPortIndex = TlbStartVec(dtlb_ld_idx) + LduCnt + HyuCnt
+   val PrefetcherDTLBPortIndex = TlbStartVec(dtlb_pf_idx)
+@@ -1542,6 +1559,7 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
+   sbuffer.io.memSetPattenDetected := dcache.io.memSetPattenDetected
+   sbuffer.io.force_write <> lsq.io.force_write
+   // flush sbuffer
++  val cmoFlush = lsq.io.flushSbuffer.valid
+   val fenceFlush = io.ooo_to_mem.flushSb
+   val atomicsFlush = atomicsUnit.io.flush_sbuffer.valid || vSegmentUnit.io.flush_sbuffer.valid
+   val stIsEmpty = sbuffer.io.flush.empty && uncache.io.flush.empty
+@@ -1549,8 +1567,8 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
+ 
+   // if both of them tries to flush sbuffer at the same time
+   // something must have gone wrong
+-  assert(!(fenceFlush && atomicsFlush))
+-  sbuffer.io.flush.valid := RegNext(fenceFlush || atomicsFlush)
++  assert(!(fenceFlush && atomicsFlush && cmoFlush))
++  sbuffer.io.flush.valid := RegNext(fenceFlush || atomicsFlush || cmoFlush)
+   uncache.io.flush.valid := sbuffer.io.flush.valid
+ 
+   // AtomicsUnit: AtomicsUnit will override other control signials,
+@@ -1623,6 +1641,8 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
+     assert(!loadUnits(0).io.ldout.valid)
+   }
+ 
++  lsq.io.flushSbuffer.empty := sbuffer.io.sbempty
++
+   for (i <- 0 until StaCnt) {
+     when (state === s_atomics(i)) {
+       io.mem_to_ooo.staIqFeedback(i).feedbackSlow := atomicsUnit.io.feedbackSlow
+diff --git a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+index 75f25d5562c..3f00cd5c4ff 100644
+--- a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
++++ b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+@@ -836,6 +836,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
+   println("  WPUEnable: " + dwpuParam.enWPU)
+   println("  WPUEnableCfPred: " + dwpuParam.enCfPred)
+   println("  WPUAlgorithm: " + dwpuParam.algoName)
++  println("  HasRVA23CMO: " + HasRVA23CMO)
+ 
+   // Enable L1 Store prefetch
+   val StorePrefetchL1Enabled = EnableStorePrefetchAtCommit || EnableStorePrefetchAtIssue || EnableStorePrefetchSPB
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+index fe6ceb95624..b5d003fabcd 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+@@ -29,6 +29,7 @@ import xiangshan.cache.mmu.{TlbRequestIO, TlbHintIO}
+ import xiangshan.mem._
+ import xiangshan.backend._
+ import xiangshan.backend.rob.RobLsqIO
++import coupledL2.{RVA23CMOReq, RVA23CMOResp}
+ 
+ class ExceptionAddrIO(implicit p: Parameters) extends XSBundle {
+   val isStore = Input(Bool())
+@@ -114,6 +115,9 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
+     val issuePtrExt = Output(new SqPtr)
+     val l2_hint = Input(Valid(new L2ToL1Hint()))
+     val tlb_hint = Flipped(new TlbHintIO)
++    val cmoOpReq  = DecoupledIO(new RVA23CMOReq)
++    val cmoOpResp = Flipped(DecoupledIO(new RVA23CMOResp))
++    val flushSbuffer = new SbufferFlushBundle
+     val force_write = Output(Bool())
+     val lqEmpty = Output(Bool())
+ 
+@@ -171,13 +175,16 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
+   storeQueue.io.vecmmioStout <> io.vecmmioStout
+   storeQueue.io.rob         <> io.rob
+   storeQueue.io.exceptionAddr.isStore := DontCare
+-  storeQueue.io.sqCancelCnt <> io.sqCancelCnt
+-  storeQueue.io.sqDeq       <> io.sqDeq
+-  storeQueue.io.sqEmpty     <> io.sqEmpty
+-  storeQueue.io.sqFull      <> io.sqFull
+-  storeQueue.io.forward     <> io.forward // overlap forwardMask & forwardData, DO NOT CHANGE SEQUENCE
+-  storeQueue.io.force_write <> io.force_write
+-  storeQueue.io.maControl   <> io.maControl
++  storeQueue.io.sqCancelCnt  <> io.sqCancelCnt
++  storeQueue.io.sqDeq        <> io.sqDeq
++  storeQueue.io.sqEmpty      <> io.sqEmpty
++  storeQueue.io.sqFull       <> io.sqFull
++  storeQueue.io.forward      <> io.forward // overlap forwardMask & forwardData, DO NOT CHANGE SEQUENCE
++  storeQueue.io.force_write  <> io.force_write
++  storeQueue.io.cmoOpReq     <> io.cmoOpReq
++  storeQueue.io.cmoOpResp    <> io.cmoOpResp
++  storeQueue.io.flushSbuffer <> io.flushSbuffer
++  storeQueue.io.maControl    <> io.maControl
+ 
+   /* <------- DANGEROUS: Don't change sequence here ! -------> */
+ 
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+index cf540aca311..232c624ad90 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+@@ -34,6 +34,7 @@ import xiangshan.backend.decode.isa.bitfield.{Riscv32BitInst, XSInstBitFields}
+ import xiangshan.backend.fu.FuConfig._
+ import xiangshan.backend.fu.FuType
+ import xiangshan.ExceptionNO._
++import coupledL2.{RVA23CMOReq, RVA23CMOResp}
+ 
+ class SqPtr(implicit p: Parameters) extends CircularQueuePtr[SqPtr](
+   p => p(XSCoreParamsKey).StoreQueueSize
+@@ -166,6 +167,8 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+     val sbuffer = Vec(EnsbufferWidth, Decoupled(new DCacheWordReqWithVaddrAndPfFlag)) // write committed store to sbuffer
+     val sbufferVecDifftestInfo = Vec(EnsbufferWidth, Decoupled(new DynInst)) // The vector store difftest needs is, write committed store to sbuffer
+     val uncacheOutstanding = Input(Bool())
++    val cmoOpReq  = DecoupledIO(new RVA23CMOReq)
++    val cmoOpResp = Flipped(DecoupledIO(new RVA23CMOResp))
+     val mmioStout = DecoupledIO(new MemExuOutput) // writeback uncached store
+     val vecmmioStout = DecoupledIO(new MemExuOutput(isVector = true))
+     val forward = Vec(LoadPipelineWidth, Flipped(new PipeLoadForwardQueryIO))
+@@ -174,6 +177,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+     val uncache = new UncacheWordIO
+     // val refill = Flipped(Valid(new DCacheLineReq ))
+     val exceptionAddr = new ExceptionAddrIO
++    val flushSbuffer = new SbufferFlushBundle
+     val sqEmpty = Output(Bool())
+     val stAddrReadySqPtr = Output(new SqPtr)
+     val stAddrReadyVec = Output(Vec(StoreQueueSize, Bool()))
+@@ -756,7 +760,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   }
+ 
+   /**
+-    * Memory mapped IO / other uncached operations
++    * Memory mapped IO / other uncached operations / CMO
+     *
+     * States:
+     * (1) writeback from store units: mark as pending
+@@ -770,11 +774,13 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   val s_idle :: s_req :: s_resp :: s_wb :: s_wait :: Nil = Enum(5)
+   val uncacheState = RegInit(s_idle)
+   val uncacheUop = Reg(new DynInst)
++  val cboFlushedSb = RegInit(false.B)
+   switch(uncacheState) {
+     is(s_idle) {
+       when(RegNext(io.rob.pendingst && uop(deqPtr).robIdx === io.rob.pendingPtr && pending(deqPtr) && allocated(deqPtr) && datavalid(deqPtr) && addrvalid(deqPtr))) {
+         uncacheState := s_req
+         uncacheUop := uop(deqPtr)
++        cboFlushedSb := false.B
+       }
+     }
+     is(s_req) {
+@@ -817,13 +823,33 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+ 
+   // CBO op type check can be delayed for 1 cycle,
+   // as uncache op will not start in s_idle
+-  val cbo_mmio_addr = paddrModule.io.rdata(0) >> 2 << 2 // clear lowest 2 bits for op
+-  val cbo_mmio_op = 0.U //TODO
+-  val cbo_mmio_data = cbo_mmio_addr | cbo_mmio_op
+-  when(RegNext(LSUOpType.isCbo(uop(deqPtr).fuOpType))){
+-    io.uncache.req.bits.addr := DontCare // TODO
+-    io.uncache.req.bits.data := paddrModule.io.rdata(0)
+-    io.uncache.req.bits.mask := DontCare // TODO
++  val cboMmioAddr = get_block_addr(paddrModule.io.rdata(0))
++  val deqCanDoCbo = GatedRegNext(LSUOpType.isCbo(uop(deqPtr).fuOpType) && allocated(deqPtr) && addrvalid(deqPtr))
++  when (deqCanDoCbo) {
++    // disable uncache channel
++    io.uncache.req.valid := false.B
++
++    when (io.cmoOpReq.fire) {
++      uncacheState := s_resp
++    }
++
++    when (uncacheState === s_resp) {
++      when (io.cmoOpResp.fire) {
++        uncacheState := s_wb
++      }
++    }
++  }
++
++  io.cmoOpReq.valid := deqCanDoCbo && cboFlushedSb && (uncacheState === s_req)
++  io.cmoOpReq.bits.opcode  := uop(deqPtr).fuOpType(1, 0)
++  io.cmoOpReq.bits.address := cboMmioAddr
++
++  io.cmoOpResp.ready := deqCanDoCbo && (uncacheState === s_resp)
++
++  io.flushSbuffer.valid := deqCanDoCbo && !cboFlushedSb && (uncacheState === s_req) && !io.flushSbuffer.empty
++
++  when(deqCanDoCbo && !cboFlushedSb && (uncacheState === s_req) && io.flushSbuffer.empty) {
++    cboFlushedSb := true.B
+   }
+ 
+   io.uncache.req.bits.atomic := atomic(GatedRegNext(rdataPtrExtNext(0)).value)
+@@ -848,6 +874,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   io.mmioStout.valid := uncacheState === s_wb && !isVec(deqPtr)
+   io.mmioStout.bits.uop := uncacheUop
+   io.mmioStout.bits.uop.sqIdx := deqPtrExt(0)
++  io.mmioStout.bits.uop.flushPipe := deqCanDoCbo // flush Pipeline to keep order in CMO
+   io.mmioStout.bits.data := shiftDataToLow(paddrModule.io.rdata(0), dataModule.io.rdata(0).data) // dataModule.io.rdata.read(deqPtr)
+   io.mmioStout.bits.debug.isMMIO := true.B
+   io.mmioStout.bits.debug.paddr := DontCare
+@@ -959,8 +986,6 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   for (i <- 0 until EnsbufferWidth) {
+     io.sbuffer(i).valid := dataBuffer.io.deq(i).valid
+     dataBuffer.io.deq(i).ready := io.sbuffer(i).ready
+-    // Write line request should have all 1 mask
+-    assert(!(io.sbuffer(i).valid && io.sbuffer(i).bits.wline && io.sbuffer(i).bits.vecValid && !io.sbuffer(i).bits.mask.andR))
+     io.sbuffer(i).bits := DontCare
+     io.sbuffer(i).bits.cmd   := MemoryOpConstants.M_XWR
+     io.sbuffer(i).bits.addr  := dataBuffer.io.deq(i).bits.addr
+diff --git a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+index 7649e4895bf..8d9820efc11 100644
+--- a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
++++ b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+@@ -198,6 +198,7 @@ class Sbuffer(implicit p: Parameters)
+     val dcache = Flipped(new DCacheToSbufferIO)
+     val forward = Vec(LoadPipelineWidth, Flipped(new LoadForwardQueryIO))
+     val sqempty = Input(Bool())
++    val sbempty = Output(Bool())
+     val flush = Flipped(new SbufferFlushBundle)
+     val csrCtrl = Flipped(new CustomCSRCtrlIO)
+     val store_prefetch = Vec(StorePipelineWidth, DecoupledIO(new StorePrefetchReq)) // to dcache
+@@ -533,6 +534,7 @@ class Sbuffer(implicit p: Parameters)
+ 
+   XSDebug(p"ActiveCount[$ActiveCount]\n")
+ 
++  io.sbempty := GatedValidRegNext(empty)
+   io.flush.empty := GatedValidRegNext(empty && io.sqempty)
+   // lru.io.flush := sbuffer_state === x_drain_all && empty
+   switch(sbuffer_state){
+@@ -876,6 +878,7 @@ class Sbuffer(implicit p: Parameters)
+   }
+   if (env.EnableDifftest) {
+     val VecMemFLOWMaxNumber = 16
++    val WlineMaxNumber = blockWords
+ 
+     def UIntSlice(in: UInt, High: UInt, Low: UInt): UInt = {
+       val maxNum = in.getWidth
+@@ -913,6 +916,7 @@ class Sbuffer(implicit p: Parameters)
+ 
+       val isSegment       = nf =/= 0.U && !isVsm
+       val isVSLine        = (isVse || isVsm || isVsr) && !isSegment
++      val isWline         = io.in(i).bits.wline
+ 
+       // The number of stores generated by a uop theroy.
+       // No other vector instructions need to be considered.
+@@ -943,7 +947,29 @@ class Sbuffer(implicit p: Parameters)
+         difftestCommon.data   := wdata
+         difftestCommon.mask   := wmask
+ 
+-      }.otherwise{
++      } .elsewhen (isWline) {
++        val storeCommit = io.in(i).fire && io.in(i).bits.vecValid
++        val blockAddr = get_block_addr(io.in(i).bits.addr)
++
++        difftestCommon.coreid := io.hartId
++        difftestCommon.index  := (i*VecMemFLOWMaxNumber).U
++        difftestCommon.valid  := storeCommit
++        difftestCommon.addr   := blockAddr
++        difftestCommon.data   := io.in(i).bits.data
++        difftestCommon.mask   := ((1 << wordBytes) - 1).U
++
++        for (index <- 1 until WlineMaxNumber) {
++          val difftest = DifftestModule(new DiffStoreEvent, delay = 2)
++
++          difftest.coreid := io.hartId
++          difftest.index  := (i*VecMemFLOWMaxNumber + index).U
++          difftest.valid  := storeCommit && isWline
++          difftest.addr   := blockAddr + (index.U << wordOffBits)
++          difftest.data   := io.in(i).bits.data
++          difftest.mask   := ((1 << wordBytes) - 1).U
++        }
++        assert(!storeCommit || (io.in(i).bits.data === 0.U), "wline only supports whole zero write now")
++      } .otherwise{
+         val storeCommit       = io.in(i).fire
+         val waddr             = ZeroExt(Cat(io.in(i).bits.addr(PAddrBits - 1, 3), 0.U(3.W)), 64)
+         val sbufferMask       = shiftMaskToLow(io.in(i).bits.addr, io.in(i).bits.mask)

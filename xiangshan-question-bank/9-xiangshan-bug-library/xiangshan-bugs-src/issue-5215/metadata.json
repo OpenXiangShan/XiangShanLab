@@ -1,0 +1,27 @@
+{
+  "number": 5215,
+  "title": "fix(CSR, NMI): fix the logic for gating `nmi`",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5215",
+  "state": "closed",
+  "labels": [
+    "module: backend"
+  ],
+  "author": "sinceforYy",
+  "created_at": "2025-11-13T10:05:57Z",
+  "updated_at": "2025-11-18T02:41:24Z",
+  "submitted_at": "2025-11-13",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5215/commit-log.md"
+  ],
+  "bug_categories": [
+    "backend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

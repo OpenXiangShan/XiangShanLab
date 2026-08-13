@@ -1,0 +1,3 @@
+./run_rf_train_once.sh secret64 64
+./run_rf_train_once.sh bitline_attack_deadbeef 0xdeadbeefcafebabe
+./prove_security_vulnerability.py

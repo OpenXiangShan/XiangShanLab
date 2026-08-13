@@ -1,0 +1,128 @@
+# Commit Log
+- Issue: #5339
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5339
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5339
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5339
+- Changed files: 4
+- Additions: 31
+- Deletions: 9
+
+## Files
+- `src/main/scala/xiangshan/frontend/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/bpu/Bpu.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+- `src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/Bundles.scala b/src/main/scala/xiangshan/frontend/Bundles.scala
+index 45edbaa8ddf..95ba2b741e9 100644
+--- a/src/main/scala/xiangshan/frontend/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/Bundles.scala
+@@ -57,7 +57,8 @@ class BpuToFtqIO(implicit p: Parameters) extends FrontendBundle {
+   val s3FtqPtr:        FtqPtr                          = Output(new FtqPtr)
+ 
+   // perfMeta uses the same valid signal as meta
+-  val perfMeta: BpuPerfMeta = Output(new BpuPerfMeta)
++  val perfMeta:       BpuPerfMeta           = Output(new BpuPerfMeta)
++  val topdownReasons: FrontendTopDownBundle = Output(new FrontendTopDownBundle())
+ }
+ 
+ class FtqToBpuIO(implicit p: Parameters) extends FrontendBundle {
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+index bc890a455dc..98c9ae91c6f 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+@@ -26,6 +26,7 @@ import utility.XSPerfAccumulate
+ import utility.XSPerfHistogram
+ import utils.EnumUInt
+ import xiangshan.frontend.BpuToFtqIO
++import xiangshan.frontend.FrontendTopDownBundle
+ import xiangshan.frontend.FtqToBpuIO
+ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.bpu.BpuPredictionSource
+@@ -529,6 +530,8 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+   s3_perfMeta.bpSource.s3Override := s3_override
+ 
+   io.toFtq.perfMeta := s3_perfMeta
++  // TODO: override reason and redirect reason
++  io.toFtq.topdownReasons := 0.U.asTypeOf(new FrontendTopDownBundle())
+ 
+   /* *** BpTrace *** */
+   when(io.toFtq.meta.fire) {
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index cf5c977978a..cb31fcf43e6 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -31,10 +31,12 @@ import utility.XSError
+ import utility.XSPerfAccumulate
+ import utility.XSPerfHistogram
+ import xiangshan.RedirectLevel
++import xiangshan.TopDownCounters
+ import xiangshan.backend.CtrlToFtqIO
+ import xiangshan.frontend.BpuToFtqIO
+ import xiangshan.frontend.ExceptionType
+ import xiangshan.frontend.FetchRequestBundle
++import xiangshan.frontend.FrontendTopDownBundle
+ import xiangshan.frontend.FtqToBpuIO
+ import xiangshan.frontend.FtqToICacheIO
+ import xiangshan.frontend.FtqToIfuIO
+@@ -275,6 +277,20 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   io.toIfu.req.bits.fetch(0).takenCfiOffset     := entryQueue(ifuPtr(0).value).takenCfiOffset
+ 
+   io.toIfu.req.bits.fetch(1) := 0.U.asTypeOf(new FetchRequestBundle)
++
++  // toIFU topdown counters
++  val topdown_stage = RegInit(0.U.asTypeOf(new FrontendTopDownBundle()))
++  // only driven by clock, not valid-ready
++  topdown_stage                 := io.fromBpu.topdownReasons
++  io.toIfu.req.bits.topdownInfo := topdown_stage
++  when(backendRedirect.valid) {
++    // TODO: reasoning back to each BP component
++    when(backendRedirect.bits.debugIsMemVio) {
++      topdown_stage.reasons(TopDownCounters.MemVioRedirectBubble.id)                 := true.B
++      io.toIfu.req.bits.topdownInfo.reasons(TopDownCounters.MemVioRedirectBubble.id) := true.B
++    }
++  }
++
+   // --------------------------------------------------------------------------------
+   // Interaction with backend
+   // --------------------------------------------------------------------------------
+@@ -358,14 +374,15 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   // --------------------------------------------------------------------------------
+   // Performance monitoring
+   // --------------------------------------------------------------------------------
+-  io.bpuInfo                    := DontCare
+-  io.toIfu.req.bits.topdownInfo := DontCare
+-  io.toIfu.topdownRedirect      := DontCare
+-  io.ControlBTBMissBubble       := DontCare
+-  io.TAGEMissBubble             := DontCare
+-  io.SCMissBubble               := DontCare
+-  io.ITTAGEMissBubble           := DontCare
+-  io.RASMissBubble              := DontCare
++  io.bpuInfo := DontCare
++  // io.toIfu.req.bits.topdownInfo is assigned above
++  io.toIfu.topdownRedirect := backendRedirect
++
++  io.ControlBTBMissBubble := false.B // TODO: add more info to distinguish
++  io.TAGEMissBubble       := RegNext(backendRedirect.valid && backendRedirect.bits.attribute.isConditional)
++  io.SCMissBubble         := false.B // TODO: add SC info
++  io.ITTAGEMissBubble     := RegNext(backendRedirect.valid && backendRedirect.bits.attribute.isOtherIndirect)
++  io.RASMissBubble        := RegNext(backendRedirect.valid && backendRedirect.bits.attribute.isReturn)
+ 
+   val perfEvents: Seq[(String, UInt)] = Seq()
+   generatePerfEvent()
+diff --git a/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala b/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala
+index b989293b047..eedef9930de 100644
+--- a/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala
++++ b/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala
+@@ -416,6 +416,7 @@ class IBuffer(implicit p: Parameters) extends IBufferModule with HasCircularQueu
+   }
+ 
+   when(io.stallReason.backReason.valid) {
++    // Backend always overrides frontend reasons
+     io.stallReason.reason.map(_ := io.stallReason.backReason.bits)
+   }
+```

@@ -1,0 +1,34 @@
+# Commit Log
+- Issue: #3728
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3728
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3728
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3728
+- Changed files: 1
+- Additions: 5
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+index cd475832cf9..5a578953808 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+@@ -817,7 +817,11 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+     }
+     is(s_wb) {
+       when (io.mmioStout.fire || io.vecmmioStout.fire) {
+-        uncacheState := s_wait
++        when (uncacheUop.exceptionVec(storeAccessFault)) {
++          uncacheState := s_idle
++        }.otherwise {
++          uncacheState := s_wait
++        }
+       }
+     }
+     is(s_wait) {
+```

@@ -1,0 +1,9 @@
+when(!entry.fof || vstart === 0.U){
+  entry.vstart       := vstart
+  entry.exceptionVec := selExceptionVec
+  entry.uop.trigger  := selPort.trigger   // trigger only saved here
+  entry.vaddr        := vaddr
+  ...
+}.otherwise{
+  entry.vl           := Mux(entry.vl < vstart, entry.vl, vstart)  // trigger lost
+}

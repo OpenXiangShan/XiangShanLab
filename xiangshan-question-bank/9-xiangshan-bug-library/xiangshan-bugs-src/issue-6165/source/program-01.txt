@@ -1,0 +1,2 @@
+new entry/tag/takenCtr from the entry SRAM
+old usefulCtr from the useful-counter SRAM

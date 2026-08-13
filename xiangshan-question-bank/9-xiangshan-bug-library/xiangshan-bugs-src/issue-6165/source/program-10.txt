@@ -1,0 +1,7 @@
+python3 ./correlate_tage_split_prediction.py \
+  phased_seed_secret1_w512_p1_7000_40000.vcd \
+  --strict-json phased_seed_secret1_w512_p1_7000_40000.tage_split.monitor.json \
+  --json-out phased_seed_secret1_w512_p1_7000_40000.bad_read.correlation.json \
+  --event-source bad-read \
+  --before-cycles 3 \
+  --after-cycles 70

@@ -1,0 +1,8 @@
+software_observable_candidate_found = false
+
+### Additional context
+
+The suspected source-level issue is in:
+
+```text
+src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala

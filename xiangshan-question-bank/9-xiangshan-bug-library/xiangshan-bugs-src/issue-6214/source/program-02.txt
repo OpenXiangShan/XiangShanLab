@@ -1,0 +1,1 @@
+TriggerCmp(vaddr, tdata2, matchType, enable)   // data(VAddrBits-1, 0) === tdata(VAddrBits-1, 0)

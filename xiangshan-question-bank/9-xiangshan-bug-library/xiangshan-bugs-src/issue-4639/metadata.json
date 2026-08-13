@@ -1,0 +1,19 @@
+{
+  "number": 4639,
+  "title": "`mtval` different",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4639",
+  "state": "closed",
+  "labels": [
+    "type: bug/fixed"
+  ],
+  "author": "ha0lyu",
+  "created_at": "2025-04-27T06:20:20Z",
+  "updated_at": "2025-08-26T13:09:58Z",
+  "source_files": [
+    "issue-4639/source/test.zip"
+  ],
+  "archive_files": [
+    "issue-4639/source/test.zip"
+  ],
+  "has_comments": true
+}

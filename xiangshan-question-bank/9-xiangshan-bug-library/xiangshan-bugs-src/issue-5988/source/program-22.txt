@@ -1,0 +1,4 @@
+Confirmed:   software-controlled cross-set MainBTB replacement interference
+Confirmed:   measurable frontend performance impact in stock emulator counters
+Plausible:   cross-context timing side channel for secret-dependent branch paths
+Not shown:   direct arbitrary data leakage

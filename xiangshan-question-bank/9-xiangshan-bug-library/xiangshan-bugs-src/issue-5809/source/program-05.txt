@@ -1,0 +1,6 @@
+s5 different at pc = 0x008000021e, right = 0x0000000000000000, wrong = 0x0f0f0f0f0f0f0f55
+mstatus different at pc = 0x008000021e, right = 0x8000040a00007e00, wrong = 0x8000000a00006600
+mepc different at pc = 0x008000021e, right = 0x000000008000021e, wrong = 0x0000000000000000
+mtval different at pc = 0x008000021e, right = 0x0000000043002ad7, wrong = 0x0000000000000000
+mcause different at pc = 0x008000021e, right = 0x0000000000000002, wrong = 0x0000000000000000
+Core 0: ABORT ...

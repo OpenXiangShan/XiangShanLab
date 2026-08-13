@@ -1,0 +1,20 @@
+{
+  "number": 5608,
+  "title": "Compilation failed on the nanhu branch",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5608",
+  "state": "closed",
+  "labels": [
+    "module: top",
+    "type: bug/fixed"
+  ],
+  "author": "quange51",
+  "created_at": "2026-02-06T09:51:15Z",
+  "updated_at": "2026-03-31T02:06:47Z",
+  "source_files": [
+    "issue-5608/source/default.txt"
+  ],
+  "archive_files": [
+    "issue-5608/source/default.txt"
+  ],
+  "has_comments": true
+}

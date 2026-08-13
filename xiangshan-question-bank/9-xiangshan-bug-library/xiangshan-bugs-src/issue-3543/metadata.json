@@ -1,0 +1,21 @@
+{
+  "number": 3543,
+  "title": "fix(FTB): Turn off FTB updates when FTB is closed.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3543",
+  "state": "closed",
+  "labels": [],
+  "author": "sleep-zzz",
+  "created_at": "2024-09-11T05:44:03Z",
+  "updated_at": "2024-10-30T11:33:10Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3543/commit-log.md"
+  ],
+  "submitted_at": "2024-09-11",
+  "branch": "",
+  "rtl_commit": ""
+}

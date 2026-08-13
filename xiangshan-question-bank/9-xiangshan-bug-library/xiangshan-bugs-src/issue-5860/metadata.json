@@ -1,0 +1,32 @@
+{
+  "number": 5860,
+  "title": "fix(csr, satp): fix the update logic of xepc and xtval",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5860",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "module: backend",
+    "module: memory",
+    "topic: functionality",
+    "module: top"
+  ],
+  "author": "sinceforYy",
+  "created_at": "2026-04-25T07:23:03Z",
+  "updated_at": "2026-04-29T09:19:15Z",
+  "submitted_at": "2026-04-25",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5860/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend",
+    "backend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

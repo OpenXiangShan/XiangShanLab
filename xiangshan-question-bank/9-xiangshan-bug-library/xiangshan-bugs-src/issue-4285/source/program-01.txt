@@ -1,0 +1,3 @@
+  val s1_need_replacement = s1_req.miss && !s1_tag_match
+  val s1_need_eviction = s1_req.miss && !s1_tag_match && s1_repl_coh.state =/= ClientStates.Nothing
+  val s1_way_en = Mux(s1_need_replacement, s1_repl_way_en, s1_tag_match_way)

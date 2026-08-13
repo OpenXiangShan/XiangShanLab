@@ -1,0 +1,20 @@
+{
+  "number": 5846,
+  "title": "NewStoreQueue:  `cross16BDeqReg` can clear between the two sbuffer writes of one cross16B store and over-advance `deqPtr`",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5846",
+  "state": "closed",
+  "labels": [
+    "module: memory",
+    "type: bug/fixed"
+  ],
+  "author": "DFPMTS",
+  "created_at": "2026-04-22T15:45:35Z",
+  "updated_at": "2026-05-07T03:01:39Z",
+  "source_files": [
+    "issue-5846/source/bug-report.tar.gz"
+  ],
+  "archive_files": [
+    "issue-5846/source/bug-report.tar.gz"
+  ],
+  "has_comments": true
+}

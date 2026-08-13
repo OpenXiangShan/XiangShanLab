@@ -1,0 +1,463 @@
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+index 5e7a95ab315..ce42654783f 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+@@ -215,7 +215,7 @@ class TlbSectorEntry(pageNormal: Boolean, pageSuper: Boolean)(implicit p: Parame
+    */
+ 
+   def hit(vpn: UInt, asid: UInt, nSets: Int = 1, ignoreAsid: Boolean = false, vmid: UInt, hasS2xlate: Bool, onlyS2: Bool = false.B, onlyS1: Bool = false.B): Bool = {
+-    val asid_hit = Mux(hasS2xlate && onlyS2, true.B, if (ignoreAsid) true.B else (this.asid === asid))
++    val asid_hit = Mux(hasS2xlate && onlyS2, true.B, if (ignoreAsid) true.B else (this.asid === asid || perm.g))
+     val addr_low_hit = valididx(vpn(2, 0))
+     val vmid_hit = Mux(hasS2xlate, this.vmid === vmid, true.B)
+     val isPageSuper = !(level.getOrElse(0.U) === 0.U)
+@@ -242,13 +242,13 @@ class TlbSectorEntry(pageNormal: Boolean, pageSuper: Boolean)(implicit p: Parame
+     val s2vpn = data.s2.entry.tag(vpnLen - 1, sectortlbwidth)
+     val wb_vpn = Mux(s2xlate === onlyStage2, s2vpn, s1vpn)
+     val vpn = Cat(wb_vpn, 0.U(sectortlbwidth.W))
+-    val asid_hit = if (ignoreAsid) true.B else (this.asid === asid)
+-    val vpn_hit = Wire(Bool())
+-    val index_hit = Wire(Vec(tlbcontiguous, Bool()))
+-    val wb_valididx = Wire(Vec(tlbcontiguous, Bool()))
+     val hasS2xlate = this.s2xlate =/= noS2xlate
+     val onlyS1 = this.s2xlate === onlyStage1
+     val onlyS2 = this.s2xlate === onlyStage2
++    val asid_hit = Mux(hasS2xlate && onlyS2, true.B, if (ignoreAsid) true.B else (this.asid === asid || data.s1.entry.perm.get.g))
++    val vpn_hit = Wire(Bool())
++    val index_hit = Wire(Vec(tlbcontiguous, Bool()))
++    val wb_valididx = Wire(Vec(tlbcontiguous, Bool()))
+     val vmid_hit = Mux(hasS2xlate, this.vmid === vmid, true.B)
+     val pteidx_hit = MuxCase(true.B, Seq(
+       onlyS2 -> (VecInit(UIntToOH(data.s2.entry.tag(sectortlbwidth - 1, 0))).asUInt === pteidx.asUInt),
+@@ -683,7 +683,7 @@ class VectorTlbPtwIO(Width: Int)(implicit p: Parameters) extends TlbBundle {
+ }
+ 
+ /****************************  L2TLB  *************************************/
+-abstract class PtwBundle(implicit p: Parameters) extends XSBundle with HasPtwConst
++abstract class PtwBundle(implicit p: Parameters) extends XSBundle with HasPtwConst with HasTlbConst
+ abstract class PtwModule(outer: L2TLB) extends LazyModuleImp(outer)
+   with HasXSParameter with HasPtwConst
+ 
+@@ -837,14 +837,45 @@ class PtwEntry(tagLen: Int, hasPerm: Boolean = false, hasLevel: Boolean = false,
+   val v = Bool()
+ 
+   //s2xlate control whether compare vmid or not
+-  def hit(vpn: UInt, asid: UInt, vasid: UInt, vmid: UInt, allType: Boolean = false, ignoreAsid: Boolean = false, s2xlate: Bool) = {
++  def hit(vpn: UInt, asid: UInt, vasid: UInt, vmid: UInt, allType: Boolean = false, ignoreID: Bool = false.B, s2xlate: UInt = 0.U(2.W), sfence: UInt = 0.U(2.W)) = {
+     require(vpn.getWidth == vpnLen)
++
++    require(s2xlate.getWidth == 2)
++    require(sfence.getWidth == 2)
++
++    val not_sfence = sfence === noSfence
++    // sfence && !virt, should check asid(may ignore)
++    val sfence_valid = sfence === isSfence
++    // hfence_v or sfence && virt, should check vmid && asid(may ignore)
++    val hfenceV_valid = sfence === isVSfence
++    // hfence_g, should check vmid
++    val hfenceG_valid = sfence === isGSfence // hfence_g
++
++    // !virt, should check asid(global)
++    val not_virt = (s2xlate === noS2xlate && not_sfence) || sfence_valid
++    val onlyS1 = s2xlate === onlyStage1
++    val onlyS2 = s2xlate === onlyStage2
++
++    // For sfence or hfence_vvma, ignoreID means ignoreAsid
++    // For hfenceG_valid, ignoreID means ignoreVmid and it itself also ignoreAsid
++    val ignoreAsid = ignoreID
++    val ignoreVmid = ignoreID && hfenceG_valid
++
++    val need_asid_check = !ignoreAsid && !onlyS2 && !hfenceG_valid
++    val need_vmid_check = !ignoreVmid && !not_virt && !sfence_valid
++
+ //    require(this.asid.getWidth <= asid.getWidth)
+-    val asid_value = Mux(s2xlate, vasid, asid)
+-    val asid_hit = if (ignoreAsid) true.B else (this.asid === asid_value)
+-    val vmid_hit = Mux(s2xlate, (this.vmid.getOrElse(0.U) === vmid), true.B)
++    val asid_value = Mux(not_virt, asid, vasid)
++    val is_global = WireInit(false.B)
++    if (hasPerm) {
++      is_global := perm.get.g
++    }
++    val asid_hit = Mux(need_asid_check, (this.asid === asid_value || is_global), true.B)
++    val vmid_hit = Mux(need_vmid_check, this.vmid.getOrElse(0.U) === vmid, true.B)
++
+     if (allType) {
+       require(hasLevel)
++      require(hasPerm)
+       val tag_match = Wire(Vec(4, Bool())) // 512GB, 1GB, 2MB or 4KB(including SVNapot), not parameterized here
+       when (n.getOrElse(0.U) =/= 0.U) {
+         tag_match(0) := tag(vpnnLen - 1, pteNapotBits) === vpn(vpnnLen - 1, pteNapotBits)
+@@ -869,13 +900,17 @@ class PtwEntry(tagLen: Int, hasPerm: Boolean = false, hasLevel: Boolean = false,
+     }
+   }
+ 
+-  def refill(vpn: UInt, asid: UInt, vmid: UInt, pte: UInt, level: UInt = 0.U, prefetch: Bool, valid: Bool = false.B): Unit = {
++  def refill(vpn: UInt, asid: UInt, vmid: UInt, pte: UInt, level: UInt = 0.U, prefetch: Bool, valid: Bool = false.B, s2xlate: UInt): Unit = {
+     require(this.asid.getWidth <= asid.getWidth) // maybe equal is better, but ugly outside
+ 
+     tag := vpn(vpnLen - 1, vpnLen - tagLen)
+     pbmt := pte.asTypeOf(new PteBundle().cloneType).pbmt
+     ppn := pte.asTypeOf(new PteBundle().cloneType).getPPN()
+     perm.map(_ := pte.asTypeOf(new PteBundle().cloneType).perm)
++    when (s2xlate === onlyStage2) {
++      // g bit in G-stage PTEs should be ignored by hardware
++      perm.map(_.g := false.B)
++    }
+     n.map(_ := pte.asTypeOf(new PteBundle().cloneType).n)
+     this.asid := asid
+     this.vmid.map(_ := vmid)
+@@ -884,9 +919,9 @@ class PtwEntry(tagLen: Int, hasPerm: Boolean = false, hasLevel: Boolean = false,
+     this.level.map(_ := level)
+   }
+ 
+-  def genPtwEntry(vpn: UInt, asid: UInt, pte: UInt, level: UInt = 0.U, prefetch: Bool, valid: Bool = false.B) = {
++  def genPtwEntry(vpn: UInt, asid: UInt, pte: UInt, level: UInt = 0.U, prefetch: Bool, valid: Bool = false.B, s2xlate: UInt) = {
+     val e = Wire(new PtwEntry(tagLen, hasPerm, hasLevel))
+-    e.refill(vpn, asid, pte, level, prefetch, valid)
++    e.refill(vpn, asid, pte, level, prefetch, valid, s2xlate = s2xlate)
+     e
+   }
+ 
+@@ -947,10 +982,14 @@ class PtwEntries(num: Int, tagLen: Int, level: Int, hasPerm: Boolean, ReservedBi
+   }
+ 
+   // For PTWCache l0 & l1 entries, need not consider napot
+-  def hit(vpn: UInt, asid: UInt, vasid: UInt, vmid:UInt, ignoreAsid: Boolean = false, s2xlate: Bool) = {
+-    val asid_value = Mux(s2xlate, vasid, asid)
+-    val asid_hit = if (ignoreAsid) true.B else (this.asid === asid_value)
+-    val vmid_hit = Mux(s2xlate, this.vmid.getOrElse(0.U) === vmid, true.B)
++  def hit(vpn: UInt, asid: UInt, vasid: UInt, vmid:UInt, ignoreID: Bool = false.B, s2xlate: UInt) = {
++    val is_global = WireInit(false.B)
++    if (hasPerm) {
++      is_global := perms.get(sectorIdxClip(vpn, level)).g
++    }
++    val asid_value = Mux(s2xlate =/= noS2xlate, vasid, asid)
++    val asid_hit = ignoreID || Mux(s2xlate === onlyStage2, true.B, (this.asid === asid_value || is_global))
++    val vmid_hit = Mux(s2xlate =/= noS2xlate, this.vmid.getOrElse(0.U) === vmid, true.B)
+     asid_hit && vmid_hit && tag === tagClip(vpn) && vs(sectorIdxClip(vpn, level))
+   }
+ 
+@@ -970,6 +1009,10 @@ class PtwEntries(num: Int, tagLen: Int, level: Int, hasPerm: Boolean, ReservedBi
+       ps.vs(i)   := (pte.canRefill(levelUInt, s2xlate, pbmte, mode) && (if (hasPerm) pte.isLeaf() else !pte.isLeaf())) || (if (hasPerm) pte.onlyPf(levelUInt, s2xlate, pbmte) else false.B)
+       ps.onlypf(i) := pte.onlyPf(levelUInt, s2xlate, pbmte)
+       ps.perms.map(_(i) := pte.perm)
++      when (s2xlate === onlyStage2) {
++        // g bit in G-stage PTEs should be ignored by hardware
++        ps.perms.map(_(i).g := false.B)
++      }
+     }
+     ps.reservedBits.map(_ := true.B)
+     ps
+@@ -1162,12 +1205,11 @@ class PtwSectorResp(implicit p: Parameters) extends PtwBundle {
+     !pf && !entry.v && !af
+   }
+ 
+-  def hit(vpn: UInt, asid: UInt, vmid: UInt, allType: Boolean = false, ignoreAsid: Boolean = false, s2xlate: Bool): Bool = {
++  def hit(vpn: UInt, asid: UInt, vmid: UInt, allType: Boolean = false, ignoreAsid: Boolean = false): Bool = {
+     require(vpn.getWidth == vpnLen)
+     require(allType)
+     // require(this.asid.getWidth <= asid.getWidth)
+-    val asid_hit = if (ignoreAsid) true.B else (this.entry.asid === asid)
+-    val vmid_hit = Mux(s2xlate, this.entry.vmid.getOrElse(0.U) === vmid, true.B)
++    val asid_hit = if (ignoreAsid) true.B else (this.entry.asid === asid || this.entry.perm.get.g)
+ 
+     val tag_match = Wire(Vec(Level + 1, Bool()))
+     tag_match(0) := Mux(entry.n.getOrElse(0.U) === 0.U,
+@@ -1188,7 +1230,7 @@ class PtwSectorResp(implicit p: Parameters) extends PtwBundle {
+     val isSuperPage = entry.level.getOrElse(0.U) =/= 0.U || entry.n.getOrElse(0.U) =/= 0.U
+     val addr_low_hit = Mux(isSuperPage, true.B, valididx(vpn(sectortlbwidth - 1, 0)))
+ 
+-    asid_hit && vmid_hit && level_match && addr_low_hit
++    asid_hit && level_match && addr_low_hit
+   }
+ }
+ 
+@@ -1274,7 +1316,7 @@ class PtwRespS2(implicit p: Parameters) extends PtwBundle {
+   }
+ 
+   def hit(vpn: UInt, asid: UInt, vasid: UInt, vmid: UInt, allType: Boolean = false, ignoreAsid: Boolean = false): Bool = {
+-    val noS2_hit = s1.hit(vpn, Mux(this.hasS2xlate, vasid, asid), vmid, allType, ignoreAsid, this.hasS2xlate)
++    val noS2_hit = s1.hit(vpn, asid, vmid, allType, ignoreAsid)
+     val onlyS2_hit = s2.hit(vpn, vmid)
+     // allstage and onlys1 hit
+     val s1vpn = Cat(s1.entry.tag, s1.addr_low)
+@@ -1311,7 +1353,7 @@ class PtwRespS2(implicit p: Parameters) extends PtwBundle {
+ 
+     val vpn_hit = level_match
+     val vmid_hit = s1.entry.vmid.getOrElse(0.U) === vmid
+-    val vasid_hit = if (ignoreAsid) true.B else (s1.entry.asid === vasid)
++    val vasid_hit = if (ignoreAsid) true.B else (s1.entry.asid === vasid || s1.entry.perm.get.g)
+     val all_onlyS1_hit = vpn_hit && vmid_hit && vasid_hit
+     Mux(this.s2xlate === noS2xlate, noS2_hit,
+       Mux(this.s2xlate === onlyStage2, onlyS2_hit, all_onlyS1_hit))
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUConst.scala b/src/main/scala/xiangshan/cache/mmu/MMUConst.scala
+index e543a5a0b7c..fcb984ba419 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUConst.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUConst.scala
+@@ -138,6 +138,11 @@ trait HasTlbConst extends HasXSParameter {
+   def onlyStage1 = "b01".U
+   def onlyStage2 = "b10".U
+ 
++  def noSfence = "b00".U
++  def isSfence = "b01".U
++  def isVSfence = "b10".U
++  def isGSfence = "b11".U
++
+   def Sv39 = "h8".U
+   def Sv48 = "h9".U
+ 
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+index 8ee2cdbbc96..27b6f0e705c 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+@@ -299,6 +299,13 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     require(set.getWidth == log2Up(l2tlbParams.l1nSets))
+     l1h(set)
+   }
++  def getl1gSet(vpn: UInt) = {
++    require(log2Up(l2tlbParams.l1nWays) == log2Down(l2tlbParams.l1nWays))
++    val set = genPtwL1SetIdx(vpn)
++    require(set.getWidth == log2Up(l2tlbParams.l1nSets))
++    val l1gVec = l1g.asTypeOf(Vec(l2tlbParams.l1nSets, UInt(l2tlbParams.l1nWays.W)))
++    l1gVec(set)
++  }
+ 
+   // l0: level 0 leaf pte of 4KB pages
+   val l0 = Module(new SplittedSRAM(
+@@ -407,7 +414,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+   val ptwl3replace = if(EnableSv48) Some(ReplacementPolicy.fromString(l2tlbParams.l3Replacer, l2tlbParams.l3Size)) else None
+   if (EnableSv48) {
+     val hitVecT = l3.get.zipWithIndex.map {
+-        case (e, i) => (e.hit(vpn_search, io.csr_dup(2).satp.asid, io.csr_dup(2).vsatp.asid, io.csr_dup(2).hgatp.vmid, s2xlate = h_search =/= noS2xlate)
++        case (e, i) => (e.hit(vpn_search, io.csr_dup(2).satp.asid, io.csr_dup(2).vsatp.asid, io.csr_dup(2).hgatp.vmid, ignoreID = l3g.get(i), s2xlate = h_search)
+           && l3v.get(i) && h_search === l3h.get(i))
+     }
+     val hitVec = hitVecT.map(RegEnable(_, stageReq.fire))
+@@ -422,7 +429,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+ 
+     l3AccessPerf.get.zip(hitVec).map{ case (l, h) => l := h && stageDelay_valid_1cycle}
+     for (i <- 0 until l2tlbParams.l3Size) {
+-      XSDebug(stageReq.fire, p"[l3] l3(${i.U}) ${l3.get(i)} hit:${l3.get(i).hit(vpn_search, io.csr_dup(2).satp.asid, io.csr_dup(2).vsatp.asid, io.csr_dup(2).hgatp.vmid, s2xlate = h_search =/= noS2xlate)}\n")
++      XSDebug(stageReq.fire, p"[l3] l3(${i.U}) ${l3.get(i)} hit:${l3.get(i).hit(vpn_search, io.csr_dup(2).satp.asid, io.csr_dup(2).vsatp.asid, io.csr_dup(2).hgatp.vmid, ignoreID = l3g.get(i), s2xlate = h_search)}\n")
+     }
+     XSDebug(stageReq.fire, p"[l3] l3v:${Binary(l3v.get)} hitVecT:${Binary(VecInit(hitVecT).asUInt)}\n")
+     XSDebug(stageDelay(0).valid, p"[l3] l3Hit:${hit} l3HitPPN:0x${Hexadecimal(hitPPN)} hitVec:${VecInit(hitVec).asUInt}\n")
+@@ -441,7 +448,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+   val ptwl2replace = ReplacementPolicy.fromString(l2tlbParams.l2Replacer, l2tlbParams.l2Size)
+   val (l2Hit, l2HitPPN, l2HitPbmt, l2Pre) = {
+     val hitVecT = l2.zipWithIndex.map {
+-      case (e, i) => (e.hit(vpn_search, io.csr_dup(2).satp.asid, io.csr_dup(2).vsatp.asid, io.csr_dup(2).hgatp.vmid, s2xlate = h_search =/= noS2xlate)
++      case (e, i) => (e.hit(vpn_search, io.csr_dup(2).satp.asid, io.csr_dup(2).vsatp.asid, io.csr_dup(2).hgatp.vmid, ignoreID = l2g(i), s2xlate = h_search)
+         && l2v(i) && h_search === l2h(i))
+     }
+     val hitVec = hitVecT.map(RegEnable(_, stageReq.fire))
+@@ -456,7 +463,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+ 
+     l2AccessPerf.zip(hitVec).map{ case (l, h) => l := h && stageDelay_valid_1cycle}
+     for (i <- 0 until l2tlbParams.l2Size) {
+-      XSDebug(stageReq.fire, p"[l2] l2(${i.U}) ${l2(i)} hit:${l2(i).hit(vpn_search, io.csr_dup(2).satp.asid, io.csr_dup(2).vsatp.asid, io.csr_dup(2).hgatp.vmid, s2xlate = h_search =/= noS2xlate)}\n")
++      XSDebug(stageReq.fire, p"[l2] l2(${i.U}) ${l2(i)} hit:${l2(i).hit(vpn_search, io.csr_dup(2).satp.asid, io.csr_dup(2).vsatp.asid, io.csr_dup(2).hgatp.vmid, ignoreID = l2g(i), s2xlate = h_search)}\n")
+     }
+     XSDebug(stageReq.fire, p"[l2] l2v:${Binary(l2v)} hitVecT:${Binary(VecInit(hitVecT).asUInt)}\n")
+     XSDebug(stageDelay(0).valid, p"[l2] l2Hit:${hit} l2HitPPN:0x${Hexadecimal(hitPPN)} hitVec:${VecInit(hitVec).asUInt}\n")
+@@ -479,6 +486,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     l1.io.r.req.bits.apply(setIdx = ridx)
+     val vVec_req = getl1vSet(vpn_search)
+     val hVec_req = getl1hSet(vpn_search)
++    val gVec_req = getl1gSet(vpn_search)
+ 
+     // delay one cycle after sram read
+     val delay_vpn = stageDelay(0).bits.req_info.vpn
+@@ -490,8 +498,9 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     val data_resp = DataHoldBypass(l1.io.r.resp.data, stageDelay_valid_1cycle)
+     val vVec_delay = RegEnable(vVec_req, stageReq.fire)
+     val hVec_delay = RegEnable(hVec_req, stageReq.fire)
+-    val hitVec_delay = VecInit(data_resp.zip(vVec_delay.asBools).zip(hVec_delay).map { case ((wayData, v), h) =>
+-      wayData.entries.hit(delay_vpn, io.csr_dup(1).satp.asid, io.csr_dup(1).vsatp.asid, io.csr_dup(1).hgatp.vmid, s2xlate = delay_h =/= noS2xlate) && v && (delay_h === h)})
++    val gVec_delay = RegEnable(gVec_req, stageReq.fire)
++    val hitVec_delay = VecInit(data_resp.zip(vVec_delay.asBools).zip(gVec_delay.asBools).zip(hVec_delay).map { case (((wayData, v), g), h) =>
++      wayData.entries.hit(delay_vpn, io.csr_dup(1).satp.asid, io.csr_dup(1).vsatp.asid, io.csr_dup(1).hgatp.vmid, ignoreID = g, s2xlate = delay_h) && v && (delay_h === h)})
+ 
+     // check hit and ecc
+     val check_vpn = stageCheck(0).bits.req_info.vpn
+@@ -552,7 +561,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     val vVec_delay = RegEnable(vVec_req, stageReq.fire)
+     val hVec_delay = RegEnable(hVec_req, stageReq.fire)
+     val hitVec_delay = VecInit(data_resp.zip(vVec_delay.asBools).zip(hVec_delay).map { case ((wayData, v), h) =>
+-      wayData.entries.hit(delay_vpn, io.csr_dup(0).satp.asid, io.csr_dup(0).vsatp.asid, io.csr_dup(0).hgatp.vmid, s2xlate = delay_h =/= noS2xlate) && v && (delay_h === h)})
++      wayData.entries.hit(delay_vpn, io.csr_dup(0).satp.asid, io.csr_dup(0).vsatp.asid, io.csr_dup(0).hgatp.vmid, s2xlate = delay_h) && v && (delay_h === h)})
+ 
+     // check hit and ecc
+     val check_vpn = stageCheck(0).bits.req_info.vpn
+@@ -622,7 +631,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+   // super page
+   val spreplace = ReplacementPolicy.fromString(l2tlbParams.spReplacer, l2tlbParams.spSize)
+   val (spHit, spHitData, spPre, spValid, spJmpBitmapCheck) = {
+-    val hitVecT = sp.zipWithIndex.map { case (e, i) => e.hit(vpn_search, io.csr_dup(0).satp.asid, io.csr_dup(0).vsatp.asid, io.csr_dup(0).hgatp.vmid, allType = true, s2xlate = h_search =/= noS2xlate) && spv(i) && (sph(i) === h_search) }
++    val hitVecT = sp.zipWithIndex.map { case (e, i) => e.hit(vpn_search, io.csr_dup(0).satp.asid, io.csr_dup(0).vsatp.asid, io.csr_dup(0).hgatp.vmid, allType = true, s2xlate = h_search) && spv(i) && (sph(i) === h_search) }
+     val hitVec = hitVecT.map(RegEnable(_, stageReq.fire))
+     val hitData = ParallelPriorityMux(hitVec zip sp)
+     val ishptw = RegEnable(stageReq.bits.isHptwReq, stageReq.fire)
+@@ -642,7 +651,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+ 
+     spAccessPerf.zip(hitVec).map{ case (s, h) => s := h && stageDelay_valid_1cycle }
+     for (i <- 0 until l2tlbParams.spSize) {
+-      XSDebug(stageReq.fire, p"[sp] sp(${i.U}) ${sp(i)} hit:${sp(i).hit(vpn_search, io.csr_dup(0).satp.asid, io.csr_dup(0).vsatp.asid, io.csr_dup(0).hgatp.vmid, allType = true, s2xlate = h_search =/= noS2xlate)} spv:${spv(i)}\n")
++      XSDebug(stageReq.fire, p"[sp] sp(${i.U}) ${sp(i)} hit:${sp(i).hit(vpn_search, io.csr_dup(0).satp.asid, io.csr_dup(0).vsatp.asid, io.csr_dup(0).hgatp.vmid, allType = true, s2xlate = h_search)} spv:${spv(i)}\n")
+     }
+     XSDebug(stageDelay_valid_1cycle, p"[sp] spHit:${hit} spHitData:${hitData} hitVec:${Binary(VecInit(hitVec).asUInt)}\n")
+ 
+@@ -881,18 +890,20 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+         io.csr_dup(2).hgatp.vmid,
+         memSelData(2),
+         3.U,
+-        refill_prefetch_dup(2)
++        refill_prefetch_dup(2),
++        s2xlate = refill.req_info_dup(2).s2xlate
+       )
+       ptwl2replace.access(l3RefillIdx)
+       l3v.get := l3v.get | l3RfOH
+-      l3g.get := (l3g.get & ~l3RfOH) | Mux(memPte(2).perm.g, l3RfOH, 0.U)
++      // g bit in G-stage PTEs should be ignored by hardware
++      l3g.get := (l3g.get & ~l3RfOH) | Mux(memPte(2).perm.g && refill.req_info_dup(2).s2xlate =/= onlyStage2, l3RfOH, 0.U)
+       l3h.get(l3RefillIdx) := refill_h(2)
+ 
+       for (i <- 0 until l2tlbParams.l3Size) {
+         l3RefillPerf.get(i) := i.U === l3RefillIdx
+       }
+     }
+-    XSDebug(l3Refill, p"[l3 refill] refillIdx:${l3RefillIdx} refillEntry:${l3.get(l3RefillIdx).genPtwEntry(refill.req_info_dup(2).vpn, Mux(refill.req_info_dup(2).s2xlate =/= noS2xlate, io.csr_dup(2).vsatp.asid, io.csr_dup(2).satp.asid), memSelData(2), 0.U, prefetch = refill_prefetch_dup(2))}\n")
++    XSDebug(l3Refill, p"[l3 refill] refillIdx:${l3RefillIdx} refillEntry:${l3.get(l3RefillIdx).genPtwEntry(refill.req_info_dup(2).vpn, Mux(refill.req_info_dup(2).s2xlate =/= noS2xlate, io.csr_dup(2).vsatp.asid, io.csr_dup(2).satp.asid), memSelData(2), 0.U, prefetch = refill_prefetch_dup(2), s2xlate = refill.req_info_dup(2).s2xlate)}\n")
+     XSDebug(l3Refill, p"[l3 refill] l3v:${Binary(l3v.get)}->${Binary(l3v.get | l3RfOH)} l3g:${Binary(l3g.get)}->${Binary((l3g.get & ~l3RfOH) | Mux(memPte(2).perm.g, l3RfOH, 0.U))}\n")
+   }
+ 
+@@ -913,18 +924,19 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+       io.csr_dup(2).hgatp.vmid,
+       memSelData(2),
+       2.U,
+-      refill_prefetch_dup(2)
++      refill_prefetch_dup(2),
++      s2xlate = refill.req_info_dup(2).s2xlate
+     )
+     ptwl2replace.access(l2RefillIdx)
+     l2v := l2v | l2RfOH
+-    l2g := (l2g & ~l2RfOH) | Mux(memPte(2).perm.g, l2RfOH, 0.U)
++    l2g := (l2g & ~l2RfOH) | Mux(memPte(2).perm.g && refill.req_info_dup(2).s2xlate =/= onlyStage2, l2RfOH, 0.U)
+     l2h(l2RefillIdx) := refill_h(2)
+ 
+     for (i <- 0 until l2tlbParams.l2Size) {
+       l2RefillPerf(i) := i.U === l2RefillIdx
+     }
+   }
+-  XSDebug(l2Refill, p"[l2 refill] refillIdx:${l2RefillIdx} refillEntry:${l2(l2RefillIdx).genPtwEntry(refill.req_info_dup(2).vpn, Mux(refill.req_info_dup(2).s2xlate =/= noS2xlate, io.csr_dup(2).vsatp.asid, io.csr_dup(2).satp.asid), memSelData(2), 0.U, prefetch = refill_prefetch_dup(2))}\n")
++  XSDebug(l2Refill, p"[l2 refill] refillIdx:${l2RefillIdx} refillEntry:${l2(l2RefillIdx).genPtwEntry(refill.req_info_dup(2).vpn, Mux(refill.req_info_dup(2).s2xlate =/= noS2xlate, io.csr_dup(2).vsatp.asid, io.csr_dup(2).satp.asid), memSelData(2), 0.U, prefetch = refill_prefetch_dup(2), s2xlate = refill.req_info_dup(2).s2xlate)}\n")
+   XSDebug(l2Refill, p"[l2 refill] l2v:${Binary(l2v)}->${Binary(l2v | l2RfOH)} l2g:${Binary(l2g)}->${Binary((l2g & ~l2RfOH) | Mux(memPte(2).perm.g, l2RfOH, 0.U))}\n")
+ 
+   // L1 refill
+@@ -956,7 +968,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     )
+     ptwl1replace.access(l1RefillIdx, l1VictimWay)
+     l1v := l1v | l1RfvOH
+-    l1g := l1g & ~l1RfvOH | Mux(Cat(memPtes.map(_.perm.g)).andR, l1RfvOH, 0.U)
++    l1g := l1g & ~l1RfvOH | Mux(Cat(memPtes.map(_.perm.g)).andR && refill.req_info_dup(1).s2xlate =/= onlyStage2, l1RfvOH, 0.U)
+     l1h(l1RefillIdx)(l1VictimWay) := refill_h(1)
+     l1asids(l1RefillIdx)(l1VictimWay) := XORFold(l1Wasid, l2tlbParams.hashAsidWidth)
+     l1vmids(l1RefillIdx)(l1VictimWay) := XORFold(io.csr_dup(1).hgatp.vmid, l2tlbParams.hashAsidWidth)
+@@ -1003,7 +1015,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     )
+     ptwl0replace.access(l0RefillIdx, l0VictimWay)
+     l0v := l0v | l0RfvOH
+-    l0g := l0g & ~l0RfvOH | Mux(Cat(memPtes.map(_.perm.g)).andR, l0RfvOH, 0.U)
++    l0g := l0g & ~l0RfvOH | Mux(Cat(memPtes.map(_.perm.g)).andR && refill.req_info_dup(0).s2xlate =/= onlyStage2, l0RfvOH, 0.U)
+     l0h(l0RefillIdx)(l0VictimWay) := refill_h(0)
+     if (HasBitmapCheck) {updateL0BitmapReg(l0BitmapReg, Tran2D(~l0RfvOH))}
+     l0asids(l0RefillIdx)(l0VictimWay) := XORFold(l0Wasid, l2tlbParams.hashAsidWidth)
+@@ -1036,11 +1048,12 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+       memSelData(0),
+       refill.level_dup(0),
+       refill_prefetch_dup(0),
+-      !memPte(0).onlyPf(refill.level_dup(0), refill.req_info_dup(0).s2xlate, pbmte)
++      !memPte(0).onlyPf(refill.level_dup(0), refill.req_info_dup(0).s2xlate, pbmte),
++      s2xlate = refill.req_info_dup(0).s2xlate
+     )
+     spreplace.access(spRefillIdx)
+     spv := spv | spRfOH
+-    spg := spg & ~spRfOH | Mux(memPte(0).perm.g, spRfOH, 0.U)
++    spg := spg & ~spRfOH | Mux(memPte(0).perm.g && refill.req_info_dup(0).s2xlate =/= onlyStage2, spRfOH, 0.U)
+     sph(spRefillIdx) := refill_h(0)
+     if (HasBitmapCheck) {updateSpBitmapReg(spBitmapReg, TranVec(~spRfOH))}
+ 
+@@ -1048,7 +1061,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+       spRefillPerf(i) := i.U === spRefillIdx
+     }
+   }
+-  XSDebug(spRefill, p"[sp refill] refillIdx:${spRefillIdx} refillEntry:${sp(spRefillIdx).genPtwEntry(refill.req_info_dup(0).vpn, Mux(refill.req_info_dup(0).s2xlate =/= noS2xlate, io.csr_dup(0).vsatp.asid, io.csr_dup(0).satp.asid), memSelData(0), refill.level_dup(0), refill_prefetch_dup(0))}\n")
++  XSDebug(spRefill, p"[sp refill] refillIdx:${spRefillIdx} refillEntry:${sp(spRefillIdx).genPtwEntry(refill.req_info_dup(0).vpn, Mux(refill.req_info_dup(0).s2xlate =/= noS2xlate, io.csr_dup(0).vsatp.asid, io.csr_dup(0).satp.asid), memSelData(0), refill.level_dup(0), refill_prefetch_dup(0), s2xlate = refill.req_info_dup(0).s2xlate)}\n")
+   XSDebug(spRefill, p"[sp refill] spv:${Binary(spv)}->${Binary(spv | spRfOH)} spg:${Binary(spg)}->${Binary(spg & ~spRfOH | Mux(memPte(0).perm.g, spRfOH, 0.U))}\n")
+ 
+   val l1eccFlush = resp_res.l1.ecc && stageResp_valid_1cycle_dup(0) // RegNext(l1eccError, init = false.B)
+@@ -1121,11 +1134,11 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+       when (sfence_dup(0).bits.rs2) {
+         // specific leaf of addr && all asid
+         l0v := l0v & ~(l0virthit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(sfence_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, ignoreAsid = true, s2xlate = io.csr_dup(0).priv.virt))).asUInt)
++        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(sfence_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, ignoreID = true.B, sfence = Mux(io.csr_dup(0).priv.virt, isVSfence, isSfence)))).asUInt)
+       } .otherwise {
+         // specific leaf of addr && specific asid
+         l0v := l0v & ~(l0virthit & ~l0g & l0asidhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(~spg & sphhit & VecInit(sp.map(_.hit(sfence_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, s2xlate = io.csr_dup(0).priv.virt))).asUInt)
++        spv := spv & ~(~spg & sphhit & VecInit(sp.map(_.hit(sfence_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, sfence = Mux(io.csr_dup(0).priv.virt, isVSfence, isSfence)))).asUInt)
+       }
+     }
+   }
+@@ -1165,10 +1178,10 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     }.otherwise {
+       when(sfence_dup(0).bits.rs2) {
+         l0v := l0v & ~(l0hhit & l0vmidhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfencev_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, ignoreAsid = true, s2xlate = true.B))).asUInt)
++        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfencev_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, ignoreID = true.B, sfence = isVSfence))).asUInt)
+       }.otherwise {
+         l0v := l0v & ~(l0hhit & l0vmidhit & ~l0g & l0asidhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(~spg & sphhit & VecInit(sp.map(_.hit(hfencev_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, s2xlate = true.B))).asUInt)
++        spv := spv & ~(~spg & sphhit & VecInit(sp.map(_.hit(hfencev_vpn, sfence_dup(0).bits.id, sfence_dup(0).bits.id, io.csr_dup(0).hgatp.vmid, allType = true, sfence = isVSfence))).asUInt)
+       }
+     }
+   }
+@@ -1209,10 +1222,10 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+     }.otherwise {
+       when(sfence_dup(0).bits.rs2) {
+         l0v := l0v & ~(l0hhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfenceg_gvpn, 0.U, 0.U, sfence_dup(0).bits.id, allType = true, ignoreAsid = true, s2xlate = false.B))).asUInt)
++        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfenceg_gvpn, 0.U, 0.U, sfence_dup(0).bits.id, allType = true, ignoreID = true.B, sfence = isGSfence))).asUInt)
+       }.otherwise {
+         l0v := l0v & ~(l0hhit & l0vmidhit & l0vpnhit & l0flushMask)
+-        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfenceg_gvpn, 0.U, 0.U, sfence_dup(0).bits.id, allType = true, ignoreAsid = true, s2xlate = true.B))).asUInt)
++        spv := spv & ~(sphhit & VecInit(sp.map(_.hit(hfenceg_gvpn, 0.U, 0.U, sfence_dup(0).bits.id, allType = true, sfence = isGSfence))).asUInt)
+       }
+     }
+   }
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala b/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala
+index 84bce40bb19..53c3aaeb03f 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala
+@@ -221,15 +221,19 @@ class TLBFA(
+   when (hfencev_valid) {
+     when (hfencev.bits.rs1) {
+       when (hfencev.bits.rs2) {
++        // all addr and all asid
+         v.zipWithIndex.map { case (a, i) => a := a && !(entries(i).s2xlate =/= noS2xlate && entries(i).vmid === io.csr.hgatp.vmid)}
+       }.otherwise {
++        // all addr but specific asid
+         v.zipWithIndex.map { case (a, i) => a := a && !(!g(i) && (entries(i).s2xlate =/= noS2xlate && entries(i).asid === sfence.bits.id && entries(i).vmid === io.csr.hgatp.vmid))
+         }
+       }
+     }.otherwise {
+       when (hfencev.bits.rs2) {
++        // specific addr but all asid
+         v.zipWithIndex.map{ case (a, i) => a := a && !hfencevHit_noasid(i) }
+       }.otherwise {
++        // specific addr and specific asid
+         v.zipWithIndex.map{ case (a, i) => a := a && !(hfencevHit(i) && !g(i)) }
+       }
+     }

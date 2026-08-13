@@ -1,0 +1,21 @@
+{
+  "number": 4713,
+  "title": "Mstatus.MIE not set properly",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4713",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported"
+  ],
+  "author": "bantierr",
+  "created_at": "2025-05-20T14:33:09Z",
+  "updated_at": "2025-05-21T05:44:34Z",
+  "source_files": [
+    "issue-4713/source/rtl666102_xiangshan_0_73_True.zip",
+    "issue-4713/source/program-01.txt",
+    "issue-4713/source/program-02.txt"
+  ],
+  "archive_files": [
+    "issue-4713/source/rtl666102_xiangshan_0_73_True.zip"
+  ],
+  "has_comments": true
+}

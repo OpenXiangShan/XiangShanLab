@@ -1,0 +1,1 @@
+val flush = (needFlush && uncacheState === s_idle) || (io.uncache.resp.fire && needFlushReg)

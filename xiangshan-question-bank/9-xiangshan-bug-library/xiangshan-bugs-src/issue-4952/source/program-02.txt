@@ -1,0 +1,4 @@
+[src/cpu/cpu-exec.c:726,fetch_decode] (M) 0x00000000800003ae:   7a c0           sw         t5,sp
+[include/memory/host.h:42,host_write] write: addr = 0x1000003b8, len = 4, data = 0x6d17
+...
+[src/cpu/cpu-exec.c:726,fetch_decode] (M) 0x00000000800003b8:   17 6d 00 00     auipc      s10,0x6000

@@ -1,0 +1,47 @@
+# Commit Log
+- Issue: #3387
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3387
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3387
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3387
+- Changed files: 1
+- Additions: 6
+- Deletions: 6
+
+## Files
+- `src/main/scala/xiangshan/backend/datapath/DataPath.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/datapath/DataPath.scala b/src/main/scala/xiangshan/backend/datapath/DataPath.scala
+index e34beb383f6..b721309ab83 100644
+--- a/src/main/scala/xiangshan/backend/datapath/DataPath.scala
++++ b/src/main/scala/xiangshan/backend/datapath/DataPath.scala
+@@ -364,9 +364,9 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
+       vfRfRaddr(portIdx) := 0.U
+   }
+ 
+-  v0RfWaddr := io.fromV0Wb.map(_.addr).toSeq
+-  v0RfWdata := io.fromV0Wb.map(_.data).toSeq
+-  v0RfWen.foreach(_.zip(io.fromV0Wb.map(_.wen)).foreach { case (wenSink, wenSource) => wenSink := wenSource } )
++  v0RfWaddr := io.fromV0Wb.map(x => RegEnable(x.addr, x.wen)).toSeq
++  v0RfWdata := io.fromV0Wb.map(x => RegEnable(x.data, x.wen)).toSeq
++  v0RfWen.foreach(_.zip(io.fromV0Wb.map(x => RegNext(x.wen))).foreach { case (wenSink, wenSource) => wenSink := wenSource } )
+ 
+   for (portIdx <- v0RfRaddr.indices) {
+     if (v0RFReadArbiter.io.out.isDefinedAt(portIdx))
+@@ -375,9 +375,9 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
+       v0RfRaddr(portIdx) := 0.U
+   }
+ 
+-  vlRfWaddr := io.fromVlWb.map(_.addr).toSeq
+-  vlRfWdata := io.fromVlWb.map(_.data).toSeq
+-  vlRfWen := io.fromVlWb.map(_.wen).toSeq
++  vlRfWaddr := io.fromVlWb.map(x => RegEnable(x.addr, x.wen)).toSeq
++  vlRfWdata := io.fromVlWb.map(x => RegEnable(x.data, x.wen)).toSeq
++  vlRfWen := io.fromVlWb.map(x => RegNext(x.wen)).toSeq
+ 
+   for (portIdx <- vlRfRaddr.indices) {
+     if (vlRFReadArbiter.io.out.isDefinedAt(portIdx))
+```

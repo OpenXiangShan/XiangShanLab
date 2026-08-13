@@ -1,0 +1,1 @@
+./build/emu -i cross16b_double_deq.bin --max-cycles=1500 --no-diff

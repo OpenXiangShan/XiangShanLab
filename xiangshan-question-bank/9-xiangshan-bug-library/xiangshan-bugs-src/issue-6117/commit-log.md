@@ -1,0 +1,129 @@
+# Commit Log
+- Issue: #6117
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6117
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6117
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6117
+- Changed files: 1
+- Additions: 39
+- Deletions: 40
+
+## Files
+- `src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+index 5372582904c..039fd9cd44c 100644
+--- a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
++++ b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+@@ -285,7 +285,9 @@ class Sbuffer(implicit p: Parameters)
+   // insert and merge: cohCount=0
+   // every cycle cohCount+=1
+   // if cohCount(EvictCountBits-1)==1, evict
+-  val cohTimeOutMask = VecInit(widthMap(i => cohCount(i) >= io.csrCtrl.sbuffer_timeout && stateVec(i).isActive()))
++  val cohTimeOutMask_wire = VecInit(widthMap(i => cohCount(i) >= io.csrCtrl.sbuffer_timeout && stateVec(i).isActive()))
++  val cohTimeOutMask = RegInit(VecInit(Seq.fill(StoreBufferSize)(false.B)))
++  cohTimeOutMask := cohTimeOutMask_wire
+   val (cohTimeOutIdx, cohHasTimeOut) = PriorityEncoderWithFlag(cohTimeOutMask)
+   val cohTimeOutOH = PriorityEncoderOH(cohTimeOutMask)
+   val missqReplayTimeOutMask = VecInit(widthMap(i => missqReplayCount(i)(MissqReplayCountBits - 1) && stateVec(i).w_timeout))
+@@ -335,60 +337,57 @@ class Sbuffer(implicit p: Parameters)
+     assert(!(PopCount(mergeMask(i).asUInt) > 1.U && io.in.req(i).fire && io.in.req(i).bits.vecValid))
+   }
+ 
+-  // insert condition
+-  // firstInsert: the first invalid entry
+-  // if first entry canMerge or second entry has the same ptag with the first entry,
+-  // secondInsert equal the first invalid entry, otherwise, the second invalid entry
++  // insert (enqueue) scenario:
++  // -- if even bank is more empty, the first req inserted into even bank, the second inserted into odd bank
++  // -- if the first or second req can be merged into an existing line, it is merged
++  // -- if the first and second req are in the same line, they can be inserted or merged into the same entry
+   val invalidMask = VecInit(stateVec.map(s => s.isInvalid()))
+   val evenInvalidMask = GetEvenBits(invalidMask.asUInt)
+   val oddInvalidMask = GetOddBits(invalidMask.asUInt)
+ 
+-  def getFirstOneOH(input: UInt): UInt = {
+-    assert(input.getWidth > 1)
+-    val output = WireInit(VecInit(input.asBools))
+-    (1 until input.getWidth).map(i => {
+-      output(i) := !input(i - 1, 0).orR && input(i)
+-    })
+-    output.asUInt
++  // set only the first one to one, example: 10011010 -> 00000010
++  def setFirstOneOH(in: UInt):(UInt, Bool) = { // return (result, isAllZero)
++    val size = in.getWidth
++    if (size == 1) { (in, !in(0)) } else {
++      val hi = setFirstOneOH(in(size - 1, size / 2))
++      val lo = setFirstOneOH(in(size / 2 - 1, 0))
++      val outHi = Mux(lo._2, hi._1, 0.U)
++      (Cat(outHi, lo._1), hi._2 && lo._2)
++    }
+   }
+ 
+-  val evenRawInsertVec = getFirstOneOH(evenInvalidMask)
+-  val oddRawInsertVec = getFirstOneOH(oddInvalidMask)
+-  val (evenRawInsertIdx, evenCanInsert) = PriorityEncoderWithFlag(evenInvalidMask)
+-  val (oddRawInsertIdx, oddCanInsert) = PriorityEncoderWithFlag(oddInvalidMask)
+-  val evenInsertIdx = Cat(evenRawInsertIdx, 0.U(1.W)) // slow to generate, for debug only
+-  val oddInsertIdx = Cat(oddRawInsertIdx, 1.U(1.W)) // slow to generate, for debug only
++  val setFirstOneEven = setFirstOneOH(evenInvalidMask)
++  val setFirstOneOdd = setFirstOneOH(oddInvalidMask)
++  val (evenRawInsertVec, evenCanInsert) = (setFirstOneEven._1, !setFirstOneEven._2)
++  val (oddRawInsertVec, oddCanInsert) = (setFirstOneOdd._1, !setFirstOneOdd._2)
+   val evenInsertVec = GetEvenBits.reverse(evenRawInsertVec)
+   val oddInsertVec = GetOddBits.reverse(oddRawInsertVec)
+ 
+-  val enbufferSelReg = RegInit(false.B)
+-  when(io.in.req(0).valid) {
+-    enbufferSelReg := ~enbufferSelReg
+-  }
++  val firstInsertEven = PopCount(evenInvalidMask) >= PopCount(oddInvalidMask)
++  val secondInsertEven = !firstInsertEven
++  val firstInsertVec = Mux(firstInsertEven, evenInsertVec, oddInsertVec)
++  val secondInsertVec = Mux(sameTag, firstInsertVec, Mux(secondInsertEven, evenInsertVec, oddInsertVec))
++  val firstCanInsert = Mux(firstInsertEven, evenCanInsert, oddCanInsert)
++  val secondCanInsert = Mux(sameTag, firstCanInsert, Mux(secondInsertEven, evenCanInsert, oddCanInsert)) &&
++                       (EnsbufferWidth >= 2).B
++
++  val enqAllowed = sbuffer_state =/= x_drain_sbuffer
++  io.in.req(0).ready := (firstCanInsert || canMerge(0)) && enqAllowed
++  io.in.req(1).ready := (secondCanInsert || canMerge(1)) && io.in.req(0).ready
++
++  // this group of signals are only for debug or assert
++  val evenRawInsertIdx = PriorityEncoderWithFlag(evenInvalidMask)._1
++  val oddRawInsertIdx = PriorityEncoderWithFlag(oddInvalidMask)._1
++  val evenInsertIdx = Cat(evenRawInsertIdx, 0.U(1.W))
++  val oddInsertIdx = Cat(oddRawInsertIdx, 1.U(1.W))
++  val firstInsertIdx = Mux(firstInsertEven, evenInsertIdx, oddInsertIdx)
++  val secondInsertIdx = Mux(sameTag, firstInsertIdx, Mux(secondInsertEven, evenInsertIdx, oddInsertIdx))
+ 
+-  val firstInsertIdx = Mux(enbufferSelReg, evenInsertIdx, oddInsertIdx) // slow to generate, for debug only
+-  val secondInsertIdx = Mux(sameTag,
+-    firstInsertIdx,
+-    Mux(~enbufferSelReg, evenInsertIdx, oddInsertIdx)
+-  ) // slow to generate, for debug only
+-  val firstInsertVec = Mux(enbufferSelReg, evenInsertVec, oddInsertVec)
+-  val secondInsertVec = Mux(sameTag,
+-    firstInsertVec,
+-    Mux(~enbufferSelReg, evenInsertVec, oddInsertVec)
+-  ) // slow to generate, for debug only
+-  val firstCanInsert = sbuffer_state =/= x_drain_sbuffer && Mux(enbufferSelReg, evenCanInsert, oddCanInsert)
+-  val secondCanInsert = sbuffer_state =/= x_drain_sbuffer && Mux(sameTag,
+-    firstCanInsert,
+-    Mux(~enbufferSelReg, evenCanInsert, oddCanInsert)
+-  ) && (EnsbufferWidth >= 1).B
+   val forward_need_uarch_drain = WireInit(false.B)
+   val merge_need_uarch_drain = WireInit(false.B)
+   val do_uarch_drain = GatedValidRegNext(forward_need_uarch_drain) || GatedValidRegNext(GatedValidRegNext(merge_need_uarch_drain))
+   XSPerfAccumulate("do_uarch_drain", do_uarch_drain)
+ 
+-  io.in.req(0).ready := firstCanInsert
+-  io.in.req(1).ready := secondCanInsert && io.in.req(0).ready
+-
+   for (i <- 0 until EnsbufferWidth) {
+     // train
+     if (EnableStorePrefetchSPB) {
+```

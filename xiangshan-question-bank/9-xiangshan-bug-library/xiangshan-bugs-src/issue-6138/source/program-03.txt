@@ -1,0 +1,14 @@
+{
+  "SECRET_VALUE=0": {
+    "result_delta_addr": "0x80080000",
+    "recovered_bit_addr": "0x80080008",
+    "mcycle_delta": 29,
+    "recovered_bit": 0
+  },
+  "SECRET_VALUE=1": {
+    "result_delta_addr": "0x80080000",
+    "recovered_bit_addr": "0x80080008",
+    "mcycle_delta": 39,
+    "recovered_bit": 1
+  }
+}

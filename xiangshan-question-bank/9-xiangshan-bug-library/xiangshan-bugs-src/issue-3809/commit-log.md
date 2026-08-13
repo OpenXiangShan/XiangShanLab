@@ -1,0 +1,129 @@
+# Commit Log
+- Issue: #3809
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3809
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3809
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3809
+- Changed files: 3
+- Additions: 34
+- Deletions: 22
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/TLB.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLB.scala b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+index 9dd85e8cc9a..e709d631716 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+@@ -268,7 +268,14 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+         (isFakePte(d) && vsatp.mode === Sv48) -> 3.U,
+         (!isFakePte(d)) -> (level(d) - 1.U),
+       ))
+-      val gpaddr_offset = Mux(isLeaf(d), get_off(req_out(i).vaddr), Cat(getVpnn(get_pn(req_out(i).vaddr), vpn_idx),  0.U(log2Up(XLEN/8).W)))
++      // We use `fullva` here when `isLeaf`, in order to cope with the situation of an unaligned load/store cross page
++      // for example, a `ld` instruction on address 0x81000ffb will be splited into two loads
++      // 1. ld 0x81000ff8. vaddr = 0x81000ff8, fullva = 0x80000ffb
++      // 2. ld 0x81001000. vaddr = 0x81001000, fullva = 0x80000ffb
++      // When load 1 trigger a guest page fault, we should use offset of fullva when generate gpaddr
++      // and when load 2 trigger a guest page fault, we should just use offset of vaddr(all zero).
++      // Whether cross-page will be determined in misalign buffer(situation 2) so we only need to judge situation 1 here.
++      val gpaddr_offset = Mux(isLeaf(d), get_off(req_out(i).fullva), Cat(getVpnn(get_pn(req_out(i).fullva), vpn_idx), 0.U(log2Up(XLEN/8).W)))
+       val gpaddr = Cat(gvpn(d), gpaddr_offset)
+       resp(i).bits.paddr(d) := Mux(enable, paddr, vaddr)
+       resp(i).bits.gpaddr(d) := Mux(r_s2xlate(d) === onlyStage2, vaddr, gpaddr)
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
+index 0d003d1c4cf..b6c15c329f6 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
+@@ -577,19 +577,23 @@ class LoadMisalignBuffer(implicit p: Parameters) extends XSModule
+ 
+   // NOTE: spectial case (unaligned load cross page, page fault happens in next page)
+   // if exception happens in the higher page address part, overwrite the loadExceptionBuffer vaddr
+-  val overwriteExpBuf = GatedValidRegNext(req_valid && globalException)
+-  val overwriteVaddr = GatedRegNext(Mux(
+-    cross16BytesBoundary && (curPtr === 1.U), 
+-    splitLoadResp(curPtr).vaddr,
+-    splitLoadResp(curPtr).fullva))
+-  val overwriteGpaddr = GatedRegNext(Mux(
+-    cross16BytesBoundary && (curPtr === 1.U), 
+-    splitLoadResp(curPtr).gpaddr,
+-    Cat(
+-      get_pn(splitLoadResp(curPtr).gpaddr), get_off(splitLoadResp(curPtr).fullva)
+-    )))
+-  val overwriteIsHyper = GatedRegNext(splitLoadResp(curPtr).isHyper)
+-  val overwriteIsForVSnonLeafPTE = GatedRegNext(splitLoadResp(curPtr).isForVSnonLeafPTE)
++  val shouldOverwrite = req_valid && globalException
++  val overwriteExpBuf = GatedValidRegNext(shouldOverwrite)
++  val overwriteVaddr = RegEnable(
++    Mux(
++      cross16BytesBoundary && (curPtr === 1.U),
++      splitLoadResp(curPtr).vaddr,
++      splitLoadResp(curPtr).fullva),
++    shouldOverwrite)
++  val overwriteGpaddr = RegEnable(
++    Mux(
++      cross16BytesBoundary && (curPtr === 1.U),
++      // when cross-page, offset should always be 0
++      Cat(get_pn(splitLoadResp(curPtr).gpaddr), get_off(0.U(splitLoadResp(curPtr).gpaddr.getWidth.W))),
++      splitLoadResp(curPtr).gpaddr),
++    shouldOverwrite)
++  val overwriteIsHyper = RegEnable(splitLoadResp(curPtr).isHyper, shouldOverwrite)
++  val overwriteIsForVSnonLeafPTE = RegEnable(splitLoadResp(curPtr).isForVSnonLeafPTE, shouldOverwrite)
+ 
+   io.overwriteExpBuf.valid := overwriteExpBuf
+   io.overwriteExpBuf.vaddr := overwriteVaddr
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+index f6570a420bd..f996d153af4 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+@@ -242,7 +242,7 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+     SB -> 0.U,
+     SH -> 1.U,
+     SW -> 3.U,
+-    SD -> 7.U 
++    SD -> 7.U
+   )) + req.vaddr(4, 0)
+   // to see if (vaddr + opSize - 1) and vaddr are in the same 16 bytes region
+   val cross16BytesBoundary = req_valid && (highAddress(4) =/= req.vaddr(4))
+@@ -553,7 +553,7 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+   io.sqControl.control.writeSb := bufferState === s_sq_req
+   io.sqControl.control.wdata   := splitStoreData(curPtr).wdata
+   io.sqControl.control.wmask   := splitStoreData(curPtr).wmask
+-  // the paddr and vaddr is not corresponding to the exact addr of 
++  // the paddr and vaddr is not corresponding to the exact addr of
+   io.sqControl.control.paddr   := splitStoreResp(curPtr).paddr
+   io.sqControl.control.vaddr   := splitStoreResp(curPtr).vaddr
+   io.sqControl.control.last    := !((unWriteStores & ~UIntToOH(curPtr)).orR)
+@@ -581,7 +581,7 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+   io.writeBack.bits.debug.vaddr := req.vaddr
+ 
+   io.sqControl.control.removeSq := req_valid && (bufferState === s_wait) && !(globalMMIO || globalException) && (io.rob.scommit =/= 0.U)
+-  
++
+   val flush = req_valid && req.uop.robIdx.needFlush(io.redirect)
+ 
+   when (flush && (bufferState =/= s_idle)) {
+@@ -596,11 +596,12 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+ 
+   // NOTE: spectial case (unaligned store cross page, page fault happens in next page)
+   // if exception happens in the higher page address part, overwrite the storeExceptionBuffer vaddr
+-  val overwriteExpBuf = GatedValidRegNext(req_valid && cross16BytesBoundary && globalException && (curPtr === 1.U))
+-  val overwriteVaddr = GatedRegNext(splitStoreResp(curPtr).vaddr)
+-  val overwriteIsHyper = GatedRegNext(splitStoreResp(curPtr).isHyper)
+-  val overwriteGpaddr = GatedRegNext(splitStoreResp(curPtr).gpaddr)
+-  val overwriteIsForVSnonLeafPTE = GatedRegNext(splitStoreResp(curPtr).isForVSnonLeafPTE)
++  val shouldOverwrite = req_valid && cross16BytesBoundary && globalException && (curPtr === 1.U)
++  val overwriteExpBuf = GatedValidRegNext(shouldOverwrite)
++  val overwriteVaddr = RegEnable(splitStoreResp(curPtr).vaddr, shouldOverwrite)
++  val overwriteIsHyper = RegEnable(splitStoreResp(curPtr).isHyper, shouldOverwrite)
++  val overwriteGpaddr = RegEnable(splitStoreResp(curPtr).gpaddr, shouldOverwrite)
++  val overwriteIsForVSnonLeafPTE = RegEnable(splitStoreResp(curPtr).isForVSnonLeafPTE, shouldOverwrite)
+ 
+   io.overwriteExpBuf.valid := overwriteExpBuf
+   io.overwriteExpBuf.vaddr := overwriteVaddr
+```

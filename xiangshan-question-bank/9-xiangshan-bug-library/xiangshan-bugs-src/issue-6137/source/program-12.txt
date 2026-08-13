@@ -1,0 +1,6 @@
+python3 analyze_security_vcd.py \
+  poc_abtb_dcache_gadget_9700_10100.vcd \
+  poc_abtb_dcache_gadget.elf \
+  19400 \
+  20250 \
+  > security_evidence.json

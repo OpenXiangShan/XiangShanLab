@@ -1,0 +1,3 @@
+- Remove `mispred_mask` from ITTAGE update logic due to timing issues
+- Remove `mispred_mask` from TAGE update logic due to timing issues
+- Disable clock gating in ICacheDataArray to improve timing

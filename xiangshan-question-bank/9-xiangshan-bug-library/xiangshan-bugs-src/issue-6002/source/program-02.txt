@@ -1,0 +1,4 @@
+store addr       = 0x8000108c
+load addr        = 0x80001090
+store data       = 0x1122334455667788
+expected a0      = 0x11223344

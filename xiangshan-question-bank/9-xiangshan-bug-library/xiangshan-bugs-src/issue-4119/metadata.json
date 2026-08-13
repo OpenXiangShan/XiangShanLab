@@ -1,0 +1,21 @@
+{
+  "number": 4119,
+  "title": "timing(CSR): using addr/wdata after 1 cycle for writing frontend and memory",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4119",
+  "state": "closed",
+  "labels": [],
+  "author": "sinceforYy",
+  "created_at": "2025-01-02T11:04:28Z",
+  "updated_at": "2025-01-06T06:27:15Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4119/commit-log.md"
+  ],
+  "submitted_at": "2025-01-02",
+  "branch": "",
+  "rtl_commit": ""
+}

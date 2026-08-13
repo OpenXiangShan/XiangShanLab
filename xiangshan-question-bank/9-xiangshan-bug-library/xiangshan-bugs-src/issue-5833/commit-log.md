@@ -1,0 +1,145 @@
+# Commit Log
+- Issue: #5833
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5833
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5833
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5833
+- Changed files: 2
+- Additions: 18
+- Deletions: 18
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSRIND.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
+index 62419e74b0d..91d6abe13a7 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
+@@ -26,7 +26,7 @@ trait CSRAIA { self: NewCSR with HypervisorLevel =>
+     .setAddr(CSRs.miselect)
+ 
+   val mireg = Module(new CSRModule("Mireg", new ZeroFieldBundle("Machine interrupt-file indirect data register selected by miselect.")) with HasIregSink {
+-    rdata := iregRead.mireg
++    regOut := iregRead.mireg
+   })
+     .setAddr(CSRs.mireg)
+ 
+@@ -53,7 +53,7 @@ trait CSRAIA { self: NewCSR with HypervisorLevel =>
+     .setAddr(CSRs.siselect)
+ 
+   val sireg = Module(new CSRModule("Sireg", new ZeroFieldBundle("Supervisor interrupt-file indirect data register selected by siselect.")) with HasIregSink {
+-    rdata := iregRead.sireg
++    regOut := iregRead.sireg
+   })
+     .setAddr(CSRs.sireg)
+ 
+@@ -78,7 +78,7 @@ trait CSRAIA { self: NewCSR with HypervisorLevel =>
+     .setAddr(CSRs.vsiselect)
+ 
+   val vsireg    = Module(new CSRModule("VSireg", new ZeroFieldBundle("Virtual supervisor interrupt-file indirect data register selected by vsiselect.")) with HasIregSink {
+-    rdata := iregRead.sireg
++    regOut := iregRead.sireg
+   })
+     .setAddr(CSRs.vsireg)
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRIND.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRIND.scala
+index 6aece1a51c6..3484f566a24 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRIND.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRIND.scala
+@@ -15,77 +15,77 @@ import scala.collection.immutable.SeqMap
+ 
+ trait CSRIND { self: NewCSR with HypervisorLevel =>
+   val mireg2 = Module(new CSRModule("Mireg2", new ZeroFieldBundle("Reserved machine interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.mireg2)
+ 
+   val mireg3 = Module(new CSRModule("Mireg3", new ZeroFieldBundle("Reserved machine interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.mireg3)
+ 
+   val mireg4 = Module(new CSRModule("Mireg4", new ZeroFieldBundle("Reserved machine interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.mireg4)
+ 
+   val mireg5 = Module(new CSRModule("Mireg5", new ZeroFieldBundle("Reserved machine interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.mireg5)
+ 
+   val mireg6 = Module(new CSRModule("Mireg6", new ZeroFieldBundle("Reserved machine interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.mireg6)
+ 
+   val sireg2 = Module(new CSRModule("Sireg2", new ZeroFieldBundle("Reserved supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.sireg2)
+ 
+   val sireg3 = Module(new CSRModule("Sireg3", new ZeroFieldBundle("Reserved supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.sireg3)
+ 
+   val sireg4 = Module(new CSRModule("Sireg4", new ZeroFieldBundle("Reserved supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.sireg4)
+ 
+   val sireg5 = Module(new CSRModule("Sireg5", new ZeroFieldBundle("Reserved supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.sireg5)
+ 
+   val sireg6 = Module(new CSRModule("Sireg6", new ZeroFieldBundle("Reserved supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.sireg6)
+ 
+   val vsireg2 = Module(new CSRModule("VSireg2", new ZeroFieldBundle("Reserved virtual supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.vsireg2)
+ 
+   val vsireg3 = Module(new CSRModule("VSireg3", new ZeroFieldBundle("Reserved virtual supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.vsireg3)
+ 
+   val vsireg4 = Module(new CSRModule("VSireg4", new ZeroFieldBundle("Reserved virtual supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.vsireg4)
+ 
+   val vsireg5 = Module(new CSRModule("VSireg5", new ZeroFieldBundle("Reserved virtual supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.vsireg5)
+ 
+   val vsireg6 = Module(new CSRModule("VSireg6", new ZeroFieldBundle("Reserved virtual supervisor interrupt-file indirect data register; reads as zero.")) {
+-    rdata := 0.U
++    regOut := 0.U
+   })
+     .setAddr(CSRs.vsireg6)
+```

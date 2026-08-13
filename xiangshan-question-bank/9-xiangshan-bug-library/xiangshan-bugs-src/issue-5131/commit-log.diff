@@ -1,0 +1,29 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSROoORead.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSROoORead.scala
+index a9edbd3fa8c..ab0e0a37783 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSROoORead.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSROoORead.scala
+@@ -29,6 +29,12 @@ object CSROoORead {
+     CSRs.mtopei,
+     CSRs.stopei,
+     CSRs.vstopei,
++    CSRs.mip,
++    CSRs.sip,
++    CSRs.vsip,
++    CSRs.hip,
++    CSRs.hvip,
++    CSRs.mvip,
+   )
+   val blockBackwardInOrderCsrReadList = List(
+     CSRs.mireg,
+@@ -40,5 +46,11 @@ object CSROoORead {
+     CSRs.mtopei,
+     CSRs.stopei,
+     CSRs.vstopei,
++    CSRs.mip,
++    CSRs.sip,
++    CSRs.vsip,
++    CSRs.hip,
++    CSRs.hvip,
++    CSRs.mvip,
+   )
+ }

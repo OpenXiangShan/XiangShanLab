@@ -1,0 +1,5 @@
+[30] commit pc 0000004000000000 inst 18051073 ... csrw    satp, a0
+[31] exception pc ffffffc000000004 inst 00000000 cause 000000000000000c c.unimp <--
+mepc different at pc = 0x0080000024, right = 0x0000004000000004, wrong = 0xffffffc000000004
+mtval different at pc = 0x0080000024, right = 0x0000004000000004, wrong = 0xffffffc000000004
+Core 0: ABORT at pc = 0x80000024

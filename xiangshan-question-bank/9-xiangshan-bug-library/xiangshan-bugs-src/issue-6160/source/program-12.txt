@@ -1,0 +1,3 @@
+no-alt altDiffers event
+  -> useful-counter write changes across the two secret variants
+  -> later probe can produce a wrong-path LoadUnit request to the oracle line

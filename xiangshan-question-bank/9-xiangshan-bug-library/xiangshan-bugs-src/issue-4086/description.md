@@ -1,0 +1,3 @@
+For vectors, if the size of the `RAR` is not equal to the `VLQ`, it can lead to a jam. This is because:
+A `uop` of a vector splits into multiple Load operations and occupies multiple `VLQ`. The release condition of the `RAR` is that the `VLQ` are dequeue, whereas the vector requires that all Load operations of the `uop` are written back to the `MergeBuffer` before the `VLQ` can be let out of the queue. 
+Therefore, it may happen that when the deqptr of `VLQ` waits for vector `uop` to write back all, but the `RAR` is already full, the Load operation split by vector `uop` can not enter the `RAR`, so it will wait in the `ReplayQueue` for the `RAR` to be non-full, and the `RAR` can not be released because `VLQ` can not get dequeue, which leads to deadlock.

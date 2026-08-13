@@ -1,0 +1,39 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/PMA.scala b/src/main/scala/xiangshan/backend/fu/PMA.scala
+index 0ae669fa908..ae7d37575eb 100644
+--- a/src/main/scala/xiangshan/backend/fu/PMA.scala
++++ b/src/main/scala/xiangshan/backend/fu/PMA.scala
+@@ -213,8 +213,7 @@ trait PMACheckMethod extends PMPConst {
+     resp.ld := TlbCmd.isRead(cmd) && !cfg.r
+     resp.st := Mux(TlbCmd.isAmo(cmd), !cfg.atomic || !cfg.w, Mux(TlbCmd.isWrite(cmd), !cfg.w, false.B))
+     resp.instr := TlbCmd.isExec(cmd) && !cfg.x
+-    //TODO We require that a `PMA` can generate an mmio response only if the address has the appropriate `PMA` permissions.
+-    resp.mmio := !cfg.c && !(resp.ld || resp.st || resp.instr)
++    resp.mmio := !cfg.c
+     resp.atomic := cfg.atomic
+     resp
+   }
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 96f561f4181..134980332cf 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -1205,7 +1205,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+     s2_in.uop.exceptionVec(loadGuestPageFault)
+   )
+   // This real physical address is located in uncache space.
+-  val s2_actually_uncache = !s2_in.tlbMiss && !s2_un_access_exception && Pbmt.isPMA(s2_pbmt) && s2_pmp.mmio || s2_in.nc || s2_in.mmio
++  val s2_actually_uncache = !s2_in.tlbMiss && !s2_un_access_exception && Pbmt.isPMA(s2_pbmt) && (s2_pmp.mmio && !s2_pmp.ld) || s2_in.nc || s2_in.mmio
+   val s2_uncache = !s2_prf && s2_actually_uncache
+   val s2_memBackTypeMM = !s2_pmp.mmio
+   when (!s2_in.delayedLoadError) {
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 6f2cd26a7fe..54cdf6c6908 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -469,7 +469,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+     s2_in.uop.exceptionVec(storeGuestPageFault)
+   )
+   // This real physical address is located in uncache space.
+-  val s2_actually_uncache = s2_tlb_hit && !s2_un_access_exception && (Pbmt.isPMA(s2_pbmt) && s2_pmp.mmio || s2_in.nc || s2_in.mmio) && RegNext(s1_feedback.bits.hit)
++  val s2_actually_uncache = s2_tlb_hit && !s2_un_access_exception && (Pbmt.isPMA(s2_pbmt) && !s2_pmp.st && s2_pmp.mmio || s2_in.nc || s2_in.mmio) && RegNext(s1_feedback.bits.hit)
+   val s2_isCbo  = RegEnable(s1_isCbo, s1_fire) // all cbo instr
+   val s2_isCbo_noZero = LSUOpType.isCbo(s2_in.uop.fuOpType)

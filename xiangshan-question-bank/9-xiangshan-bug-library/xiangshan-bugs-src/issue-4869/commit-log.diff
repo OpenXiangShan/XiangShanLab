@@ -1,0 +1,121 @@
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 29d13f23b8e..4f1dd12a7ec 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -1593,8 +1593,10 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     )
+     vsSplit(i).io.vstd.get := DontCare // Todo: Discuss how to pass vector store data
+ 
+-    vsSplit(i).io.vstdMisalign.get.storeMisalignBufferEmpty := !storeMisalignBuffer.io.full
+-    vsSplit(i).io.vstdMisalign.get.storePipeEmpty := !storeUnits(i).io.s0_s1_valid
++    vsSplit(i).io.vstdMisalign.get.storeMisalignBufferEmpty  := storeMisalignBuffer.io.toVecSplit.empty
++    vsSplit(i).io.vstdMisalign.get.storeMisalignBufferRobIdx := storeMisalignBuffer.io.toVecSplit.robIdx
++    vsSplit(i).io.vstdMisalign.get.storeMisalignBufferUopIdx := storeMisalignBuffer.io.toVecSplit.uopIdx
++    vsSplit(i).io.vstdMisalign.get.storePipeEmpty := !storeUnits(i).io.s0_s1_s2_valid
+ 
+   }
+   (0 until VlduCnt).foreach{i =>
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+index 9e8a28ead64..7a832655be1 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+@@ -35,6 +35,11 @@ import xiangshan.mem.Bundles._
+ import xiangshan.cache._
+ import xiangshan.cache.wpu.ReplayCarry
+ 
++class MisBuffertoVecSplitIO(implicit p: Parameters) extends XSBundle {
++  val empty  = Bool()
++  val robIdx = new RobPtr
++  val uopIdx = UopIdx()
++}
+ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+   with HasCircularQueuePtrHelper
+ {
+@@ -114,7 +119,7 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+     val sqControl       = new StoreMaBufToSqControlIO
+ 
+     val toVecStoreMergeBuffer = Vec(VecStorePipelineWidth, new StoreMaBufToVecStoreMergeBufferIO)
+-    val full = Bool()
++    val toVecSplit = Output(new MisBuffertoVecSplitIO) // robIdx in misalignedBuffer
+   })
+ 
+   io.rob.mmio := 0.U.asTypeOf(Vec(LoadPipelineWidth, Bool()))
+@@ -198,7 +203,10 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+       toStMB.mbIndex := req.mbIndex
+     }
+   }
+-  io.full := req_valid
++
++  io.toVecSplit.empty  := !req_valid
++  io.toVecSplit.robIdx := req.uop.robIdx
++  io.toVecSplit.uopIdx := req.uop.uopIdx
+ 
+   //logic
+   val splitStoreReqs = RegInit(VecInit(List.fill(maxSplitNum)(0.U.asTypeOf(new LsPipelineBundle))))
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 9b293c87d8a..ecca7b756ea 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -71,7 +71,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+     // trigger
+     val fromCsrTrigger = Input(new CsrTriggerBundle)
+ 
+-    val s0_s1_valid = Output(Bool())
++    val s0_s1_s2_valid = Output(Bool())
+   })
+ 
+   PerfCCT.updateInstPos(io.stin.bits.uop.debug_seqNum, PerfCCT.InstPos.AtFU.id.U, io.stin.valid, clock, reset)
+@@ -343,9 +343,6 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   val s1_trigger_debug_mode = TriggerAction.isDmode(s1_trigger_action)
+   val s1_trigger_breakpoint = TriggerAction.isExp(s1_trigger_action)
+ 
+-  // for misalign in vsMergeBuffer
+-  io.s0_s1_valid := s0_valid || s1_valid
+-
+   // Send TLB feedback to store issue queue
+   // Store feedback is generated in store_s1, sent to RS in store_s2
+   val s1_feedback = Wire(Valid(new RSFeedback))
+@@ -556,6 +553,9 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   io.prefetch_train.bits.updateAddrValid := false.B
+   io.prefetch_train.bits.hasException := false.B
+ 
++  // for misalign in vsMergeBuffer
++  io.s0_s1_s2_valid := s0_valid || s1_valid || s2_valid
++
+   // Pipeline
+   // --------------------------------------------------------------------------------
+   // stage 3
+diff --git a/src/main/scala/xiangshan/mem/vector/VSplit.scala b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+index 2f148cbf809..a9457c66586 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSplit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+@@ -451,7 +451,11 @@ abstract class VSplitBuffer(isVStore: Boolean = false)(implicit p: Parameters) e
+ }
+ 
+ class VSSplitBufferImp(implicit p: Parameters) extends VSplitBuffer(isVStore = true){
+-  override lazy val misalignedCanGo = io.vstdMisalign.get.storePipeEmpty && io.vstdMisalign.get.storeMisalignBufferEmpty
++  override lazy val misalignedCanGo = io.vstdMisalign.get.storePipeEmpty &&
++    (io.vstdMisalign.get.storeMisalignBufferEmpty ||
++      io.vstdMisalign.get.storeMisalignBufferRobIdx > io.out.bits.uop.robIdx ||
++      io.vstdMisalign.get.storeMisalignBufferRobIdx === io.out.bits.uop.robIdx &&
++        io.vstdMisalign.get.storeMisalignBufferUopIdx > io.out.bits.uop.uopIdx)
+ 
+   // split data
+   val splitData = genVSData(
+diff --git a/src/main/scala/xiangshan/mem/vector/VecBundle.scala b/src/main/scala/xiangshan/mem/vector/VecBundle.scala
+index bed840f257e..34065f1e794 100644
+--- a/src/main/scala/xiangshan/mem/vector/VecBundle.scala
++++ b/src/main/scala/xiangshan/mem/vector/VecBundle.scala
+@@ -221,8 +221,10 @@ class FeedbackToLsqIO(implicit p: Parameters) extends VLSUBundle{
+ }
+ 
+ class storeMisaignIO(implicit p: Parameters) extends Bundle{
+-  val storePipeEmpty           = Input(Bool())
+-  val storeMisalignBufferEmpty = Input(Bool())
++  val storePipeEmpty            = Input(Bool())
++  val storeMisalignBufferEmpty  = Input(Bool())
++  val storeMisalignBufferRobIdx = Input(new RobPtr)
++  val storeMisalignBufferUopIdx = Input(UopIdx())
+ }
+ 
+ class VSplitIO(isVStore: Boolean=false)(implicit p: Parameters) extends VLSUBundle{

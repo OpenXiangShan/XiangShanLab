@@ -1,0 +1,1 @@
+To alleviate timing pressure in stage S2, the computation of total percsum and its comparisons with Threshold/1/2/3 are moved forward to stage S1. In S2, only selection based on wayIdx and lowBits is performed.

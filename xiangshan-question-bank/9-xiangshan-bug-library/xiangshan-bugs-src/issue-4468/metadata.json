@@ -1,0 +1,21 @@
+{
+  "number": 4468,
+  "title": "area(ICache): split ICache meta SRAM",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4468",
+  "state": "closed",
+  "labels": [],
+  "author": "my-mayfly",
+  "created_at": "2025-03-27T13:53:27Z",
+  "updated_at": "2025-05-08T07:51:06Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4468/commit-log.md"
+  ],
+  "submitted_at": "2025-03-27",
+  "branch": "",
+  "rtl_commit": ""
+}

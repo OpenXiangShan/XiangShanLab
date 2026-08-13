@@ -1,0 +1,5 @@
+80001284:   80c17057    vsetvl zero, sp, a2
+80001288:   c49fb42f    amominu.d.aq    s0, s1, (t6)
+````
+
+Upon detecting the hang, the DiffTest framework allows NEMU to run **one more instruction** — which is the `amominu.d.aq` at `0x80001288`. Since `amominu` writes to `s0`, NEMU's `s0` is updated while DUT's `s0` retains its stale historical value. This step-alignment gap triggers the following mismatch and ABORT:

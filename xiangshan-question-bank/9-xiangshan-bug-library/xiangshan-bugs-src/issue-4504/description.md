@@ -1,0 +1,425 @@
+### Before start
+
+- [x] I have read the [RISC-V ISA Manual](https://github.com/riscv/riscv-isa-manual) and this is not a RISC-V ISA question. 我已经阅读过 RISC-V 指令集手册，这不是一个指令集本身的问题。
+- [x] I have read the [XiangShan Documents](https://xiangshan-doc.readthedocs.io/zh_CN/latest). 我已经阅读过香山文档。
+- [x] I have searched the previous issues and did not find anything relevant. 我已经搜索过之前的 issue，并没有找到相关的。
+- [x] I have reviewed the commit messages from the relevant commit history. 我已经浏览过相关的提交历史和提交信息。
+
+### Describe the bug
+
+I'm working with the latest stable release, Southlake version, of XiangShan.
+And I found an assertion violation when exercising its `ICacheMissEntry` module.
+I'm wondering whether it can be considered a bug.
+The corresponding optimized low firrtl file is as follows, which is reffered to as `ICacheMissEntry.opt.lo.fir` later.
+```firrtl
+FIRRTL version 1.1.0
+circuit ICacheMissEntry :
+  module ICacheMissEntry :
+    input clock : Clock
+    input reset : UInt<1>
+    input io_id : UInt<1>
+    output io_req_ready : UInt<1>
+    input io_req_valid : UInt<1>
+    input io_req_bits_paddr : UInt<38>
+    input io_req_bits_vaddr : UInt<39>
+    input io_req_bits_waymask : UInt<4>
+    input io_req_bits_coh_state : UInt<2>
+    output io_resp_valid : UInt<1>
+    output io_resp_bits_data : UInt<512>
+    output io_resp_bits_corrupt : UInt<1>
+    input io_mem_acquire_ready : UInt<1>
+    output io_mem_acquire_valid : UInt<1>
+    output io_mem_acquire_bits_opcode : UInt<3>
+    output io_mem_acquire_bits_param : UInt<3>
+    output io_mem_acquire_bits_size : UInt<3>
+    output io_mem_acquire_bits_source : UInt<3>
+    output io_mem_acquire_bits_address : UInt<38>
+    output io_mem_acquire_bits_user_alias : UInt<2>
+    output io_mem_acquire_bits_user_preferCache : UInt<1>
+    output io_mem_acquire_bits_user_needHint : UInt<1>
+    output io_mem_acquire_bits_echo_blockisdirty : UInt<1>
+    output io_mem_acquire_bits_mask : UInt<32>
+    output io_mem_acquire_bits_data : UInt<256>
+    output io_mem_acquire_bits_corrupt : UInt<1>
+    output io_mem_grant_ready : UInt<1>
+    input io_mem_grant_valid : UInt<1>
+    input io_mem_grant_bits_opcode : UInt<3>
+    input io_mem_grant_bits_param : UInt<2>
+    input io_mem_grant_bits_size : UInt<3>
+    input io_mem_grant_bits_source : UInt<3>
+    input io_mem_grant_bits_sink : UInt<6>
+    input io_mem_grant_bits_denied : UInt<1>
+    input io_mem_grant_bits_echo_blockisdirty : UInt<1>
+    input io_mem_grant_bits_data : UInt<256>
+    input io_mem_grant_bits_corrupt : UInt<1>
+    input io_mem_finish_ready : UInt<1>
+    output io_mem_finish_valid : UInt<1>
+    output io_mem_finish_bits_sink : UInt<6>
+    input io_meta_write_ready : UInt<1>
+    output io_meta_write_valid : UInt<1>
+    output io_meta_write_bits_virIdx : UInt<8>
+    output io_meta_write_bits_phyTag : UInt<26>
+    output io_meta_write_bits_coh_state : UInt<2>
+    output io_meta_write_bits_waymask : UInt<4>
+    output io_meta_write_bits_bankIdx : UInt<1>
+    input io_data_write_ready : UInt<1>
+    output io_data_write_valid : UInt<1>
+    output io_data_write_bits_virIdx : UInt<8>
+    output io_data_write_bits_data : UInt<512>
+    output io_data_write_bits_waymask : UInt<4>
+    output io_data_write_bits_bankIdx : UInt<1>
+    output io_data_write_bits_writeEn_0 : UInt<1>
+    output io_data_write_bits_writeEn_1 : UInt<1>
+    output io_data_write_bits_writeEn_2 : UInt<1>
+    output io_data_write_bits_writeEn_3 : UInt<1>
+    input io_release_req_ready : UInt<1>
+    output io_release_req_valid : UInt<1>
+    output io_release_req_bits_paddr : UInt<38>
+    output io_release_req_bits_vaddr : UInt<39>
+    output io_release_req_bits_param : UInt<3>
+    output io_release_req_bits_voluntary : UInt<1>
+    output io_release_req_bits_needData : UInt<1>
+    output io_release_req_bits_waymask : UInt<4>
+    output io_release_req_bits_id : UInt<5>
+    input io_release_resp_valid : UInt<1>
+    input io_release_resp_bits : UInt<5>
+    output io_victimInfor_valid : UInt<1>
+    output io_victimInfor_vidx : UInt<8>
+    output io_toPrefetch_valid : UInt<1>
+    output io_toPrefetch_bits : UInt<38>
+
+    reg state : UInt<3>, clock with :
+      reset => (UInt<1>("h0"), state) @[ICacheMissUnit.scala 96:22]
+    reg state_dup_0 : UInt<3>, clock with :
+      reset => (UInt<1>("h0"), state_dup_0) @[ICacheMissUnit.scala 97:38]
+    reg state_dup_1 : UInt<3>, clock with :
+      reset => (UInt<1>("h0"), state_dup_1) @[ICacheMissUnit.scala 97:38]
+    reg state_dup_2 : UInt<3>, clock with :
+      reset => (UInt<1>("h0"), state_dup_2) @[ICacheMissUnit.scala 97:38]
+    reg state_dup_3 : UInt<3>, clock with :
+      reset => (UInt<1>("h0"), state_dup_3) @[ICacheMissUnit.scala 97:38]
+    reg req_paddr : UInt<38>, clock with :
+      reset => (UInt<1>("h0"), req_paddr) @[ICacheMissUnit.scala 100:16]
+    reg req_vaddr : UInt<39>, clock with :
+      reset => (UInt<1>("h0"), req_vaddr) @[ICacheMissUnit.scala 100:16]
+    reg req_waymask : UInt<4>, clock with :
+      reset => (UInt<1>("h0"), req_waymask) @[ICacheMissUnit.scala 100:16]
+    node req_idx = bits(req_vaddr, 13, 6) @[L1Cache.scala 81:33]
+    reg req_corrupt : UInt<1>, clock with :
+      reset => (UInt<1>("h0"), req_corrupt) @[ICacheMissUnit.scala 105:28]
+    node _io_victimInfor_valid_T = eq(state_dup_0, UInt<3>("h5")) @[ICacheMissUnit.scala 107:40]
+    node _io_victimInfor_valid_T_1 = eq(state_dup_0, UInt<3>("h6")) @[ICacheMissUnit.scala 107:75]
+    node _io_victimInfor_valid_T_2 = or(_io_victimInfor_valid_T, _io_victimInfor_valid_T_1) @[ICacheMissUnit.scala 107:59]
+    node _io_victimInfor_valid_T_3 = eq(state_dup_0, UInt<3>("h3")) @[ICacheMissUnit.scala 107:110]
+    node _io_victimInfor_valid_T_4 = or(_io_victimInfor_valid_T_2, _io_victimInfor_valid_T_3) @[ICacheMissUnit.scala 107:94]
+    node _io_victimInfor_valid_T_5 = eq(state_dup_0, UInt<3>("h7")) @[ICacheMissUnit.scala 107:143]
+    node _T = and(io_mem_grant_ready, io_mem_grant_valid) @[Decoupled.scala 50:35]
+    node _beats1_decode_T_1 = dshl(UInt<6>("h3f"), io_mem_grant_bits_size) @[package.scala 234:77]
+    node _beats1_decode_T_2 = bits(_beats1_decode_T_1, 5, 0) @[package.scala 234:82]
+    node _beats1_decode_T_3 = not(_beats1_decode_T_2) @[package.scala 234:46]
+    node beats1_decode = shr(_beats1_decode_T_3, 5) @[Edges.scala 219:59]
+    node beats1_opdata = bits(io_mem_grant_bits_opcode, 0, 0) @[Edges.scala 105:36]
+    node beats1 = and(beats1_opdata, beats1_decode) @[Edges.scala 220:14]
+    reg counter : UInt<1>, clock with :
+      reset => (UInt<1>("h0"), counter) @[Edges.scala 228:27]
+    node _counter1_T = sub(counter, UInt<1>("h1")) @[Edges.scala 229:28]
+    node counter1 = tail(_counter1_T, 1) @[Edges.scala 229:28]
+    node first = not(counter) @[Edges.scala 230:25]
+    node _last_T_1 = not(beats1) @[Edges.scala 231:47]
+    node last = or(counter, _last_T_1) @[Edges.scala 231:37]
+    node refill_done = and(last, _T) @[Edges.scala 232:22]
+    node _counter_T = mux(first, beats1, counter1) @[Edges.scala 235:21]
+    node _GEN_0 = mux(_T, _counter_T, counter) @[Edges.scala 234:17 235:15 228:27]
+    reg readBeatCnt : UInt<1>, clock with :
+      reset => (UInt<1>("h0"), readBeatCnt) @[ICacheMissUnit.scala 113:24]
+    reg respDataReg_0 : UInt<256>, clock with :
+      reset => (UInt<1>("h0"), respDataReg_0) @[ICacheMissUnit.scala 114:24]
+    reg respDataReg_1 : UInt<256>, clock with :
+      reset => (UInt<1>("h0"), respDataReg_1) @[ICacheMissUnit.scala 114:24]
+    node _io_toPrefetch_bits_T = bits(req_paddr, 37, 6) @[IFU.scala 36:71]
+    reg grantack_sink : UInt<6>, clock with :
+      reset => (UInt<1>("h0"), grantack_sink) @[Reg.scala 16:16]
+    reg grant_param : UInt<2>, clock with :
+      reset => (UInt<1>("h0"), grant_param) @[ICacheMissUnit.scala 139:24]
+    reg is_dirty : UInt<1>, clock with :
+      reset => (UInt<1>("h0"), is_dirty) @[ICacheMissUnit.scala 140:25]
+    node _is_grant_T = bits(io_mem_grant_bits_opcode, 2, 2) @[Edges.scala 70:36]
+    node _is_grant_T_1 = bits(io_mem_grant_bits_opcode, 1, 1) @[Edges.scala 70:52]
+    node _is_grant_T_2 = not(_is_grant_T_1) @[Edges.scala 70:43]
+    node _is_grant_T_3 = and(_is_grant_T, _is_grant_T_2) @[Edges.scala 70:40]
+    reg is_grant : UInt<1>, clock with :
+      reset => (UInt<1>("h0"), is_grant) @[Reg.scala 16:16]
+    node _T_1 = eq(UInt<3>("h0"), state) @[ICacheMissUnit.scala 144:17]
+    node _T_2 = and(io_req_ready, io_req_valid) @[Decoupled.scala 50:35]
+    node _GEN_3 = mux(_T_2, UInt<1>("h0"), readBeatCnt) @[ICacheMissUnit.scala 146:27 147:21 113:24]
+    node _GEN_4 = mux(_T_2, UInt<3>("h1"), state) @[ICacheMissUnit.scala 146:27 148:15 96:22]
+    node _GEN_5 = mux(_T_2, UInt<3>("h1"), state_dup_0) @[ICacheMissUnit.scala 146:27 149:25 97:38]
+    node _GEN_6 = mux(_T_2, UInt<3>("h1"), state_dup_1) @[ICacheMissUnit.scala 146:27 149:25 97:38]
+    node _GEN_7 = mux(_T_2, UInt<3>("h1"), state_dup_2) @[ICacheMissUnit.scala 146:27 149:25 97:38]
+    node _GEN_8 = mux(_T_2, UInt<3>("h1"), state_dup_3) @[ICacheMissUnit.scala 146:27 149:25 97:38]
+    node _GEN_10 = mux(_T_2, io_req_bits_paddr, req_paddr) @[ICacheMissUnit.scala 146:27 150:13 100:16]
+    node _GEN_11 = mux(_T_2, io_req_bits_vaddr, req_vaddr) @[ICacheMissUnit.scala 146:27 150:13 100:16]
+    node _GEN_12 = mux(_T_2, io_req_bits_waymask, req_waymask) @[ICacheMissUnit.scala 146:27 150:13 100:16]
+    node _T_3 = eq(UInt<3>("h1"), state) @[ICacheMissUnit.scala 144:17]
+    node _T_4 = and(io_mem_acquire_ready, io_mem_acquire_valid) @[Decoupled.scala 50:35]
+    node _GEN_14 = mux(_T_4, UInt<3>("h2"), state) @[ICacheMissUnit.scala 156:35 157:15 96:22]
+    node _GEN_15 = mux(_T_4, UInt<3>("h2"), state_dup_0) @[ICacheMissUnit.scala 156:35 158:25 97:38]
+    node _GEN_16 = mux(_T_4, UInt<3>("h2"), state_dup_1) @[ICacheMissUnit.scala 156:35 158:25 97:38]
+    node _GEN_17 = mux(_T_4, UInt<3>("h2"), state_dup_2) @[ICacheMissUnit.scala 156:35 158:25 97:38]
+    node _GEN_18 = mux(_T_4, UInt<3>("h2"), state_dup_3) @[ICacheMissUnit.scala 156:35 158:25 97:38]
+    node _T_5 = eq(UInt<3>("h2"), state) @[ICacheMissUnit.scala 144:17]
+    node _readBeatCnt_T = add(readBeatCnt, UInt<1>("h1")) @[ICacheMissUnit.scala 165:38]
+    node _readBeatCnt_T_1 = tail(_readBeatCnt_T, 1) @[ICacheMissUnit.scala 165:38]
+    node _GEN_20 = mux(not(readBeatCnt), io_mem_grant_bits_data, respDataReg_0) @[ICacheMissUnit.scala 114:24 166:{36,36}]
+    node _GEN_21 = mux(readBeatCnt, io_mem_grant_bits_data, respDataReg_1) @[ICacheMissUnit.scala 114:24 166:{36,36}]
+    node _T_9 = not(reset) @[ICacheMissUnit.scala 171:19]
+    node _T_10 = not(refill_done) @[ICacheMissUnit.scala 171:19]
+    node _GEN_22 = mux(readBeatCnt, UInt<3>("h4"), state) @[ICacheMissUnit.scala 170:54 172:19 96:22]
+    node _GEN_23 = mux(readBeatCnt, UInt<3>("h4"), state_dup_0) @[ICacheMissUnit.scala 170:54 173:29 97:38]
+    node _GEN_24 = mux(readBeatCnt, UInt<3>("h4"), state_dup_1) @[ICacheMissUnit.scala 170:54 173:29 97:38]
+    node _GEN_25 = mux(readBeatCnt, UInt<3>("h4"), state_dup_2) @[ICacheMissUnit.scala 170:54 173:29 97:38]
+    node _GEN_26 = mux(readBeatCnt, UInt<3>("h4"), state_dup_3) @[ICacheMissUnit.scala 170:54 173:29 97:38]
+    node _GEN_28 = mux(_T, _readBeatCnt_T_1, readBeatCnt) @[ICacheMissUnit.scala 164:35 165:23 113:24]
+    node _GEN_29 = mux(_T, _GEN_20, respDataReg_0) @[ICacheMissUnit.scala 114:24 164:35]
+    node _GEN_30 = mux(_T, _GEN_21, respDataReg_1) @[ICacheMissUnit.scala 114:24 164:35]
+    node _GEN_31 = mux(_T, io_mem_grant_bits_corrupt, req_corrupt) @[ICacheMissUnit.scala 164:35 167:23 105:28]
+    node _GEN_32 = mux(_T, io_mem_grant_bits_param, grant_param) @[ICacheMissUnit.scala 164:35 168:23 139:24]
+    node _GEN_33 = mux(_T, io_mem_grant_bits_echo_blockisdirty, is_dirty) @[ICacheMissUnit.scala 164:35 169:23 140:25]
+    node _GEN_34 = mux(_T, _GEN_22, state) @[ICacheMissUnit.scala 164:35 96:22]
+    node _GEN_35 = mux(_T, _GEN_23, state_dup_0) @[ICacheMissUnit.scala 164:35 97:38]
+    node _GEN_36 = mux(_T, _GEN_24, state_dup_1) @[ICacheMissUnit.scala 164:35 97:38]
+    node _GEN_37 = mux(_T, _GEN_25, state_dup_2) @[ICacheMissUnit.scala 164:35 97:38]
+    node _GEN_38 = mux(_T, _GEN_26, state_dup_3) @[ICacheMissUnit.scala 164:35 97:38]
+    node _GEN_40 = mux(beats1_opdata, _GEN_28, readBeatCnt) @[ICacheMissUnit.scala 113:24 163:45]
+    node _GEN_41 = mux(beats1_opdata, _GEN_29, respDataReg_0) @[ICacheMissUnit.scala 114:24 163:45]
+    node _GEN_42 = mux(beats1_opdata, _GEN_30, respDataReg_1) @[ICacheMissUnit.scala 114:24 163:45]
+    node _GEN_43 = mux(beats1_opdata, _GEN_31, req_corrupt) @[ICacheMissUnit.scala 105:28 163:45]
+    node _GEN_44 = mux(beats1_opdata, _GEN_32, grant_param) @[ICacheMissUnit.scala 139:24 163:45]
+    node _GEN_45 = mux(beats1_opdata, _GEN_33, is_dirty) @[ICacheMissUnit.scala 140:25 163:45]
+    node _GEN_46 = mux(beats1_opdata, _GEN_34, state) @[ICacheMissUnit.scala 163:45 96:22]
+    node _GEN_47 = mux(beats1_opdata, _GEN_35, state_dup_0) @[ICacheMissUnit.scala 163:45 97:38]
+    node _GEN_48 = mux(beats1_opdata, _GEN_36, state_dup_1) @[ICacheMissUnit.scala 163:45 97:38]
+    node _GEN_49 = mux(beats1_opdata, _GEN_37, state_dup_2) @[ICacheMissUnit.scala 163:45 97:38]
+    node _GEN_50 = mux(beats1_opdata, _GEN_38, state_dup_3) @[ICacheMissUnit.scala 163:45 97:38]
+    node _T_11 = eq(UInt<3>("h4"), state) @[ICacheMissUnit.scala 144:17]
+    node _T_12 = and(io_mem_finish_ready, io_mem_finish_valid) @[Decoupled.scala 50:35]
+    node _GEN_52 = mux(_T_12, UInt<3>("h5"), state) @[ICacheMissUnit.scala 180:34 181:15 96:22]
+    node _GEN_53 = mux(_T_12, UInt<3>("h5"), state_dup_0) @[ICacheMissUnit.scala 180:34 182:25 97:38]
+    node _GEN_54 = mux(_T_12, UInt<3>("h5"), state_dup_1) @[ICacheMissUnit.scala 180:34 182:25 97:38]
+    node _GEN_55 = mux(_T_12, UInt<3>("h5"), state_dup_2) @[ICacheMissUnit.scala 180:34 182:25 97:38]
+    node _GEN_56 = mux(_T_12, UInt<3>("h5"), state_dup_3) @[ICacheMissUnit.scala 180:34 182:25 97:38]
+    node _T_13 = eq(UInt<3>("h5"), state) @[ICacheMissUnit.scala 144:17]
+    node _T_14 = and(io_release_req_ready, io_release_req_valid) @[Decoupled.scala 50:35]
+    node _GEN_58 = mux(_T_14, UInt<3>("h6"), state) @[ICacheMissUnit.scala 187:34 188:15 96:22]
+    node _GEN_59 = mux(_T_14, UInt<3>("h6"), state_dup_0) @[ICacheMissUnit.scala 187:34 189:25 97:38]
+    node _GEN_60 = mux(_T_14, UInt<3>("h6"), state_dup_1) @[ICacheMissUnit.scala 187:34 189:25 97:38]
+    node _GEN_61 = mux(_T_14, UInt<3>("h6"), state_dup_2) @[ICacheMissUnit.scala 187:34 189:25 97:38]
+    node _GEN_62 = mux(_T_14, UInt<3>("h6"), state_dup_3) @[ICacheMissUnit.scala 187:34 189:25 97:38]
+    node _T_15 = eq(UInt<3>("h6"), state) @[ICacheMissUnit.scala 144:17]
+    node _T_16 = eq(io_release_resp_bits, UInt<5>("h2")) @[ICacheMissUnit.scala 194:58]
+    node _T_17 = and(io_release_resp_valid, _T_16) @[ICacheMissUnit.scala 194:34]
+    node _GEN_64 = mux(_T_17, UInt<3>("h3"), state) @[ICacheMissUnit.scala 194:73 195:15 96:22]
+    node _GEN_65 = mux(_T_17, UInt<3>("h3"), state_dup_0) @[ICacheMissUnit.scala 194:73 196:25 97:38]
+    node _GEN_66 = mux(_T_17, UInt<3>("h3"), state_dup_1) @[ICacheMissUnit.scala 194:73 196:25 97:38]
+    node _GEN_67 = mux(_T_17, UInt<3>("h3"), state_dup_2) @[ICacheMissUnit.scala 194:73 196:25 97:38]
+    node _GEN_68 = mux(_T_17, UInt<3>("h3"), state_dup_3) @[ICacheMissUnit.scala 194:73 196:25 97:38]
+    node _T_18 = eq(UInt<3>("h3"), state) @[ICacheMissUnit.scala 144:17]
+    node _state_T = and(io_meta_write_ready, io_meta_write_valid) @[Decoupled.scala 50:35]
+    node _state_T_1 = and(io_data_write_ready, io_data_write_valid) @[Decoupled.scala 50:35]
+    node _state_T_2 = and(_state_T, _state_T_1) @[ICacheMissUnit.scala 201:41]
+    node _state_T_3 = mux(_state_T_2, UInt<3>("h7"), UInt<3>("h3")) @[ICacheMissUnit.scala 201:19]
+    node _T_19 = eq(UInt<3>("h7"), state) @[ICacheMissUnit.scala 144:17]
+    node _GEN_70 = mux(io_resp_valid, UInt<3>("h0"), state) @[ICacheMissUnit.scala 208:28 209:15 96:22]
+    node _GEN_71 = mux(io_resp_valid, UInt<3>("h0"), state_dup_0) @[ICacheMissUnit.scala 208:28 210:25 97:38]
+    node _GEN_72 = mux(io_resp_valid, UInt<3>("h0"), state_dup_1) @[ICacheMissUnit.scala 208:28 210:25 97:38]
+    node _GEN_73 = mux(io_resp_valid, UInt<3>("h0"), state_dup_2) @[ICacheMissUnit.scala 208:28 210:25 97:38]
+    node _GEN_74 = mux(io_resp_valid, UInt<3>("h0"), state_dup_3) @[ICacheMissUnit.scala 208:28 210:25 97:38]
+    node _GEN_78 = mux(_T_19, _GEN_70, state) @[ICacheMissUnit.scala 144:17 96:22]
+    node _GEN_79 = mux(_T_19, _GEN_71, state_dup_0) @[ICacheMissUnit.scala 144:17 97:38]
+    node _GEN_80 = mux(_T_19, _GEN_72, state_dup_1) @[ICacheMissUnit.scala 144:17 97:38]
+    node _GEN_81 = mux(_T_19, _GEN_73, state_dup_2) @[ICacheMissUnit.scala 144:17 97:38]
+    node _GEN_82 = mux(_T_19, _GEN_74, state_dup_3) @[ICacheMissUnit.scala 144:17 97:38]
+    node _GEN_84 = mux(_T_18, _state_T_3, _GEN_78) @[ICacheMissUnit.scala 144:17 201:13]
+    node _GEN_85 = mux(_T_18, _state_T_3, _GEN_79) @[ICacheMissUnit.scala 144:17 202:23]
+    node _GEN_86 = mux(_T_18, _state_T_3, _GEN_80) @[ICacheMissUnit.scala 144:17 202:23]
+    node _GEN_87 = mux(_T_18, _state_T_3, _GEN_81) @[ICacheMissUnit.scala 144:17 202:23]
+    node _GEN_88 = mux(_T_18, _state_T_3, _GEN_82) @[ICacheMissUnit.scala 144:17 202:23]
+    node _GEN_92 = mux(_T_15, _GEN_64, _GEN_84) @[ICacheMissUnit.scala 144:17]
+    node _GEN_93 = mux(_T_15, _GEN_65, _GEN_85) @[ICacheMissUnit.scala 144:17]
+    node _GEN_94 = mux(_T_15, _GEN_66, _GEN_86) @[ICacheMissUnit.scala 144:17]
+    node _GEN_95 = mux(_T_15, _GEN_67, _GEN_87) @[ICacheMissUnit.scala 144:17]
+    node _GEN_96 = mux(_T_15, _GEN_68, _GEN_88) @[ICacheMissUnit.scala 144:17]
+    node _GEN_100 = mux(_T_13, _GEN_58, _GEN_92) @[ICacheMissUnit.scala 144:17]
+    node _GEN_101 = mux(_T_13, _GEN_59, _GEN_93) @[ICacheMissUnit.scala 144:17]
+    node _GEN_102 = mux(_T_13, _GEN_60, _GEN_94) @[ICacheMissUnit.scala 144:17]
+    node _GEN_103 = mux(_T_13, _GEN_61, _GEN_95) @[ICacheMissUnit.scala 144:17]
+    node _GEN_104 = mux(_T_13, _GEN_62, _GEN_96) @[ICacheMissUnit.scala 144:17]
+    node _GEN_108 = mux(_T_11, _GEN_52, _GEN_100) @[ICacheMissUnit.scala 144:17]
+    node _GEN_109 = mux(_T_11, _GEN_53, _GEN_101) @[ICacheMissUnit.scala 144:17]
+    node _GEN_110 = mux(_T_11, _GEN_54, _GEN_102) @[ICacheMissUnit.scala 144:17]
+    node _GEN_111 = mux(_T_11, _GEN_55, _GEN_103) @[ICacheMissUnit.scala 144:17]
+    node _GEN_112 = mux(_T_11, _GEN_56, _GEN_104) @[ICacheMissUnit.scala 144:17]
+    node _GEN_116 = mux(_T_5, _GEN_40, readBeatCnt) @[ICacheMissUnit.scala 144:17 113:24]
+    node _GEN_117 = mux(_T_5, _GEN_41, respDataReg_0) @[ICacheMissUnit.scala 144:17 114:24]
+    node _GEN_118 = mux(_T_5, _GEN_42, respDataReg_1) @[ICacheMissUnit.scala 144:17 114:24]
+    node _GEN_119 = mux(_T_5, _GEN_43, req_corrupt) @[ICacheMissUnit.scala 144:17 105:28]
+    node _GEN_120 = mux(_T_5, _GEN_44, grant_param) @[ICacheMissUnit.scala 144:17 139:24]
+    node _GEN_121 = mux(_T_5, _GEN_45, is_dirty) @[ICacheMissUnit.scala 144:17 140:25]
+    node _GEN_122 = mux(_T_5, _GEN_46, _GEN_108) @[ICacheMissUnit.scala 144:17]
+    node _GEN_123 = mux(_T_5, _GEN_47, _GEN_109) @[ICacheMissUnit.scala 144:17]
+    node _GEN_124 = mux(_T_5, _GEN_48, _GEN_110) @[ICacheMissUnit.scala 144:17]
+    node _GEN_125 = mux(_T_5, _GEN_49, _GEN_111) @[ICacheMissUnit.scala 144:17]
+    node _GEN_126 = mux(_T_5, _GEN_50, _GEN_112) @[ICacheMissUnit.scala 144:17]
+    node _GEN_130 = mux(_T_3, _GEN_14, _GEN_122) @[ICacheMissUnit.scala 144:17]
+    node _GEN_131 = mux(_T_3, _GEN_15, _GEN_123) @[ICacheMissUnit.scala 144:17]
+    node _GEN_132 = mux(_T_3, _GEN_16, _GEN_124) @[ICacheMissUnit.scala 144:17]
+    node _GEN_133 = mux(_T_3, _GEN_17, _GEN_125) @[ICacheMissUnit.scala 144:17]
+    node _GEN_134 = mux(_T_3, _GEN_18, _GEN_126) @[ICacheMissUnit.scala 144:17]
+    node _GEN_136 = mux(_T_3, readBeatCnt, _GEN_116) @[ICacheMissUnit.scala 144:17 113:24]
+    node _GEN_137 = mux(_T_3, respDataReg_0, _GEN_117) @[ICacheMissUnit.scala 144:17 114:24]
+    node _GEN_138 = mux(_T_3, respDataReg_1, _GEN_118) @[ICacheMissUnit.scala 144:17 114:24]
+    node _GEN_139 = mux(_T_3, req_corrupt, _GEN_119) @[ICacheMissUnit.scala 144:17 105:28]
+    node _GEN_140 = mux(_T_3, grant_param, _GEN_120) @[ICacheMissUnit.scala 144:17 139:24]
+    node _GEN_141 = mux(_T_3, is_dirty, _GEN_121) @[ICacheMissUnit.scala 144:17 140:25]
+    node _GEN_145 = mux(_T_1, _GEN_4, _GEN_130) @[ICacheMissUnit.scala 144:17]
+    node _GEN_146 = mux(_T_1, _GEN_5, _GEN_131) @[ICacheMissUnit.scala 144:17]
+    node _GEN_147 = mux(_T_1, _GEN_6, _GEN_132) @[ICacheMissUnit.scala 144:17]
+    node _GEN_148 = mux(_T_1, _GEN_7, _GEN_133) @[ICacheMissUnit.scala 144:17]
+    node _GEN_149 = mux(_T_1, _GEN_8, _GEN_134) @[ICacheMissUnit.scala 144:17]
+    node _GEN_157 = mux(_T_1, req_corrupt, _GEN_139) @[ICacheMissUnit.scala 144:17 105:28]
+    node _GEN_159 = mux(_T_1, is_dirty, _GEN_141) @[ICacheMissUnit.scala 144:17 140:25]
+    node _io_mem_finish_valid_T = eq(state_dup_3, UInt<3>("h4")) @[ICacheMissUnit.scala 230:40]
+    node _miss_new_coh_T = cat(grant_param, is_dirty) @[Cat.scala 31:58]
+    node _miss_new_coh_T_5 = eq(UInt<3>("h2"), _miss_new_coh_T) @[Mux.scala 81:61]
+    node _miss_new_coh_T_6 = mux(_miss_new_coh_T_5, UInt<2>("h1"), UInt<2>("h0")) @[Mux.scala 81:58]
+    node _miss_new_coh_T_7 = eq(UInt<3>("h3"), _miss_new_coh_T) @[Mux.scala 81:61]
+    node _miss_new_coh_T_8 = mux(_miss_new_coh_T_7, UInt<2>("h1"), _miss_new_coh_T_6) @[Mux.scala 81:58]
+    node _miss_new_coh_T_9 = eq(UInt<3>("h0"), _miss_new_coh_T) @[Mux.scala 81:61]
+    node _miss_new_coh_T_10 = mux(_miss_new_coh_T_9, UInt<2>("h2"), _miss_new_coh_T_8) @[Mux.scala 81:58]
+    node _miss_new_coh_T_11 = eq(UInt<3>("h1"), _miss_new_coh_T) @[Mux.scala 81:61]
+    io_req_ready <= eq(state, UInt<3>("h0")) @[ICacheMissUnit.scala 131:26]
+    io_resp_valid <= eq(state, UInt<3>("h7")) @[ICacheMissUnit.scala 234:26]
+    io_resp_bits_data <= cat(respDataReg_1, respDataReg_0) @[ICacheMissUnit.scala 206:40]
+    io_resp_bits_corrupt <= req_corrupt @[ICacheMissUnit.scala 144:17 207:28]
+    io_mem_acquire_valid <= eq(state_dup_1, UInt<3>("h1")) @[ICacheMissUnit.scala 132:41]
+    io_mem_acquire_bits_opcode <= UInt<3>("h6") @[Edges.scala 345:17 346:15]
+    io_mem_acquire_bits_param <= UInt<3>("h0") @[Edges.scala 345:17 347:15]
+    io_mem_acquire_bits_size <= UInt<3>("h6") @[Edges.scala 345:17 348:15]
+    io_mem_acquire_bits_source <= pad(io_id, 3) @[Edges.scala 345:17 349:15]
+    io_mem_acquire_bits_address <= cat(_io_toPrefetch_bits_T, UInt<6>("h0")) @[Cat.scala 31:58]
+    io_mem_acquire_bits_user_alias <= bits(req_vaddr, 13, 12) @[ICacheMissUnit.scala 226:65]
+    io_mem_acquire_bits_user_preferCache <= UInt<1>("h0") @[ICacheMissUnit.scala 224:23]
+    io_mem_acquire_bits_user_needHint <= UInt<1>("h0") @[ICacheMissUnit.scala 224:23]
+    io_mem_acquire_bits_echo_blockisdirty <= UInt<1>("h0") @[ICacheMissUnit.scala 224:23]
+    io_mem_acquire_bits_mask <= UInt<32>("hffffffff") @[Cat.scala 31:58]
+    io_mem_acquire_bits_data <= UInt<256>("h0") @[Edges.scala 345:17 352:15]
+    io_mem_acquire_bits_corrupt <= UInt<1>("h0") @[Edges.scala 345:17 353:15]
+    io_mem_grant_ready <= UInt<1>("h1") @[ICacheMissUnit.scala 119:22]
+    io_mem_finish_valid <= and(_io_mem_finish_valid_T, is_grant) @[ICacheMissUnit.scala 230:62]
+    io_mem_finish_bits_sink <= grantack_sink @[ICacheMissUnit.scala 231:22]
+    io_meta_write_valid <= eq(state, UInt<3>("h3")) @[ICacheMissUnit.scala 246:33]
+    io_meta_write_bits_virIdx <= bits(req_vaddr, 13, 6) @[L1Cache.scala 81:33]
+    io_meta_write_bits_phyTag <= shr(req_paddr, 12) @[L1Cache.scala 79:41]
+    io_meta_write_bits_coh_state <= mux(_miss_new_coh_T_11, UInt<2>("h3"), _miss_new_coh_T_10) @[Mux.scala 81:58]
+    io_meta_write_bits_waymask <= req_waymask @[ICacheBundle.scala 63:18]
+    io_meta_write_bits_bankIdx <= bits(req_idx, 0, 0) @[ICacheMissUnit.scala 247:121]
+    io_data_write_valid <= eq(state, UInt<3>("h3")) @[ICacheMissUnit.scala 249:33]
+    io_data_write_bits_virIdx <= bits(req_vaddr, 13, 6) @[L1Cache.scala 81:33]
+    io_data_write_bits_data <= cat(respDataReg_1, respDataReg_0) @[ICacheMissUnit.scala 254:50]
+    io_data_write_bits_waymask <= req_waymask @[ICacheBundle.scala 80:18]
+    io_data_write_bits_bankIdx <= bits(req_idx, 0, 0) @[ICacheMissUnit.scala 254:113]
+    io_data_write_bits_writeEn_0 <= eq(state_dup_0, UInt<3>("h3")) @[ICacheMissUnit.scala 252:25]
+    io_data_write_bits_writeEn_1 <= eq(state_dup_1, UInt<3>("h3")) @[ICacheMissUnit.scala 252:25]
+    io_data_write_bits_writeEn_2 <= eq(state_dup_2, UInt<3>("h3")) @[ICacheMissUnit.scala 252:25]
+    io_data_write_bits_writeEn_3 <= eq(state_dup_3, UInt<3>("h3")) @[ICacheMissUnit.scala 252:25]
+    io_release_req_valid <= eq(state_dup_1, UInt<3>("h5")) @[ICacheMissUnit.scala 133:41]
+    io_release_req_bits_paddr <= req_paddr @[ICacheMissUnit.scala 123:29]
+    io_release_req_bits_vaddr <= req_vaddr @[ICacheMissUnit.scala 124:29]
+    io_release_req_bits_param <= UInt<3>("h0")
+    io_release_req_bits_voluntary <= UInt<1>("h1") @[ICacheMissUnit.scala 125:33]
+    io_release_req_bits_needData <= UInt<1>("h0") @[ICacheMissUnit.scala 127:34]
+    io_release_req_bits_waymask <= req_waymask @[ICacheMissUnit.scala 126:33]
+    io_release_req_bits_id <= UInt<5>("h2") @[ICacheMissUnit.scala 128:28]
+    io_victimInfor_valid <= or(_io_victimInfor_valid_T_4, _io_victimInfor_valid_T_5) @[ICacheMissUnit.scala 107:127]
+    io_victimInfor_vidx <= bits(req_vaddr, 13, 6) @[L1Cache.scala 81:33]
+    io_toPrefetch_valid <= neq(state_dup_2, UInt<3>("h0")) @[ICacheMissUnit.scala 135:40]
+    io_toPrefetch_bits <= cat(_io_toPrefetch_bits_T, UInt<6>("h0")) @[Cat.scala 31:58]
+    state <= mux(reset, UInt<3>("h0"), _GEN_145) @[ICacheMissUnit.scala 96:{22,22}]
+    state_dup_0 <= mux(reset, UInt<3>("h0"), _GEN_146) @[ICacheMissUnit.scala 97:{38,38}]
+    state_dup_1 <= mux(reset, UInt<3>("h0"), _GEN_147) @[ICacheMissUnit.scala 97:{38,38}]
+    state_dup_2 <= mux(reset, UInt<3>("h0"), _GEN_148) @[ICacheMissUnit.scala 97:{38,38}]
+    state_dup_3 <= mux(reset, UInt<3>("h0"), _GEN_149) @[ICacheMissUnit.scala 97:{38,38}]
+    req_paddr <= mux(_T_1, _GEN_10, req_paddr) @[ICacheMissUnit.scala 100:16 144:17]
+    req_vaddr <= mux(_T_1, _GEN_11, req_vaddr) @[ICacheMissUnit.scala 100:16 144:17]
+    req_waymask <= mux(_T_1, _GEN_12, req_waymask) @[ICacheMissUnit.scala 100:16 144:17]
+    req_corrupt <= mux(reset, UInt<1>("h0"), _GEN_157) @[ICacheMissUnit.scala 105:{28,28}]
+    counter <= mux(reset, UInt<1>("h0"), _GEN_0) @[Edges.scala 228:{27,27}]
+    readBeatCnt <= mux(_T_1, _GEN_3, _GEN_136) @[ICacheMissUnit.scala 144:17]
+    respDataReg_0 <= mux(_T_1, respDataReg_0, _GEN_137) @[ICacheMissUnit.scala 144:17 114:24]
+    respDataReg_1 <= mux(_T_1, respDataReg_1, _GEN_138) @[ICacheMissUnit.scala 144:17 114:24]
+    grantack_sink <= mux(_T, io_mem_grant_bits_sink, grantack_sink) @[Reg.scala 16:16 17:{18,22}]
+    grant_param <= mux(_T_1, grant_param, _GEN_140) @[ICacheMissUnit.scala 144:17 139:24]
+    is_dirty <= mux(reset, UInt<1>("h0"), _GEN_159) @[ICacheMissUnit.scala 140:{25,25}]
+    is_grant <= mux(_T, _is_grant_T_3, is_grant) @[Reg.scala 16:16 17:{18,22}]
+    node _GEN_164 = not(_T_1) @[ICacheMissUnit.scala 171:19]
+    node _GEN_165 = not(_T_3) @[ICacheMissUnit.scala 171:19]
+    node _GEN_166 = and(_GEN_164, _GEN_165) @[ICacheMissUnit.scala 171:19]
+    node _GEN_167 = and(_GEN_166, _T_5) @[ICacheMissUnit.scala 171:19]
+    node _GEN_168 = and(_GEN_167, beats1_opdata) @[ICacheMissUnit.scala 171:19]
+    node _GEN_169 = and(_GEN_168, _T) @[ICacheMissUnit.scala 171:19]
+    node _GEN_170 = and(_GEN_169, readBeatCnt) @[ICacheMissUnit.scala 171:19]
+    node _GEN_171 = and(_GEN_170, _T_9) @[ICacheMissUnit.scala 171:19]
+    printf(clock, and(_GEN_171, _T_10), "Assertion failed: refill not done!\n    at ICacheMissUnit.scala:171 assert(refill_done, \"refill not done!\")\n") : printf @[ICacheMissUnit.scala 171:19]
+    assert(clock, refill_done, and(_GEN_170, _T_9), "") : assert @[ICacheMissUnit.scala 171:19]
+```
+
+### Expected behavior
+
+As far as I'm concerned, in a reliable program, an assertion is something that should not be violated under any inputs.
+Although I'm not sure if it is also the case for `ICacheMissEntry`.
+
+### To Reproduce
+
+This is a payload for this assertion activation, which will be refered to as `refill_done.payload` since `refill_done` is the predicate of this assertion.
+
+```
+reset
+poke io_req_valid 1
+poke io_mem_grant_bits_opcode 4
+step
+step
+poke io_mem_acquire_ready 1
+step
+poke io_mem_grant_valid 1
+poke io_mem_grant_bits_opcode 1
+step
+poke io_mem_grant_bits_size 6
+step
+```
+
+To reproduce this violation, run the following instruction:
+
+```shell
+$ treadle -tfsf ICacheMissEntry.opt.lo.fir < refill_done.payload
+```
+
+And the violation is indicated by simulator outputs:
+
+```
+...
+Assertion failed: refill not done!
+    at ICacheMissUnit.scala:171 assert(refill_done, "refill not done!")
+Error: exception Failure Stop:assert:(65) at  @[ICacheMissUnit.scala 171:19] treadle.executable.StopException: Failure Stop:assert:(65) at  @[ICacheMissUnit.scala 171:19]
+...
+```
+
+Here, `treadle` is the [firrtl simulator](https://github.com/chipsalliance/treadle/blob/v1.5.6/utils/bin/treadle), whose version is `v1.5.6`.
+
+### Environment
+
+- XiangShan commit id: `v2.1` tag
+
+
+### Additional context
+
+I'm just wondering if this behavior is reasonable and proper.

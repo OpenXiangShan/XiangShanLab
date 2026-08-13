@@ -1,0 +1,24 @@
+{
+  "number": 4044,
+  "title": "feat(ICache): ECC error injection",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4044",
+  "state": "closed",
+  "labels": [],
+  "author": "ngc7331",
+  "created_at": "2024-12-15T08:58:24Z",
+  "updated_at": "2024-12-30T05:16:57Z",
+  "source_files": [
+    "issue-4044/source/program-01.txt",
+    "issue-4044/source/program-02.S"
+  ],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4044/commit-log.md"
+  ],
+  "submitted_at": "2024-12-15",
+  "branch": "",
+  "rtl_commit": ""
+}

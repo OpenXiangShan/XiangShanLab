@@ -1,0 +1,21 @@
+{
+  "number": 3978,
+  "title": "fix(Smstateen): fix access check when Smstateen extension enable.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3978",
+  "state": "closed",
+  "labels": [],
+  "author": "NewPaulWalker",
+  "created_at": "2024-12-03T10:53:49Z",
+  "updated_at": "2024-12-09T10:38:49Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3978/commit-log.md"
+  ],
+  "submitted_at": "2024-12-03",
+  "branch": "",
+  "rtl_commit": ""
+}

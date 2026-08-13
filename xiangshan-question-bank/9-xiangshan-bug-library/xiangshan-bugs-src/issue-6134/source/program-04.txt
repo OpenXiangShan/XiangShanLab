@@ -1,0 +1,8 @@
+s2_pbmt            = 2
+s2_pmp_mmio        = 0
+s3_use_uncache     = 1
+s3_pmp_mmio        = 0
+ifu_uncache_state  = SendReq
+is_first_instr     = 0
+backend_empty      = 0
+to_uncache.fire    = 1

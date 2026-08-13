@@ -1,0 +1,2620 @@
+# Commit Log
+- Issue: #5049
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5049
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5049
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5049
+- Changed files: 25
+- Additions: 1525
+- Deletions: 165
+
+## Files
+- `coupledL2`
+- `src/main/scala/xiangshan/Parameters.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSRCustom.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+- `src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala`
+- `src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala`
+- `src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala`
+- `src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala`
+- `src/main/scala/xiangshan/cache/dcache/meta/AsynchronousMetaArray.scala`
+- `src/main/scala/xiangshan/cache/mmu/MMUConst.scala`
+- `src/main/scala/xiangshan/mem/Bundles.scala`
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala`
+- `src/main/scala/xiangshan/mem/pipeline/HybridUnit.scala`
+- `src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala`
+- `src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala`
+- `src/main/scala/xiangshan/mem/prefetch/BasePrefecher.scala`
+- `src/main/scala/xiangshan/mem/prefetch/Berti.scala`
+- `src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala`
+- `src/main/scala/xiangshan/mem/prefetch/L1PrefetchInterface.scala`
+- `src/main/scala/xiangshan/mem/prefetch/L1StridePrefetcher.scala`
+- `src/main/scala/xiangshan/mem/prefetch/PrefetcherWrapper.scala`
+- `src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala`
+- `utility`
+
+## Diff
+```diff
+diff --git a/coupledL2 b/coupledL2
+index c4550b17da7..87953063493 160000
+--- a/coupledL2
++++ b/coupledL2
+@@ -1 +1 @@
+-Subproject commit c4550b17da709b4c63c6d37014f0ecdcd7ce07b8
++Subproject commit 8795306349398ff7a9a99156d36cf39c1be4dab0
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 6ccc1edf11f..2294911904b 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -16,37 +16,30 @@
+ 
+ package xiangshan
+ 
+-import org.chipsalliance.cde.config.{Field, Parameters}
+ import chisel3._
+ import chisel3.util._
+-import huancun._
++import coupledL2._
++import coupledL2.tl2chi._
++import freechips.rocketchip.diplomacy.AddressSet
++import freechips.rocketchip.tile.MaxHartIdBits
++import org.chipsalliance.cde.config.{Field, Parameters}
+ import system.{CVMParamsKey, SoCParamsKey}
++import xiangshan.backend.BackendParams
+ import xiangshan.backend.datapath.RdConfig._
++import xiangshan.backend.datapath.WakeUpConfig
+ import xiangshan.backend.datapath.WbConfig._
+ import xiangshan.backend.exu.ExeUnitParams
+ import xiangshan.backend.fu.FuConfig._
+-import xiangshan.backend.issue.{FpScheduler, IntScheduler, IssueBlockParams, SchdBlockParams, SchedulerType, VecScheduler}
++import xiangshan.backend.issue._
+ import xiangshan.backend.regfile._
+-import xiangshan.backend.BackendParams
+ import xiangshan.backend.trace._
+ import xiangshan.cache.DCacheParameters
+-import xiangshan.frontend.bpu.BpuParameters
+-import xiangshan.frontend.icache.ICacheParameters
+ import xiangshan.cache.mmu.{L2TLBParameters, TLBParameters}
+-import xiangshan.frontend._
+-import freechips.rocketchip.diplomacy.AddressSet
+-import freechips.rocketchip.tile.MaxHartIdBits
+-import system.SoCParamsKey
+-import huancun._
+-import huancun.debug._
+ import xiangshan.cache.wpu.WPUParameters
+-import coupledL2._
+-import coupledL2.tl2chi._
+-import xiangshan.backend.datapath.WakeUpConfig
+-import xiangshan.frontend.ftq.FtqParameters
+-import xiangshan.mem.prefetch.{PrefetcherParams, SMSParams, StreamStrideParams, TLBPlace}
++import xiangshan.frontend._
++import xiangshan.mem.prefetch._
+ 
+-import scala.math.{max, min, pow}
++import scala.math.{max, pow}
+ 
+ case object XSTileKey extends Field[Seq[XSCoreParameters]]
+ 
+@@ -148,7 +141,7 @@ case class XSCoreParameters
+   MemRegCacheSize: Int = 12,
+   intSchdVlWbPort: Int = 0,
+   vfSchdVlWbPort: Int = 1,
+-  prefetcher: Seq[PrefetcherParams] = Seq(StreamStrideParams(), SMSParams()),
++  prefetcher: Seq[PrefetcherParams] = Seq(StreamStrideParams(), BertiParams(), SMSParams()),
+   IfuRedirectNum: Int = 1,
+   LoadPipelineWidth: Int = 3,
+   StorePipelineWidth: Int = 2,
+@@ -533,6 +526,9 @@ trait HasXSParameter {
+   def prefetcherNum = max(prefetcherSeq.size, 1) //TODO lyq: 1 for simpler code generation, but it's also ugly
+   def PfNumInDtlbLD = prefetcherSeq.count(_.tlbPlace == TLBPlace.dtlb_ld)
+   def PfNumInDtlbPF = prefetcherSeq.count(_.tlbPlace == TLBPlace.dtlb_pf) + 1 // 1 for l2 prefetch
++  def hasSMS = coreParams.prefetcher.exists(_.isInstanceOf[SMSParams])
++  def hasBerti = coreParams.prefetcher.exists(_.isInstanceOf[BertiParams])
++  def hasStreamStride = coreParams.prefetcher.exists(_.isInstanceOf[StreamStrideParams])
+ 
+   def HasMExtension = coreParams.HasMExtension
+   def HasCExtension = coreParams.HasCExtension
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRCustom.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRCustom.scala
+index 16e6b7d0069..67c1f1dd98d 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRCustom.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRCustom.scala
+@@ -78,7 +78,8 @@ class SbpctlBundle extends CSRBundle {
+ }
+ 
+ class SpfctlBundle extends CSRBundle {
+-  val L2_PF_DELAY_LATENCY = SpfctlL2PfDelayLatency(31, 22).withReset(SpfctlL2PfDelayLatency.initValue) // delay latency for l2 prefetcher train
++  val BERTI_ENABLE            = RW(    32).withReset(true.B)
++  val L2_PF_DELAY_LATENCY     = SpfctlL2PfDelayLatency(31, 22).withReset(SpfctlL2PfDelayLatency.initValue) // delay latency for l2 prefetcher train
+   val L2_PF_TP_ENABLE         = RW(    21).withReset(true.B)  // (Train L2, Prefetch L2) TP
+   val L2_PF_VBOP_ENABLE       = RW(    20).withReset(true.B)  // (Train L2, Prefetch L2) VBOP
+   val L2_PF_PBOP_ENABLE       = RW(    19).withReset(true.B)  // (Train L2, Prefetch L2) PBOP
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index ab4e0f962f1..1ca6c82813d 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -1329,6 +1329,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   io.status.custom.pf_ctrl.l2_pf_vbop_enable       := spfctl.regOut.L2_PF_VBOP_ENABLE.asBool
+   io.status.custom.pf_ctrl.l2_pf_tp_enable         := spfctl.regOut.L2_PF_TP_ENABLE.asBool
+   io.status.custom.pf_ctrl.l2_pf_delay_latency     := spfctl.regOut.L2_PF_DELAY_LATENCY.asUInt
++  io.status.custom.pf_ctrl.berti_enable            := spfctl.regOut.BERTI_ENABLE.asBool
+ 
+   io.status.custom.lvpred_disable          := slvpredctl.regOut.LVPRED_DISABLE.asBool
+   io.status.custom.no_spec_load            := slvpredctl.regOut.NO_SPEC_LOAD.asBool
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index 8459c441993..0d79bbe37ae 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -565,6 +565,8 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+       debug_microOp(wbIdx).debugInfo.selectTime := wb.bits.debugInfo.selectTime
+       debug_microOp(wbIdx).debugInfo.issueTime := wb.bits.debugInfo.issueTime
+       debug_microOp(wbIdx).debugInfo.writebackTime := wb.bits.debugInfo.writebackTime
++      debug_microOp(wbIdx).debugInfo.tlbFirstReqTime := wb.bits.debugInfo.tlbFirstReqTime
++      debug_microOp(wbIdx).debugInfo.tlbRespTime := wb.bits.debugInfo.tlbRespTime
+ 
+       // debug for lqidx and sqidx
+       debug_microOp(wbIdx).lqIdx := wb.bits.lqIdx.getOrElse(0.U.asTypeOf(new LqPtr))
+@@ -1382,6 +1384,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   val executeLatency = commitDebugUop.map(uop => uop.debugInfo.writebackTime - uop.debugInfo.issueTime)
+   val rsFuLatency = commitDebugUop.map(uop => uop.debugInfo.writebackTime - uop.debugInfo.enqRsTime)
+   val commitLatency = commitDebugUop.map(uop => timer - uop.debugInfo.writebackTime)
++  val tlbLatency = commitDebugUop.map(uop => uop.debugInfo.tlbRespTime - uop.debugInfo.tlbFirstReqTime)
+ 
+   def latencySum(cond: Seq[Bool], latency: Seq[UInt]): UInt = {
+     cond.zip(latency).map(x => Mux(x._1, x._2, 0.U)).reduce(_ +& _)
+@@ -1430,7 +1433,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   if (!env.FPGAPlatform) {
+     val instTableName = "InstTable" + p(XSCoreParamsKey).HartId.toString
+     val instSiteName = "Rob" + p(XSCoreParamsKey).HartId.toString
+-    val debug_instTable = ChiselDB.createTable(instTableName, new InstInfoEntry)
++    val debug_instTable = ChiselDB.createTable(instTableName, new InstInfoEntry, basicDB = true)
+     for (wb <- exuWBs) {
+       when(wb.valid) {
+         val debug_instData = Wire(new InstInfoEntry)
+@@ -1465,6 +1468,30 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     }
+   }
+ 
++  // log when committing
++  val load_debug_table = ChiselDB.createTable("LoadDebugTable" + p(XSCoreParamsKey).HartId.toString, new LoadInfoEntry, basicDB = true)
++  for (i <- 0 until CommitWidth) {
++    val log_enable = io.commits.commitValid(i) && io.commits.isCommit && (io.commits.info(i).commitType === CommitType.LOAD)
++    val commit_index = io.commits.robIdx(i).value
++    val load_debug_data = Wire(new LoadInfoEntry)
++
++    load_debug_data.pc := io.commits.info(i).debug_pc.getOrElse(0.U)
++    load_debug_data.vaddr := debug_lsTopdownInfo(commit_index).s1.vaddr_bits
++    load_debug_data.paddr := debug_lsTopdownInfo(commit_index).s2.paddr_bits
++    load_debug_data.cacheMiss := debug_lsTopdownInfo(commit_index).s2.first_real_miss
++    load_debug_data.tlbQueryLatency := tlbLatency(i)
++    load_debug_data.exeLatency := executeLatency(i)
++
++
++    load_debug_table.log(
++      data = load_debug_data,
++      en = log_enable,
++      site = "LoadDebugTable",
++      clock = clock,
++      reset = reset
++    )
++  }
++
+   val debug_VecOtherPdest = RegInit(VecInit.fill(RobSize)(VecInit.fill(8)(0.U(PhyRegIdxWidth.W))))
+ 
+   vldWBs.map{ vldWb =>
+diff --git a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+index a326d93d7c2..10c66126a62 100644
+--- a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
++++ b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+@@ -28,11 +28,10 @@ import org.chipsalliance.cde.config.Parameters
+ import utility._
+ import utils._
+ import xiangshan._
+-import xiangshan.backend.Bundles.DynInst
+ import xiangshan.backend.rob.{RobDebugRollingIO, RobPtr}
+ import xiangshan.cache.wpu._
+-import xiangshan.mem.{AddPipelineReg, DataBufferEntry, HasL1PrefetchSourceParameter, LqPtr}
+ import xiangshan.mem.prefetch._
++import xiangshan.mem.{AddPipelineReg, DataBufferEntry, HasL1PrefetchSourceParameter, LqPtr}
+ 
+ // DCache specific parameters
+ case class DCacheParameters
+@@ -91,6 +90,8 @@ trait HasDCacheParameters extends HasL1CacheParameters with HasL1PrefetchSourceP
+   val cacheParams = dcacheParameters
+   val cfg = cacheParams
+ 
++  def GenLatencyArray: Boolean = hasBerti
++
+   def blockProbeAfterGrantCycles = 8 // give the processor some time to issue a request after a grant
+ 
+   def nSourceType = 10
+@@ -111,6 +112,8 @@ trait HasDCacheParameters extends HasL1CacheParameters with HasL1PrefetchSourceP
+   def HW_PREFETCH_STRIDE = 10
+ 
+   def BLOOM_FILTER_ENTRY_NUM = 4096
++  def TIMESTAMP_WIDTH = 16
++  def LATENCY_WIDTH = 16 // FIXME lyq: here should be 12, test for 16
+ 
+   // each source use a id to distinguish its multiple reqs
+   def reqIdWidth = log2Up(nEntries) max log2Up(StoreBufferSize)
+@@ -357,6 +360,7 @@ class DCacheExtraMeta(implicit p: Parameters) extends DCacheBundle
+   val error = Bool() // cache line has been marked as corrupted by l2 / ecc error detected when store
+   val prefetch = UInt(L1PfSourceBits.W) // cache line is first required by prefetch
+   val access = Bool() // cache line has been accessed by load / store
++  val latency = UInt(LATENCY_WIDTH.W)
+ 
+   // val debug_access_timestamp = UInt(64.W) // last time a load / store / refill access that cacheline
+ }
+@@ -467,6 +471,7 @@ class DCacheWordResp(implicit p: Parameters) extends BaseDCacheWordResp
+ {
+   val meta_prefetch = UInt(L1PfSourceBits.W)
+   val meta_access = Bool()
++  val refill_latency = UInt(LATENCY_WIDTH.W)
+   // s2
+   val handled = Bool()
+   val real_miss = Bool()
+@@ -825,6 +830,7 @@ class DCacheIO(implicit p: Parameters) extends DCacheBundle {
+   val memSetPattenDetected = Output(Bool())
+   val lqEmpty = Input(Bool())
+   val pf_ctrl = Output(Vec(L1PrefetcherNum, new PrefetchControlBundle))
++  val refillTrain = ValidIO(new TrainReqBundle)
+   val force_write = Input(Bool())
+   val sms_agt_evict_req = DecoupledIO(new AGTEvictReq)
+   val debugTopDown = new DCacheTopDownIO
+@@ -1002,6 +1008,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
+   val metaArray = Module(new L1CohMetaArray(readPorts = LoadPipelineWidth + 1, writePorts = 1))
+   val errorArray = Module(new L1FlagMetaArray(readPorts = LoadPipelineWidth + 1, writePorts = 1, enableBypass = true))
+   val prefetchArray = Module(new L1PrefetchSourceArray(readPorts = PrefetchArrayReadPort, writePorts = 1 + LoadPipelineWidth)) // prefetch flag array
++  val latencyArray = Option.when(GenLatencyArray)(Module(new L1RefillLatencyArray(readPorts = PrefetchArrayReadPort, writePorts = 1 + LoadPipelineWidth)))
+   val accessArray = Module(new L1FlagMetaArray(readPorts = AccessArrayReadPort, writePorts = LoadPipelineWidth + 1))
+   val tagArray = Module(new DuplicatedTagArray(readPorts = TagReadPort))
+   val prefetcherMonitor = Module(new PrefetcherMonitor)
+@@ -1043,6 +1050,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
+   mainPipe.io.sms_agt_evict_req <> io.sms_agt_evict_req
+   io.memSetPattenDetected := missQueue.io.memSetPattenDetected
+   io.wfi <> missQueue.io.wfi
++  io.refillTrain := missQueue.io.refill_train
+ 
+   // l1 dcache controller
+   outer.cacheCtrlOpt.foreach {
+@@ -1156,6 +1164,19 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
+   extra_meta_resp_ports.zip(accessArray.io.resp).foreach { case (p, r) => {
+     (0 until nWays).map(i => { p(i).access := r(i) })
+   }}
++  if (GenLatencyArray) {
++    (meta_read_ports.take(HybridLoadReadBase + 1) ++
++      meta_read_ports.takeRight(backendParams.HyuCnt)).zip(latencyArray.get.io.read).foreach { case (p, r) => r <> p }
++    extra_meta_resp_ports.zip(latencyArray.get.io.resp).foreach { case (p, r) => {
++      (0 until nWays).map(i => { p(i).latency := r(i) })
++    }}
++  } else {
++    (meta_read_ports.take(HybridLoadReadBase + 1) ++
++      meta_read_ports.takeRight(backendParams.HyuCnt)).foreach { case p => p.ready := true.B}
++    extra_meta_resp_ports.foreach { case p => {
++      (0 until nWays).map(i => { p(i).latency := 0.U })
++    }}
++  }
+ 
+   if(LoadPrefetchL1Enabled) {
+     // use last port to read prefetch and access flag
+@@ -1170,6 +1191,12 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
+     prefetchArray.io.read.last.bits.idx := mainPipe.io.prefetch_flag_write.bits.idx
+     prefetchArray.io.read.last.bits.way_en := mainPipe.io.prefetch_flag_write.bits.way_en
+ 
++    if(GenLatencyArray) {
++      latencyArray.get.io.read.last.valid := mainPipe.io.prefetch_flag_write.valid
++      latencyArray.get.io.read.last.bits.idx := mainPipe.io.prefetch_flag_write.bits.idx
++      latencyArray.get.io.read.last.bits.way_en := mainPipe.io.prefetch_flag_write.bits.way_en
++    }
++
+     accessArray.io.read.last.valid := mainPipe.io.prefetch_flag_write.valid
+     accessArray.io.read.last.bits.idx := mainPipe.io.prefetch_flag_write.bits.idx
+     accessArray.io.read.last.bits.way_en := mainPipe.io.prefetch_flag_write.bits.way_en
+@@ -1197,6 +1224,15 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
+   )
+   prefetch_flag_write_ports.zip(prefetchArray.io.write).foreach { case (p, w) => w <> p }
+ 
++  val latency_flag_write_ports = ldu.map(_.io.latency_flag_write) ++ Seq(
++    mainPipe.io.latency_flag_write
++  )
++  if (GenLatencyArray) {
++    latency_flag_write_ports.zip(latencyArray.get.io.write).foreach { case (p, w) => w <> p }
++  } else {
++    latency_flag_write_ports.foreach { case p => p.ready := true.B }
++  }
++
+   // FIXME: add hybrid unit?
+   val same_cycle_update_pf_flag = ldu(0).io.prefetch_flag_write.valid && ldu(1).io.prefetch_flag_write.valid && (ldu(0).io.prefetch_flag_write.bits.idx === ldu(1).io.prefetch_flag_write.bits.idx) && (ldu(0).io.prefetch_flag_write.bits.way_en === ldu(1).io.prefetch_flag_write.bits.way_en)
+   XSPerfAccumulate("same_cycle_update_pf_flag", same_cycle_update_pf_flag)
+@@ -1701,7 +1737,6 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
+   //----------------------------------------
+   // assertions
+   // dcache should only deal with DRAM addresses
+-  import freechips.rocketchip.util._
+   when (bus.a.fire) {
+     assert(PmemRanges.map(_.cover(bus.a.bits.address)).reduce(_ || _))
+   }
+diff --git a/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala b/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala
+index 6c2402686e9..8d0dd808c2f 100644
+--- a/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala
++++ b/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala
+@@ -16,16 +16,15 @@
+ 
+ package xiangshan.cache
+ 
+-import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+-import freechips.rocketchip.tilelink.{ClientMetadata, ClientStates, TLPermissions}
+-import utility.{ParallelPriorityMux, OneHot, ChiselDB, ParallelORR, ParallelMux, XSDebug, XSPerfAccumulate, HasPerfEvents}
+-import xiangshan.{XSCoreParamsKey, L1CacheErrorInfo}
++import freechips.rocketchip.tilelink.TLPermissions
++import org.chipsalliance.cde.config.Parameters
++import utility._
+ import xiangshan.cache.wpu._
+ import xiangshan.mem.HasL1PrefetchSourceParameter
+ import xiangshan.mem.prefetch._
+-import xiangshan.mem.LqPtr
++import xiangshan.{L1CacheErrorInfo, XSCoreParamsKey}
+ 
+ class LoadPfDbBundle(implicit p: Parameters) extends DCacheBundle {
+   val paddr = UInt(PAddrBits.W)
+@@ -57,6 +56,7 @@ class LoadPipe(id: Int)(implicit p: Parameters) extends DCacheModule with HasPer
+     // access bit update
+     val access_flag_write = DecoupledIO(new FlagMetaWriteReq)
+     val prefetch_flag_write = DecoupledIO(new SourceMetaWriteReq)
++    val latency_flag_write = DecoupledIO(new LatencyMetaWriteReq)
+ 
+     // banked data read conflict
+     val bank_conflict_slow = Input(Bool())
+@@ -288,6 +288,7 @@ class LoadPipe(id: Int)(implicit p: Parameters) extends DCacheModule with HasPer
+   val s1_hit_error = ParallelMux(s1_tag_match_way_dup_dc.asBools, (0 until nWays).map(w => io.extra_meta_resp(w).error))
+   val s1_hit_prefetch = ParallelMux(s1_tag_match_way_dup_dc.asBools, (0 until nWays).map(w => io.extra_meta_resp(w).prefetch))
+   val s1_hit_access = ParallelMux(s1_tag_match_way_dup_dc.asBools, (0 until nWays).map(w => io.extra_meta_resp(w).access))
++  val s1_hit_refill_latency = ParallelMux(s1_tag_match_way_dup_dc.asBools, (0 until nWays).map(w => io.extra_meta_resp(w).latency))
+ 
+   // io.replace_way.set.valid := RegNext(s0_fire)
+   io.replace_way.set.valid := false.B
+@@ -416,6 +417,7 @@ class LoadPipe(id: Int)(implicit p: Parameters) extends DCacheModule with HasPer
+ 
+   val s2_hit_prefetch = RegEnable(s1_hit_prefetch, s1_fire)
+   val s2_hit_access = RegEnable(s1_hit_access, s1_fire)
++  val s2_hit_refill_latency = RegEnable(s1_hit_refill_latency, s1_fire)
+ 
+   val s2_hit = s2_tag_match && s2_has_permission && s2_hit_coh === s2_new_hit_coh && !s2_wpu_pred_fail
+ 
+@@ -477,6 +479,7 @@ class LoadPipe(id: Int)(implicit p: Parameters) extends DCacheModule with HasPer
+   resp.bits.replayCarry.real_way_en := s2_real_way_en
+   resp.bits.meta_prefetch := s2_hit_prefetch
+   resp.bits.meta_access := s2_hit_access
++  resp.bits.refill_latency := s2_hit_refill_latency
+   resp.bits.tag_error := false.B
+   resp.bits.mshr_id := io.miss_resp.id
+   resp.bits.handled := s2_miss_req_fire && !io.miss_req.bits.cancel && !io.wbq_block_miss_req && io.miss_resp.handled
+@@ -593,6 +596,12 @@ class LoadPipe(id: Int)(implicit p: Parameters) extends DCacheModule with HasPer
+   io.prefetch_flag_write.bits.way_en := s3_tag_match_way
+   io.prefetch_flag_write.bits.source := L1_HW_PREFETCH_CLEAR
+ 
++  // when demand request hit prefetch data, the latency is reset to 0.
++  io.latency_flag_write.valid := s3_clear_pf_flag_en && !io.counter_filter_query.resp
++  io.latency_flag_write.bits.idx := get_idx(s3_vaddr)
++  io.latency_flag_write.bits.way_en := s3_tag_match_way
++  io.latency_flag_write.bits.latency := 0.U
++
+   io.counter_filter_query.req.valid := s3_clear_pf_flag_en
+   io.counter_filter_query.req.bits.idx := get_idx(s3_vaddr)
+   io.counter_filter_query.req.bits.way := OHToUInt(s3_tag_match_way)
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+index 006f39fd454..45315301649 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+@@ -16,18 +16,17 @@
+ 
+ package xiangshan.cache
+ 
+-import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+ import freechips.rocketchip.tilelink.ClientStates._
+ import freechips.rocketchip.tilelink.MemoryOpCategories._
+ import freechips.rocketchip.tilelink.TLPermissions._
+ import freechips.rocketchip.tilelink.{ClientMetadata, ClientStates, TLPermissions}
+-import utils._
++import org.chipsalliance.cde.config.Parameters
+ import utility._
+-import xiangshan.{L1CacheErrorInfo, XSCoreParamsKey}
+-import xiangshan.mem.prefetch._
+ import xiangshan.mem.HasL1PrefetchSourceParameter
++import xiangshan.mem.prefetch._
++import xiangshan.{L1CacheErrorInfo, XSCoreParamsKey}
+ 
+ class MainPipeReq(implicit p: Parameters) extends DCacheBundle {
+   val miss = Bool() // only amo miss will refill in main pipe
+@@ -166,6 +165,7 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+     val error_flag_write = DecoupledIO(new FlagMetaWriteReq)
+     val prefetch_flag_write = DecoupledIO(new SourceMetaWriteReq)
+     val access_flag_write = DecoupledIO(new FlagMetaWriteReq)
++    val latency_flag_write = DecoupledIO(new LatencyMetaWriteReq)
+ 
+     // tag sram
+     val tag_read = DecoupledIO(new TagReadReq)
+@@ -440,6 +440,7 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val s2_flag_error = RegEnable(s1_flag_error, s1_fire)
+   val s2_tag_error = WireInit(false.B)
+   val s2_l2_error = Mux(io.refill_info.valid, io.refill_info.bits.error, s2_req.error)
++  val s2_refill_latency = Mux(io.refill_info.valid && isFromL1Prefetch(s2_req.pf_source), io.refill_info.bits.refill_latency, 0.U)
+   val s2_error = s2_flag_error || s2_tag_error || s2_l2_error // data_error not included
+ 
+   val s2_may_report_data_error = s2_need_data && s2_coh.state =/= ClientStates.Nothing
+@@ -553,6 +554,7 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+     else Cat(s3_store_data_merged(i + 1), s3_store_data_merged(i))
+   }))(s3_req.word_idx)
+ 
++  val s3_refill_latency = RegEnable(s2_refill_latency, s2_fire_to_s3)
+   val s3_sc_fail  = Wire(Bool()) // miss or lr mismatch
+   val s3_need_replacement = RegEnable(s2_need_replacement && !s2_refill_tag_eq_way, s2_fire_to_s3)
+ 
+@@ -916,6 +918,11 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   io.prefetch_flag_write.bits.way_en := s3_way_en
+   io.prefetch_flag_write.bits.source := s3_req.pf_source
+ 
++  io.latency_flag_write.valid := s3_fire && s3_req.miss
++  io.latency_flag_write.bits.idx := s3_idx
++  io.latency_flag_write.bits.way_en := s3_way_en
++  io.latency_flag_write.bits.latency := s3_refill_latency
++
+   // regenerate repl_way & repl_coh
+   io.bloom_filter_query.set.valid := s2_fire_to_s3 && s2_req.miss && !isFromL1Prefetch(s2_repl_pf) && s2_repl_coh.isValid() && isFromL1Prefetch(s2_req.pf_source)
+   io.bloom_filter_query.set.bits.addr := io.bloom_filter_query.set.bits.get_addr(Cat(s2_repl_tag, get_untag(s2_req.vaddr))) // the evict block address
+@@ -923,6 +930,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   io.bloom_filter_query.clr.valid := s3_fire && isFromL1Prefetch(s3_req.pf_source)
+   io.bloom_filter_query.clr.bits.addr := io.bloom_filter_query.clr.bits.get_addr(s3_req.addr)
+ 
++  XSPerfAccumulate("prefetch_write_valid", s3_fire && s3_req.miss)
++  XSPerfAccumulate("prefetch_write_valid_pf", io.prefetch_flag_write.valid && isFromL1Prefetch(s3_req.pf_source))
+   XSPerfAccumulate("mainpipe_update_prefetchArray", io.prefetch_flag_write.valid)
+   XSPerfAccumulate("mainpipe_s2_miss_req", s2_valid && s2_req.miss)
+   XSPerfAccumulate("mainpipe_s2_block_penalty", s2_valid && s2_req.miss && !io.refill_info.valid)
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
+index 45a177bfa80..4ce566ecdb6 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
+@@ -24,24 +24,18 @@
+ package xiangshan.cache
+ 
+ import chisel3._
+-import chisel3.util._
+ import chisel3.experimental.dataview._
+-import coupledL2.{IsKeywordKey, MemBackTypeMM, MemBackTypeMMField, MemPageTypeNC, MemPageTypeNCField, VaddrKey}
++import chisel3.util._
++import coupledL2.{IsKeywordKey, MemBackTypeMM, MemPageTypeNC, VaddrKey}
+ import difftest._
+-import freechips.rocketchip.tilelink.ClientStates._
+-import freechips.rocketchip.tilelink.MemoryOpCategories._
+-import freechips.rocketchip.tilelink.TLPermissions._
+-import freechips.rocketchip.tilelink.TLMessages._
+ import freechips.rocketchip.tilelink._
+ import huancun.{AliasKey, DirtyKey, PrefetchKey}
+ import org.chipsalliance.cde.config.Parameters
+ import utility._
+-import utils._
+ import xiangshan._
+-import xiangshan.mem.AddPipelineReg
++import xiangshan.mem.LqPtr
+ import xiangshan.mem.prefetch._
+ import xiangshan.mem.trace._
+-import xiangshan.mem.LqPtr
+ 
+ class MissReqWoStoreData(implicit p: Parameters) extends DCacheBundle {
+   val source = UInt(sourceTypeWidth.W)
+@@ -109,6 +103,7 @@ class MissQueueRefillInfo(implicit p: Parameters) extends MissReqStoreData {
+   val miss_param = UInt(TLPermissions.bdWidth.W)
+   val miss_dirty = Bool()
+   val error      = Bool()
++  val refill_latency = UInt(LATENCY_WIDTH.W)
+ }
+ 
+ class MissReq(implicit p: Parameters) extends MissReqWoStoreData {
+@@ -407,6 +402,7 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
+ 
+     // for main pipe s2
+     val refill_info = ValidIO(new MissQueueRefillInfo)
++    val refill_train = ValidIO(new TrainReqBundle)
+ 
+     val occupy_way = Output(UInt(nWays.W))
+ 
+@@ -516,6 +512,9 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
+   // raw data refilled to l1 by l2
+   val refill_data_raw = Reg(Vec(blockBytes/beatBytes, UInt(beatBits.W)))
+ 
++  val refill_start_time = Reg(UInt(64.W))
++  val refill_latency = Reg(UInt(LATENCY_WIDTH.W))
++
+   // allocate current miss queue entry for a miss req
+   val primary_fire = WireInit(io.req.valid && io.primary_ready && io.primary_valid && !io.req.bits.cancel && !io.wbq_block_miss_req)
+   val primary_accept = WireInit(io.req.valid && io.primary_ready && io.primary_valid && !io.req.bits.cancel)
+@@ -584,6 +583,8 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
+     prefetch := input_req_is_prefetch && !io.miss_req_pipe_reg.prefetch_late_en(io.req.bits, io.req.valid)
+     access := false.B
+     secondary_fired := false.B
++
++    refill_start_time := GTimer()
+   }
+ 
+   when (io.miss_req_pipe_reg.merge && !io.miss_req_pipe_reg.cancel) {
+@@ -681,6 +682,12 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
+ 
+     refill_data_raw(refill_count ^ isKeyword) := io.mem_grant.bits.data
+     isDirty := io.mem_grant.bits.echo.lift(DirtyKey).getOrElse(false.B)
++    when(refill_done) {
++      val refill_end_time = GTimer()
++      val time_delta = refill_end_time - refill_start_time
++      val overflow = refill_end_time < refill_start_time || (time_delta >> LATENCY_WIDTH).orR
++      refill_latency := Mux(overflow, 0.U, time_delta)
++    }
+   }
+ 
+   when (io.mem_finish.fire) {
+@@ -909,6 +916,20 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
+   io.refill_info.bits.miss_param := grant_param
+   io.refill_info.bits.miss_dirty := isDirty
+   io.refill_info.bits.error      := error
++  io.refill_info.bits.refill_latency := Mux(
++    isFromL1Prefetch(req.pf_source),
++    refill_latency,
++    0.U
++  )
++
++  io.refill_train.valid := req_valid && w_grantlast
++  io.refill_train.bits.pc := req.pc
++  io.refill_train.bits.paddr := req.addr
++  io.refill_train.bits.vaddr := req.vaddr
++  io.refill_train.bits.miss := true.B
++  // FIXME lyq: when mshr entry merges, req.pf_source may be cleaned.
++  io.refill_train.bits.metaSource := req.pf_source
++  io.refill_train.bits.refillLatency := refill_latency
+ 
+   XSPerfAccumulate("miss_refill_mainpipe_req", io.main_pipe_req.fire)
+   XSPerfAccumulate("miss_refill_without_hint", io.main_pipe_req.fire && !mainpipe_req_fired && !w_l2hint)
+@@ -998,6 +1019,7 @@ class MissQueue(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
+ 
+     val mainpipe_info = Input(new MainPipeInfoToMQ)
+     val refill_info = ValidIO(new MissQueueRefillInfo)
++    val refill_train = ValidIO(new TrainReqBundle)
+ 
+     // block probe
+     val probe = Flipped(new MissQueueBlockIO)
+@@ -1232,6 +1254,9 @@ class MissQueue(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
+   io.refill_info.valid := VecInit(entries.zipWithIndex.map{ case(e,i) => e.io.refill_info.valid && io.mainpipe_info.s2_valid && io.mainpipe_info.s2_miss_id === i.U}).asUInt.orR
+   io.refill_info.bits := Mux1H(entries.zipWithIndex.map{ case(e,i) => (io.mainpipe_info.s2_miss_id === i.U) -> e.io.refill_info.bits })
+ 
++  io.refill_train.valid := VecInit(entries.zipWithIndex.map{ case(e,i) => e.io.refill_train.valid && io.mainpipe_info.s2_valid && io.mainpipe_info.s2_miss_id === i.U}).asUInt.orR
++  io.refill_train.bits := Mux1H(entries.zipWithIndex.map{ case(e,i) => (io.mainpipe_info.s2_miss_id === i.U) -> e.io.refill_train.bits })
++
+   acquire_from_pipereg.valid := miss_req_pipe_reg.can_send_acquire(io.req.valid, io.req.bits) && !io.wfi.wfiReq
+   acquire_from_pipereg.bits := miss_req_pipe_reg.get_acquire(io.l2_pf_store_only)
+ 
+diff --git a/src/main/scala/xiangshan/cache/dcache/meta/AsynchronousMetaArray.scala b/src/main/scala/xiangshan/cache/dcache/meta/AsynchronousMetaArray.scala
+index 7c4059e3d58..eb867f9520a 100644
+--- a/src/main/scala/xiangshan/cache/dcache/meta/AsynchronousMetaArray.scala
++++ b/src/main/scala/xiangshan/cache/dcache/meta/AsynchronousMetaArray.scala
+@@ -16,12 +16,10 @@
+ 
+ package xiangshan.cache
+ 
+-import freechips.rocketchip.tilelink.ClientMetadata
+-import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+-import xiangshan.L1CacheErrorInfo
+-import xiangshan.cache.CacheInstrucion._
++import freechips.rocketchip.tilelink.ClientMetadata
++import org.chipsalliance.cde.config.Parameters
+ 
+ class Meta(implicit p: Parameters) extends DCacheBundle {
+   val coh = new ClientMetadata
+@@ -243,3 +241,65 @@ class L1PrefetchSourceArray(readPorts: Int, writePorts: Int)(implicit p: Paramet
+       }
+   }
+ }
++
++// TODO lyq: here can use abstract class to replace L1CohMetaArray\L1FlagMetaArray\L1PrefetchSourceArray
++class LatencyMetaWriteReq(implicit p: Parameters) extends MetaReadReq {
++  val latency = UInt(LATENCY_WIDTH.W)
++}
++class L1RefillLatencyArray(readPorts: Int, writePorts: Int)(implicit p: Parameters) extends DCacheModule {
++
++  def DataType: UInt = UInt(LATENCY_WIDTH.W)
++
++  val io = IO(new Bundle() {
++    val read = Vec(readPorts, Flipped(DecoupledIO(new MetaReadReq)))
++    val resp = Output(Vec(readPorts, Vec(nWays, DataType)))
++    val write = Vec(writePorts, Flipped(DecoupledIO(new LatencyMetaWriteReq)))
++  })
++
++  val array = RegInit(
++    VecInit(Seq.fill(nSets)(
++      VecInit(Seq.fill(nWays)(0.U.asTypeOf(DataType)))
++    ))
++  )
++
++  val s0_way_wen = Wire(Vec(nWays, Vec(writePorts, Bool())))
++  val s1_way_waddr = Wire(Vec(nWays, Vec(writePorts, UInt(idxBits.W))))
++  val s1_way_wen = Wire(Vec(nWays, Vec(writePorts, Bool())))
++  val s1_way_wdata = Wire(Vec(nWays, Vec(writePorts, DataType)))
++
++  (io.read.zip(io.resp)).zipWithIndex.foreach {
++    case ((read, resp), i) =>
++      read.ready := true.B
++      (0 until nWays).map(way => {
++        val read_way_bypass = WireInit(false.B)
++        val bypass_data = Wire(DataType)
++        bypass_data := DontCare
++        (0 until writePorts).map(wport =>
++          when(s1_way_wen(way)(wport) && s1_way_waddr(way)(wport) === read.bits.idx){
++            read_way_bypass := true.B
++            bypass_data := s1_way_wdata(way)(wport)
++          }
++        )
++        resp(way) := Mux(
++          RegEnable(read_way_bypass, read.valid),
++          RegEnable(bypass_data, read_way_bypass),
++          array(RegEnable(read.bits.idx, read.valid))(way)
++        )
++      })
++  }
++
++  io.write.zipWithIndex.foreach {
++    case (write, wport) =>
++      write.ready := true.B
++      write.bits.way_en.asBools.zipWithIndex.foreach {
++        case (wen, way) =>
++          s0_way_wen(way)(wport) := write.valid && wen
++          s1_way_wen(way)(wport) := RegNext(s0_way_wen(way)(wport))
++          s1_way_waddr(way)(wport) := RegEnable(write.bits.idx, s0_way_wen(way)(wport))
++          s1_way_wdata(way)(wport) := RegEnable(write.bits.latency, s0_way_wen(way)(wport))
++          when (s1_way_wen(way)(wport)) {
++            array(s1_way_waddr(way)(wport))(way) := s1_way_wdata(way)(wport)
++          }
++      }
++  }
++}
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUConst.scala b/src/main/scala/xiangshan/cache/mmu/MMUConst.scala
+index 8c4046794dc..8cd40b22501 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUConst.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUConst.scala
+@@ -17,15 +17,11 @@
+ 
+ package xiangshan.cache.mmu
+ 
+-import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+-import xiangshan._
+-import xiangshan.cache.{HasDCacheParameters, MemoryOpConstants}
+-import utils._
+ import utility._
+-import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+-import freechips.rocketchip.tilelink._
++import xiangshan._
++import xiangshan.cache.MemoryOpConstants
+ 
+ 
+ case class TLBParameters
+@@ -127,7 +123,7 @@ trait HasTlbConst extends HasXSParameter {
+ 
+   val loadfiltersize = 16 // 4*3(LduCnt:2 + HyuCnt:1) + 4(prefetch:1)
+   val storefiltersize = if (StorePipelineWidth >= 3) 16 else 8
+-  val prefetchfiltersize = 8
++  val prefetchfiltersize = 16
+ 
+   val sramSinglePort = true
+ 
+diff --git a/src/main/scala/xiangshan/mem/Bundles.scala b/src/main/scala/xiangshan/mem/Bundles.scala
+index 5f108929343..cd9aa8ef1d7 100644
+--- a/src/main/scala/xiangshan/mem/Bundles.scala
++++ b/src/main/scala/xiangshan/mem/Bundles.scala
+@@ -18,22 +18,17 @@
+ package xiangshan.mem
+ 
+ 
+-import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+-import utility._
+-import utils._
++import org.chipsalliance.cde.config.Parameters
+ import xiangshan._
+ import xiangshan.backend.Bundles._
+ import xiangshan.backend.rob.RobPtr
+-import xiangshan.backend.fu.FenceToSbuffer
+-import xiangshan.backend.fu.vector.Bundles._
+-import xiangshan.backend.Bundles._
+-import xiangshan.mem.prefetch.PrefetchReqBundle
+ import xiangshan.cache._
+ import xiangshan.cache.wpu.ReplayCarry
+-import xiangshan.cache.mmu._
+-import math._
++import xiangshan.mem.prefetch.{PrefetchReqBundle, TrainReqBundle}
++
++import scala.math._
+ 
+ object Bundles {
+ 
+@@ -136,6 +131,7 @@ object Bundles {
+     val meta_prefetch = UInt(L1PfSourceBits.W)
+     val meta_access = Bool()
+     val is_from_hw_pf = Bool() // s0 source is from prefetch
++    val refillLatency = UInt(LATENCY_WIDTH.W)
+ 
+     def fromLsPipelineBundle(input: LsPipelineBundle, latch: Boolean = false, enable: Bool = true.B) = {
+       val inputReg = latch match {
+@@ -143,9 +139,7 @@ object Bundles {
+         case false  => input
+       }
+       connectSamePort(this, inputReg)
+-      this.meta_prefetch := DontCare
+-      this.meta_access := DontCare
+-      this.is_from_hw_pf := DontCare
++      // The remaining variables must be assigned outside the function to ensure correctness
+     }
+ 
+     def toPrefetchReqBundle(): PrefetchReqBundle = {
+@@ -157,6 +151,17 @@ object Bundles {
+       res.pfHitStream := isFromStream(this.meta_prefetch)
+       res
+     }
++
++    def toTrainReqBundle(): TrainReqBundle = {
++      val res = Wire(new TrainReqBundle)
++      res.vaddr := this.vaddr
++      res.paddr := this.paddr
++      res.pc := this.uop.pc
++      res.miss := this.miss
++      res.metaSource := this.meta_prefetch
++      res.refillLatency := this.refillLatency
++      res
++    }
+   }
+ 
+   class LqWriteBundle(implicit p: Parameters) extends LsPipelineBundle {
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 5d2dbe02ed9..6256d0c5108 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -16,44 +16,35 @@
+ 
+ package xiangshan.mem
+ 
+-import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
++import coupledL2.PrefetchRecv
+ import freechips.rocketchip.diplomacy._
+-import freechips.rocketchip.diplomacy.{BundleBridgeSource, LazyModule, LazyModuleImp}
+ import freechips.rocketchip.interrupts.{IntSinkNode, IntSinkPortSimple}
+ import freechips.rocketchip.tile.HasFPUParameters
+ import freechips.rocketchip.tilelink._
+-import utils._
++import org.chipsalliance.cde.config.Parameters
++import system.{HasSoCParameter, SoCParamsKey}
+ import utility._
+ import utility.mbist.{MbistInterface, MbistPipeline}
+ import utility.sram.{SramBroadcastBundle, SramHelper}
+-import system.{HasSoCParameter, SoCParamsKey}
++import utils._
+ import xiangshan._
+-import xiangshan.ExceptionNO._
+ import xiangshan.backend.Bundles.{DynInst, MemExuInput, MemExuOutput}
+ import xiangshan.backend.ctrlblock.{DebugLSIO, LsTopdownInfo}
++import xiangshan.backend.datapath.NewPipelineConnect
+ import xiangshan.backend.exu.MemExeUnit
+-import xiangshan.backend.fu._
+ import xiangshan.backend.fu.FuType._
+-import xiangshan.backend.fu.NewCSR.{CsrTriggerBundle, PFEvent, TriggerUtil}
++import xiangshan.backend.fu.NewCSR.PFEvent
++import xiangshan.backend.fu._
+ import xiangshan.backend.fu.util.{CSRConst, SdtrigExt}
+-import xiangshan.backend.{BackendToTopBundle, TopToBackendBundle}
+-import xiangshan.backend.rob.{RobDebugRollingIO, RobLsqIO, RobPtr}
+-import xiangshan.backend.datapath.NewPipelineConnect
++import xiangshan.backend.rob.{RobDebugRollingIO, RobPtr}
+ import xiangshan.backend.trace.{Itype, TraceCoreInterface}
+-import xiangshan.backend.Bundles._
+-import xiangshan.mem._
+-import xiangshan.mem.mdp._
+-import xiangshan.mem.Bundles._
+-import xiangshan.mem.prefetch.{BasePrefecher, L1Prefetcher, PrefetcherWrapper, SMSParams, SMSPrefetcher, TLBPlace}
++import xiangshan.backend.{BackendToTopBundle, TopToBackendBundle}
+ import xiangshan.cache._
+ import xiangshan.cache.mmu._
+-import coupledL2.PrefetchRecv
+-import utility.mbist.{MbistInterface, MbistPipeline}
+-import utility.sram.{SramBroadcastBundle, SramHelper}
+-import system.HasSoCParameter
+ import xiangshan.frontend.instruncache.HasInstrUncacheConst
++import xiangshan.mem.prefetch.{PrefetcherWrapper, TLBPlace}
+ 
+ trait HasMemBlockParameters extends HasXSParameter {
+   // number of memory units
+@@ -578,7 +569,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+       replace_st.io.apply_sep(dtlb_st.map(_.replace), ptwio.resp.bits.data.s1.entry.tag)
+     }
+     if (pftlbParams.outReplace) {
+-      val replace_pf = Module(new TlbReplace(2, pftlbParams))
++      val replace_pf = Module(new TlbReplace(TlbSubSizeVec(dtlb_pf_idx), pftlbParams))
+       replace_pf.io.apply_sep(dtlb_prefetch.map(_.replace), ptwio.resp.bits.data.s1.entry.tag)
+     }
+   }
+@@ -661,6 +652,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   prefetcher.io.pfCtrlFromCSR := io.ooo_to_mem.csrCtrl.pf_ctrl
+   prefetcher.io.pfCtrlFromDCache <> dcache.io.pf_ctrl
+   prefetcher.io.fromDCache.sms_agt_evict_req <> dcache.io.sms_agt_evict_req
++  prefetcher.io.fromDCache.refillTrain := dcache.io.refillTrain
+   prefetcher.io.fromOOO.s1_loadPc := io.ooo_to_mem.issueLda.map(x => RegNext(x.bits.uop.pc)) ++ io.ooo_to_mem.hybridPc
+   prefetcher.io.fromOOO.s1_storePc := io.ooo_to_mem.storePc ++ io.ooo_to_mem.hybridPc
+   prefetcher.io.trainSource.s1_loadFireHint := loadUnits.map(_.io.s1_prefetch_spec) ++ hybridUnits.map(_.io.s1_prefetch_spec)
+@@ -699,34 +691,41 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+ 
+   /** prefetch to l1 req */
+   // Stream's confidence is always 1
+-  // (LduCnt + HyuCnt) l1_pf_reqs ?
+-  loadUnits.foreach(load_unit => {
+-    load_unit.io.prefetch_req.valid <> l1_pf_req.valid
+-    load_unit.io.prefetch_req.bits <> l1_pf_req.bits
+-  })
+-  hybridUnits.foreach(hybrid_unit => {
+-    hybrid_unit.io.ldu_io.prefetch_req.valid <> l1_pf_req.valid
+-    hybrid_unit.io.ldu_io.prefetch_req.bits <> l1_pf_req.bits
+-  })
+-  // NOTE: loadUnits(0) has higher bank conflict and miss queue arb priority than loadUnits(1) and loadUnits(2)
++  // NOTE lx:
++  // loadUnits(0) has higher bank conflict and miss queue arb priority than loadUnits(1) and loadUnits(2)
+   // when loadUnits(1)/loadUnits(2) stage 0 is busy, hw prefetch will never use that pipeline
+-  val LowConfPorts = if (LduCnt == 2) Seq(1) else if (LduCnt == 3) Seq(1, 2) else Seq(0)
+-  LowConfPorts.map{case i => loadUnits(i).io.prefetch_req.bits.confidence := 0.U}
+-  hybridUnits.foreach(hybrid_unit => { hybrid_unit.io.ldu_io.prefetch_req.bits.confidence := 0.U })
+-
++  // NOTE lyq:
++  // Because all the unfairness between ldu0 and ldu1/2, such as bank conflicts and lower entry priority in MissQueue,
++  // belong to the replay channel, whose priority is higher than prefetch channel in loadunit.
++  // Therefore, there is no need to distinguish among ldu0, ldu1, and ldu2 if **prefetch-request outstanding <= 1**.
+   val canAcceptHighConfPrefetch = loadUnits.map(_.io.canAcceptHighConfPrefetch) ++
+                                   hybridUnits.map(_.io.canAcceptLowConfPrefetch)
+   val canAcceptLowConfPrefetch = loadUnits.map(_.io.canAcceptLowConfPrefetch) ++
+                                  hybridUnits.map(_.io.canAcceptLowConfPrefetch)
+-  l1_pf_req.ready := (0 until LduCnt + HyuCnt).map{
+-    case i => {
+-      if (LowConfPorts.contains(i)) {
+-        loadUnits(i).io.canAcceptLowConfPrefetch
+-      } else {
+-        Mux(l1_pf_req.bits.confidence === 1.U, canAcceptHighConfPrefetch(i), canAcceptLowConfPrefetch(i))
+-      }
+-    }
+-  }.reduce(_ || _)
++  val canAcceptPrefetch = (0 until LduCnt + HyuCnt).map{ case i =>
++    Mux(l1_pf_req.bits.confidence === 1.U, canAcceptHighConfPrefetch(i), canAcceptLowConfPrefetch(i))
++    /* // if it needs to distinguish ldu0 with others, use the code below
++    if (LduCnt > 1 && i == 0) {
++      Mux(l1_pf_req.bits.confidence === 1.U, canAcceptHighConfPrefetch(i), canAcceptLowConfPrefetch(i))
++    } else {
++      canAcceptLowConfPrefetch(i)
++    } */
++  }
++  l1_pf_req.ready := canAcceptPrefetch.reduce(_ || _)
++
++  val toPrefetchValidVec = (0 until LduCnt + HyuCnt).map{ case i =>
++    if(i==0) l1_pf_req.valid
++    else l1_pf_req.valid && !canAcceptPrefetch.take(i).reduce(_ || _)
++  }
++  loadUnits.zipWithIndex.foreach { case(u, i) => {
++    u.io.prefetch_req.valid <> toPrefetchValidVec(i)
++    u.io.prefetch_req.bits <> l1_pf_req.bits
++  }}
++  hybridUnits.zipWithIndex.foreach { case (u, i) => {
++    u.io.ldu_io.prefetch_req.valid <> toPrefetchValidVec(i + LduCnt)
++    u.io.ldu_io.prefetch_req.bits <> l1_pf_req.bits
++  }}
++
+   /** l1 pf fuzzer interface */
+   val DebugEnableL1PFFuzzer = false
+   if (DebugEnableL1PFFuzzer) {
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala
+index 6d22893cd7f..d72a1dd8da6 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala
+@@ -568,6 +568,7 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
+     replay_req(i).bits.forward_tlDchannel := s2_replayCauses(LoadReplayCauses.C_DM)
+     replay_req(i).bits.schedIndex   := s2_oldestSel(i).bits
+     replay_req(i).bits.uop.loadWaitStrict := false.B
++    replay_req(i).bits.tlbMiss      := s2_replayCauses(LoadReplayCauses.C_TM)
+ 
+     XSError(replay_req(i).fire && !allocated(s2_oldestSel(i).bits), p"LoadQueueReplay: why replay an invalid entry ${s2_oldestSel(i).bits} ?")
+   }
+diff --git a/src/main/scala/xiangshan/mem/pipeline/HybridUnit.scala b/src/main/scala/xiangshan/mem/pipeline/HybridUnit.scala
+index 5dd0f08761d..73582d15469 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/HybridUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/HybridUnit.scala
+@@ -218,7 +218,7 @@ class HybridUnit(implicit p: Parameters) extends XSModule
+     io.lsin.valid, // int flow first issue or software prefetch
+     io.vec_stu_io.in.valid,
+     io.ldu_io.l2l_fwd_in.valid && io.ldu_io.ld_fast_match,
+-    io.ldu_io.prefetch_req.valid && io.ldu_io.prefetch_req.bits.confidence === 0.U,
++    io.ldu_io.prefetch_req.valid  // lower confidence prefetch or lower prefetch-priority ldu
+   )))
+   // load flow source ready
+   val s0_src_ready_vec = Wire(Vec(SRC_NUM, Bool()))
+@@ -1085,7 +1085,7 @@ class HybridUnit(implicit p: Parameters) extends XSModule
+   // prefetch train --> s3
+   io.s1_prefetch_spec := s1_fire
+   io.s2_prefetch_spec := s2_fire
+-  val s2_prefetch_train_valid = s2_valid && !s2_actually_mmio && !s2_in.isHWPrefetch
++  val s2_prefetch_train_valid = s2_valid && !s2_actually_mmio && !s2_in.isHWPrefetch && !s2_exception
+   io.prefetch_train.valid              := s2_prefetch_train_valid
+   io.prefetch_train.bits.fromLsPipelineBundle(s2_in, latch = true, enable = s2_prefetch_train_valid)
+   // TODO: use trace with bank conflict?
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 82d405a883a..c4b6ad95281 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -230,6 +230,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+     val rep_carry     = new ReplayCarry(nWays)
+     val mshrid        = UInt(log2Up(cfg.nMissEntries).W)
+     val isFirstIssue  = Bool()
++    val repForTlbMiss = Bool()
+     val fast_rep      = Bool()
+     val ld_rep        = Bool()
+     val prf           = Bool()
+@@ -275,7 +276,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   //       the other uops should have higher priority
+   // src 7: vec read from RS (io.vecldin)
+   // src 8: int read / software prefetch first issue from RS (io.in)
+-  // src 9: hardware prefetch from prefetchor (high confidence) (io.prefetch)
++  // src 9: hardware prefetch from prefetchor (low confidence) (io.prefetch)
+   // priority: high to low
+   val s0_rep_stall           = io.ldin.valid && isAfter(io.replay.bits.uop.lqIdx, io.ldin.bits.uop.lqIdx) ||
+                                io.vecldin.valid && isAfter(io.replay.bits.uop.lqIdx, io.vecldin.bits.uop.lqIdx)
+@@ -295,7 +296,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+     io.prefetch_req.valid && io.prefetch_req.bits.confidence > 0.U,
+     io.vecldin.valid,
+     io.ldin.valid, // int flow first issue or software prefetch
+-    io.prefetch_req.valid && io.prefetch_req.bits.confidence === 0.U,
++    io.prefetch_req.valid, // lower confidence prefetch or lower prefetch-priority ldu
+   )))
+   // load flow source ready
+   val s0_src_ready_vec = Wire(Vec(SRC_NUM, Bool()))
+@@ -511,6 +512,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+     out.elemIdx       := src.elemIdx
+     out.elemIdxInsideVd := src.elemIdxInsideVd
+     out.alignedType   := src.alignedType
++    out.repForTlbMiss := src.tlbMiss
+     out
+   }
+ 
+@@ -760,7 +762,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   s0_out.uop.exceptionVec(loadAddrMisaligned) := (!s0_addr_aligned || s0_sel_src.uop.exceptionVec(loadAddrMisaligned)) && s0_sel_src.vecActive && !s0_misalignWith16Byte
+   s0_out.isMisalign := (!s0_addr_aligned || s0_sel_src.uop.exceptionVec(loadAddrMisaligned)) && s0_sel_src.vecActive
+   s0_out.forward_tlDchannel := s0_src_select_vec(super_rep_idx)
+-  when(io.tlb.req.valid && s0_sel_src.isFirstIssue) {
++  when(io.tlb.req.valid && (s0_sel_src.isFirstIssue || s0_sel_src.repForTlbMiss)) {
+     s0_out.uop.debugInfo.tlbFirstReqTime := GTimer()
+   }.otherwise{
+     s0_out.uop.debugInfo.tlbFirstReqTime := s0_sel_src.uop.debugInfo.tlbFirstReqTime
+@@ -888,9 +890,12 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   s1_paddr_dup_dcache := Mux(s1_in.tlbNoQuery, s1_in.paddr, io.tlb.resp.bits.paddr(1))
+   s1_gpaddr_dup_lsu   := Mux(s1_in.isFastReplay, s1_in.paddr, io.tlb.resp.bits.gpaddr(0))
+ 
+-  when (s1_tlb_memidx.is_ld && io.tlb.resp.valid && !s1_tlb_miss && s1_tlb_memidx.idx === s1_in.uop.lqIdx.value) {
+-    // printf("load idx = %d\n", s1_tlb_memidx.idx)
++  when (io.tlb.resp.valid && !s1_tlb_miss) {
+     s1_out.uop.debugInfo.tlbRespTime := GTimer()
++  }.elsewhen (io.tlb.resp.valid && s1_tlb_miss) {
++    s1_out.uop.debugInfo.tlbRespTime := s1_in.uop.debugInfo.tlbFirstReqTime
++  }.otherwise {
++    s1_out.uop.debugInfo.tlbRespTime := s1_in.uop.debugInfo.tlbRespTime
+   }
+ 
+   io.tlb.req_kill   := s1_kill || s1_dly_err
+@@ -1332,13 +1337,15 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+ 
+   // RegNext prefetch train for better timing
+   // ** Now, prefetch train is valid at load s3 **
+-  val s2_prefetch_train_valid = s2_fire && s2_in.isFirstIssue && !s2_actually_uncache
++  // s2_un_access_exception can guarantee the physical address is valid
++  val s2_prefetch_train_valid = s2_fire && s2_in.isFirstIssue && !s2_actually_uncache && !s2_un_access_exception
+   io.prefetch_train.valid := GatedValidRegNext(s2_prefetch_train_valid)
+   io.prefetch_train.bits.fromLsPipelineBundle(s2_in, latch = true, enable = s2_prefetch_train_valid)
+   io.prefetch_train.bits.miss := RegEnable(io.dcache.resp.bits.miss, s2_prefetch_train_valid) // TODO: use trace with bank conflict?
+   io.prefetch_train.bits.meta_prefetch := RegEnable(io.dcache.resp.bits.meta_prefetch, s2_prefetch_train_valid)
+   io.prefetch_train.bits.meta_access := RegEnable(io.dcache.resp.bits.meta_access, s2_prefetch_train_valid)
+   io.prefetch_train.bits.is_from_hw_pf := RegNext(s2_hw_prf)
++  io.prefetch_train.bits.refillLatency := RegEnable(io.dcache.resp.bits.refill_latency, s2_prefetch_train_valid)
+   io.prefetch_train.bits.isFinalSplit := false.B
+   io.prefetch_train.bits.misalignWith16Byte := false.B
+   io.prefetch_train.bits.misalignNeedWakeUp := false.B
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 2038f1a1e09..36883a718d6 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -535,7 +535,8 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   // RegNext prefetch train for better timing
+   // ** Now, prefetch train is valid at store s3 **
+   val s2_prefetch_train_valid = WireInit(false.B)
+-  s2_prefetch_train_valid := s2_valid && io.dcache.resp.fire && !s2_out.mmio && !s2_out.nc && !s2_in.tlbMiss
++  // s2_un_access_exception can guarantee the physical address is valid
++  s2_prefetch_train_valid := s2_valid && io.dcache.resp.fire && !s2_out.mmio && !s2_out.nc && !s2_in.tlbMiss && !s2_un_access_exception
+   io.prefetch_train.valid := RegNext(s2_prefetch_train_valid)
+   io.prefetch_train.bits.fromLsPipelineBundle(s2_in, latch = true, enable = s2_prefetch_train_valid)
+   // override miss bit
+@@ -544,6 +545,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   io.prefetch_train.bits.meta_prefetch := false.B
+   io.prefetch_train.bits.meta_access := false.B
+   io.prefetch_train.bits.is_from_hw_pf := RegNext(s2_in.isHWPrefetch)
++  io.prefetch_train.bits.refillLatency := 0.U // TODO: store not for berti, so there is no refillLatency
+   io.prefetch_train.bits.isFinalSplit := false.B
+   io.prefetch_train.bits.misalignWith16Byte := false.B
+   io.prefetch_train.bits.isMisalign := false.B
+diff --git a/src/main/scala/xiangshan/mem/prefetch/BasePrefecher.scala b/src/main/scala/xiangshan/mem/prefetch/BasePrefecher.scala
+index 7c00641ecdf..85f903c2b1d 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/BasePrefecher.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/BasePrefecher.scala
+@@ -16,17 +16,26 @@
+ 
+ package xiangshan.mem.prefetch
+ 
+-import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
++import coupledL2.PrefetchCtrlFromCore
++import org.chipsalliance.cde.config.Parameters
+ import utility.MemReqSource
+ import xiangshan._
+-import xiangshan.backend._
+ import xiangshan.backend.fu.PMPRespBundle
+-import xiangshan.mem.L1PrefetchReq
+-import xiangshan.mem.Bundles.LsPrefetchTrainBundle
++import xiangshan.cache._
+ import xiangshan.cache.mmu.TlbRequestIO
+-import coupledL2.PrefetchCtrlFromCore
++import xiangshan.mem.Bundles.LsPrefetchTrainBundle
++import xiangshan.mem.L1PrefetchReq
++
++object PrefetchTarget extends Enumeration{
++  val L1 = Value("toL1")
++  val L2 = Value("toL2")
++  val L3 = Value("toL3")
++
++  val PfTgtCnt = Value("PrefetchTargetCount")
++  val PfTgtBits = log2Ceil(PfTgtCnt.id)
++}
+ 
+ class PrefetchCtrl(implicit p: Parameters) extends XSBundle {
+   val l1I_pf_enable = Bool()
+@@ -44,6 +53,7 @@ class PrefetchCtrl(implicit p: Parameters) extends XSBundle {
+   val l2_pf_vbop_enable = Bool()
+   val l2_pf_tp_enable = Bool()
+   val l2_pf_delay_latency = UInt(10.W)
++  val berti_enable = Bool()
+ 
+   def toL2PrefetchCtrl(): PrefetchCtrlFromCore = {
+     val res = Wire(new PrefetchCtrlFromCore)
+@@ -64,7 +74,24 @@ class L2PrefetchReq(implicit p: Parameters) extends XSBundle {
+ 
+ class L3PrefetchReq(implicit p: Parameters) extends L2PrefetchReq
+ 
++class TrainReqBundle()(implicit p: Parameters) extends DCacheBundle {
++  val vaddr = UInt(VAddrBits.W)
++  val paddr = UInt(PAddrBits.W)
++  val pc = UInt(VAddrBits.W)
++  val miss = Bool()
++  val metaSource = UInt(L1PfSourceBits.W)
++  val refillLatency = UInt(LATENCY_WIDTH.W)
++}
++
++class SourcePrefetchReq()(implicit p: Parameters) extends DCacheBundle {
++  val triggerPC = UInt(VAddrBits.W)
++  val triggerVA = UInt(VAddrBits.W)
++  val prefetchVA = UInt(VAddrBits.W)
++  val prefetchTarget = UInt(PrefetchTarget.PfTgtBits.W)
++}
++
+ class PrefetcherIO()(implicit p: Parameters) extends XSBundle {
++  val enable = Input(Bool())
+   val ld_in = Flipped(Vec(backendParams.LdExuCnt, ValidIO(new LsPrefetchTrainBundle())))
+   val st_in = Flipped(Vec(backendParams.StaExuCnt, ValidIO(new LsPrefetchTrainBundle())))
+   val tlb_req = new TlbRequestIO(nRespDups = 2)
+@@ -72,7 +99,10 @@ class PrefetcherIO()(implicit p: Parameters) extends XSBundle {
+   val l1_req = DecoupledIO(new L1PrefetchReq())
+   val l2_req = DecoupledIO(new L2PrefetchReq())
+   val l3_req = DecoupledIO(new L3PrefetchReq())
+-  val enable = Input(Bool())
++}
++
++class BertiPrefetcherIO()(implicit p: Parameters) extends PrefetcherIO {
++  val refillTrain = Flipped(ValidIO(new TrainReqBundle()))
+ }
+ 
+ class PrefetchReqBundle()(implicit p: Parameters) extends XSBundle {
+@@ -83,8 +113,11 @@ class PrefetchReqBundle()(implicit p: Parameters) extends XSBundle {
+   val pfHitStream = Bool()
+ }
+ 
+-abstract class BasePrefecher()(implicit p: Parameters) extends XSModule {
+-  val io = IO(new PrefetcherIO())
++abstract class BasePrefecher()(implicit p: Parameters) extends XSModule
++  with PrefetcherParams
++  with HasDCacheParameters
++{
++  lazy val io: PrefetcherIO = IO(new PrefetcherIO())
+ 
+   // By default, there are no tlb transformations, l2_req and l3_req
+   io.tlb_req.req.valid := false.B
+diff --git a/src/main/scala/xiangshan/mem/prefetch/Berti.scala b/src/main/scala/xiangshan/mem/prefetch/Berti.scala
+new file mode 100644
+index 00000000000..6d49ec45440
+--- /dev/null
++++ b/src/main/scala/xiangshan/mem/prefetch/Berti.scala
+@@ -0,0 +1,993 @@
++/***************************************************************************************
++ * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
++ * Copyright (c) 2020-2021 Peng Cheng Laboratory
++ *
++ * XiangShan is licensed under Mulan PSL v2.
++ * You can use this software according to the terms and conditions of the Mulan PSL v2.
++ * You may obtain a copy of Mulan PSL v2 at:
++ *          http://license.coscl.org.cn/MulanPSL2
++ *
++ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++ *
++ * See the Mulan PSL v2 for more details.
++ ***************************************************************************************/
++
++package xiangshan.mem.prefetch
++
++import chisel3._
++import chisel3.util._
++import freechips.rocketchip.util.SeqBoolBitwiseOps
++import org.chipsalliance.cde.config.Parameters
++import utility._
++import xiangshan._
++import xiangshan.backend.fu.PMPRespBundle
++import xiangshan.cache.mmu._
++import xiangshan.cache.{DCacheBundle, DCacheModule, HasDCacheParameters, HasL1CacheParameters}
++import xiangshan.mem.L1PrefetchReq
++
++case class BertiParams
++(
++  name: String = "berti",
++  ht_set_cnt: Int = 64, //8,
++  ht_way_cnt: Int = 6, // 16,
++  ht_replacement_policy: String = "fifo",
++  dt_way_cnt: Int = 64, // 16,
++  dt_delta_size: Int = 4, // 16,
++  use_byte_addr: Boolean = false,
++) extends PrefetcherParams{
++  override def TRAIN_FILTER_SIZE = 6
++  override def PREFETCH_FILTER_SIZE = 16
++}
++
++trait HasBertiHelper extends HasCircularQueuePtrHelper with HasDCacheParameters {
++  def bertiParams = p(XSCoreParamsKey).prefetcher.find {
++    case p: BertiParams => true
++    case _ => false
++  }.get.asInstanceOf[BertiParams]
++  /**
++    * Ht: history Table
++    * Dt: Delta Table
++    * tsp: Timestamp
++    */
++
++  def _name: String = bertiParams.name
++
++  def PcOffsetWidth: Int = 2
++  def DeltaWidth: Int = 13
++  def HtPcTagWidth: Int = 7
++  def HtLineVAddrWidth: Int = 24
++  def HtLineOffsetWidth: Int = DCacheLineOffset
++  def DtPcTagWidth: Int = 10
++  def DtCntWidth: Int = 4
++
++  def useByteAddr: Boolean = bertiParams.use_byte_addr
++  def usePLRU: Boolean = bertiParams.ht_replacement_policy == "plru"
++  def useFIFO: Boolean = bertiParams.ht_replacement_policy == "fifo"
++  assert(usePLRU || useFIFO, s"unsupported ht replacement policy: ${bertiParams.ht_replacement_policy}")
++  def HtSetSize: Int = bertiParams.ht_set_cnt
++  def DtWaySize: Int = bertiParams.dt_way_cnt
++  def HtWaySize: Int = bertiParams.ht_way_cnt
++  def DtDeltaSize: Int = bertiParams.dt_delta_size
++  def DtDeltaIndexWidth: Int = log2Up(DtDeltaSize)
++
++  def HtSetWidth: Int = log2Up(HtSetSize)
++  def DtWayWidth: Int = log2Up(DtWaySize)
++
++  def DELTA_MIN: Int = -(1 << (DeltaWidth - 1))
++  def DELTA_MAX: Int = (1 << (DeltaWidth - 1)) - 1
++  def DELTA_THRESHOLD: Int = if (useByteAddr) blockBytes else 1 // 64 Bytes = 1 line
++
++  def _getLineVAddr(vaddr: UInt): UInt = {
++    vaddr(vaddr.getWidth - 1, HtLineOffsetWidth)
++  }
++
++  def _signedExtend(x: UInt, width: Int): UInt = {
++    if (x.getWidth >= width) {
++      x
++    } else {
++      Cat(Fill(width - x.getWidth, x.head(1)), x)
++    }
++  }
++
++  def getPCHash(pc: UInt): UInt = (pc >> 1) ^ (pc >> 4)
++
++  def getTrainBaseAddr(vaddr: UInt): UInt = {
++    if (useByteAddr) {
++      vaddr
++    } else {
++      _getLineVAddr(vaddr)
++    }
++  }
++
++  def getPrefetchVAddr(triggerVA: UInt, delta: SInt): UInt = {
++    if (useByteAddr) {
++      triggerVA + _signedExtend(delta.asUInt, VAddrBits)
++    } else {
++      triggerVA + _signedExtend((delta.asUInt << HtLineOffsetWidth), VAddrBits)
++    }
++  }
++}
++
++abstract class BertiBundle(implicit p: Parameters) extends XSBundle with HasBertiHelper
++abstract class BertiModule(implicit p: Parameters) extends XSModule with HasBertiHelper
++
++object DeltaStatus extends ChiselEnum {
++  val NO_PREF, L1_PREF, L2_PREF, L2_PREF_REPL = Value
++}
++
++class HTSearchReq(implicit p: Parameters) extends BertiBundle {
++  val pc = UInt(VAddrBits.W)
++  val vaddr = UInt(VAddrBits.W)
++  val latency = UInt(LATENCY_WIDTH.W)
++}
++class LearnDeltasLiteIO(implicit p: Parameters) extends BertiBundle {
++  val valid = Bool()
++  val delta = SInt(DeltaWidth.W)
++  val pc = UInt(VAddrBits.W)
++}
++
++class LearnDeltasIO(implicit p: Parameters) extends BertiBundle {
++  val validVec = Vec(HtWaySize, Bool())
++  val deltaVec = Vec(HtWaySize, SInt(DeltaWidth.W))
++  val pc = UInt(VAddrBits.W)
++}
++
++class HistoryTable()(implicit p: Parameters) extends BertiModule {
++  /*** static variable ***/
++  val stat_find_delta = WireInit(false.B)
++  val stat_overflow = WireInit(false.B)
++  val stat_satisfy = WireInit(false.B)
++  val stat_dissatisfy = WireInit(false.B)
++  val stat_histLineVA = WireInit(0.U(HtLineVAddrWidth.W))
++  val stat_currLineVA = WireInit(0.U(HtLineVAddrWidth.W))
++  /*** built-in function */
++  def wayMap[T <: Data](f: Int => T) = VecInit((0 until HtWaySize).map(f))
++  def getIndex(pc: UInt): UInt = getPCHash(pc)(HtSetWidth-1, 0)
++  def getTag(pc: UInt): UInt = getPCHash(pc)(HtPcTagWidth + HtSetWidth - 1, HtSetWidth)
++  def getTrainBaseAddr2HT(vaddr: UInt): UInt = {
++    getTrainBaseAddr(vaddr)(HtLineVAddrWidth - 1, 0)
++  }
++  def checkDissatisfy(delta: SInt): Bool = {
++    delta < (DELTA_THRESHOLD).S(DeltaWidth.W) && delta > (-DELTA_THRESHOLD).S(DeltaWidth.W)
++  }
++  def getDelta(lineVA1: UInt, lineVA2: UInt): (Bool, SInt) = {
++    // here should handle the overflow
++    val diffFull = (lineVA1.zext - lineVA2.zext).asSInt
++    val overflow = diffFull < DELTA_MIN.S(DeltaWidth.W) || diffFull > DELTA_MAX.S(DeltaWidth.W)
++    val dissatisfy = checkDissatisfy(diffFull)
++    stat_overflow := overflow
++    stat_dissatisfy := dissatisfy
++    stat_satisfy := !overflow && !dissatisfy
++    stat_currLineVA := lineVA1
++    stat_histLineVA := lineVA2
++    (stat_satisfy, diffFull)
++  }
++
++  /*** built-in class */
++  class Entry()(implicit p: Parameters) extends BertiBundle {
++    val pcTag = UInt(HtPcTagWidth.W)
++    val baseVAddr = UInt(HtLineVAddrWidth.W)
++    val tsp = UInt(LATENCY_WIDTH.W)
++
++    def alloc(_pcTag: UInt, _baseVAddr: UInt, _tsp: UInt): Unit = {
++      pcTag := _pcTag
++      baseVAddr := _baseVAddr
++      tsp := _tsp
++    }
++
++    def update(_baseVAddr: UInt, _tsp: UInt): Unit = {
++      baseVAddr := _baseVAddr
++      tsp := _tsp
++    }
++  }
++
++  class HtWayPointer(implicit p: Parameters) extends CircularQueuePtr[HtWayPointer](HtWaySize) {}
++
++  /*** io */
++  val io = IO(new Bundle{
++    val access = Flipped(ValidIO(new Bundle{
++      val pc = UInt(VAddrBits.W)
++      val vaddr = UInt(VAddrBits.W)
++    }))
++    val search = new Bundle{
++      val req = Flipped(ValidIO(new HTSearchReq()))
++      val resp = Output(new LearnDeltasLiteIO())
++    }
++  })
++
++  /*** data structure */
++  val entries = Reg(Vec(HtSetSize, Vec(HtWaySize, new Entry)))
++  val valids = RegInit(0.U.asTypeOf(Vec(HtSetSize, Vec(HtWaySize, Bool()))))
++  val decrModes = RegInit(0.U.asTypeOf(Vec(HtSetSize, Bool())))
++  val currTime = GTimer()
++  // PLRU: replace record
++  val replacer = Option.when(usePLRU)(ReplacementPolicy.fromString("setplru", HtWaySize, HtSetSize))
++  // FIFO: for FIFO replace policy
++  val accessPtrs = Option.when(useFIFO)(RegInit(0.U.asTypeOf(Vec(HtSetSize, new HtWayPointer))))
++  // FIFO: for easier learning policy
++  val learnPtrs = Option.when(useFIFO)(RegInit(0.U.asTypeOf(Vec(HtSetSize, new HtWayPointer))))
++
++  /*** functional function */
++  def init(): Unit = {
++    valids := 0.U.asTypeOf(chiselTypeOf(valids))
++    accessPtrs.foreach(_ := 0.U.asTypeOf(chiselTypeOf(accessPtrs.head)))
++    learnPtrs.foreach(_ := 0.U.asTypeOf(chiselTypeOf(learnPtrs.head)))
++  }
++
++  /**
++    * A new entry is inserted in the history table (Write port in Figure 5)
++    * either on-demand misses (Miss arrow from the L1D in Figure 5) or on hits
++    * for prefetched cache lines (Hitp in Figure 5). The virtual address (VA) and
++    * the IP (IP, VA arrow in Figure 5) are stored in the new entry along with
++    * the current timestamp (not shown in the figure)
++    * 
++    * understand:
++    *   1. tag match
++    *   2. FIFO queue (here used)
++    * 
++    * // TODO lyq:
++    *   How to support multi port of access for both historyTable and deltaTable.
++    *   Maybe hard due to set division.
++    * 
++    */
++  def accessPLRU(pc: UInt, vaddr: UInt): Bool = {
++    // ensure option exists in this code path
++    require(replacer.isDefined, "PLRU replacer must be defined when usePLRU == true")
++    val isReplace = Wire(Bool())
++    val set = getIndex(pc)
++    val tag = getTag(pc)
++    val baseVAddr = getTrainBaseAddr2HT(vaddr)
++    val matchVec = wayMap(w => valids(set)(w) && entries(set)(w).pcTag === tag)
++    assert(PopCount(matchVec) <= 1.U, s"matchVec should not have more than one match in ${this.getClass.getSimpleName}")
++    when(matchVec.orR){
++      val hitWay = OHToUInt(matchVec)
++      entries(set)(hitWay).update(baseVAddr, currTime)
++      replacer.get.access(set, hitWay)
++      isReplace := false.B
++    }.otherwise{
++      val way = replacer.get.way(set)
++      entries(set)(way).alloc(tag, baseVAddr, currTime)
++      valids(set)(way) := true.B
++      isReplace := true.B
++    }
++    isReplace
++  }
++
++  def searchLitePLRU(pc: UInt, vaddr: UInt, latency: UInt): LearnDeltasLiteIO = {
++    // ensure option exists in this code path
++    require(replacer.isDefined, "PLRU replacer must be defined when usePLRU == true")
++    val res = Wire(new LearnDeltasLiteIO)
++    val set = getIndex(pc)
++    val tag = getTag(pc)
++    val matchVec = wayMap(w => valids(set)(w) && entries(set)(w).pcTag === tag)
++    assert(PopCount(matchVec) <= 1.U, s"matchVec should not have more than one match in ${this.getClass.getSimpleName}")
++    when(matchVec.orR){
++      val hitWay = OHToUInt(matchVec)
++      val pair = getDelta(getTrainBaseAddr2HT(vaddr), entries(set)(hitWay).baseVAddr)
++      stat_find_delta := latency =/= 0.U && (currTime - latency > entries(set)(hitWay).tsp)
++      res.valid := latency =/= 0.U && (currTime - latency > entries(set)(hitWay).tsp) && pair._1
++      res.pc := pc
++      res.delta := pair._2
++      replacer.get.access(set, hitWay)
++    }.otherwise{
++      res.valid := false.B
++      res.pc := 0.U
++      res.delta := 0.S
++    }
++    res
++  }
++
++  def accessFIFO(pc: UInt, vaddr: UInt): Bool = {
++    // ensure option exists in this code path
++    require(accessPtrs.isDefined, "accessPtrs must be defined when useFIFO == true")
++    val isReplace = Wire(Bool())
++    val set = getIndex(pc)
++    val way = accessPtrs.get(set).value
++    val baseVAddr = getTrainBaseAddr2HT(vaddr)
++    val matchVec = wayMap(w => valids(set)(w) && entries(set)(w).baseVAddr === baseVAddr)
++    when(matchVec.orR){
++      isReplace := false.B
++    }.otherwise {
++      isReplace := valids(set)(way)
++      val lastWay = (accessPtrs.get(set)-1.U).value
++      decrModes(set) := valids(set)(lastWay) && baseVAddr < entries(set)(lastWay).baseVAddr
++      valids(set)(way) := true.B
++      entries(set)(way).alloc(
++        getTag(pc),
++        baseVAddr,
++        currTime
++      )
++      accessPtrs.get(set) := accessPtrs.get(set) + 1.U
++    }
++    isReplace
++  }
++
++  def searchLiteFIFO(pc: UInt, vaddr: UInt, latency: UInt): LearnDeltasLiteIO = {
++    // ensure option exists in this code path
++    require(learnPtrs.isDefined, "learnPtrs must be defined when useFIFO == true")
++    val res = Wire(new LearnDeltasLiteIO)
++    val set = getIndex(pc)
++    val tag = getTag(pc)
++    val way = learnPtrs.get(set).value
++    val pair = getDelta(getTrainBaseAddr2HT(vaddr), entries(set)(way).baseVAddr)
++    stat_find_delta := valids(set)(way) && latency =/= 0.U && tag === entries(set)(way).pcTag && (currTime - latency > entries(set)(way).tsp)
++    res.pc := pc
++    res.valid := stat_find_delta && pair._1
++    when (decrModes(set) ^ pair._2(pair._2.getWidth-1)){
++      res.delta := -pair._2
++    }.otherwise{
++      res.delta := pair._2
++    }
++    learnPtrs.get(set) := learnPtrs.get(set) + 1.U
++    res
++  }
++
++  def access(pc: UInt, vaddr: UInt): Bool = {
++    if (usePLRU) accessPLRU(pc, vaddr) else accessFIFO(pc, vaddr)
++  }
++  def searchLite(pc: UInt, vaddr: UInt, latency: UInt): LearnDeltasLiteIO = {
++    if (usePLRU) searchLitePLRU(pc, vaddr, latency) else searchLiteFIFO(pc, vaddr, latency)
++  }
++
++  /*** processing logic */
++  val isReplace = Wire(Bool())
++  when(io.access.valid){
++    isReplace := this.access(io.access.bits.pc, io.access.bits.vaddr)
++  }.otherwise{
++    isReplace := false.B
++  }
++
++  val searchResult = Wire(new LearnDeltasLiteIO)
++  when(io.search.req.valid){
++    val searchReq = io.search.req.bits
++    searchResult := this.searchLite(searchReq.pc, searchReq.vaddr, searchReq.latency)
++  }.otherwise{
++    searchResult := DontCare
++    searchResult.valid := false.B
++  }
++  io.search.resp := searchResult
++  io.search.resp.valid := searchResult.valid && !checkDissatisfy(searchResult.delta)
++
++  /*** performance counter */
++  XSPerfAccumulate("access_req", io.access.valid)
++  XSPerfAccumulate("access_replace", io.access.valid && isReplace)
++  XSPerfAccumulate("search_req", io.search.req.valid)
++  XSPerfAccumulate("search_resp_valid", io.search.resp.valid)
++  XSPerfAccumulate("search_resp_find_total", searchResult.valid)
++  XSPerfAccumulate("search_resp_find_overflow", searchResult.valid && stat_overflow)
++  XSPerfAccumulate("search_resp_find_dissatisfy", searchResult.valid && stat_dissatisfy)
++  XSPerfAccumulate("search_resp_find_satisfy", searchResult.valid && stat_satisfy)
++
++  class SearchLogDb extends Bundle {
++    val histLineVA = UInt(HtLineVAddrWidth.W)
++    val currLineVA = UInt(HtLineVAddrWidth.W)
++    val calDelta = UInt(DeltaWidth.W)
++  }
++  val searchLog = Wire(new SearchLogDb())
++  searchLog.histLineVA := stat_histLineVA
++  searchLog.currLineVA := stat_currLineVA
++  searchLog.calDelta := io.search.resp.delta.asUInt
++  val searchLogDb = ChiselDB.createTable("berti_searchLog" + p(XSCoreParamsKey).HartId.toString, new SearchLogDb, basicDB = false)
++  searchLogDb.log(data = searchLog, en = io.search.resp.valid, clock = clock, reset = reset)
++}
++
++class DeltaTable()(implicit p: Parameters) extends BertiModule {
++  val stat_update_isEntryHit = WireInit(false.B)
++  val stat_update_isEntryMiss = WireInit(false.B)
++  val stat_update_isEntryReplace = WireInit(false.B)
++  val stat_update_isDeltaHit = WireInit(false.B)
++  val stat_update_isDeltaMiss = WireInit(false.B)
++  val stat_update_isDeltaReplace = WireInit(false.B)
++  val stat_update_evictEntryIdx = WireInit(0.U(DtWayWidth.W)) // TODO lyq: if have chiselMap, it may be eaiser to statistic evicted data
++  val stat_update_evictDelta = WireInit(0.S(DeltaWidth.W)) // TODO lyq: have no idea how to output this
++  val stat_prefetch_isEntryHit = WireInit(false.B)
++  /*** built-in function */
++  // def thresholdOfMax: UInt = (1 << DtCntWidth) - 1
++  // def thresholdOfHalf: UInt = (1 << (DtCntWidth - 1)) - 1
++  // def thresholdOfReset: UInt = 16.U 
++  // def thresholdOfUpdate: UInt = 10.U 
++  // def thresholdOfL1PF: UInt = 8.U 
++  // def thresholdOfL2PF: UInt = 5.U 
++  // def thresholdOfL2PFR: UInt = 2.U 
++  val thresholdOfReset = Constantin.createRecord(_name+"_thresholdOfReset", 6)   // thresholdOfMax
++  val thresholdOfUpdate = Constantin.createRecord(_name+"_thresholdOfUpdate", 2)  // thresholdOfHalf
++  val thresholdOfL1PF = Constantin.createRecord(_name+"_thresholdOfL1PF", 4)      // ((1 << DtCntWidth) * 0.65).toInt
++  val thresholdOfL2PF = Constantin.createRecord(_name+"_thresholdOfL2PF", 2)      // ((1 << DtCntWidth) * 0.5).toInt
++  val thresholdOfL2PFR = Constantin.createRecord(_name+"_thresholdOfL2PFR", 1)    // ((1 << DtCntWidth) * 0.35).toInt
++  def getPcTag(pc: UInt): UInt = {
++    val res = getPCHash(pc)
++    res(DtPcTagWidth - 1, 0)
++  }
++  def getStatus(conf: UInt): DeltaStatus.Type = {
++    val res = Wire(DeltaStatus())
++    when(conf >= thresholdOfL1PF){
++      res := DeltaStatus.L1_PREF
++    }.elsewhen(conf > thresholdOfL2PF){
++      res := DeltaStatus.L2_PREF
++    }.elsewhen(conf > thresholdOfL2PFR) {
++      res := DeltaStatus.L2_PREF_REPL
++    }.otherwise{
++      res := DeltaStatus.NO_PREF
++    }
++    res
++  }
++
++  /*** built-in class */
++  class DeltaInfo()(implicit p: Parameters) extends BertiBundle {
++    val delta = SInt(DeltaWidth.W)
++    val coverageCnt = UInt(DtCntWidth.W)
++    val status = DeltaStatus()
++
++    def init(): Unit = {
++      delta := 0.S
++      coverageCnt := 0.U
++      status := DeltaStatus.NO_PREF
++    }
++
++    def set(_delta: SInt): Unit = {
++      delta := _delta
++      coverageCnt := 1.U
++    }
++
++    def update(inc: UInt = 1.U): Unit = {
++      coverageCnt := coverageCnt + inc
++    }
++
++    // enter the new cycle
++    // use next to use this record
++    def newCycle(next: UInt = 0.U): Unit = {
++      coverageCnt := 0.U
++      status := getStatus(Mux(next === 0.U, coverageCnt, next))
++    }
++
++    // enter the new status
++    // use next to use this record
++    def newStatus(next: UInt = 0.U): Unit = {
++      status := getStatus(Mux(next === 0.U, coverageCnt, next))
++    }
++  }
++
++  class DeltaEntry()(implicit p: Parameters) extends BertiBundle {
++    val pcTag = UInt(DtPcTagWidth.W)
++    val counter = UInt(DtCntWidth.W)
++    val bestDeltaIdx = UInt(DtDeltaIndexWidth.W)
++    val deltaList = Vec(DtDeltaSize, new DeltaInfo())
++
++    def init(): Unit = {
++      pcTag := 0.U
++      counter := 0.U
++      bestDeltaIdx := 0.U
++      deltaList.map(x => x.init())
++    }
++
++    def setStatus(): Unit = {
++      when(counter >= thresholdOfReset){
++        counter := 0.U
++        deltaList.map(x => x.newCycle())
++      }.elsewhen(counter >= thresholdOfUpdate){
++        deltaList.map(x => x.newStatus())
++      }
++      // when(counter >= thresholdOfUpdate){
++      //   counter := 0.U
++      //   deltaList.map(x => x.newCycle())
++      // }
++    }
++
++    // TODO: use next value to set status
++    // Because that way you don't lose that value from the latest update?
++    // But it's a little hard to record the nextDeltaCnt
++    def setStatus(nextCnt: UInt, nextDeltaCnt: Seq[UInt]): Unit = {
++      when(nextCnt >= thresholdOfReset){
++        counter := 0.U
++        deltaList.zip(nextDeltaCnt).map{case (x, cnt) => x.newCycle(cnt)}
++      }.elsewhen(nextCnt >= thresholdOfUpdate){
++        deltaList.zip(nextDeltaCnt).map{case (x, cnt) => x.newStatus(cnt)}
++      }
++    }
++
++    def setLite(_pcTag: UInt, _delta: SInt): Unit = {
++      pcTag := _pcTag
++      counter := 1.U
++
++      (0 until DtDeltaSize).map(i => deltaList(i).init())
++      deltaList(0).set(_delta)
++      bestDeltaIdx := 0.U
++    }
++
++    def updateLite(_delta: SInt): Unit = {
++      /**
++        * 1. update
++        *    1. hit: match and update
++        *    2. miss: select and set
++        * 2. check for status reset
++        */
++
++      assert(_delta =/= 0.S, s"delta should not be 0.U when call ${Thread.currentThread().getStackTrace()(1).getMethodName} of ${this.getClass.getSimpleName}")
++
++      // update
++      val nextCounter = counter + 1.U
++      counter := nextCounter
++
++      // delta match
++      val matchVec = VecInit(deltaList.map(x => x.delta === _delta)).asUInt
++      val invalidVec1 = deltaList.map(x => x.delta === 0.S)
++      val invalidVec2 = deltaList.map(x => x.status === DeltaStatus.NO_PREF)
++      val invalidVec3 = deltaList.map(x => x.status === DeltaStatus.L2_PREF_REPL)
++
++      when (matchVec.orR){
++        val updateIdx = OHToUInt(matchVec)
++        deltaList(updateIdx).update()
++        when(deltaList(updateIdx).coverageCnt >= deltaList(bestDeltaIdx).coverageCnt){
++          bestDeltaIdx := updateIdx
++        }
++        stat_update_isDeltaHit := true.B
++      }.otherwise{
++        stat_update_isDeltaMiss := true.B
++        val (allocIdx1, canAlloc1) = PriorityEncoderWithFlag(invalidVec1)
++        val (allocIdx2, canAlloc2) = PriorityEncoderWithFlag(invalidVec2)
++        val (allocIdx3, canAlloc3) = PriorityEncoderWithFlag(invalidVec3)
++        // It doesn't matter if allocIdx* === bestDeltaIdx, because the status is low anyway.
++        when(canAlloc1) {
++          deltaList(allocIdx1).set(_delta)
++          stat_update_isDeltaReplace := true.B
++          stat_update_evictDelta := deltaList(allocIdx1).delta
++        }.elsewhen(canAlloc2){
++          deltaList(allocIdx2).set(_delta)
++          stat_update_isDeltaReplace := true.B
++          stat_update_evictDelta := deltaList(allocIdx2).delta
++        }.elsewhen(canAlloc3){
++          deltaList(allocIdx3).set(_delta)
++          stat_update_isDeltaReplace := true.B
++          stat_update_evictDelta := deltaList(allocIdx3).delta
++        }.otherwise{
++          // drop the new delta
++        }
++      }
++
++      // // method 1: check here, low power but how about performance?
++      // when(nextCounter  === thresholdOfReset){
++      //   deltaList.map(x => x.reset())
++      // }
++    }
++  }
++
++  /*** io */
++  val io = IO(new Bundle{
++    val learn = Input(new LearnDeltasLiteIO())
++    val train = Flipped(ValidIO(new TrainReqBundle()))
++    val prefetch = ValidIO(new SourcePrefetchReq())
++  })
++
++  /*** data structure */
++  /**
++    * 16-entry, fully-associative, 4-bit FIFO replacement policy.
++    * Each entry:
++    *   10-bit IP tag
++    *   4-bit counter
++    *   an array of 16 deltas (13-bit delta, 4-bit coverage, 2-bit status)
++    * 
++    */
++  val entries = Reg(Vec(DtWaySize, new DeltaEntry()))
++  val valids = RegInit(0.U.asTypeOf(Vec(DtWaySize, Bool())))
++  val replacer = ReplacementPolicy.fromString("plru", DtWaySize)
++
++  /*** functional function */
++  def update(learn: LearnDeltasIO): Unit = {
++    // TODO lyq: how to update when having multiple deltas?
++    assert(false, "not implemented yet")
++  }
++
++  def updateLite(learn: LearnDeltasLiteIO): Unit = {
++    when(learn.valid && learn.delta =/= 0.S) {
++      val pcTag = getPcTag(learn.pc)
++      val matchVec = VecInit((0 until DtWaySize).map(i => valids(i) && entries(i).pcTag === pcTag)).asUInt
++      val hit = matchVec.orR
++      when(!hit) {
++        val way = replacer.way
++        entries(way).setLite(pcTag, learn.delta)
++        valids(way) := true.B
++        stat_update_isEntryMiss := true.B
++        stat_update_isEntryReplace := true.B
++        stat_update_evictEntryIdx := way
++      }.otherwise {
++        val way = OHToUInt(matchVec)
++        entries(way).updateLite(learn.delta)
++        replacer.access(way)
++        stat_update_isEntryHit := true.B
++      }
++    }
++  }
++
++  def prefetch(train: Valid[TrainReqBundle]): (Valid[SourcePrefetchReq], DeltaInfo) = {
++    val res = Wire(Valid(new SourcePrefetchReq()))
++    val deltaInfo = WireInit(0.U.asTypeOf(new DeltaInfo()))
++    res.valid := false.B
++    res.bits := DontCare
++    when(train.valid){
++      val pcTag = getPcTag(train.bits.pc)
++      val matchOH = VecInit((0 until DtWaySize).map(i => train.valid && valids(i) && entries(i).pcTag === pcTag)).asUInt
++      when(matchOH.orR){
++        stat_prefetch_isEntryHit := true.B
++        val way = OHToUInt(matchOH)
++        replacer.access(way)
++        deltaInfo := entries(way).deltaList(entries(way).bestDeltaIdx)
++        
++        when(deltaInfo.status =/= DeltaStatus.NO_PREF){
++          res.valid := train.valid
++          res.bits.triggerPC := train.bits.pc
++          res.bits.triggerVA := train.bits.vaddr
++          res.bits.prefetchVA := getPrefetchVAddr(train.bits.vaddr, deltaInfo.delta)
++          when(deltaInfo.status === DeltaStatus.L1_PREF) {
++            res.bits.prefetchTarget := PrefetchTarget.L1.id.U
++          }.elsewhen(deltaInfo.status === DeltaStatus.L2_PREF || deltaInfo.status === DeltaStatus.L2_PREF_REPL){
++            res.bits.prefetchTarget := PrefetchTarget.L2.id.U
++          }.otherwise{
++            res.bits.prefetchTarget := PrefetchTarget.L3.id.U
++          }
++        }
++      }
++    }
++
++    (res, deltaInfo)
++  }
++
++  /*** processing logic */
++  entries.foreach(x => x.setStatus())
++  this.updateLite(io.learn)
++  val pfRes = this.prefetch(io.train)
++  io.prefetch := pfRes._1
++  val deltaInfo = WireInit(0.U.asTypeOf(new DeltaInfo()))
++
++  /** performance counter */
++  class DeltaInfo2Db extends Bundle {
++    val delta = UInt(DeltaWidth.W)
++    val coverageCnt = UInt(DtCntWidth.W)
++    val status = UInt(2.W)
++  }
++  val deltaInfo2Db = Wire(new DeltaInfo2Db())
++  deltaInfo2Db.delta := pfRes._2.delta.asUInt
++  deltaInfo2Db.coverageCnt := pfRes._2.coverageCnt
++  deltaInfo2Db.status := pfRes._2.status.asUInt
++  val prefetchDeltaTable = ChiselDB.createTable("berti_prefetchDeltaTable" + p(XSCoreParamsKey).HartId.toString, new DeltaInfo2Db, basicDB = false)
++  prefetchDeltaTable.log(data = deltaInfo2Db, en = io.prefetch.valid, clock = clock, reset = reset)
++  
++  XSPerfAccumulate("learn_req", io.learn.valid)
++  XSPerfAccumulate("learn_req_0", io.learn.valid && io.learn.delta === 0.S)
++  XSPerfAccumulate("learn_req_non_0", io.learn.valid && io.learn.delta =/= 0.S)
++  XSPerfAccumulate("train_req", io.train.valid)
++  XSPerfAccumulate("prefetch_req", io.prefetch.valid)
++  XSPerfAccumulate("stat_update_isEntryHit", stat_update_isEntryHit)
++  XSPerfAccumulate("stat_update_isEntryMiss", stat_update_isEntryMiss)
++  XSPerfAccumulate("stat_update_isEntryReplace", stat_update_isEntryReplace)
++  XSPerfAccumulate("stat_update_isDeltaHit", stat_update_isDeltaHit)
++  XSPerfAccumulate("stat_update_isDeltaMiss", stat_update_isDeltaMiss)
++  XSPerfAccumulate("stat_update_isDeltaReplace", stat_update_isDeltaReplace)
++  XSPerfAccumulate("stat_prefetch_isEntryHit", stat_prefetch_isEntryHit)
++
++}
++
++class DeltaPrefetchBuffer(size: Int, name: String)(implicit p: Parameters) extends DCacheModule {
++  /*** built-in function */
++  /**
++    *    Address Struture and Internal Statement
++    *
++    * [[HasDCacheParameters]]
++    * |        page       (alias)|  page offset    | @physical
++    * |        ptag              |  page offset    | @physical
++    * |        vtag       | set    | bank | offset | @virtual
++    * |        line                |   line offset | @virtual
++    * [[HasL1CacheParameters]]
++    * |        block               |  block offset | @virtual
++    * |        vtag       | idx    | word | offset | @virtual
++    *
++    */
++  def BufferIndexWidth: Int = log2Up(size)
++  def LineOffsetWidth: Int = DCacheLineOffset
++  def VLineWidth: Int = VAddrBits - LineOffsetWidth
++  def PLineWidth: Int = PAddrBits - LineOffsetWidth
++  def getLine(addr: UInt): UInt = addr(addr.getWidth - 1, LineOffsetWidth)
++  def sizeMap[T <: Data](f: Int => T) = VecInit((0 until size).map(f))
++
++  /*** built-in class */
++  class Entry()(implicit p: Parameters) extends DCacheBundle {
++    val vline = UInt(VLineWidth.W)
++    val pline = UInt(PLineWidth.W)
++    val pvalid = Bool()
++    val target = UInt(PrefetchTarget.PfTgtBits.W)
++
++    def getPrefetchVA: UInt = Cat(vline, 0.U(LineOffsetWidth.W))
++    def getPrefetchPA: UInt = Cat(pline, 0.U(LineOffsetWidth.W))
++    def getPrefetchAlias: UInt = get_alias(getPrefetchPA)
++    def fromSourcePrefetchReq(src: SourcePrefetchReq): Unit ={
++      this.vline := getLine(src.prefetchVA)
++      this.pline := 0.U
++      this.pvalid := false.B
++      this.target := src.prefetchTarget
++    }
++    def updateEntryMerge(target: UInt): Unit = {
++      when(target < this.target){
++        this.target := target
++      }
++    }
++    def updateTlbResp(paddr: UInt): Unit = {
++      this.pline := getLine(paddr)
++      this.pvalid := true.B
++    }
++  }
++
++  /*** io */
++  val io = IO(new Bundle{
++    val srcReq = Flipped(ValidIO(new SourcePrefetchReq()))
++    val tlbReq = new TlbRequestIO(nRespDups = 2)
++    val pmpResp = Flipped(new PMPRespBundle())
++    val l1_req = DecoupledIO(new L1PrefetchReq())
++    val l2_req = DecoupledIO(new L2PrefetchReq())
++    val l3_req = DecoupledIO(new L3PrefetchReq())
++    // val custom = new Bundle... // TODO: how to design fields
++  })
++
++  /*** data structure */
++  val entries = Reg(Vec(size, new Entry()))
++  val valids = RegInit(0.U.asTypeOf(Vec(size, Bool())))
++  // drop old prefetch when there is no invalid entry to allocate
++  val replacer = ReplacementPolicy.fromString("plru", size)
++  val tlbReqArb = Module(new RRArbiterInit(new TlbReq, size))
++  val pfIdxArb = Module(new RRArbiterInit(UInt(BufferIndexWidth.W), size))
++  
++  /*** io default */
++  io.l1_req.valid := false.B
++  io.l1_req.bits := DontCare
++  io.l2_req.valid := false.B
++  io.l2_req.bits := DontCare
++  io.l3_req.valid := false.B
++  io.l3_req.bits := DontCare
++
++  /*** processing logic */
++  /******************************************************************
++   * Req Entry
++   *  e0: entries lookup
++   *  e1: update
++   ******************************************************************/
++  // predefine
++  val e0_fire = Wire(Bool())
++  val e0_srcValid = io.srcReq.valid
++  val e0_src = io.srcReq.bits
++  val e0_selIdx = Wire(UInt(BufferIndexWidth.W))
++  val e1_fire = RegNext(e0_fire)
++  val e1_src = RegEnable(io.srcReq.bits, io.srcReq.valid)
++  val e1_selIdx = RegEnable(e0_selIdx, e0_fire)
++  // e0
++  val e0_matchPrev = e1_fire && e0_srcValid && getLine(e1_src.prefetchVA) === getLine(e0_src.prefetchVA)
++  val e0_matchVec = sizeMap(i => e0_srcValid && valids(i) && entries(i).vline === getLine(e0_src.prefetchVA))
++  assert(PopCount(e0_matchVec) <= 1.U, s"matchVec should not have more than one match in ${this.getClass.getSimpleName}")
++  val e0_allocIdx = replacer.way
++  when(e0_matchPrev){
++    e0_selIdx := e1_selIdx
++  }.elsewhen(e0_matchVec.orR){
++    e0_selIdx := OHToUInt(e0_matchVec)
++  }.otherwise{
++    e0_selIdx := e0_allocIdx
++  }
++  val e0_update =  e0_matchPrev || e0_matchVec.orR
++  e0_fire := e0_srcValid
++  when(e0_fire){
++    replacer.access(e0_selIdx)
++  }
++
++  // e1
++  val e1_update = RegNext(e0_fire && e0_update)
++  val e1_alloc = RegNext(e0_fire && !e0_update)
++  when(e1_update){
++    entries(e1_selIdx).updateEntryMerge(e1_src.prefetchTarget)
++  }.elsewhen(e1_alloc){
++    entries(e1_selIdx).fromSourcePrefetchReq(e1_src)
++    valids(e1_selIdx) := true.B
++  }
++  XSPerfAccumulate("src_req_fire", e0_fire)
++  XSPerfAccumulate("src_req_fire_update", e0_fire && e0_update)
++  XSPerfAccumulate("src_req_fire_alloc", e0_fire && !e0_update)
++
++  /******************************************************************
++   * tlb
++   *  s0: arbiter
++   *  s1: sent tlb resp
++   *  s2: receive tlb resp
++   *  s3: reveive pmp resp
++   ******************************************************************/
++  val s0_tlbFireOH = VecInit(tlbReqArb.io.in.map(_.fire))
++  // control
++  val s0_tlbFire = s0_tlbFireOH.orR
++  val s1_tlbFire = RegNext(s0_tlbFire)
++  val s2_tlbFire = RegNext(s1_tlbFire)
++  // data
++  val s1_tlbFireOH = RegEnable(s0_tlbFireOH, 0.U.asTypeOf(s0_tlbFireOH), s0_tlbFire)
++  val s2_tlbFireOH = RegEnable(s1_tlbFireOH, 0.U.asTypeOf(s0_tlbFireOH), s1_tlbFire)
++  val s3_tlbFireOH = RegEnable(s2_tlbFireOH, 0.U.asTypeOf(s0_tlbFireOH), s2_tlbFire)
++  val s0_notSelectOH = sizeMap(i => !s1_tlbFireOH(i) && !s2_tlbFireOH(i) && !s3_tlbFireOH(i))
++  for(i <- 0 until size) {
++    tlbReqArb.io.in(i).valid := valids(i) && !entries(i).pvalid && s0_notSelectOH(i)
++    tlbReqArb.io.in(i).bits.vaddr := entries(i).getPrefetchVA
++    tlbReqArb.io.in(i).bits.cmd := TlbCmd.read
++    tlbReqArb.io.in(i).bits.isPrefetch := true.B
++    tlbReqArb.io.in(i).bits.size := 3.U
++    tlbReqArb.io.in(i).bits.kill := false.B
++    tlbReqArb.io.in(i).bits.no_translate := false.B
++    tlbReqArb.io.in(i).bits.fullva := 0.U
++    tlbReqArb.io.in(i).bits.checkfullva := false.B
++    tlbReqArb.io.in(i).bits.memidx := DontCare
++    tlbReqArb.io.in(i).bits.debug := DontCare
++    tlbReqArb.io.in(i).bits.hlvx := DontCare
++    tlbReqArb.io.in(i).bits.hyperinst := DontCare
++    tlbReqArb.io.in(i).bits.pmp_addr := DontCare
++  }
++  tlbReqArb.io.out.ready := true.B
++  // tlb req
++  val s1_tlbReqValid = RegNext(tlbReqArb.io.out.valid)
++  val s1_tlbReqBits = RegEnable(tlbReqArb.io.out.bits, tlbReqArb.io.out.valid)
++  val s1_vaddr = RegEnable(tlbReqArb.io.out.bits.vaddr, tlbReqArb.io.out.valid)
++  io.tlbReq.req.valid := s1_tlbReqValid
++  io.tlbReq.req.bits := s1_tlbReqBits
++  io.tlbReq.req_kill := false.B
++  // tlb resp
++  val s2_tlbRespValid = io.tlbReq.resp.valid
++  val s2_tlbRespBits = io.tlbReq.resp.bits
++  val s2_vaddr = RegEnable(s1_vaddr, s1_tlbReqValid)
++  io.tlbReq.resp.ready := true.B
++  // pmp resp
++  val s3_tlbRespValid = RegNext(s2_tlbRespValid)
++  val s3_tlbRespBits = RegEnable(s2_tlbRespBits, s2_tlbRespValid)
++  val s3_vaddr = RegEnable(s2_vaddr, s2_tlbRespValid)
++  val s3_pmpResp = io.pmpResp
++  val s3_updateValid = s3_tlbRespValid && !s3_tlbRespBits.miss
++  val s3_updateIndex = OHToUInt(s3_tlbFireOH.asUInt)
++  val s3_drop1 = s3_tlbRespValid && s3_tlbRespBits.miss
++  val s3_drop2 = s3_updateValid && (
++    // is region addr in pmem ranges
++    !PmemRanges.map(_.cover(s3_tlbRespBits.paddr.head)).reduce(_ || _) ||
++    // page/access fault
++    s3_tlbRespBits.excp.head.pf.ld || s3_tlbRespBits.excp.head.gpf.ld || s3_tlbRespBits.excp.head.af.ld ||
++    // uncache
++    s3_pmpResp.mmio || Pbmt.isUncache(s3_tlbRespBits.pbmt.head) ||
++    // pmp access fault
++    s3_pmpResp.ld
++  )
++  val s3_quit = entries(s3_updateIndex).getPrefetchVA =/= s3_vaddr // overwrite by new req
++  // update
++  when(s3_drop1 || s3_drop2 || s3_quit){
++    when(s3_drop1 || s3_drop2){
++      valids(s3_updateIndex) := false.B
++    }
++  }.elsewhen(s3_updateValid){
++    entries(s3_updateIndex).updateTlbResp(s3_tlbRespBits.paddr.head)
++  }
++  XSPerfAccumulate("tlb_req_fire", io.tlbReq.req.fire)
++  XSPerfAccumulate("tlb_resp_fire", io.tlbReq.resp.fire)
++  XSPerfAccumulate("tlb_drop_miss", s3_drop1)
++  XSPerfAccumulate("tlb_drop_fault", s3_drop2)
++  XSPerfAccumulate("tlb_quit_overwrite", s3_quit)
++  XSPerfAccumulate("tlb_succ_update", !(s3_drop1 || s3_drop2 || s3_quit) && s3_updateValid)
++
++  /******************************************************************
++   * prefetch
++   *  p0: arbiter and send pf req
++   * 
++   * TODO: prefetch may not ready, how about setting replay counter?
++   ******************************************************************/
++  for(i <- 0 until size){
++    pfIdxArb.io.in(i).valid := valids(i) && entries(i).pvalid
++    pfIdxArb.io.in(i).bits := i.U
++  }
++  val pfIdx = pfIdxArb.io.out.bits
++  pfIdxArb.io.out.ready := true.B
++  switch(entries(pfIdx).target){
++    is(PrefetchTarget.L1.id.U){
++      pfIdxArb.io.out.ready := io.l1_req.ready
++      io.l1_req.valid := pfIdxArb.io.out.valid
++      io.l1_req.bits.paddr := entries(pfIdx).getPrefetchPA
++      io.l1_req.bits.alias := entries(pfIdx).getPrefetchAlias
++      io.l1_req.bits.confidence := 1.U
++      io.l1_req.bits.is_store := false.B
++      io.l1_req.bits.pf_source.value := L1_HW_PREFETCH_BERTI
++    }
++    is(PrefetchTarget.L2.id.U){
++      pfIdxArb.io.out.ready := io.l2_req.ready
++      io.l2_req.valid := pfIdxArb.io.out.valid
++      io.l2_req.bits.addr := entries(pfIdx).getPrefetchPA
++      io.l2_req.bits.source := MemReqSource.Prefetch2L2Berti.id.U
++    }
++    is(PrefetchTarget.L3.id.U){
++      pfIdxArb.io.out.ready := io.l3_req.ready
++      io.l3_req.valid := pfIdxArb.io.out.valid
++      io.l3_req.bits.addr := entries(pfIdx).getPrefetchPA
++      io.l3_req.bits.source := MemReqSource.Prefetch2L3Berti.id.U
++    }
++  }
++  // update
++  when(pfIdxArb.io.out.fire){
++    valids(pfIdx) := false.B
++  }
++  XSPerfAccumulate("pf_l1_req", io.l1_req.fire)
++  XSPerfAccumulate("pf_l2_req", io.l2_req.fire)
++  XSPerfAccumulate("pf_l3_req", io.l3_req.fire)
++  
++  /*** performance counter and debug */
++  val srcTable = ChiselDB.createTable(
++    "berti_source_pf_req" + p(XSCoreParamsKey).HartId.toString,
++    new SourcePrefetchReq, basicDB = false
++  )
++  srcTable.log(
++    data = e0_src,
++    en = e0_fire,
++    clock = clock,
++    reset = reset
++  )
++
++  val sendTable = ChiselDB.createTable(
++    "berti_send_pf_req" + p(XSCoreParamsKey).HartId.toString,
++    new Entry, basicDB = false
++  )
++  sendTable.log(
++    data = entries(pfIdx),
++    en = pfIdxArb.io.out.valid,
++    clock = clock,
++    reset = reset
++  )
++}
++
++class BertiPrefetcher()(implicit p: Parameters) extends BasePrefecher with HasBertiHelper {
++  override lazy val io = IO(new BertiPrefetcherIO)
++
++  val trainFilter = Module(new NewTrainFilter(TRAIN_FILTER_SIZE, name, true, true))
++  val historyTable = Module(new HistoryTable())
++  val detlaTable = Module(new DeltaTable())
++  val prefetchBuffer = Module(new DeltaPrefetchBuffer(PREFETCH_FILTER_SIZE, name))
++
++  // 1. train filter
++  val demandRefill = io.refillTrain.valid && isDemand(io.refillTrain.bits.metaSource)
++  trainFilter.io.enable := io.enable
++  trainFilter.io.flush := false.B
++  trainFilter.io.ldTrainOpt.map(_ := io.ld_in)
++  trainFilter.io.stTrainOpt.map(_ := io.st_in)
++  trainFilter.io.trainReq.ready := !demandRefill
++
++  // 2. history table && delta
++  val trainValid = trainFilter.io.trainReq.valid
++  val trainBits = trainFilter.io.trainReq.bits
++  val demandMiss = trainValid && trainBits.miss
++  val demandPfHit = trainValid && isFromBerti(trainBits.metaSource)
++
++  historyTable.io.access.valid := demandMiss || demandPfHit
++  historyTable.io.access.bits.pc := trainBits.pc
++  historyTable.io.access.bits.vaddr := trainBits.vaddr
++
++  historyTable.io.search.req.valid := demandRefill || demandPfHit
++  historyTable.io.search.req.bits.pc := Mux(demandRefill, io.refillTrain.bits.pc, trainBits.pc)
++  historyTable.io.search.req.bits.vaddr := Mux(demandRefill, io.refillTrain.bits.vaddr, trainBits.vaddr)
++  historyTable.io.search.req.bits.latency := Mux(demandRefill, io.refillTrain.bits.refillLatency, trainBits.refillLatency)
++
++  detlaTable.io.learn := historyTable.io.search.resp
++
++  // 3. Prefetch
++  val canPrefetch = io.enable && (demandMiss || demandPfHit)
++  detlaTable.io.train.valid := canPrefetch
++  detlaTable.io.train.bits := trainBits
++  prefetchBuffer.io.srcReq := detlaTable.io.prefetch
++
++  // 4. io
++  io.tlb_req <> prefetchBuffer.io.tlbReq
++  prefetchBuffer.io.pmpResp := io.pmp_resp
++  io.l1_req <> prefetchBuffer.io.l1_req
++  io.l2_req <> prefetchBuffer.io.l2_req
++  io.l3_req <> prefetchBuffer.io.l3_req
++
++  XSPerfAccumulate("demandMiss", demandMiss)
++  XSPerfAccumulate("demandPfHit", demandPfHit)
++  XSPerfAccumulate("demandRefill", demandRefill)
++  XSPerfAccumulate("demandRefill_searchValid", demandRefill && historyTable.io.search.resp.valid && historyTable.io.search.resp.delta =/= 0.S)
++  XSPerfAccumulate("demandPfHit_searchValid", demandPfHit && historyTable.io.search.resp.valid && historyTable.io.search.resp.delta =/= 0.S)
++  XSPerfAccumulate("demandMiss_prefetchValid", demandMiss && detlaTable.io.prefetch.valid)
++  XSPerfAccumulate("demandPfHit_prefetchValid", demandPfHit && detlaTable.io.prefetch.valid)
++
++}
+diff --git a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
+index 895160f0948..d5c99819e6f 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchComponent.scala
+@@ -1,26 +1,23 @@
+ package xiangshan.mem.prefetch
+ 
+-import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+ import freechips.rocketchip.util._
+-import utils._
++import org.chipsalliance.cde.config.Parameters
+ import utility._
+ import xiangshan._
+ import xiangshan.backend.fu.PMPRespBundle
+-import xiangshan.mem.L1PrefetchReq
+-import xiangshan.mem.Bundles.LsPrefetchTrainBundle
+-import xiangshan.mem.trace._
+-import xiangshan.mem.L1PrefetchSource
+-import xiangshan.mem.HasL1PrefetchSourceParameter
+ import xiangshan.cache.HasDCacheParameters
+ import xiangshan.cache.mmu._
++import xiangshan.mem.Bundles.LsPrefetchTrainBundle
++import xiangshan.mem.{L1PrefetchReq, L1PrefetchSource}
+ 
+ case class StreamStrideParams() extends PrefetcherParams{
+   override def name = "StreamStride"
+   override def tlbPlace = TLBPlace.dtlb_ld
+ }
+ 
++// only for region type of prefetch
+ trait HasL1PrefetchHelper extends HasCircularQueuePtrHelper with HasDCacheParameters {
+   // region related
+   val REGION_SIZE = 1024
+@@ -257,6 +254,113 @@ class TrainFilter(size: Int, name: String)(implicit p: Parameters) extends XSMod
+   }
+ }
+ 
++class NewTrainFilter(size: Int, name: String, hasLoadTrain: Boolean=true, hasStoreTrain: Boolean=false)(implicit p: Parameters) extends XSModule with HasL1PrefetchHelper {
++  val io = IO(new Bundle() {
++    // control
++    val enable = Input(Bool()) // FIXME lyq: some doubts about the functionality of enable
++    val flush = Input(Bool())
++    // train input: from ldu, stu
++
++    val ldTrainOpt = if (hasLoadTrain) {
++      Some(Flipped(Vec(backendParams.LdExuCnt, ValidIO(new LsPrefetchTrainBundle()))))
++    } else None
++    val stTrainOpt = if (hasStoreTrain) {
++       Some(Flipped(Vec(backendParams.StaExuCnt, ValidIO(new LsPrefetchTrainBundle()))))
++    } else None
++    // filter output
++    val trainReq = DecoupledIO(new TrainReqBundle())
++  })
++
++  class Ptr(implicit p: Parameters) extends CircularQueuePtr[Ptr]( p => size ){}
++
++  val entries = Reg(Vec(size, new TrainReqBundle))
++  val valids = RegInit(VecInit(Seq.fill(size){ (false.B) }))
++
++  // enq
++  val enqLen = (if(hasLoadTrain) backendParams.LdExuCnt else 0) + (if(hasStoreTrain) backendParams.StaExuCnt else 0)
++  require(size >= enqLen)
++
++  val enqPtrExt = RegInit(VecInit((0 until enqLen).map(_.U.asTypeOf(new Ptr))))
++  val deqPtrExt = RegInit(0.U.asTypeOf(new Ptr))
++  val deqPtr = WireInit(deqPtrExt.value)
++
++  val ldReorderOpt = io.ldTrainOpt.map { ldTrain =>
++    HwSort(VecInit(ldTrain.map { case x => DataWithPtr(x.valid, x.bits, x.bits.uop.robIdx) }))
++  }
++  val stReorderOpt = io.stTrainOpt.map { stTrain =>
++    HwSort(VecInit(stTrain.map { case x => DataWithPtr(x.valid, x.bits, x.bits.uop.robIdx) }))
++  }
++  val reqs = ldReorderOpt.map(_.map(_.bits.toTrainReqBundle())).getOrElse(Seq.empty) ++
++    stReorderOpt.map(_.map(_.bits.toTrainReqBundle())).getOrElse(Seq.empty)
++  val reqsValid = ldReorderOpt.map(_.map(_.valid)).getOrElse(Seq.empty) ++
++    stReorderOpt.map(_.map(_.valid)).getOrElse(Seq.empty)
++
++  val needAlloc = Wire(Vec(enqLen, Bool()))
++  val canAlloc = Wire(Vec(enqLen, Bool()))
++
++  for(i <- (0 until enqLen)) {
++    val req = reqs(i)
++    val reqValid = reqsValid(i)
++    val index = PopCount(needAlloc.take(i))
++    val allocPtr = enqPtrExt(index)
++    val entry_match = Cat(entries.zip(valids).map {
++      case(e, v) => v && block_hash_tag(e.vaddr) === block_hash_tag(req.vaddr)
++    }).orR
++    val prev_enq_match = if(i == 0) false.B else Cat(reqs.zip(reqsValid).take(i).map {
++      case(pre, pre_v) => pre_v && block_hash_tag(pre.vaddr) === block_hash_tag(req.vaddr)
++    }).orR
++
++    needAlloc(i) := reqValid && !entry_match && !prev_enq_match
++    canAlloc(i) := needAlloc(i) && allocPtr >= deqPtrExt && io.enable
++
++    when(canAlloc(i)) {
++      valids(allocPtr.value) := true.B
++      entries(allocPtr.value) := req
++    }
++  }
++  val allocNum = PopCount(canAlloc)
++
++  enqPtrExt.foreach{case x => when(canAlloc.asUInt.orR) {x := x + allocNum} }
++
++  // deq
++  io.trainReq.valid := false.B
++  io.trainReq.bits := DontCare
++  valids.zip(entries).zipWithIndex.foreach {
++    case((valid, entry), i) => {
++      when(deqPtr === i.U) {
++        io.trainReq.valid := valid && io.enable
++        io.trainReq.bits := entry
++      }
++    }
++  }
++
++  when(io.trainReq.fire) {
++    valids(deqPtr) := false.B
++    deqPtrExt := deqPtrExt + 1.U
++  }
++
++  when(RegNext(io.flush)) {
++    valids.foreach {case valid => valid := false.B}
++    (0 until enqLen).map {case i => enqPtrExt(i) := i.U.asTypeOf(new Ptr)}
++    deqPtrExt := 0.U.asTypeOf(new Ptr)
++  }
++
++  XSPerfAccumulate(s"${name}_train_filter_full", PopCount(valids) === size.U)
++  XSPerfAccumulate(s"${name}_train_filter_half", PopCount(valids) >= (size / 2).U)
++  XSPerfAccumulate(s"${name}_train_filter_empty", PopCount(valids) === 0.U)
++  XSPerfAccumulate(s"${name}_train_filter_enq_valid", PopCount(reqsValid))
++  XSPerfAccumulate(s"${name}_train_filter_enq_fire", allocNum)
++  XSPerfAccumulate(s"${name}_train_filter_deq", io.trainReq.fire)
++  val raw_enq_pattern = Cat(reqsValid)
++  val filtered_enq_pattern = Cat(needAlloc)
++  val actual_enq_pattern = Cat(canAlloc)
++  for(i <- 0 until (1 << enqLen)) {
++    XSPerfAccumulate(s"${name}_train_filter_raw_enq_pattern_${toBinary(i)}", raw_enq_pattern === i.U)
++    XSPerfAccumulate(s"${name}_train_filter_filtered_enq_pattern_${toBinary(i)}", filtered_enq_pattern === i.U)
++    XSPerfAccumulate(s"${name}_train_filter_actual_enq_pattern_${toBinary(i)}", actual_enq_pattern === i.U)
++  }
++}
++
+ class MLPReqFilterBundle(implicit p: Parameters) extends XSBundle with HasL1PrefetchHelper {
+   val tag = UInt(HASH_TAG_WIDTH.W)
+   val region = UInt(REGION_TAG_BITS.W)
+@@ -858,6 +962,7 @@ class L1Prefetcher(implicit p: Parameters) extends BasePrefecher with HasStreamP
+   val pf_ctrl = IO(Input(Vec(L1PrefetcherNum, new PrefetchControlBundle)))
+   val stride_train = IO(Flipped(Vec(backendParams.LduCnt + backendParams.HyuCnt, ValidIO(new LsPrefetchTrainBundle()))))
+   val l2PfqBusy = IO(Input(Bool()))
++  val strideEnable = IO(Input(Bool()))
+ 
+   val stride_train_filter = Module(new TrainFilter(STRIDE_FILTER_SIZE, "stride"))
+   val stride_meta_array = Module(new StrideMetaArray)
+@@ -895,7 +1000,7 @@ class L1Prefetcher(implicit p: Parameters) extends BasePrefecher with HasStreamP
+   stream_bit_vec_array.io.confidence := stream_pf_ctrl.confidence
+   stream_bit_vec_array.io.train_req <> stream_train_filter.io.train_req
+ 
+-  stride_meta_array.io.enable := enable
++  stride_meta_array.io.enable := enable && strideEnable
+   stride_meta_array.io.flush := stride_pf_ctrl.flush
+   stride_meta_array.io.dynamic_depth := 0.U
+   stride_meta_array.io.confidence := stride_pf_ctrl.confidence
+diff --git a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchInterface.scala b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchInterface.scala
+index 7b9b92949b7..69374d643c5 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/L1PrefetchInterface.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/L1PrefetchInterface.scala
+@@ -16,16 +16,14 @@
+ 
+ package xiangshan.mem
+ 
+-import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
+-import utils._
++import org.chipsalliance.cde.config.Parameters
+ import utility._
++import utils._
+ import xiangshan.ExceptionNO._
+ import xiangshan._
+-import xiangshan.backend.fu.PMPRespBundle
+ import xiangshan.cache._
+-import xiangshan.cache.mmu.{TlbCmd, TlbReq, TlbRequestIO, TlbResp}
+ 
+ trait HasL1PrefetchSourceParameter {
+   // l1 prefetch source related
+@@ -37,16 +35,21 @@ trait HasL1PrefetchSourceParameter {
+   def L1_HW_PREFETCH_STRIDE = 2.U
+   def L1_HW_PREFETCH_STREAM = 3.U
+   def L1_HW_PREFETCH_STORE  = 4.U
++  def L1_HW_PREFETCH_BERTI = 5.U
+   
+   // ------------------------------------------------------------------------------------------------------------------------
+   // timeline: L1_HW_PREFETCH_NULL  --(pf by stream)--> L1_HW_PREFETCH_STREAM --(pf hit by load)--> L1_HW_PREFETCH_CLEAR
+   // ------------------------------------------------------------------------------------------------------------------------
+ 
++  def isDemand(value: UInt) = value <= L1_HW_PREFETCH_CLEAR
+   def isPrefetchRelated(value: UInt) = value >= L1_HW_PREFETCH_CLEAR
+   def isFromL1Prefetch(value: UInt)  = value > L1_HW_PREFETCH_CLEAR
+   def isPrefetchClear(value: UInt)   = value === L1_HW_PREFETCH_CLEAR
+   def isFromStride(value: UInt)      = value === L1_HW_PREFETCH_STRIDE
+   def isFromStream(value: UInt)      = value === L1_HW_PREFETCH_STREAM
++  def isFromBerti(value: UInt) = value === L1_HW_PREFETCH_BERTI
++
++  private val source2string = scala.collection.mutable.Map[String, BigInt]()
+ }
+ 
+ class L1PrefetchSource(implicit p: Parameters) extends XSBundle with HasL1PrefetchSourceParameter {
+diff --git a/src/main/scala/xiangshan/mem/prefetch/L1StridePrefetcher.scala b/src/main/scala/xiangshan/mem/prefetch/L1StridePrefetcher.scala
+index 66900891edc..7a66fb8196a 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/L1StridePrefetcher.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/L1StridePrefetcher.scala
+@@ -230,9 +230,9 @@ class StrideMetaArray(implicit p: Parameters) extends XSModule with HasStridePre
+   val s4_valid = GatedValidRegNext(s3_valid)
+   val s4_l2_pf_req_bits = RegEnable(s3_l2_pf_req_bits, s3_valid)
+ 
+-  io.l1_prefetch_req.valid := s3_valid
++  io.l1_prefetch_req.valid := s3_valid && io.enable
+   io.l1_prefetch_req.bits := s3_l1_pf_req_bits
+-  io.l2_l3_prefetch_req.valid := s4_valid
++  io.l2_l3_prefetch_req.valid := s4_valid && io.enable
+   io.l2_l3_prefetch_req.bits := s4_l2_pf_req_bits
+ 
+   XSPerfAccumulate("pf_valid", PopCount(Seq(io.l1_prefetch_req.valid, io.l2_l3_prefetch_req.valid)))
+diff --git a/src/main/scala/xiangshan/mem/prefetch/PrefetcherWrapper.scala b/src/main/scala/xiangshan/mem/prefetch/PrefetcherWrapper.scala
+index 3d26be410cd..675ca52cc4f 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/PrefetcherWrapper.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/PrefetcherWrapper.scala
+@@ -4,17 +4,16 @@ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import utility._
++import utility.mbist.MbistPipeline
+ import utils._
+ import xiangshan._
+ import xiangshan.backend.Bundles.DynInst
+ import xiangshan.backend.fu.{FuType, PMPRespBundle}
+-import xiangshan.cache.{DCacheLineReq, HasDCacheParameters, LoadPfDbBundle}
+ import xiangshan.cache.mmu._
+-import xiangshan.mem._
++import xiangshan.cache.{HasDCacheParameters, LoadPfDbBundle}
+ import xiangshan.mem.Bundles.LsPrefetchTrainBundle
++import xiangshan.mem._
+ import xiangshan.mem.trace._
+-import freechips.rocketchip.diplomacy.BufferParams.default
+-import utility.mbist.{MbistInterface, MbistPipeline}
+ 
+ object TLBPlace extends Enumeration{
+   /* now only support dtlb_ld and dtlb_st */
+@@ -63,6 +62,7 @@ class OOOToPrefetchIO(implicit p: Parameters) extends PrefetchBundle {
+ 
+ class DCacheToPrefetchIO(implicit p: Parameters) extends PrefetchBundle {
+   val sms_agt_evict_req = DecoupledIO(new AGTEvictReq())
++  val refillTrain = ValidIO(new TrainReqBundle)
+ }
+ 
+ class TrainSourceIO(implicit p: Parameters) extends PrefetchBundle {
+@@ -121,11 +121,11 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+     RegEnable(s2_storePcVec(i), io.trainSource.s2_storeFireHint(i))
+   }
+   /* prefetch arbiter */
+-  val l1_pf_arb = Module(new RRArbiterInit(new L1PrefetchReq, prefetcherNum))
++  val l1_pf_arb = Module(new Arbiter(new L1PrefetchReq, prefetcherNum))
+   val l2_pf_req = Wire(Decoupled(new L2PrefetchReq()))
+-  val l2_pf_arb = Module(new RRArbiterInit(new L2PrefetchReq, prefetcherNum))
++  val l2_pf_arb = Module(new Arbiter(new L2PrefetchReq, prefetcherNum))
+   val l3_pf_req = Wire(Decoupled(new L3PrefetchReq()))
+-  val l3_pf_arb = Module(new RRArbiterInit(new L3PrefetchReq, prefetcherNum))
++  val l3_pf_arb = Module(new Arbiter(new L3PrefetchReq, prefetcherNum))
+ 
+   // init
+   io.tlb_req.foreach{ x =>
+@@ -149,15 +149,25 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+ 
+ 
+   /** Prefetchor
+-    * L1: Stride
+-    * L2: Stride, SMS
+-    * L3: Stride
++    * L1: Stride, Berti
++    * L2: Stride, SMS, Berti
++    * L3: Stride, Berti
+     */
+   val HasSMS = prefetcherSeq.exists(_.isInstanceOf[SMSParams])
+   val IdxSMS = prefetcherSeq.indexWhere(_.isInstanceOf[SMSParams])
++  val HasStreamStride = prefetcherSeq.exists(_.isInstanceOf[StreamStrideParams])
++  val IdxStreamStride = prefetcherSeq.indexWhere(_.isInstanceOf[StreamStrideParams])
++  val HasBerti = prefetcherSeq.exists(_.isInstanceOf[BertiParams])
++  val IdxBerti = prefetcherSeq.indexWhere(_.isInstanceOf[BertiParams])
++
++  private val Seq(bothOff, strideOnBertiOff, strideOffBertiOn, bothOn) = Seq(0, 1, 2, 3)
++  val modeStrideBerti = Constantin.createRecord(s"pf_modeStrideBerti$hartId", initValue = strideOnBertiOff)
++  val strideModeEnable = modeStrideBerti =/= bothOff.U && !(modeStrideBerti === strideOffBertiOn.U && HasBerti.B)
++  val bertiModeEnable = modeStrideBerti =/= bothOff.U && !(modeStrideBerti === strideOnBertiOff.U && HasStreamStride.B)
++
+   val smsOpt: Option[SMSPrefetcher] = if(HasSMS) Some(Module(new SMSPrefetcher())) else None
+   smsOpt.foreach (pf => {
+-    val enableSMS = Constantin.createRecord(s"enableSMS$hartId", initValue = true)
++    val enableSMS = Constantin.createRecord(s"pf_enableSMS$hartId", initValue = true)
+     // constantinCtrl && master switch csrCtrl && single switch csrCtrl
+     pf.io.enable := enableSMS && l1D_pf_enable &&
+       GatedRegNextN(io.pfCtrlFromCSR.l2_pf_recv_enable, 2, Some(false.B))
+@@ -171,7 +181,7 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+ 
+     for (i <- 0 until LD_TRAIN_WIDTH) {
+       val source = io.trainSource.s3_load(i)
+-      val primaryValid = source.valid && (!source.bits.tlbMiss || source.bits.is_from_hw_pf)
++      val primaryValid = source.valid && !source.bits.tlbMiss && !source.bits.is_from_hw_pf
+       pf.io.ld_in(i).valid := Mux(
+         pf_train_on_hit,
+         primaryValid,
+@@ -187,7 +197,7 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+ 
+     for (i <- 0 until ST_TRAIN_WIDTH) {
+       val source = io.trainSource.s3_store(i)
+-      val primaryValid = source.valid && (!source.bits.tlbMiss || source.bits.is_from_hw_pf)
++      val primaryValid = source.valid && !source.bits.tlbMiss && !source.bits.is_from_hw_pf
+       pf.io.st_in(i).valid := Mux(
+         pf_train_on_hit,
+         primaryValid,
+@@ -205,31 +215,31 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+     pf.io.l3_req.ready := false.B
+   })
+ 
+-  val HasStreamStride = prefetcherSeq.exists(_.isInstanceOf[StreamStrideParams])
+-  val IdxStreamStride = prefetcherSeq.indexWhere(_.isInstanceOf[StreamStrideParams])
+   val strideOpt: Option[L1Prefetcher] = if(HasStreamStride) Some(Module(new L1Prefetcher())) else None
+   strideOpt.foreach(pf => {
+-    val enableL1StreamPrefetcher = Constantin.createRecord(s"enableL1StreamPrefetcher$hartId", initValue = true)
++    val enableL1StreamPrefetcher = Constantin.createRecord(s"pf_enableL1StreamPrefetcher$hartId", initValue = true)
+     // constantinCtrl && master switch csrCtrl && single switch csrCtrl
+     pf.io.enable := enableL1StreamPrefetcher && l1D_pf_enable &&
+       GatedRegNextN(io.pfCtrlFromCSR.l1D_pf_enable_stride, 2, Some(false.B))
+ 
+     pf.pf_ctrl <> io.pfCtrlFromDCache
+     pf.l2PfqBusy := io.pfCtrlFromTile.l2PfqBusy
++    pf.strideEnable := strideModeEnable
+ 
+     // stride will train on miss or prefetch hit
+     for(i <- 0 until LD_TRAIN_WIDTH){
+       val source = io.trainSource.s3_load(i)
+       pf.stride_train(i).valid := source.valid && source.bits.isFirstIssue && (
+         source.bits.miss || isFromStride(source.bits.meta_prefetch)
+-      ) // && isLoadAccess(source.bits.uop)
++      ) && !source.bits.is_from_hw_pf // && isLoadAccess(source.bits.uop)
+       pf.stride_train(i).bits := source.bits
+       pf.stride_train(i).bits.uop.pc := Mux(
+         io.trainSource.s3_ptrChasing(i),
+         s2_loadPcVec(i),
+         s3_loadPcVec(i)
+       )
+-      pf.io.ld_in(i).valid := source.valid && source.bits.isFirstIssue && isLoadAccess(source.bits.uop)
++      pf.io.ld_in(i).valid := source.valid && source.bits.isFirstIssue && !source.bits.is_from_hw_pf
++      // && isLoadAccess(source.bits.uop)
+       pf.io.ld_in(i).bits := source.bits
+     }
+ 
+@@ -246,6 +256,49 @@ class PrefetcherWrapper(implicit p: Parameters) extends PrefetchModule {
+     l3_pf_arb.io.in(IdxStreamStride) <> pf.io.l3_req
+   })
+ 
++  val bertiOpt: Option[BertiPrefetcher] = if(HasBerti) Some(Module(new BertiPrefetcher())) else None
++  bertiOpt.foreach(pf => {
++    val enableBerti = Constantin.createRecord(s"pf_enableBerti$hartId", initValue = true)
++    // constantinCtrl && master switch csrCtrl && single switch csrCtrl
++    pf.io.enable := enableBerti && l1D_pf_enable &&
++      GatedRegNextN(io.pfCtrlFromCSR.berti_enable, 2, Some(false.B)) &&
++      bertiModeEnable
++
++    for(i <- 0 until LD_TRAIN_WIDTH){
++      val source = io.trainSource.s3_load(i)
++      pf.io.ld_in(i).valid := source.valid && source.bits.isFirstIssue && (
++        source.bits.miss || isFromBerti(source.bits.meta_prefetch)
++      ) && !source.bits.is_from_hw_pf // && isLoadAccess(source.bits.uop)
++      pf.io.ld_in(i).bits := source.bits
++      pf.io.ld_in(i).bits.uop.pc := Mux(
++        io.trainSource.s3_ptrChasing(i),
++        s2_loadPcVec(i),
++        s3_loadPcVec(i)
++      )
++    }
++
++    for (i <- 0 until ST_TRAIN_WIDTH) {
++      pf.io.st_in(i).valid := false.B
++      pf.io.st_in(i).bits := DontCare
++      // val source = io.trainSource.s3_store(i)
++      // pf.io.st_in(i).valid := source.valid && source.bits.isFirstIssue && (
++      //  source.bits.miss || isFromBerti(source.bits.meta_prefetch)
++      // )
++      // pf.io.st_in(i).bits := source.bits
++      // pf.io.st_in(i).bits.uop.pc := s3_storePcVec(i)
++    }
++
++    pf.io.refillTrain := io.fromDCache.refillTrain
++
++    io.tlb_req(IdxBerti) <> pf.io.tlb_req
++    pf.io.pmp_resp := io.pmp_resp(IdxBerti)
++
++    l1_pf_arb.io.in(IdxBerti) <> pf.io.l1_req
++    l2_pf_arb.io.in(IdxBerti) <> pf.io.l2_req
++    l3_pf_arb.io.in(IdxBerti) <> pf.io.l3_req
++
++  })
++
+   /**
+    * load prefetch to l1 Dcache
+    * stride
+diff --git a/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala b/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala
+index 7703f339eb8..ff34ab402ab 100644
+--- a/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala
++++ b/src/main/scala/xiangshan/mem/prefetch/SMSPrefetcher.scala
+@@ -930,7 +930,7 @@ class PrefetchFilter()(implicit p: Parameters) extends XSModule with HasSMSModul
+     val gen_req = Flipped(ValidIO(new PfGenReq()))
+     val tlb_req = new TlbRequestIO(2)
+     val pmp_resp = Flipped(new PMPRespBundle())
+-    val l2_pf_addr = ValidIO(UInt(PAddrBits.W))
++    val l2_pf_addr = DecoupledIO(UInt(PAddrBits.W))
+     val pf_alias_bits = Output(UInt(2.W))
+     val debug_source_type = Output(UInt(log2Up(nSourceType).W))
+   })
+@@ -944,12 +944,10 @@ class PrefetchFilter()(implicit p: Parameters) extends XSModule with HasSMSModul
+   val tlb_req_arb = Module(new RRArbiterInit(new TlbReq, smsParams.pf_filter_size))
+   val pf_req_arb = Module(new RRArbiterInit(UInt(PAddrBits.W), smsParams.pf_filter_size))
+ 
+-  io.l2_pf_addr.valid := pf_req_arb.io.out.valid
+-  io.l2_pf_addr.bits := pf_req_arb.io.out.bits
++  io.l2_pf_addr <> pf_req_arb.io.out
+   io.pf_alias_bits := Mux1H(entries.zipWithIndex.map({
+     case (entry, i) => (i.U === pf_req_arb.io.chosen) -> entry.alias_bits
+   }))
+-  pf_req_arb.io.out.ready := true.B
+ 
+   io.debug_source_type := VecInit(entries.map(_.debug_source_type))(pf_req_arb.io.chosen)
+ 
+@@ -1059,6 +1057,8 @@ class PrefetchFilter()(implicit p: Parameters) extends XSModule with HasSMSModul
+   val s3_pmp_resp = io.pmp_resp
+   val s3_update_valid = s3_tlb_resp_fire && !s3_tlb_resp.miss
+   val s3_drop = s3_update_valid && (
++    // is region addr in pmem ranges
++    !PmemRanges.map(_.cover(s3_tlb_resp.paddr.head)).reduce(_ || _) ||
+     // page/access fault
+     s3_tlb_resp.excp.head.pf.ld || s3_tlb_resp.excp.head.gpf.ld || s3_tlb_resp.excp.head.af.ld ||
+     // uncache
+@@ -1329,11 +1329,11 @@ class SMSPrefetcher()(implicit p: Parameters) extends BasePrefecher with HasSMSM
+   pf_filter.io.gen_req.bits := pf_gen_req
+   io.tlb_req <> pf_filter.io.tlb_req
+   pf_filter.io.pmp_resp := io.pmp_resp
+-  val is_valid_address = PmemRanges.map(_.cover(pf_filter.io.l2_pf_addr.bits)).reduce(_ || _)
+ 
+-  io.l2_req.valid := pf_filter.io.l2_pf_addr.valid && io.enable && is_valid_address
++  io.l2_req.valid := pf_filter.io.l2_pf_addr.valid && io.enable
+   io.l2_req.bits.addr := pf_filter.io.l2_pf_addr.bits
+   io.l2_req.bits.source := MemReqSource.Prefetch2L2SMS.id.U
++  pf_filter.io.l2_pf_addr.ready := io.l2_req.ready
+ 
+   // for now, sms will not send l1 prefetch requests
+   io.l1_req.bits.paddr := pf_filter.io.l2_pf_addr.bits
+diff --git a/utility b/utility
+index a6ca9ce4de6..b51bd326daf 160000
+--- a/utility
++++ b/utility
+@@ -1 +1 @@
+-Subproject commit a6ca9ce4de61b6141912280516371936d54c47d0
++Subproject commit b51bd326daf46826df19b743794a021c05360461
+```

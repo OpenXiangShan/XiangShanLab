@@ -1,0 +1,50 @@
+# Commit Log
+- Issue: #6071
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6071
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6071
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6071
+- Changed files: 2
+- Additions: 2
+- Deletions: 4
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+index 5df893c60d0..8ac5ad65354 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+@@ -88,10 +88,9 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+   private val tvalFillPcPlus2  = (isFetchExcp || isFetchGuestExcp) && fetchCrossPage
+   private val tvalFillMemVaddr = isMemExcp || isMemBkpt
+   private val tvalFillGVA      =
+-    isHlsExcp && isMemExcp ||
+     isLSGuestExcp|| isFetchGuestExcp ||
+     (isFetchExcp || isFetchBkpt) && fetchIsVirt ||
+-    (isMemExcp || isMemBkpt) && memIsVirt
++    (isMemExcp || isMemBkpt) && (memIsVirt || isHlsExcp)
+   private val tvalFillInst     = isIllegalInst
+ 
+   private val tval = Mux1H(Seq(
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+index 0dc149a5bac..9bd2a33151f 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+@@ -86,10 +86,9 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   private val tvalFillPcPlus2  = (isFetchExcp || isFetchGuestExcp) && fetchCrossPage
+   private val tvalFillMemVaddr = isMemExcp || isMemBkpt
+   private val tvalFillGVA      =
+-    isHlsExcp && isMemExcp ||
+     isLSGuestExcp|| isFetchGuestExcp ||
+     (isFetchExcp || isFetchBkpt) && fetchIsVirt ||
+-    (isMemExcp || isMemBkpt) && memIsVirt
++    (isMemExcp || isMemBkpt) && (memIsVirt || isHlsExcp)
+   private val tvalFillInst     = isIllegalInst
+ 
+   private val tval = Mux1H(Seq(
+```

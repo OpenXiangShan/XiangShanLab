@@ -1,0 +1,3 @@
+[*] mcause = 0x17 (EX_SGPF=23, store guest-page fault)
+[*] mtinst = 0x3000
+[*] BUG CONFIRMED: mtinst = 0x3000, bit 5 CLEAR

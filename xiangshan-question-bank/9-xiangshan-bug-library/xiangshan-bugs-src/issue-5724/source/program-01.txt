@@ -1,0 +1,1 @@
+val accessContext_EX_II = csrIsContext && !privState.isModeM && !mstateen0.CONTEXT.asBool

@@ -1,0 +1,203 @@
+# Commit Log
+- Issue: #5347
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5347
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5347
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5347
+- Changed files: 3
+- Additions: 48
+- Deletions: 20
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+index 9417412cb15..96cfd47a41a 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+@@ -223,6 +223,7 @@ class BpuTrain(implicit p: Parameters) extends BpuBundle with HalfAlignHelper {
+   val meta:     BpuMeta                = new BpuMeta
+   val startPc:  PrunedAddr             = PrunedAddr(VAddrBits)
+   val branches: Vec[Valid[BranchInfo]] = Vec(ResolveEntryBranchNumber, Valid(new BranchInfo))
++  val perfMeta: BpuPerfMeta            = new BpuPerfMeta
+ 
+   // we masked out all branches after the first mispredict branch in Bpu top (refer to Bpu.scala t0_firstMispredictMask)
+   // so, we can assert that branches.map(b => b.valid && b.bits.mispredict) is at-most-one-hot
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+index d86355efc26..a131db5c310 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+@@ -21,7 +21,7 @@ import org.chipsalliance.cde.config.Parameters
+ import utility.HasCircularQueuePtrHelper
+ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.bpu.BpuMeta
+-import xiangshan.frontend.bpu.BranchAttribute
++import xiangshan.frontend.bpu.BpuPerfMeta
+ import xiangshan.frontend.bpu.BranchInfo
+ 
+ class FtqEntry(implicit p: Parameters) extends FtqBundle {
+@@ -77,3 +77,9 @@ class FtqToCtrlIO(implicit p: Parameters) extends FtqBundle {
+   val ftqIdx:  UInt       = Output(UInt(FtqPtr.width.W))
+   val startPc: PrunedAddr = Output(PrunedAddr(VAddrBits))
+ }
++
++class PerfMeta(implicit p: Parameters) extends FtqBundle {
++  val bpuPerf:    BpuPerfMeta = new BpuPerfMeta
++  val isCfi:      Vec[Bool]   = Vec(FetchBlockInstNum, Bool())
++  val mispredict: Vec[Bool]   = Vec(FetchBlockInstNum, Bool())
++}
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 96555228f7a..40a1dde1cc2 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -41,7 +41,6 @@ import xiangshan.frontend.FtqToIfuIO
+ import xiangshan.frontend.IfuToFtqIO
+ import xiangshan.frontend.PrunedAddrInit
+ import xiangshan.frontend.bpu.BpuMeta
+-import xiangshan.frontend.bpu.BpuPerfMeta
+ import xiangshan.frontend.bpu.BpuPredictionSource
+ import xiangshan.frontend.bpu.BpuSpeculationMeta
+ import xiangshan.frontend.bpu.HalfAlignHelper
+@@ -112,7 +111,7 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   private val commitQueue = Module(new CommitQueue)
+ 
+   // perfQueue stores information for performance monitoring. These queues should not exist in hardware
+-  private val perfQueue = Reg(Vec(FtqSize, new BpuPerfMeta))
++  private val perfQueue = Reg(Vec(FtqSize, new PerfMeta))
+ 
+   private val specTopAddr = speculationQueue(io.fromIfu.wbRedirect.bits.ftqIdx.value).topRetAddr.toUInt
+   private val ifuRedirect = receiveIfuRedirect(io.fromIfu.wbRedirect, specTopAddr)
+@@ -186,10 +185,13 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   speculationQueue(io.fromBpu.s3FtqPtr.value) := io.fromBpu.speculationMeta.bits
+ 
+   when(io.fromBpu.meta.valid) {
+-    metaQueueResolve(io.fromBpu.s3FtqPtr.value) := io.fromBpu.meta.bits
+-    metaQueueCommit(io.fromBpu.s3FtqPtr.value)  := io.fromBpu.meta.bits.ras
++    val s3BpuPtr = io.fromBpu.s3FtqPtr.value
++    metaQueueResolve(s3BpuPtr) := io.fromBpu.meta.bits
++    metaQueueCommit(s3BpuPtr)  := io.fromBpu.meta.bits.ras
+ 
+-    perfQueue(io.fromBpu.s3FtqPtr.value) := io.fromBpu.perfMeta
++    perfQueue(s3BpuPtr).bpuPerf := io.fromBpu.perfMeta
++    perfQueue(s3BpuPtr).isCfi.foreach(_ := false.B)
++    perfQueue(s3BpuPtr).mispredict.foreach(_ := false.B)
+   }
+ 
+   resolveQueue.io.bpuEnqueue    := bpuEnqueue
+@@ -323,6 +325,16 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   io.toBpu.train.bits.meta       := metaQueueResolve(resolveQueue.io.bpuTrain.bits.ftqIdx.value)
+   io.toBpu.train.bits.startPc    := resolveQueue.io.bpuTrain.bits.startPc
+   io.toBpu.train.bits.branches   := resolveQueue.io.bpuTrain.bits.branches
++  io.toBpu.train.bits.perfMeta   := perfQueue(resolveQueue.io.bpuTrain.bits.ftqIdx.value).bpuPerf
++
++  when(io.fromBackend.resolve.map(_.valid).reduce(_ || _)) {
++    io.fromBackend.resolve.foreach { branch =>
++      val ftqIdx      = branch.bits.ftqIdx.value
++      val cfiPosition = getAlignedPosition(branch.bits.pc, branch.bits.ftqOffset)._1
++      perfQueue(ftqIdx).isCfi(cfiPosition)      := true.B
++      perfQueue(ftqIdx).mispredict(cfiPosition) := branch.bits.mispredict
++    }
++  }
+ 
+   // --------------------------------------------------------------------------------
+   // Commit and train BPU
+@@ -374,21 +386,21 @@ class Ftq(implicit p: Parameters) extends FtqModule
+     PrunedAddrInit(redirect.bits.pc),
+     redirect.bits.ftqOffset
+   )._1
+-  private val perfMeta = perfQueue(backendRedirectFtqIdx.bits.value)
++  private val perfMeta = perfQueue(backendRedirectFtqIdx.bits.value).bpuPerf
+ 
+   XSPerfPriorityAccumulate(
+-    "squashCycles_bpWrong_redirect",
++    "squash_cycles_bp_wrong_redirect",
+     backendRedirect.valid && backendRedirect.bits.isMisPred,
+     Seq(
+-      ("wrongTaken", redirect.bits.taken =/= perfMeta.bpPred.taken),
+-      ("wrongPosition", redirectCfiOffset =/= perfMeta.bpPred.cfiPosition),
+-      ("wrongAttribute", !(redirect.bits.attribute === perfMeta.bpPred.attribute)),
+-      ("wrongTarget", redirect.bits.target =/= perfMeta.bpPred.target.toUInt)
++      ("wrong_taken", redirect.bits.taken =/= perfMeta.bpPred.taken),
++      ("wrong_position", redirectCfiOffset =/= perfMeta.bpPred.cfiPosition),
++      ("wrong_attribute", !(redirect.bits.attribute === perfMeta.bpPred.attribute)),
++      ("wrong_target", redirect.bits.target =/= perfMeta.bpPred.target.toUInt)
+     )
+   )
+ 
+   XSPerfAccumulate(
+-    "squashCycles_bpWrong_redirect_wrongTarget",
++    "squash_cycles_bp_wrong_redirect_wrong_target",
+     backendRedirect.valid && backendRedirect.bits.isMisPred &&
+       redirect.bits.taken === perfMeta.bpPred.taken &&
+       redirectCfiOffset === perfMeta.bpPred.cfiPosition &&
+@@ -398,7 +410,7 @@ class Ftq(implicit p: Parameters) extends FtqModule
+       ("conditional", redirect.bits.attribute.isConditional),
+       ("direct", redirect.bits.attribute.isDirect),
+       ("indirect", redirect.bits.attribute.isIndirect),
+-      ("indirect_retCall", redirect.bits.attribute.isReturnAndCall && redirect.bits.attribute.isIndirect)
++      ("indirect_ret_call", redirect.bits.attribute.isReturnAndCall && redirect.bits.attribute.isIndirect)
+     )
+   )
+ 
+@@ -406,40 +418,49 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   private val perf_mispredS3SourceVec = BpuPredictionSource.Stage3.getValidSeq(perfMeta.bpSource.s3Source)
+ 
+   XSPerfAccumulate(
+-    "branchMisPredicts_s1",
++    "branch_mispredicts_s1",
+     backendRedirect.valid && backendRedirect.bits.isMisPred && !perfMeta.bpSource.s3Override,
+     perf_mispredS1SourceVec
+   )
+ 
+   XSPerfAccumulate(
+-    "branchMisPredicts_s3",
++    "branch_mispredicts_s3",
+     backendRedirect.valid && backendRedirect.bits.isMisPred && perfMeta.bpSource.s3Override,
+     perf_mispredS3SourceVec
+   )
+ 
++  XSPerfAccumulate(
++    "commit",
++    io.toBpu.commit.valid,
++    Seq(
++      ("branch_number", true.B, PopCount(perfQueue(commitPtr(0).value).isCfi)),
++      ("mispredict_number", true.B, PopCount(perfQueue(commitPtr(0).value).mispredict))
++    )
++  )
++
+   XSPerfHistogram(
+-    "distance_bpuBtwCommit",
++    "distance_between_bpu_commit",
+     distanceBetween(bpuPtr(0), commitPtr(0)),
+     true.B,
+     0,
+     FtqSize + 1
+   )
+   XSPerfHistogram(
+-    "distance_ifuBtwCommit",
++    "distance_between_ifu_commit",
+     distanceBetween(ifuPtr(0), commitPtr(0)),
+     true.B,
+     0,
+     FtqSize + 1
+   )
+   XSPerfHistogram(
+-    "distance_bpuBtwIfu",
++    "distance_between_bpu_ifu",
+     distanceBetween(bpuPtr(0), ifuPtr(0)),
+     true.B,
+     0,
+     FtqSize + 1
+   )
+   XSPerfAccumulate(
+-    "totalCommits",
++    "total_commits",
+     commit
+   )
+ }
+```

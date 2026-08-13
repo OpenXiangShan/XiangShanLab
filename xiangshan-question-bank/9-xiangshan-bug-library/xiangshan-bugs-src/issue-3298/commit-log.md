@@ -1,0 +1,35 @@
+# Commit Log
+- Issue: #3298
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3298
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3298
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3298
+- Changed files: 1
+- Additions: 2
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+index 6ea75b1a542..e53ae929115 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+@@ -574,11 +574,11 @@ class LLPTW(implicit p: Parameters) extends XSModule with HasPtwConst with HasPe
+   when (io.mem.resp.fire) {
+     state.indices.map{i =>
+       when (state(i) === state_mem_waiting && io.mem.resp.bits.id === entries(i).wait_id) {
+-        state(i) := Mux(entries(i).req_info.s2xlate === allStage, state_last_hptw_req, state_mem_out)
+-        mem_resp_hit(i) := true.B
+         val req_paddr = MakeAddr(entries(i).ppn, getVpnn(entries(i).req_info.vpn, 0))
+         val req_hpaddr = MakeAddr(entries(i).hptw_resp.genPPNS2(get_pn(req_paddr)), getVpnn(entries(i).req_info.vpn, 0))
+         val index =  Mux(entries(i).req_info.s2xlate === allStage, req_hpaddr, req_paddr)(log2Up(l2tlbParams.blockBytes)-1, log2Up(XLEN/8))
++        state(i) := Mux(entries(i).req_info.s2xlate === allStage && !(ptes(index).isPf(2.U) || !ptes(index).isLeaf() || ptes(index).isAf()), state_last_hptw_req, state_mem_out)
++        mem_resp_hit(i) := true.B
+         entries(i).ppn := ptes(index).getPPN() // for last stage 2 translation
+       }
+     }
+```

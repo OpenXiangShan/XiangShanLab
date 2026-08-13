@@ -1,0 +1,63 @@
+diff --git a/src/main/scala/xiangshan/Bundle.scala b/src/main/scala/xiangshan/Bundle.scala
+index e22c28aea0a..0e900bc2fed 100644
+--- a/src/main/scala/xiangshan/Bundle.scala
++++ b/src/main/scala/xiangshan/Bundle.scala
+@@ -670,6 +670,9 @@ class AddrTransType(implicit p: Parameters) extends XSBundle {
+     sv48 && target(XLEN - 1, 48) =/= VecInit.fill(XLEN - 48)(target(47)).asUInt
+   def checkGuestPageFault(target: UInt): Bool =
+     sv39x4 && target(XLEN - 1, 41).orR || sv48x4 && target(XLEN - 1, 50).orR
++
++  def shouldBeSext: Bool = sv39 || sv48
++  def shouldBeZext: Bool = bare || sv39x4 || sv48x4
+ }
+ 
+ object AddrTransType {
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index 270867e617e..78aaabab88b 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -778,6 +778,7 @@ class CtrlBlockImp(
+   rob.io.lsTopdownInfo := io.robio.lsTopdownInfo
+   rob.io.csr.criticalErrorState := io.robio.csr.criticalErrorState
+   rob.io.debugEnqLsq := io.debugEnqLsq
++  rob.io.debugInstrAddrTransType := io.fromCSR.instrAddrTransType
+ 
+   io.robio.robDeqPtr := rob.io.robDeqPtr
+ 
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index afaed355798..7825bc3f82b 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -123,6 +123,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+       val robHeadLqIdx = Valid(new LqPtr)
+     }
+     val debugRolling = new RobDebugRollingIO
++    val debugInstrAddrTransType = Input(new AddrTransType) 
+ 
+     // store event difftest information
+     val storeDebugInfo = Vec(EnsbufferWidth, new Bundle {
+@@ -1481,11 +1482,13 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     // These are the structures used by difftest only and should be optimized after synthesis.
+     val dt_eliminatedMove = Mem(RobSize, Bool())
+     val dt_isRVC = Mem(RobSize, Bool())
++    val dt_pcTransType = Option.when(env.EnableDifftest)(Mem(RobSize, new AddrTransType))
+     val dt_exuDebug = Reg(Vec(RobSize, new DebugBundle))
+     for (i <- 0 until RenameWidth) {
+       when(canEnqueue(i)) {
+         dt_eliminatedMove(allocatePtrVec(i).value) := io.enq.req(i).bits.eliminatedMove
+         dt_isRVC(allocatePtrVec(i).value) := io.enq.req(i).bits.preDecodeInfo.isRVC
++        dt_pcTransType.foreach(_(allocatePtrVec(i).value) := io.debugInstrAddrTransType)
+       }
+     }
+     for (wb <- exuWBs) {
+@@ -1524,8 +1527,8 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+         assert(CommitType.isFused(commitInfo.commitType).asUInt + commitInfo.instrSize >= 1.U)
+       }
+       if (env.EnableDifftest) {
+-        val uop = commitDebugUop(i)
+-        difftest.pc := SignExt(uop.pc, XLEN)
++        val pcTransType = dt_pcTransType.get(deqPtrVec(i).value)
++        difftest.pc := Mux(pcTransType.shouldBeSext, SignExt(uop.pc, XLEN), uop.pc)
+         difftest.instr := uop.instr
+         difftest.robIdx := ZeroExt(ptr, 10)
+         difftest.lqIdx := ZeroExt(uop.lqIdx.value, 7)

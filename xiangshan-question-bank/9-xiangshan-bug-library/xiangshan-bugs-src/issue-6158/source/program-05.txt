@@ -1,0 +1,5 @@
+"predicate_result": "reproduced"
+"bad_issue_event_count": 1
+"accepted_bad_event_count": 1
+"s2_not_blocked_event_count": 1
+"write_intent_event_count": 0

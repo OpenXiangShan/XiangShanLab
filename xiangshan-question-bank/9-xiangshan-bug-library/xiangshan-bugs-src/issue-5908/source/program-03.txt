@@ -1,0 +1,1 @@
+./build/verilator-compile/emu --no-diff -i unalignq_enqptr_deqptr.bin -C 5000

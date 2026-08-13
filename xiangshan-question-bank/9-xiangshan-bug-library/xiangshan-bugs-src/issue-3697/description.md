@@ -1,0 +1,1 @@
+In our previous design, it was assumed that a request for gpaddr would always be replayed until it was responsed. However, this condition is not satisfied for prefetch and redirected requests, resulting in stuck. This commit fixes this bug.

@@ -1,0 +1,2 @@
+- Uncache requests do not necessarily block; MMIO and generic uncache must be distinguished.
+- Uncache requests should use the uncache path conditionally based on whether an exception is present.

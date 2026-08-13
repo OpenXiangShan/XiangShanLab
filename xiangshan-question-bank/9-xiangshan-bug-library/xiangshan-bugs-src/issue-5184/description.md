@@ -1,0 +1,2 @@
+- Due to backend behavior, branches from redirected blocks may still be resolved, so trainBranchIdxOH can become multi-hot instead of one-hot.
+- Remove assertion for this and select the lowest-index one.

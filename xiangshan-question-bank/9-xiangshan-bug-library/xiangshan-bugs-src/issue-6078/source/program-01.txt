@@ -1,0 +1,3 @@
+94006013  (opcode=OP-IMM, funct3=ORI, rd=x0, rs1=x0, imm[4:0]=0x0)
+→ Zicbop: prefetch.i
+→ effective address = x0 + signext(0x940) = 0xFFFFFFFFFFFFF940

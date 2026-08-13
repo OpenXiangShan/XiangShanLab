@@ -1,0 +1,466 @@
+diff --git a/.github/workflows/emu.yml b/.github/workflows/emu.yml
+index ccd75367ea8..5426192ce02 100644
+--- a/.github/workflows/emu.yml
++++ b/.github/workflows/emu.yml
+@@ -272,13 +272,13 @@ jobs:
+             --num-cores 2 --emu-optimize "" \
+             --dramsim3 /nfs/home/share/ci-workloads/DRAMsim3 \
+             --with-dramsim3 --threads 16 \
+-            --pgo /nfs/home/share/ci-workloads/linux-hello-smp-newcsr/bbl.bin --llvm-profdata llvm-profdata
++            --pgo /nfs/home/share/ci-workloads/linux-hello-smp-new/bbl.bin --llvm-profdata llvm-profdata
+       - name: MC Test
+         run: |
+           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --diff ./ready-to-run/riscv64-nemu-interpreter-dual-so --ci mc-tests 2> /dev/zero
+       - name: SMP Linux
+         run: |
+-          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --diff ./ready-to-run/riscv64-nemu-interpreter-dual-so --ci linux-hello-smp-newcsr 2> /dev/null
++          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --wave-dump $WAVE_HOME --threads 16 --numa --diff ./ready-to-run/riscv64-nemu-interpreter-dual-so --ci linux-hello-smp-new 2> /dev/null
+   simv-basics:
+     runs-on: eda
+     needs: changes
+diff --git a/difftest b/difftest
+index ca4fce1867b..e3cd34c3492 160000
+--- a/difftest
++++ b/difftest
+@@ -1 +1 @@
+-Subproject commit ca4fce1867b23ebd9af27a4fa8627d2787bbee3a
++Subproject commit e3cd34c3492ce0c2dde0078ecce966d98d79c2e4
+diff --git a/ready-to-run b/ready-to-run
+index 6736823ec11..b5faebd9ce5 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit 6736823ec116284d175d445494f680f9d7f00ece
++Subproject commit b5faebd9ce51cdc38400cdaba357e51c87703cbe
+diff --git a/scripts/xiangshan.py b/scripts/xiangshan.py
+index 0a31b5fa431..a420c12da39 100644
+--- a/scripts/xiangshan.py
++++ b/scripts/xiangshan.py
+@@ -427,7 +427,6 @@ def __get_ci_workloads(self, name):
+             "linux-hello-smp-opensbi": "fw_payload.bin",
+             "linux-hello-new": "bbl.bin",
+             "linux-hello-smp-new": "bbl.bin",
+-            "linux-hello-smp-newcsr": "bbl.bin",
+             "povray": "_700480000000_.gz",
+             "mcf": "_17520000000_.gz",
+             "xalancbmk": "_266100000000_.gz",
+diff --git a/src/main/scala/xiangshan/Bundle.scala b/src/main/scala/xiangshan/Bundle.scala
+index eba54274f74..0a2d6e1b705 100644
+--- a/src/main/scala/xiangshan/Bundle.scala
++++ b/src/main/scala/xiangshan/Bundle.scala
+@@ -39,7 +39,7 @@ import org.chipsalliance.cde.config.Parameters
+ import chisel3.util.BitPat.bitPatToUInt
+ import chisel3.util.experimental.decode.EspressoMinimizer
+ import xiangshan.backend.CtrlToFtqIO
+-import xiangshan.backend.fu.NewCSR.{Mcontrol, Tdata1Bundle, Tdata2Bundle}
++import xiangshan.backend.fu.NewCSR.{Mcontrol6, Tdata1Bundle, Tdata2Bundle}
+ import xiangshan.backend.fu.PMPEntry
+ import xiangshan.frontend.Ftq_Redirect_SRAMEntry
+ import xiangshan.frontend.AllFoldedHistories
+@@ -753,16 +753,16 @@ class MatchTriggerIO(implicit p: Parameters) extends XSBundle {
+   val tdata2    = Output(UInt(64.W))
+ 
+   def GenTdataDistribute(tdata1: Tdata1Bundle, tdata2: Tdata2Bundle): MatchTriggerIO = {
+-    val mcontrol = Wire(new Mcontrol)
+-    mcontrol := tdata1.DATA.asUInt
+-    this.matchType := mcontrol.MATCH.asUInt
+-    this.select    := mcontrol.SELECT.asBool
+-    this.timing    := mcontrol.TIMING.asBool
+-    this.action    := mcontrol.ACTION.asUInt
+-    this.chain     := mcontrol.CHAIN.asBool
+-    this.execute   := mcontrol.EXECUTE.asBool
+-    this.load      := mcontrol.LOAD.asBool
+-    this.store     := mcontrol.STORE.asBool
++    val mcontrol6 = Wire(new Mcontrol6)
++    mcontrol6 := tdata1.DATA.asUInt
++    this.matchType := mcontrol6.MATCH.asUInt
++    this.select    := mcontrol6.SELECT.asBool
++    this.timing    := false.B
++    this.action    := mcontrol6.ACTION.asUInt
++    this.chain     := mcontrol6.CHAIN.asBool
++    this.execute   := mcontrol6.EXECUTE.asBool
++    this.load      := mcontrol6.LOAD.asBool
++    this.store     := mcontrol6.STORE.asBool
+     this.tdata2    := tdata2.asUInt
+     this
+   }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+index 11e2b715c43..58f77763009 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+@@ -136,8 +136,6 @@ class TrapEntryEventInput(implicit val p: Parameters) extends Bundle with HasXSP
+   val sstatus = Input(new SstatusBundle)
+   val vsstatus = Input(new SstatusBundle)
+ 
+-  val tcontrol = Input(new TcontrolBundle)
+-
+   val pcFromXtvec = Input(UInt(XLEN.W))
+ 
+   val satp = Input(new SatpBundle)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala
+index 60a402b6147..a5f939e3346 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/MretEvent.scala
+@@ -15,14 +15,12 @@ import xiangshan.AddrTransType
+ 
+ class MretEventOutput extends Bundle with EventUpdatePrivStateOutput with EventOutputBase {
+   val mstatus  = ValidIO((new MstatusBundle).addInEvent(_.MPP, _.MPV, _.MIE, _.MPIE, _.MPRV))
+-  val tcontrol = ValidIO((new TcontrolBundle).addInEvent(_.MTE))
+   val targetPc = ValidIO(new TargetPCBundle)
+ }
+ 
+ class MretEventInput extends Bundle {
+   val mstatus  = Input(new MstatusBundle)
+   val mepc     = Input(new Epc())
+-  val tcontrol = Input(new TcontrolBundle)
+   val satp     = Input(new SatpBundle)
+   val vsatp    = Input(new SatpBundle)
+   val hgatp    = Input(new HgatpBundle)
+@@ -53,7 +51,6 @@ class MretEventModule(implicit p: Parameters) extends Module with CSREventBase {
+ 
+   out.privState.valid := valid
+   out.mstatus  .valid := valid
+-  out.tcontrol .valid := valid
+   out.targetPc .valid := valid
+ 
+   out.privState.bits.PRVM     := in.mstatus.MPP
+@@ -63,7 +60,6 @@ class MretEventModule(implicit p: Parameters) extends Module with CSREventBase {
+   out.mstatus.bits.MIE        := in.mstatus.MPIE
+   out.mstatus.bits.MPIE       := 1.U
+   out.mstatus.bits.MPRV       := Mux(in.mstatus.MPP =/= PrivMode.M, 0.U, in.mstatus.MPRV.asUInt)
+-  out.tcontrol.bits.MTE       := in.tcontrol.MPTE
+   out.targetPc.bits.pc        := in.mepc.asUInt
+   out.targetPc.bits.raiseIPF  := instrAddrTransType.checkPageFault(in.mepc.asUInt)
+   out.targetPc.bits.raiseIAF  := instrAddrTransType.checkAccessFault(in.mepc.asUInt)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+index a9ac4454ba0..498c9f4c234 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+@@ -19,7 +19,6 @@ class TrapEntryMEventOutput extends Bundle with EventUpdatePrivStateOutput with
+   val mtval     = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val mtval2    = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+   val mtinst    = ValidIO((new OneFieldBundle).addInEvent(_.ALL))
+-  val tcontrol  = ValidIO((new TcontrolBundle).addInEvent(_.MPTE, _.MTE))
+   val targetPc  = ValidIO(new TargetPCBundle)
+ }
+ 
+@@ -104,7 +103,6 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   out.mtval    .valid := valid
+   out.mtval2   .valid := valid
+   out.mtinst   .valid := valid
+-  out.tcontrol .valid := valid
+   out.targetPc .valid := valid
+ 
+   out.privState.bits            := PrivState.ModeM
+@@ -119,8 +117,6 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   out.mtval.bits.ALL            := Mux(isFetchMalAddr, in.fetchMalTval, tval)
+   out.mtval2.bits.ALL           := tval2 >> 2
+   out.mtinst.bits.ALL           := Mux(isFetchGuestExcp && in.trapIsForVSnonLeafPTE || isLSGuestExcp && in.memExceptionIsForVSnonLeafPTE, 0x3000.U, 0.U)
+-  out.tcontrol.bits.MPTE        := in.tcontrol.MTE
+-  out.tcontrol.bits.MTE         := 0.U
+   out.targetPc.bits.pc          := in.pcFromXtvec
+   out.targetPc.bits.raiseIPF    := false.B
+   out.targetPc.bits.raiseIAF    := AddrTransType(bare = true).checkAccessFault(in.pcFromXtvec)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala
+index f3b4eb469f7..5dfa0233ecb 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/Debug.scala
+@@ -23,7 +23,6 @@ class Debug(implicit val p: Parameters) extends Module with HasXSParameter {
+   private val debugMode = io.in.debugMode
+ 
+   private val dcsr = io.in.dcsr
+-  private val tcontrol = io.in.tcontrol
+   private val tselect = io.in.tselect
+   private val tdata1Selected = io.in.tdata1Selected
+   private val tdata2Selected = io.in.tdata2Selected
+@@ -57,13 +56,13 @@ class Debug(implicit val p: Parameters) extends Module with HasXSParameter {
+   val hasDebugEbreakException = isEbreak && ebreakEnterDebugMode
+ 
+   // debug_exception_trigger
+-  val mcontrolWireVec = tdata1Vec.map{ mod => {
+-    val mcontrolWire = Wire(new Mcontrol)
+-    mcontrolWire := mod.DATA.asUInt
+-    mcontrolWire
++  val mcontrol6WireVec = tdata1Vec.map{ mod => {
++    val mcontrol6Wire = Wire(new Mcontrol6)
++    mcontrol6Wire := mod.DATA.asUInt
++    mcontrol6Wire
+   }}
+ 
+-  val triggerCanRaiseBpExp = Mux(privState.isModeM, tcontrol.MTE.asBool, true.B)
++  val triggerCanRaiseBpExp = io.in.triggerCanRaiseBpExp
+   val triggerEnterDebugMode = hasExp && TriggerAction.isDmode(trigger)
+ 
+   // debug_exception_single
+@@ -73,38 +72,40 @@ class Debug(implicit val p: Parameters) extends Module with HasXSParameter {
+   val hasDebugTrap = hasDebugException || hasDebugIntr
+ 
+   val tselect1H = UIntToOH(tselect.asUInt, TriggerNum).asBools
+-  val chainVec = mcontrolWireVec.map(_.CHAIN.asBool)
++  val chainVec = mcontrol6WireVec.map(_.CHAIN.asBool)
+   val newTriggerChainVec = tselect1H.zip(chainVec).map{case(a, b) => a | b}
+   val newTriggerChainIsLegal = TriggerUtil.TriggerCheckChainLegal(newTriggerChainVec, TriggerChainMaxLength)
+ 
+   val triggerUpdate = tdata1Update || tdata2Update
+ 
+-  val mcontrolWdata = Wire(new Mcontrol)
+-  mcontrolWdata := tdata1Wdata.DATA.asUInt
++  val mcontrol6Wdata = Wire(new Mcontrol6)
++  mcontrol6Wdata := tdata1Wdata.DATA.asUInt
+   val tdata1TypeWdata = tdata1Wdata.TYPE
+ 
+-  val mcontrolSelected = Wire(new Mcontrol)
+-  mcontrolSelected := tdata1Selected.DATA.asUInt
++  val mcontrol6Selected = Wire(new Mcontrol6)
++  mcontrol6Selected := tdata1Selected.DATA.asUInt
+ 
+   val frontendTriggerUpdate =
+-    tdata1Update && tdata1TypeWdata.isLegal && mcontrolWdata.isFetchTrigger ||
+-      mcontrolSelected.isFetchTrigger && triggerUpdate
++    tdata1Update && tdata1TypeWdata.isLegal && mcontrol6Wdata.isFetchTrigger ||
++      mcontrol6Selected.isFetchTrigger && triggerUpdate
+ 
+   val memTriggerUpdate =
+-    tdata1Update && tdata1TypeWdata.isLegal && mcontrolWdata.isMemAccTrigger ||
+-      mcontrolSelected.isMemAccTrigger && triggerUpdate
++    tdata1Update && tdata1TypeWdata.isLegal && mcontrol6Wdata.isMemAccTrigger ||
++      mcontrol6Selected.isMemAccTrigger && triggerUpdate
+ 
+-  val triggerEnableVec = tdata1Vec.zip(mcontrolWireVec).map { case(tdata1, mcontrol) =>
++  val triggerEnableVec = tdata1Vec.zip(mcontrol6WireVec).map { case(tdata1, mcontrol6) =>
+     tdata1.TYPE.isLegal && (
+-      mcontrol.M && privState.isModeM  ||
+-        mcontrol.S && privState.isModeHS ||
+-        mcontrol.U && privState.isModeHU)
++      mcontrol6.M && privState.isModeM  ||
++        mcontrol6.S && privState.isModeHS ||
++        mcontrol6.U && privState.isModeHU ||
++        mcontrol6.VS && privState.isModeVS ||
++        mcontrol6.VU && privState.isModeVU)
+   }
+ 
+-  val fetchTriggerEnableVec = triggerEnableVec.zip(mcontrolWireVec).map {
++  val fetchTriggerEnableVec = triggerEnableVec.zip(mcontrol6WireVec).map {
+     case (tEnable, mod) => tEnable && mod.isFetchTrigger
+   }
+-  val memAccTriggerEnableVec = triggerEnableVec.zip(mcontrolWireVec).map {
++  val memAccTriggerEnableVec = triggerEnableVec.zip(mcontrol6WireVec).map {
+     case (tEnable, mod) => tEnable && mod.isMemAccTrigger
+   }
+   
+@@ -147,11 +148,11 @@ class DebugIO(implicit val p: Parameters) extends Bundle with HasXSParameter {
+     val debugMode = Bool()
+ 
+     val dcsr = new DcsrBundle
+-    val tcontrol = new TcontrolBundle
+     val tselect = new TselectBundle(TriggerNum)
+     val tdata1Selected = new Tdata1Bundle
+     val tdata2Selected = new Tdata2Bundle
+     val tdata1Vec = Vec(TriggerNum, new Tdata1Bundle)
++    val triggerCanRaiseBpExp = Bool()
+ 
+     val tdata1Update = Bool()
+     val tdata2Update = Bool()
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
+index 3eac6af530e..21e462a84e1 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/DebugLevel.scala
+@@ -56,9 +56,6 @@ trait DebugLevel { self: NewCSR =>
+   val tinfo = Module(new CSRModule("Tinfo", new TinfoBundle))
+     .setAddr(CSRs.tinfo)
+ 
+-  val tcontrol = Module(new CSRModule("Tcontrol", new TcontrolBundle) with TrapEntryMEventSinkBundle with MretEventSinkBundle)
+-    .setAddr(CSRs.tcontrol)
+-
+   val dcsr = Module(new CSRModule("Dcsr", new DcsrBundle) with TrapEntryDEventSinkBundle with DretEventSinkBundle)
+     .setAddr(CSRs.dcsr)
+ 
+@@ -76,7 +73,6 @@ trait DebugLevel { self: NewCSR =>
+     tdata2,
+     tselect,
+     tinfo,
+-    tcontrol,
+     dcsr,
+     dpc,
+     dscratch0,
+@@ -126,7 +122,7 @@ class Tdata1Bundle extends CSRBundle{
+   val DATA    = RW(58, 0).withReset(0.U)
+ 
+   def getTriggerAction: CSREnumType = {
+-    val res = Wire(new Mcontrol)
++    val res = Wire(new Mcontrol6)
+     res := this.asUInt
+     res.ACTION
+   }
+@@ -138,9 +134,9 @@ class Tdata1Bundle extends CSRBundle{
+     res.TYPE := this.TYPE.legalize.asUInt
+     res.DMODE := dmode
+     when(this.TYPE.isLegal) {
+-      val mcontrolRes = Wire(new Mcontrol)
+-      mcontrolRes := this.DATA.asUInt
+-      res.DATA := mcontrolRes.writeData(dmode, chainable).asUInt
++      val mcontrol6Res = Wire(new Mcontrol6)
++      mcontrol6Res := this.DATA.asUInt
++      res.DATA := mcontrol6Res.writeData(dmode, chainable).asUInt
+     }.otherwise{
+       res.DATA := 0.U
+     }
+@@ -148,37 +144,39 @@ class Tdata1Bundle extends CSRBundle{
+   }
+ }
+ 
+-class Mcontrol extends CSRBundle{
++class Mcontrol6 extends CSRBundle{
+   override val len: Int = 59
+   // xiangshan don't support match = NAPOT
+-  val MASKMAX = RO(58, 53).withReset(0.U)
+-  val SIZEHI  = RW(22, 21).withReset(0.U)
+-  val HIT     = RW(20).withReset(0.U)
+-  val SELECT  = RW(19).withReset(0.U)
+-  val TIMING  = RW(18).withReset(0.U)
+-  val SIZELO  = RW(17, 16).withReset(0.U)
+-  val ACTION  = TrigAction(15, 12, wNoFilter).withReset(TrigAction.BreakpointExp)
+-  val CHAIN   = RW(11).withReset(0.U)
+-  val MATCH   = TrigMatch(10, 7, wNoFilter).withReset(TrigMatch.EQ)
+-  val M       = RW(6).withReset(0.U)
+-  val S       = RW(4).withReset(0.U)
+-  val U       = RW(3).withReset(0.U)
+-  val EXECUTE = RW(2).withReset(0.U)
+-  val STORE   = RW(1).withReset(0.U)
+-  val LOAD    = RW(0).withReset(0.U)
+-
+-  def writeData(dmode: Bool, chainable: Bool): Mcontrol = {
+-    val res = Wire(new Mcontrol)
++  val UNCERTAIN   = RO(26).withReset(0.U)
++  val HIT1        = RO(25).withReset(0.U)
++  val VS          = RW(24).withReset(0.U)
++  val VU          = RW(23).withReset(0.U)
++  val HIT0        = RO(22).withReset(0.U)
++  val SELECT      = RO(21).withReset(0.U)
++  val SIZE        = RO(18, 16).withReset(0.U)
++  val ACTION      = TrigAction(15, 12, wNoFilter).withReset(TrigAction.BreakpointExp)
++  val CHAIN       = RW(11).withReset(0.U)
++  val MATCH       = TrigMatch(10, 7, wNoFilter).withReset(TrigMatch.EQ)
++  val M           = RW(6).withReset(0.U)
++  val UNCERTAINEN = RO(5).withReset(0.U)
++  val S           = RW(4).withReset(0.U)
++  val U           = RW(3).withReset(0.U)
++  val EXECUTE     = RW(2).withReset(0.U)
++  val STORE       = RW(1).withReset(0.U)
++  val LOAD        = RW(0).withReset(0.U)
++
++  def writeData(dmode: Bool, chainable: Bool): Mcontrol6 = {
++    val res = Wire(new Mcontrol6)
+     res := this.asUInt
+-    res.MASKMAX     := 0.U
+-    res.SIZEHI      := 0.U
+-    res.HIT         := false.B
+-    res.SELECT      := this.EXECUTE.asBool && this.SELECT.asBool
+-    res.TIMING      := false.B
+-    res.SIZELO      := 0.U
++    res.UNCERTAIN   := 0.U
++    res.HIT1        := 0.U
++    res.HIT0        := 0.U
++    res.SELECT      := 0.U
++    res.SIZE        := 0.U
+     res.ACTION      := this.ACTION.legalize(dmode).asUInt
+     res.CHAIN       := this.CHAIN.asBool && chainable
+     res.MATCH       := this.MATCH.legalize.asUInt
++    res.UNCERTAINEN := 0.U
+     res
+   }
+   def isFetchTrigger: Bool = this.EXECUTE.asBool
+@@ -197,7 +195,7 @@ object Tdata1Type extends CSREnum with WARLApply {
+   val Tmexttrigger = Value(7.U)
+   val Disabled     = Value(15.U)
+ 
+-  override def isLegal(enumeration: CSREnumType): Bool = enumeration.isOneOf(Mcontrol)
++  override def isLegal(enumeration: CSREnumType): Bool = enumeration.isOneOf(Mcontrol6)
+ 
+   override def legalize(enumeration: CSREnumType): CSREnumType = {
+     val res = WireInit(enumeration)
+@@ -260,15 +258,8 @@ class Tdata2Bundle extends OneFieldBundle
+ class TinfoBundle extends CSRBundle{
+   // Version isn't in version 0.13
+   val VERSION     = RO(31, 24).withReset(0.U)
+-  // only support mcontrol
+-  val MCONTROLEN  = RO(2).withReset(1.U)
+-}
+-
+-class TcontrolBundle extends CSRBundle{
+-  // M-mode previous trigger enable field
+-  val MPTE = RW(7).withReset(0.U)
+-  // M-mode trigger enable field
+-  val MTE  = RW(3).withReset(0.U)
++  // only support mcontrol6
++  val MCONTROL6EN = RO(6).withReset(1.U)
+ }
+ 
+ // Dscratch
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+index 555c2664ed6..5fd1056d748 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+@@ -547,7 +547,6 @@ class MisaBundle extends CSRBundle {
+ class MedelegBundle extends ExceptionBundle {
+   this.getALL.foreach(_.setRW().withReset(0.U))
+   this.EX_MCALL.setRO().withReset(0.U) // never delegate machine level ecall
+-  this.EX_BP.setRO().withReset(0.U)    // Parter 5.4 in debug spec. tcontrol is implemented. medeleg [3] is hard-wired to 0.
+   this.EX_DBLTRP.setRO().withReset(0.U)// double trap is not delegatable
+ }
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 056ca11360b..089443e1881 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -677,7 +677,6 @@ class NewCSR(implicit val p: Parameters) extends Module
+         in.sstatus := mstatus.sstatus
+         in.vsstatus := vsstatus.regOut
+         in.pcFromXtvec := trapHandleMod.io.out.pcFromXtvec
+-        in.tcontrol := tcontrol.regOut
+ 
+         in.satp  := satp.regOut
+         in.vsatp := vsatp.regOut
+@@ -708,7 +707,6 @@ class NewCSR(implicit val p: Parameters) extends Module
+     case in =>
+       in.mstatus := mstatus.regOut
+       in.mepc := mepc.regOut
+-      in.tcontrol := tcontrol.regOut
+       in.satp := satp.regOut
+       in.vsatp := vsatp.regOut
+       in.hgatp := hgatp.regOut
+@@ -973,6 +971,10 @@ class NewCSR(implicit val p: Parameters) extends Module
+     tdata1Wire
+   }}
+ 
++  val triggerCanRaiseBpExp = !(privState.isModeM && !mstatus.regOut.MIE ||
++    medeleg.regOut.EX_BP && privState.isModeHS && !mstatus.sstatus.SIE ||
++    medeleg.regOut.EX_BP && hedeleg.regOut.EX_BP && privState.isModeVS && !vsstatus.regOut.SIE)
++
+   val debugMod = Module(new Debug)
+   debugMod.io.in.trapInfo.valid            := hasTrap
+   debugMod.io.in.trapInfo.bits.trapVec     := trapVec.asUInt
+@@ -983,7 +985,6 @@ class NewCSR(implicit val p: Parameters) extends Module
+   debugMod.io.in.privState                 := privState
+   debugMod.io.in.debugMode                 := debugMode
+   debugMod.io.in.dcsr                      := dcsr.regOut
+-  debugMod.io.in.tcontrol                  := tcontrol.regOut
+   debugMod.io.in.tselect                   := tselect.regOut
+   debugMod.io.in.tdata1Vec                 := tdata1Vec
+   debugMod.io.in.tdata1Selected            := tdata1.rdata
+@@ -991,6 +992,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   debugMod.io.in.tdata1Update              := tdata1Update
+   debugMod.io.in.tdata2Update              := tdata2Update
+   debugMod.io.in.tdata1Wdata               := wdata
++  debugMod.io.in.triggerCanRaiseBpExp      := triggerCanRaiseBpExp
+ 
+   entryDebugMode := debugMod.io.out.hasDebugTrap && !debugMode
+ 
+@@ -1315,7 +1317,6 @@ class NewCSR(implicit val p: Parameters) extends Module
+     diffTriggerCSRState.tselect   := tselect.rdata
+     diffTriggerCSRState.tdata1    := tdata1.rdata
+     diffTriggerCSRState.tinfo     := tinfo.rdata
+-    diffTriggerCSRState.tcontrol  := tcontrol.rdata
+ 
+     val diffVecCSRState = DifftestModule(new DiffVecCSRState)
+     diffVecCSRState.coreid := hartId

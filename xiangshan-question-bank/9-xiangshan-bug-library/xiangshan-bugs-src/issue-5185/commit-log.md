@@ -1,0 +1,193 @@
+# Commit Log
+- Issue: #5185
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5185
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5185
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5185
+- Changed files: 7
+- Additions: 23
+- Deletions: 17
+
+## Files
+- `src/main/scala/xiangshan/cache/dcache/CtrlUnit.scala`
+- `src/main/scala/xiangshan/cache/mmu/Repeater.scala`
+- `src/main/scala/xiangshan/cache/mmu/TLBStorage.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala`
+- `src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala`
+- `src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala`
+- `src/main/scala/xiangshan/mem/vector/VSplit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/dcache/CtrlUnit.scala b/src/main/scala/xiangshan/cache/dcache/CtrlUnit.scala
+index 83f6f8caa81..470b7e11eb2 100644
+--- a/src/main/scala/xiangshan/cache/dcache/CtrlUnit.scala
++++ b/src/main/scala/xiangshan/cache/dcache/CtrlUnit.scala
+@@ -27,6 +27,7 @@ import freechips.rocketchip.interrupts._
+ import freechips.rocketchip.util._
+ import chisel3.experimental.SourceInfo
+ import xiangshan._
++import xiangshan.backend.datapath.NewPipelineConnect
+ 
+ case class L1CacheCtrlParams (
+   address: AddressSet,
+@@ -83,15 +84,15 @@ class CtrlUnit(params: L1CacheCtrlParams)(implicit p: Parameters) extends LazyMo
+     val delayRegs = RegInit(VecInit(Seq.fill(1)(0.U(params.regWidth.W))))
+     val maskRegs  = RegInit(VecInit(Seq.fill(DCacheBanks)(0.U(DCacheSRAMRowBits.W))))
+     val counterRegs = RegInit(VecInit(Seq.fill(1)(0.U(params.regWidth.W))))
+-
+-    io_pseudoError.zipWithIndex.foreach {
++    val pseudoError_gen = Wire(Vec(params.nSignalComps, DecoupledIO(Vec(DCacheBanks, new CtrlUnitSignalingBundle))))
++    pseudoError_gen.zipWithIndex.foreach {
+       case (inj, i) =>
+         val ctrlReg = ctrlRegs.head
+         val ctrlRegBundle = ctrlRegs.head.asTypeOf(new CtrlUnitCtrlBundle)
+         val delayReg = delayRegs.head
+         val counterReg = counterRegs.head
+ 
+-        require(log2Up(io_pseudoError.length) == ctrlRegBundle.comp.getWidth, "io_pseudoError must equal number of components!")
++        require(log2Up(pseudoError_gen.length) == ctrlRegBundle.comp.getWidth, "pseudoError_gen must equal number of components!")
+         inj.valid := ctrlRegBundle.ese && (ctrlRegBundle.comp === i.U) && (!ctrlRegBundle.ede || counterReg === 0.U)
+         inj.bits.zip(ctrlRegBundle.bank.asBools).zip(maskRegs).map {
+           case ((bankOut, bankEnable), mask) =>
+@@ -118,6 +119,13 @@ class CtrlUnit(params: L1CacheCtrlParams)(implicit p: Parameters) extends LazyMo
+         }
+     }
+ 
++    for (i <- 0 until params.nSignalComps) {
++      NewPipelineConnect(
++        pseudoError_gen(i), io_pseudoError(i), io_pseudoError(i).fire, false.B,
++        Option(s"CtrlUnitPseudoErrorPipelineConnect${i}")
++      )
++    }
++
+     def ctrlRegDesc(i: Int) =
+       RegFieldDesc(
+         name      = s"control_$i",
+diff --git a/src/main/scala/xiangshan/cache/mmu/Repeater.scala b/src/main/scala/xiangshan/cache/mmu/Repeater.scala
+index 2ab0feb1287..c3f939d4338 100644
+--- a/src/main/scala/xiangshan/cache/mmu/Repeater.scala
++++ b/src/main/scala/xiangshan/cache/mmu/Repeater.scala
+@@ -373,7 +373,7 @@ class PTWNewFilter(Width: Int, Size: Int, FenceDelay: Int)(implicit p: Parameter
+   val ptwResp = RegEnable(io.ptw.resp.bits, io.ptw.resp.fire)
+   val ptwResp_valid = Cat(filter.map(_.refill)).orR
+   filter.map(_.tlb.resp.ready := true.B)
+-  filter.map(_.ptw.resp.valid := GatedValidRegNext(io.ptw.resp.fire, init = false.B))
++  filter.map(_.ptw.resp.valid := RegNext(io.ptw.resp.fire, init = false.B))
+   filter.map(_.ptw.resp.bits := ptwResp)
+   filter.map(_.flush := flush)
+   filter.map(_.sfence := io.sfence)
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala b/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala
+index 53c3aaeb03f..d171e59e65b 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala
+@@ -176,7 +176,7 @@ class TLBFA(
+ 
+   val refill_vpn_reg = RegEnable(io.w.bits.data.s1.entry.tag, io.w.valid)
+   val refill_wayIdx_reg = RegEnable(io.w.bits.wayIdx, io.w.valid)
+-  when (GatedValidRegNext(io.w.valid)) {
++  when (RegNext(io.w.valid)) {
+     io.access.map { access =>
+       access.sets := get_set_idx(refill_vpn_reg, nSets)
+       access.touch_ways.valid := true.B
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala
+index 97b12a7061e..f4e4bd2f624 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala
+@@ -276,14 +276,13 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
+   val canEnqueue = io.enq.map(_.valid)
+   val cancelEnq = io.enq.map(enq => enq.bits.uop.robIdx.needFlush(io.redirect))
+   val needReplay = io.enq.map(enq => enq.bits.rep_info.need_rep)
+-  val hasExceptions = io.enq.map(enq => ExceptionNO.selectByFu(enq.bits.uop.exceptionVec, LduCfg).asUInt.orR && !enq.bits.tlbMiss)
+   val loadReplay = io.enq.map(enq => enq.bits.isLoadReplay)
+   val needEnqueue = VecInit((0 until LoadPipelineWidth).map(w => {
+-    canEnqueue(w) && !cancelEnq(w) && needReplay(w) && !hasExceptions(w)
++    canEnqueue(w) && !cancelEnq(w) && needReplay(w)
+   }))
+   val newEnqueue = Wire(Vec(LoadPipelineWidth, Bool()))
+   val canFreeVec = VecInit((0 until LoadPipelineWidth).map(w => {
+-    canEnqueue(w) && loadReplay(w) && (!needReplay(w) || hasExceptions(w))
++    canEnqueue(w) && loadReplay(w) && !needReplay(w)
+   }))
+ 
+   // select LoadPipelineWidth valid index.
+@@ -631,10 +630,7 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
+       needEnqueue(w) && enq.ready &&
+       allocated(enqIndex) && !enq.bits.isLoadReplay,
+       p"LoadQueueReplay: can not accept more load, check: ldu $w, robIdx $debug_robIdx!")
+-    XSError(
+-      needEnqueue(w) && enq.ready &&
+-      hasExceptions(w),
+-      p"LoadQueueReplay: The instruction has exception, it can not be replay, check: ldu $w, robIdx $debug_robIdx!")
++
+     when (needEnqueue(w) && enq.ready) {
+       freeList.io.doAllocate(w) := !enq.bits.isLoadReplay
+ 
+@@ -642,6 +638,7 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
+       allocated(enqIndex) := true.B
+       scheduled(enqIndex) := false.B
+       uop(enqIndex)       := enq.bits.uop
++      uop(enqIndex).exceptionVec := 0.U.asTypeOf(enq.bits.uop.exceptionVec)
+       vecReplay(enqIndex).isvec := enq.bits.isvec
+       vecReplay(enqIndex).isLastElem := enq.bits.isLastElem
+       vecReplay(enqIndex).is128bit := enq.bits.is128bit
+@@ -722,7 +719,7 @@ class LoadQueueReplay(implicit p: Parameters) extends XSModule
+     //
+     val schedIndex = enq.bits.schedIndex
+     when (enq.valid && enq.bits.isLoadReplay) {
+-      when (!needReplay(w) || hasExceptions(w)) {
++      when (!needReplay(w)) {
+         allocated(schedIndex) := false.B
+         freeMaskVec(schedIndex) := true.B
+       } .otherwise {
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 6d1e3df8088..4e97aa1244b 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -1322,7 +1322,8 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+                     s2_troublem
+ 
+   // need allocate new entry
+-  val s2_can_query = !(s2_dcache_fast_rep || s2_nuke) && s2_troublem
++  val s2_dcache_no_query = !s2_dcache_miss && (s2_bank_conflict || s2_wpu_pred_fail)
++  val s2_can_query = !(s2_dcache_no_query || s2_in.rep_info.nuke) && s2_troublem
+ 
+   val s2_data_fwded = s2_dcache_miss && s2_full_fwd
+ 
+@@ -1602,7 +1603,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+ 
+   s3_misalign_rep_cause := VecInit(s3_mab_sel_rep_cause.asBools)
+ 
+-  when (s3_exception || s3_hw_err || s3_rep_frm_fetch || s3_frm_mabuf) {
++  when (s3_rep_frm_fetch || s3_frm_mabuf) {
+     s3_replayqueue_rep_cause := 0.U.asTypeOf(s3_lrq_rep_info.cause.cloneType)
+   } .otherwise {
+     s3_replayqueue_rep_cause := VecInit(s3_lrq_sel_rep_cause.asBools)
+diff --git a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+index 1e07b8889c9..d460ff32b98 100644
+--- a/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
++++ b/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala
+@@ -778,7 +778,7 @@ class Sbuffer(implicit p: Parameters)
+     // ptag_matches uses paddr from dtlb, which is far from sbuffer
+     val ptag_matches = VecInit(widthMap(w => RegEnable(ptag(w), forward.valid) === RegEnable(getPTag(forward.paddr), forward.valid)))
+     val tag_matches = vtag_matches
+-    val tag_mismatch = GatedValidRegNext(forward.valid) && VecInit(widthMap(w =>
++    val tag_mismatch = RegNext(forward.valid) && VecInit(widthMap(w =>
+       GatedValidRegNext(vtag_matches(w)) =/= ptag_matches(w) && GatedValidRegNext((activeMask(w) || inflightMask(w)))
+     )).asUInt.orR
+     mismatch(i) := tag_mismatch
+diff --git a/src/main/scala/xiangshan/mem/vector/VSplit.scala b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+index 5f035dfa0ca..4ac5ffaa82c 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSplit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+@@ -258,7 +258,7 @@ class VSplitPipeline(isVStore: Boolean = false)(implicit p: Parameters) extends
+ //    XSError(vdIdxReg + 1.U === 0.U, s"Overflow! The number of vd should be less than 8\n")
+ //  }
+   // out connect
+-  io.out.valid          := s1_valid && io.toMergeBuffer.resp.valid && (activeNum =/= 0.U) // if activeNum == 0, this uop do nothing, can be killed.
++  io.out.valid          := s1_valid && io.toMergeBuffer.resp.valid // if activeNum == 0, this uop do nothing, can be killed.
+   io.out.bits           := s1_in
+   io.out.bits.uopOffset := uopOffset
+   io.out.bits.uopAddr   := s1_in.baseAddr + uopOffset
+```

@@ -1,0 +1,7 @@
+load breakpoint trigger matched
+s1 DCache kill       = 0
+s2 kill              = 1
+DCache hit           = 1
+replace_access.valid = 1
+access_flag.valid    = 1
+post-trap hit/miss   = depends on selected trigger-matched address

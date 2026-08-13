@@ -1,0 +1,7 @@
+when( A ) {
+  not_allow_refill = true.B
+  when (!p_hit_fast) {
+    need_gpa_wire := true.B
+  }
+}
+refill = B && !not_allow_refill

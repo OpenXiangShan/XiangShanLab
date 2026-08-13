@@ -1,0 +1,21 @@
+{
+  "number": 3709,
+  "title": "D extension instr `fle.d` bug.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/3709",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported"
+  ],
+  "author": "ha0lyu",
+  "created_at": "2024-10-10T05:58:19Z",
+  "updated_at": "2024-10-13T06:01:43Z",
+  "source_files": [
+    "issue-3709/source/runxs_files.zip",
+    "issue-3709/source/fle.d.log"
+  ],
+  "archive_files": [
+    "issue-3709/source/runxs_files.zip",
+    "issue-3709/source/fle.d.log"
+  ],
+  "has_comments": true
+}

@@ -1,0 +1,39 @@
+# Commit Log
+- Issue: #3898
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3898
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3898
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3898
+- Changed files: 1
+- Additions: 2
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/DretEvent.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/DretEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/DretEvent.scala
+index 15042240f74..2361a28206b 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/DretEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/DretEvent.scala
+@@ -4,7 +4,7 @@ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import xiangshan.backend.fu.NewCSR.CSRConfig.VaddrMaxWidth
+-import xiangshan.backend.fu.NewCSR.CSRDefines.{HgatpMode, PrivMode, SatpMode}
++import xiangshan.backend.fu.NewCSR.CSRDefines.{HgatpMode, PrivMode, SatpMode, VirtMode}
+ import xiangshan.backend.fu.NewCSR._
+ import xiangshan.AddrTransType
+ 
+@@ -57,7 +57,7 @@ class DretEventModule(implicit p: Parameters) extends Module with CSREventBase {
+   out.targetPc.valid        := valid
+ 
+   out.privState.bits.PRVM     := in.dcsr.PRV.asUInt
+-  out.privState.bits.V        := in.dcsr.V
++  out.privState.bits.V        := Mux(in.dcsr.PRV === PrivMode.M, VirtMode.Off.asUInt, in.dcsr.V.asUInt)
+   out.mstatus.bits.MPRV       := Mux(!out.privState.bits.isModeM, 0.U, in.mstatus.MPRV.asUInt)
+   out.debugMode.bits          := false.B
+   out.debugIntrEnable.bits    := true.B
+```

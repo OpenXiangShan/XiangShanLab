@@ -1,0 +1,38 @@
+# Commit Log
+- Issue: #6144
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6144
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6144
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6144
+- Changed files: 1
+- Additions: 3
+- Deletions: 4
+
+## Files
+- `src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala b/src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala
+index 11af41b41dc..2541cc59a29 100644
+--- a/src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala
++++ b/src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala
+@@ -82,13 +82,12 @@ class IfuUncacheUnit(implicit p: Parameters) extends IfuModule with IfuHelper {
+     uncacheFinish     := false.B
+   }
+ 
+-  // last instruction finish
+-  private val reqIsMmio = io.req.valid && io.req.bits.isMmio
+-
+   switch(uncacheState) {
+     is(UncacheFsmState.Idle) {
++      // pbmt.nc does not need to wait for last commit as it's idempotent area, while pbmt.io and (pbmt.pma && mmio) needs.
++      val shouldWait = io.req.bits.isMmio || Pbmt.isIO(io.req.bits.pbmt)
+       when(io.req.valid) {
+-        uncacheState := Mux(reqIsMmio, UncacheFsmState.WaitLastCommit, UncacheFsmState.SendReq)
++        uncacheState := Mux(shouldWait, UncacheFsmState.WaitLastCommit, UncacheFsmState.SendReq)
+         uncachePAddr := io.req.bits.paddr
+         isMmio       := io.req.bits.isMmio
+         itlbPbmt     := io.req.bits.pbmt
+```

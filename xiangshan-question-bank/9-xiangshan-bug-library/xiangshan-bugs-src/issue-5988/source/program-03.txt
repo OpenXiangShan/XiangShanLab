@@ -1,0 +1,7 @@
+  out/poc.bin
+  out/poc.elf
+  out/poc.ld
+  out/poc.txt
+  out/symbols.txt
+  out/static_proof.txt
+  out/verdict.txt

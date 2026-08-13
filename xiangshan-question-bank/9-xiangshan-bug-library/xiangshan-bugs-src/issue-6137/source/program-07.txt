@@ -1,0 +1,5 @@
+abtbEnable                  = 0
+abtb.s2_valid               = 1
+abtb.prediction.valid       = 1
+io.toFtq.prediction.fire    = 1
+abtb.debug_startPc         != bpu.s1_startPc

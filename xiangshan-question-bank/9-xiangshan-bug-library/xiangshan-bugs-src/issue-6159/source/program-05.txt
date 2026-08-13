@@ -1,0 +1,12 @@
+time                          = 8801
+table                         = 0
+abtb_enable                   = 0
+read_index                    = 0x160
+read_bank                     = 0
+read_bank_r_req_valid         = 1
+write_index                   = 0x20
+write_bank                    = 0
+write_bank_r_req_valid        = 1
+write_bank_w_req_valid        = 0
+force_write                   = 0
+write_success                 = 0

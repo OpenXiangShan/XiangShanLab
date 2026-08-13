@@ -1,0 +1,4 @@
+cd $NOOP_HOME
+./build/emu -i /testcase/gpf-htinst/build/gpf-htinst-riscv64-xs.elf \
+  --diff=$NOOP_HOME/ready-to-run/riscv64-nemu-interpreter-so \
+  -C 100000

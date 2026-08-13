@@ -1,0 +1,24 @@
+{
+  "number": 6295,
+  "title": "`vle32ff.v` corrupts destination vector register on Load Access Fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6295",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "lhb-sec",
+  "created_at": "2026-07-28T07:48:59Z",
+  "updated_at": "2026-08-04T04:00:36Z",
+  "source_files": [
+    "issue-6295/source/seeds_301.log",
+    "issue-6295/source/seeds_301.zip",
+    "issue-6295/source/program-01.txt",
+    "issue-6295/source/program-02.txt"
+  ],
+  "archive_files": [
+    "issue-6295/source/seeds_301.log",
+    "issue-6295/source/seeds_301.zip"
+  ],
+  "has_comments": true
+}

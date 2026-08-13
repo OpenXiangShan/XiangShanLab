@@ -1,0 +1,13 @@
+diff --git a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+index 53dc8736061..640c8fbe552 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+@@ -122,7 +122,7 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+   mem.foreach { entry =>
+     when(entry.valid &&
+       (backendRedirect.reduce(_ || _) && entry.bits.ftqIdx > backendRedirectPtr ||
+-        io.bpuEnqueue && entry.bits.ftqIdx === io.bpuEnqueuePtr)) {
++        io.bpuEnqueue && entry.bits.ftqIdx.value === io.bpuEnqueuePtr.value)) {
+       entry.bits.flushed := true.B
+     }
+   }

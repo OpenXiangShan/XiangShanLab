@@ -1,0 +1,8 @@
+  emu \
+  -C 11550 -b 0 -e 11550 \
+  -i cross16_multistore_forward.bin \
+  --no-diff \
+  --dump-wave-full \
+  --wave-path=cross16_repro_0_11550.vcd \
+  --force-dump-result \
+  > run_repro_0_11550.log 2>&1

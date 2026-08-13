@@ -1,0 +1,1 @@
+SECRETS="0 1" CYCLES=19000 WAVE_BEGIN=7800 WAVE_END=15000 bash run_sidechannel_poc.sh

@@ -1,0 +1,2 @@
+riscv64-unknown-elf-as -o "$OBJECT_FILE" "$ASM_FILE"
+riscv64-unknown-elf-ld -T "$LINKER_SCRIPT" -o "$NAME" "$OBJECT_FILE"

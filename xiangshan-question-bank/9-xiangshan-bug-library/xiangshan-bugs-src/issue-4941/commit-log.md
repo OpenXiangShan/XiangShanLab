@@ -1,0 +1,31 @@
+# Commit Log
+- Issue: #4941
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4941
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4941
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4941
+- Changed files: 1
+- Additions: 2
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/backend/rename/BusyTable.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/rename/BusyTable.scala b/src/main/scala/xiangshan/backend/rename/BusyTable.scala
+index 722b832c80d..8dc9f162538 100644
+--- a/src/main/scala/xiangshan/backend/rename/BusyTable.scala
++++ b/src/main/scala/xiangshan/backend/rename/BusyTable.scala
+@@ -88,7 +88,8 @@ class BusyTable(numReadPorts: Int, numWritePorts: Int, numPhyPregs: Int, pregWB:
+     case FpWB(_, _) => allWakeUp.filter{x => x.bits.params.writeFpRf && !x.bits.params.hasLoadExu}
+     case VfWB(_, _) => allWakeUp.filter(_.bits.params.writeVfRf)
+     case V0WB(_, _) => allWakeUp.filter(_.bits.params.writeV0Rf)
+-    case VlWB(_, _) => allWakeUp.filter(_.bits.params.writeVlRf)
++    // avoid load fast wakes, since load cancel signal not connected to vlbusytable, may have bug for vsetvli
++    case VlWB(_, _) => allWakeUp.filter(x => false)
+     case _ => throw new IllegalArgumentException(s"WbConfig ${pregWB} is not permitted")
+   }
+   val loadDependency = RegInit(0.U.asTypeOf(Vec(numPhyPregs, Vec(LoadPipelineWidth, UInt(LoadDependencyWidth.W)))))
+```

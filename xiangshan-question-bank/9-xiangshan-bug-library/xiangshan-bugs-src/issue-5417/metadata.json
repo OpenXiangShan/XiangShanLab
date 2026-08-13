@@ -1,0 +1,28 @@
+{
+  "number": 5417,
+  "title": "timing(abtb): change abtb sram to 32x112 for better timing",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5417",
+  "state": "closed",
+  "labels": [
+    "topic: timing",
+    "module: frontend"
+  ],
+  "author": "out-of-order55",
+  "created_at": "2025-12-23T05:09:39Z",
+  "updated_at": "2025-12-31T09:22:21Z",
+  "submitted_at": "2025-12-23",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5417/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

@@ -1,0 +1,4 @@
+mepc different at pc = 0x008000012c, right = 0x00000000800000c4, wrong = 0x0000000000000000
+mtval different at pc = 0x008000012c, right = 0x000000009e50b1d7, wrong = 0x0000000000000000
+mcause different at pc = 0x008000012c, right = 0x0000000000000002, wrong = 0x0000000000000000
+Core 0: ABORT at pc = 0x8000012c

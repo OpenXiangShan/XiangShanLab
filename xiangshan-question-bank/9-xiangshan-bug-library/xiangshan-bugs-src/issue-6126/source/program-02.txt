@@ -1,0 +1,4 @@
+0x8000006a: HLV.WU t1, (t0)
+0x80000078: beq t1,t2,0x8000008c <bug_loaded_secret>
+0x8000008c: li a0,94
+0x80000090: XS_EXIT

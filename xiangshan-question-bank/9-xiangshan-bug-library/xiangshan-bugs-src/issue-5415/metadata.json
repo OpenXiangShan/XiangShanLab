@@ -1,0 +1,28 @@
+{
+  "number": 5415,
+  "title": "fix(StoreUnit): fix multi-writeback when storeMisalignBuffer full",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5415",
+  "state": "closed",
+  "labels": [
+    "module: memory",
+    "topic: functionality"
+  ],
+  "author": "weidingliu",
+  "created_at": "2025-12-22T10:36:02Z",
+  "updated_at": "2025-12-25T06:21:46Z",
+  "submitted_at": "2025-12-22",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5415/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

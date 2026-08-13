@@ -1,0 +1,90 @@
+# Commit Log
+- Issue: #3457
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3457
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3457
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3457
+- Changed files: 3
+- Additions: 6
+- Deletions: 7
+
+## Files
+- `src/main/scala/xiangshan/backend/ctrlblock/RedirectGenerator.scala`
+- `src/main/scala/xiangshan/backend/datapath/DataPath.scala`
+- `src/main/scala/xiangshan/mem/mdp/StoreSet.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/ctrlblock/RedirectGenerator.scala b/src/main/scala/xiangshan/backend/ctrlblock/RedirectGenerator.scala
+index b323d8d09a8..9237193b70a 100644
+--- a/src/main/scala/xiangshan/backend/ctrlblock/RedirectGenerator.scala
++++ b/src/main/scala/xiangshan/backend/ctrlblock/RedirectGenerator.scala
+@@ -81,7 +81,5 @@ class RedirectGenerator(implicit p: Parameters) extends XSModule
+   io.memPredUpdate.ldpc := RegEnable(XORFold(real_pc(VAddrBits - 1, 1), MemPredPCWidth), s1_isReplay && s1_redirect_valid_reg)
+   // store pc is ready 1 cycle after s1_isReplay is judged
+   io.memPredUpdate.stpc := RegEnable(XORFold(store_pc(VAddrBits - 1, 1), MemPredPCWidth), s1_isReplay && s1_redirect_valid_reg)
+-  // disle mdp
+-  io.memPredUpdate := 0.U.asTypeOf(io.memPredUpdate)
+ 
+ }
+diff --git a/src/main/scala/xiangshan/backend/datapath/DataPath.scala b/src/main/scala/xiangshan/backend/datapath/DataPath.scala
+index b721309ab83..8697d5e92a7 100644
+--- a/src/main/scala/xiangshan/backend/datapath/DataPath.scala
++++ b/src/main/scala/xiangshan/backend/datapath/DataPath.scala
+@@ -576,7 +576,7 @@ class DataPathImp(override val wrapper: DataPath)(implicit p: Parameters, params
+         s1_data.fromIssueBundle(s0.bits) // no src data here
+         s1_addrOH := s0.bits.addrOH
+       }
+-      s0.ready := (s1_ready || !s1_valid) && notBlock && !s1_cancel && !s0_ldCancel && !s0_cancel
++      s0.ready := (s1_ready || !s1_valid) && notBlock && !s0_cancel
+       // IQ(s0) --[Ctrl]--> s1Reg ---------- end
+     }
+   }
+diff --git a/src/main/scala/xiangshan/mem/mdp/StoreSet.scala b/src/main/scala/xiangshan/mem/mdp/StoreSet.scala
+index 4a3a299fd7f..a2022dff87e 100644
+--- a/src/main/scala/xiangshan/mem/mdp/StoreSet.scala
++++ b/src/main/scala/xiangshan/mem/mdp/StoreSet.scala
+@@ -199,6 +199,7 @@ class SSIT(implicit p: Parameters) extends XSModule {
+   // for now we just use lowest bits of ldpc as store set id
+   val s2_ldSsidAllocate = XORFold(s2_mempred_update_req.ldpc, SSIDWidth)
+   val s2_stSsidAllocate = XORFold(s2_mempred_update_req.stpc, SSIDWidth)
++  val s2_allocSsid = Mux(s2_ldSsidAllocate < s2_stSsidAllocate, s2_ldSsidAllocate, s2_stSsidAllocate)
+   // both the load and the store have already been assigned store sets
+   // but load's store set ID is smaller
+   val s2_winnerSSID = Mux(s2_loadOldSSID < s2_storeOldSSID, s2_loadOldSSID, s2_storeOldSSID)
+@@ -237,13 +238,13 @@ class SSIT(implicit p: Parameters) extends XSModule {
+         update_ld_ssit_entry(
+           pc = s2_mempred_update_req.ldpc,
+           valid = true.B,
+-          ssid = s2_ldSsidAllocate,
++          ssid = s2_allocSsid,
+           strict = false.B
+         )
+         update_st_ssit_entry(
+           pc = s2_mempred_update_req.stpc,
+           valid = true.B,
+-          ssid = s2_stSsidAllocate,
++          ssid = s2_allocSsid,
+           strict = false.B
+         )
+       }
+@@ -253,7 +254,7 @@ class SSIT(implicit p: Parameters) extends XSModule {
+         update_st_ssit_entry(
+           pc = s2_mempred_update_req.stpc,
+           valid = true.B,
+-          ssid = s2_stSsidAllocate,
++          ssid = s2_ldSsidAllocate,
+           strict = false.B
+         )
+       }
+@@ -263,7 +264,7 @@ class SSIT(implicit p: Parameters) extends XSModule {
+         update_ld_ssit_entry(
+           pc = s2_mempred_update_req.ldpc,
+           valid = true.B,
+-          ssid = s2_ldSsidAllocate,
++          ssid = s2_stSsidAllocate,
+           strict = false.B
+         )
+       }
+```

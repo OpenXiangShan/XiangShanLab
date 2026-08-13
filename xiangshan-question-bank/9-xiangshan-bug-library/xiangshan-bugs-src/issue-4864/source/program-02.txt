@@ -1,0 +1,5 @@
+==============  Store Commit Event (Core 0)  ==============
+Mismatch for store commits 
+  REF commits addr 0x0000000080004258, data 0x8000000200046100, mask 0x00ff, pc 0x0000000000000000
+  DUT commits addr 0x0000000080004258, data 0x8000000200046100, mask 0x00ff, pc 0x0000000080001188, robidx 0x27
+Core 0: [31mABORT at pc = 0x800011b4

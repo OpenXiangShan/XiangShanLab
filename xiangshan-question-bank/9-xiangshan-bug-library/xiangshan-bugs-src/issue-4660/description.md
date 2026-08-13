@@ -1,0 +1,1 @@
+When the vector store that raised the exception is written back to the backend, the StoreQueue is too late to set the corresponding entries to `committed`, resulting in the `redirect` flush them, which results in the `vecExceptionFlag` being asserted due to the timeout not being cleared.

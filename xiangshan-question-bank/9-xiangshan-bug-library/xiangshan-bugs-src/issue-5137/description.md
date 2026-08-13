@@ -1,0 +1,161 @@
+### Before start
+
+- [x] I have read the [RISC-V ISA Manual](https://github.com/riscv/riscv-isa-manual) and this is not a RISC-V ISA question. 我已经阅读过 RISC-V 指令集手册，这不是一个指令集本身的问题。
+- [x] I have read the [XiangShan Documents](https://xiangshan-doc.readthedocs.io/zh_CN/latest). 我已经阅读过香山文档。
+- [x] I have searched the previous issues and did not find anything relevant. 我已经搜索过之前的 issue，并没有找到相关的。
+- [x] I have reviewed the commit messages from the relevant commit history. 我已经浏览过相关的提交历史和提交信息。
+- [x] I have reproduced the incorrect behaviors using the latest commit on the master branch. 我已经使用 master 分支最新的 commit 复现了不正确的行为。
+
+### Describe the bug
+
+The assembly file contains only one instruction:
+
+`lw t0, 0x0(s1)`
+
+
+However, XiangShan and NEMU show inconsistent behavior when executing it.
+
+XiangShan: raises a hardware error (mcause = 0x13, i.e., 19)
+
+NEMU: raises a load access fault (mcause = 0x5)
+
+According to the RISC-V specification, this case should result in a load access fault, not a hardware error. Therefore, XiangShan’s behavior appears to be incorrect.
+
+I found a similar issue in #5109, but in that case the mcause value differed, indicating a potentially related yet distinct root cause.
+
+### Expected behavior
+
+mcause = 0x5
+
+### To Reproduce
+
+Here are the commands
+
+```
+riscv64-unknown-elf-gcc -march=rv64imafdc -mabi=lp64d -nostartfiles -nostdlib -Wl,-e,_start -T link.ld -o test.elf test.S
+./emu -i test.elf --diff=nemu      
+```
+
+Here is the difftest result.
+```                                          
+Using simulated 32768B flash
+Core  0's Commit SHA is: 1f3fb10e4e, dirty: 0
+Using simulated 8386560MB RAM
+The image is asmfalse.elf
+ELF file detected and loading image from extracted elf file
+Loading 12 bytes at address 0x80000000 at offset 0x0
+The reference model is bench/nemu
+The first instruction of core 0 has commited. Difftest enabled.
+
+==============  In the last commit group  ==============
+the first commit instr pc of DUT is 0x0000000080000000
+the first commit instr pc of REF is 0x0000000080000000
+
+============== Commit Group Trace (Core 0) ==============
+commit group [00]: pc 0010000000 cmtcnt 1
+commit group [01]: pc 0010000004 cmtcnt 1
+commit group [02]: pc 0010000008 cmtcnt 1
+commit group [03]: pc 0080000000 cmtcnt 1 <--
+
+============== Commit Instr Trace ==============
+[00] commit pc 0000000010000000 inst 0010029b wen 1 dst 05 data 0000000000000001 idx 000 addiw   t0, zero, 1
+[01] commit pc 0000000010000004 inst 01f29293 wen 1 dst 05 data 0000000080000000 idx 001 slli    t0, t0, 31
+[02] commit pc 0000000010000008 inst 00028067 wen 0 dst 00 data 0000000000000000 idx 002 jr      t0
+[03] commit pc 0000000080000000 inst 0000100f wen 0 dst 00 data 0000000000000000 idx 003 fence.i
+[04] exception pc 0000000080000004 inst 0004a283 cause 0000000000000013 lw      t0, 0(s1) <--
+
+==============  REF Regs  ==============
+---------------- Intger Registers ----------------
+  $0: 0x0000000000000000   ra: 0x0000000000000000   sp: 0x0000000000000000   gp: 0x0000000000000000
+  tp: 0x0000000000000000   t0: 0x0000000080000000   t1: 0x0000000000000000   t2: 0x0000000000000000
+  s0: 0x0000000000000000   s1: 0x0000000000000000   a0: 0x0000000000000000   a1: 0x0000000000000000
+  a2: 0x0000000000000000   a3: 0x0000000000000000   a4: 0x0000000000000000   a5: 0x0000000000000000
+  a6: 0x0000000000000000   a7: 0x0000000000000000   s2: 0x0000000000000000   s3: 0x0000000000000000
+  s4: 0x0000000000000000   s5: 0x0000000000000000   s6: 0x0000000000000000   s7: 0x0000000000000000
+  s8: 0x0000000000000000   s9: 0x0000000000000000  s10: 0x0000000000000000  s11: 0x0000000000000000
+  t3: 0x0000000000000000   t4: 0x0000000000000000   t5: 0x0000000000000000   t6: 0x0000000000000000
+---------------- Float Registers ----------------
+ ft0: 0xffb13fd92b970393  ft1: 0xd3fd9e56b4cfd378  ft2: 0x3761108f2250ff45  ft3: 0xee3e53911e3fabdd
+ ft4: 0x2ae294e057e1a655  ft5: 0x5a408fbb815597a2  ft6: 0xbde11304946cbe8a  ft7: 0xb0561421ebffb4cb
+ fs0: 0x9fe3ca75d2790f66  fs1: 0xe8c291e4313bc324  fa0: 0x7fbaadbccf75b048  fa1: 0xa1b15b5523762ee0
+ fa2: 0x1004e8217a67005f  fa3: 0x264f726096534419  fa4: 0x698aea830db1268b  fa5: 0x6803343fc51f97dc
+ fa6: 0x41feec561a072aea  fa7: 0x549ef30aa47b7ff6  fs2: 0x50b1852cfffe9763  fs3: 0x3e4ab82206f8b9fa
+ fs4: 0x27265619b566cd03  fs5: 0x933cd2f8d6519dba  fs6: 0xd6da3261480cd9f5  fs7: 0x9f655a01b5f0d1e9
+ fs8: 0xea7d2e2464e60373  fs9: 0x30cf3efaa16885c6 fs10: 0x6bfa19469770274a fs11: 0x579913a4ffcc97b6
+ ft8: 0xbf4cf95723f24771  ft9: 0x881e08940813e8f1 ft10: 0xea650d9449a06b9e ft11: 0x316afe18c4438986
+ fcsr: 0x0000000000000000 fflags: 0x0000000000000000 frm: 0x0000000000000000
+---------------- Privileged CSRs ----------------
+pc: 0x0000000000000000  privilege mode: M (mode: 3  v: 0  debug: 0)
+   mstatus: 0x0000040a00001800   sstatus: 0x0000000200000000  vsstatus: 0x0000000200000000
+   hstatus: 0x0000000200000000  mnstatus: 0x0000000000000008
+    mcause: 0x0000000000000005      mepc: 0x0000000080000004     mtval: 0x0000000000000000
+    scause: 0x0000000000000000      sepc: 0x0000000000000000     stval: 0x0000000000000000
+   vscause: 0x0000000000000000     vsepc: 0x0000000000000000    vstval: 0x0000000000000000
+   mncause: 0x0000000000000000     mnepc: 0x0000000000000000 mnscratch: 0x0000000000000000
+    mtval2: 0x0000000000000000     htval: 0x0000000000000000
+    mtinst: 0x0000000000000000    htinst: 0x0000000000000000
+  mscratch: 0xb73895f673ec9c6b  sscratch: 0xd59fdbb3a7dfb322 vsscratch: 0x725475e0fe97c948
+     mtvec: 0x0000000000000000     stvec: 0x0000000000000000    vstvec: 0x0000000000000000
+       mip: 0x0000000000000000       mie: 0x0000000000000000
+   mideleg: 0x0000000000001444   medeleg: 0x0000000000000000
+   hideleg: 0x0000000000000000   hedeleg: 0x0000000000000000
+      satp: 0x0000000000000000     hgatp: 0x0000000000000000     vsatp: 0x0000000000000000
+ mcounteren: 0x0000000000000000 scounteren: 0x0000000000000000 hcounteren: 0x0000000000000000
+  miselect: 0x0000000000000000  siselect: 0x0000000000000000 vsiselect: 0x0000000000000000
+     mireg: 0x0000000000000000     sireg: 0x0000000000000000    vsireg: 0x0000000000000000
+     mtopi: 0x0000000000000000     stopi: 0x0000000000000000    vstopi: 0x0000000000000000
+     mvien: 0x0000000000000000     hvien: 0x0000000000000000      mvip: 0x0000000000000000
+    mtopei: 0x0000000000000000    stopei: 0x0000000000000000   vstopei: 0x0000000000000000
+    hvictl: 0x0000000000000000  hviprio1: 0x0000000000000000  hviprio2: 0x0000000000000000
+---------------- PMP CSRs ----------------
+pmp: 16 entries active, details:
+ 0: cfg:0x00 addr:0x0000000000000000| 1: cfg:0x00 addr:0x0000000000000000
+ 2: cfg:0x00 addr:0x0000000000000000| 3: cfg:0x00 addr:0x0000000000000000
+ 4: cfg:0x00 addr:0x0000000000000000| 5: cfg:0x00 addr:0x0000000000000000
+ 6: cfg:0x00 addr:0x0000000000000000| 7: cfg:0x00 addr:0x0000000000000000
+ 8: cfg:0x00 addr:0x0000000000000000| 9: cfg:0x00 addr:0x0000000000000000
+10: cfg:0x00 addr:0x0000000000000000|11: cfg:0x00 addr:0x0000000000000000
+12: cfg:0x00 addr:0x0000000000000000|13: cfg:0x00 addr:0x0000000000000000
+14: cfg:0x00 addr:0x0000000000000000|15: cfg:0x00 addr:0x0000000000000000
+---------------- Vector Registers ----------------
+v0 : 0x05402274ce6f8a45_934bb4fb540676c2  v1 : 0xf6a6f49dcce80f36_a58c43dd3b7d7062
+v2 : 0x4c8a980c25a6ff55_c2b35143117caded  v3 : 0xb294bd1412c7b10c_df6581b46114e773
+v4 : 0xd9314716442e7d48_cc43faa81068e715  v5 : 0x0111de3c242fd682_eac054f23fd7059f
+v6 : 0x0c07aad0f6d15c9e_025d5675e739b96b  v7 : 0xe1088add3a9ee51a_4987da965fab5d3b
+v8 : 0xdaa1a4fb5f957fbf_7c35512849f3deee  v9 : 0x9a18450a1ca61987_daaca523d2b1f69c
+v10: 0xfc48f7391d6e4f9f_b521ff92ea4e6e93  v11: 0x85528cb29c39259e_4b095bb4adcb3c9e
+v12: 0x271e002bdfaa7c8b_65da3bbabf9fbc77  v13: 0xe5ccfc5f57102565_f362bd493d8b026a
+v14: 0xf05c6f70357cbde5_1f747b350af68ab8  v15: 0xc77dc304ad730aa8_cf64c8405780f219
+v16: 0x39660e3d8fa29a2a_4eafe12ce6619716  v17: 0x2d4ec891653d29cc_f553c64416c83f8c
+v18: 0xfd8df77588230703_b59f8d05748ebef4  v19: 0x96421c3b09a36c13_f18cd71244287292
+v20: 0xb341e3b54e6eb1ef_e6f257f0f20d235a  v21: 0xbcafb12a7758a387_952b916319cca079
+v22: 0x73f3ec566eb3127b_65b1eb7633e3fa1b  v23: 0x5a9034a41a02e071_8c76e7f36556507d
+v24: 0x22368c86e6da19f2_01670e1b14ce947d  v25: 0x538754299ccc7dbb_ac420cc3a5976753
+v26: 0xbd8110d79b2529ed_f19d30c1154262bf  v27: 0x375b7eceaf71b1cd_a4ed8fc9c52d3699
+v28: 0x435244a8db678bdc_21adf37f0be094fc  v29: 0xb854e54a0874ddb4_1ae37ceaf91471e3
+v30: 0xc610d0166d05151b_815e237611abbf70  v31: 0xe249b20295161bf1_c66cc2766fc712a6
+  vtype: 0x8000000000000000 vstart: 0x0000000000000000  vxsat: 0x0000000000000000
+   vxrm: 0x0000000000000002     vl: 0x0000000000000000   vcsr: 0x0000000000000004
+---------------- Triggers ----------------
+ tselect: 0x0000000000000000
+ 0: tdata1: 0xf000000000000000 tdata2: 0x0000000000000000
+ 1: tdata1: 0xf000000000000000 tdata2: 0x00005b5ebf494460
+ 2: tdata1: 0xf000000000000000 tdata2: 0x0000000000000030
+ 3: tdata1: 0xf000000000000000 tdata2: 0x00007ffe77e874f8
+ 4: tdata1: 0x00005b5ebf48cc00 tdata2: 0x00005b5ebf48d7b0
+privilegeMode: 3
+ mcause different at pc = 0x0080000000, right= 0x0000000000000005, wrong = 0x0000000000000013
+```
+
+### Environment
+
+- XiangShan branch: master(main)
+- XiangShan commit id: 1f3fb10e4e
+- XiangShan config: DefaultConfig
+- NEMU commit id: d3b94c7302
+- SPIKE commit id: /
+
+
+### Additional context
+
+[test.zip](https://github.com/user-attachments/files/23051440/test.zip)

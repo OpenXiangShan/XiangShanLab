@@ -1,0 +1,13 @@
+time 16902/16903:
+  backend redirect target = 0x80000094
+  taken = 1
+  isMisPred = 1
+
+time 16928/16929:
+  TOP.SimTop.cpu.l_soc.core_with_l2.core.backend._inner_intRegion_io_wbDataPathToCtrlBlock_writeback_6_valid             = 1
+  TOP.SimTop.cpu.l_soc.core_with_l2.core.backend._inner_intRegion_io_wbDataPathToCtrlBlock_writeback_6_bits_robIdx_flag  = 0
+  TOP.SimTop.cpu.l_soc.core_with_l2.core.backend._inner_intRegion_io_wbDataPathToCtrlBlock_writeback_6_bits_data         = 0x0000000000000bad
+
+time 17000/17001:
+  TOP.SimTop.cpu.l_soc.core_with_l2.core.backend.inner_ctrlBlock._rob_io_commits_commitValid_5     = 1
+  TOP.SimTop.cpu.l_soc.core_with_l2.core.backend.inner_ctrlBlock._rob_io_commits_robIdx_5_flag     = 0

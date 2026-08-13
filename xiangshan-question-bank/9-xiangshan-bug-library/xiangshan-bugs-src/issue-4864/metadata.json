@@ -1,0 +1,24 @@
+{
+  "number": 4864,
+  "title": "`mcause` error when load data",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4864",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported",
+    "topic: functionality"
+  ],
+  "author": "ha0lyu",
+  "created_at": "2025-07-04T16:09:04Z",
+  "updated_at": "2026-06-10T02:10:48Z",
+  "source_files": [
+    "issue-4864/source/test.zip",
+    "issue-4864/source/test.log",
+    "issue-4864/source/program-01.txt",
+    "issue-4864/source/program-02.txt"
+  ],
+  "archive_files": [
+    "issue-4864/source/test.zip",
+    "issue-4864/source/test.log"
+  ],
+  "has_comments": true
+}

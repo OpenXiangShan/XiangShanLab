@@ -1,0 +1,10 @@
+mstatus different at pc = 0x0000000000, right = 0x8000040a00007e00, wrong = 0x8000000a00006600
+   mepc different at pc = 0x0000000000, right = 0x00000000800002ec, wrong = 0x0000000000000000
+  mtval different at pc = 0x0000000000, right = 0x000000078fffffbf, wrong = 0x0000000000000000
+ mcause different at pc = 0x0000000000, right = 0x0000000000000005, wrong = 0x0000000000000000
+v20_low different at pc = 0x0000000000, right = 0x3a5df9a517eb24b9, wrong = 0x0000800000000000
+v21_low different at pc = 0x0000000000, right = 0xe456d0e1e625c56a, wrong = 0x0000000000000000
+v22_low different at pc = 0x0000000000, right = 0xffffffffffffffff, wrong = 0xc558268a00000000
+v23_low different at pc = 0x0000000000, right = 0xffffffffffffffff, wrong = 0x2bedf3b600000000
+v24_low different at pc = 0x0000000000, right = 0xbecfecf6cd7f0202, wrong = 0xce97988900000000
+Core 0: ABORT at pc = 0x0

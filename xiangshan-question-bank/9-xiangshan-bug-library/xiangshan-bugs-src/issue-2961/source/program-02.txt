@@ -1,0 +1,1 @@
+ make emu NUM_CORES=4 MFC=1 -j `nproc`

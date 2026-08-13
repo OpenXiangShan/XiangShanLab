@@ -1,0 +1,5 @@
+The first instruction of core 0 has commited. Difftest enabled.
+[src/memory/paddr.c:239,check_paddr] isa pma check failed
+[src/memory/paddr.c:239,check_paddr] isa pma check failed
+Core 0 dump: HIT CRITICAL ERROR: please check if software cause a double trap.
+Core 0: HIT GOOD TRAP at pc = 0xe

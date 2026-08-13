@@ -1,0 +1,194 @@
+# Commit Log
+- Issue: #3795
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3795
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3795
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3795
+- Changed files: 10
+- Additions: 31
+- Deletions: 20
+
+## Files
+- `src/main/scala/xiangshan/Parameters.scala`
+- `src/main/scala/xiangshan/backend/GPAMem.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/frontend/IFU.scala`
+- `src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala`
+- `src/main/scala/xiangshan/frontend/icache/IPrefetch.scala`
+- `src/main/scala/xiangshan/frontend/icache/WayLookup.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index e911b0798c0..f5d7f53f617 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -68,6 +68,7 @@ case class XSCoreParameters
+   HasICache: Boolean = true,
+   HasDCache: Boolean = true,
+   AddrBits: Int = 64,
++  PAddrBitsMax: Int = 56,   // The bits of physical address from Sv39/Sv48/Sv57 virtual address translation.
+   VAddrBitsSv39: Int = 39,
+   GPAddrBitsSv39x4: Int = 41,
+   VAddrBitsSv48: Int = 48,
+@@ -593,6 +594,7 @@ trait HasXSParameter {
+   def HasIcache = coreParams.HasICache
+   def HasDcache = coreParams.HasDCache
+   def AddrBits = coreParams.AddrBits // AddrBits is used in some cases
++  def PAddrBitsMax = coreParams.PAddrBitsMax
+   def GPAddrBitsSv39x4 = coreParams.GPAddrBitsSv39x4
+   def GPAddrBitsSv48x4 = coreParams.GPAddrBitsSv48x4
+   def GPAddrBits = {
+diff --git a/src/main/scala/xiangshan/backend/GPAMem.scala b/src/main/scala/xiangshan/backend/GPAMem.scala
+index 0cf5d4de6b5..a16ba9acc7f 100644
+--- a/src/main/scala/xiangshan/backend/GPAMem.scala
++++ b/src/main/scala/xiangshan/backend/GPAMem.scala
+@@ -41,7 +41,7 @@ class GPAMemImp(override val wrapper: GPAMem)(implicit p: Parameters) extends La
+ }
+ 
+ class GPAMemEntry(implicit val p: Parameters) extends Bundle with HasXSParameter {
+-  val gpaddr = UInt(XLEN.W)
++  val gpaddr = UInt(PAddrBitsMax.W)
+   val isForVSnonLeafPTE = Bool()
+ }
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+index 7b9ce4e6704..32446f57334 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+@@ -117,7 +117,7 @@ trait CSREventBase {
+ class TrapEntryEventInput(implicit val p: Parameters) extends Bundle with HasXSParameter {
+   val causeNO = Input(new CauseBundle)
+   val trapPc = Input(UInt(VaddrMaxWidth.W))
+-  val trapPcGPA = Input(UInt(GPAddrBits.W))
++  val trapPcGPA = Input(UInt(PAddrBitsMax.W))
+   val trapInst = Input(ValidIO(UInt(InstWidth.W)))
+   val fetchMalTval = Input(UInt(XLEN.W))
+   val isCrossPageIPF = Input(Bool())
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+index 0c6597d7335..aa47bb2572c 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+@@ -48,7 +48,7 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+     in.trapPc,
+   )
+ 
+-  private val trapPCGPA = SignExt(in.trapPcGPA, XLEN)
++  private val trapPCGPA = in.trapPcGPA
+ 
+   private val trapMemVA = in.memExceptionVAddr
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+index 328d8752580..1c69e078644 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+@@ -46,7 +46,7 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+     in.trapPc,
+   )
+ 
+-  private val trapPCGPA = SignExt(in.trapPcGPA, XLEN)
++  private val trapPCGPA = in.trapPcGPA
+ 
+   private val trapMemVA = in.memExceptionVAddr
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 02c885c6dc3..a15f31324c3 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -136,7 +136,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+     val fromRob = Input(new Bundle {
+       val trap = ValidIO(new Bundle {
+         val pc = UInt(VaddrMaxWidth.W)
+-        val pcGPA = UInt(VaddrMaxWidth.W)
++        val pcGPA = UInt(PAddrBitsMax.W)
+         val instr = UInt(InstWidth.W)
+         val trapVec = UInt(64.W)
+         val isFetchBkpt = Bool()
+diff --git a/src/main/scala/xiangshan/frontend/IFU.scala b/src/main/scala/xiangshan/frontend/IFU.scala
+index 2343288a176..cf6f486a703 100644
+--- a/src/main/scala/xiangshan/frontend/IFU.scala
++++ b/src/main/scala/xiangshan/frontend/IFU.scala
+@@ -636,11 +636,12 @@ class NewIFU(implicit p: Parameters) extends XSModule
+   }
+ 
+   /*** MMIO State Machine***/
+-  val f3_mmio_data                  = Reg(Vec(2, UInt(16.W)))
+-  val mmio_is_RVC                   = RegInit(false.B)
+-  val mmio_resend_addr              = RegInit(0.U(PAddrBits.W))
+-  val mmio_resend_exception         = RegInit(0.U(ExceptionType.width.W))
+-  val mmio_resend_gpaddr            = RegInit(0.U(GPAddrBits.W))
++  val f3_mmio_data          = Reg(Vec(2, UInt(16.W)))
++  val mmio_is_RVC           = RegInit(false.B)
++  val mmio_resend_addr      = RegInit(0.U(PAddrBits.W))
++  val mmio_resend_exception = RegInit(0.U(ExceptionType.width.W))
++  // NOTE: we dont use GPAddrBits here, refer to ICacheMainPipe.scala L43-48 and PR#3795
++  val mmio_resend_gpaddr            = RegInit(0.U(PAddrBitsMax.W))
+   val mmio_resend_isForVSnonLeafPTE = RegInit(false.B)
+ 
+   // last instuction finish
+diff --git a/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala b/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala
+index 55c83c81bf3..24a4c85ffd5 100644
+--- a/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala
++++ b/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala
+@@ -37,15 +37,21 @@ class ICacheMainPipeReq(implicit p: Parameters) extends ICacheBundle {
+ }
+ 
+ class ICacheMainPipeResp(implicit p: Parameters) extends ICacheBundle {
+-  val vaddr             = UInt(VAddrBits.W)
+-  val data              = UInt(blockBits.W)
+-  val paddr             = UInt(PAddrBits.W)
+-  val gpaddr            = UInt(GPAddrBits.W)
++  val vaddr            = UInt(VAddrBits.W)
++  val data             = UInt(blockBits.W)
++  val paddr            = UInt(PAddrBits.W)
++  val exception        = UInt(ExceptionType.width.W)
++  val pmp_mmio         = Bool()
++  val itlb_pbmt        = UInt(Pbmt.width.W)
++  val backendException = Bool()
++  /* NOTE: GPAddrBits(=50bit) is not enough for gpaddr here, refer to PR#3795
++   * Sv48*4 only allows 50bit gpaddr, when software violates this requirement
++   * it needs to fill the mtval2 register with the full XLEN(=64bit) gpaddr,
++   * PAddrBitsMax(=56bit currently) is required for the frontend datapath due to the itlb ppn length limitation
++   * (cases 56<x<=64 are handled by the backend datapath)
++   */
++  val gpaddr            = UInt(PAddrBitsMax.W)
+   val isForVSnonLeafPTE = Bool()
+-  val exception         = UInt(ExceptionType.width.W)
+-  val pmp_mmio          = Bool()
+-  val itlb_pbmt         = UInt(Pbmt.width.W)
+-  val backendException  = Bool()
+ }
+ 
+ class ICacheMainPipeBundle(implicit p: Parameters) extends ICacheBundle {
+diff --git a/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala b/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala
+index 94c1d3221c9..dfea922ea2f 100644
+--- a/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala
++++ b/src/main/scala/xiangshan/frontend/icache/IPrefetch.scala
+@@ -201,7 +201,8 @@ class IPrefetchPipe(implicit p: Parameters) extends IPrefetchModule {
+   val s1_req_gpaddr_tmp = VecInit((0 until PortNumber).map(i =>
+     ResultHoldBypass(
+       valid = tlb_valid_pulse(i),
+-      init = 0.U.asTypeOf(fromITLB(i).bits.gpaddr(0)),
++      // NOTE: we dont use GPAddrBits or XLEN here, refer to ICacheMainPipe.scala L43-48 and PR#3795
++      init = 0.U(PAddrBitsMax.W),
+       data = fromITLB(i).bits.gpaddr(0)
+     )
+   ))
+diff --git a/src/main/scala/xiangshan/frontend/icache/WayLookup.scala b/src/main/scala/xiangshan/frontend/icache/WayLookup.scala
+index 94b7b050872..5acc6745331 100644
+--- a/src/main/scala/xiangshan/frontend/icache/WayLookup.scala
++++ b/src/main/scala/xiangshan/frontend/icache/WayLookup.scala
+@@ -39,7 +39,8 @@ class WayLookupEntry(implicit p: Parameters) extends ICacheBundle {
+ }
+ 
+ class WayLookupGPFEntry(implicit p: Parameters) extends ICacheBundle {
+-  val gpaddr:            UInt = UInt(GPAddrBits.W)
++  // NOTE: we dont use GPAddrBits here, refer to ICacheMainPipe.scala L43-48 and PR#3795
++  val gpaddr:            UInt = UInt(PAddrBitsMax.W)
+   val isForVSnonLeafPTE: Bool = Bool()
+ }
+```

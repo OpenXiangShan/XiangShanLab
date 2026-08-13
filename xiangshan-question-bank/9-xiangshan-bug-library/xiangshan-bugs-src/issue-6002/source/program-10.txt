@@ -1,0 +1,8 @@
+store nuke valid = 1
+store paddr      = 0x8000108c
+store mask       = 0xf000
+store matchType  = OctaWord
+load paddr       = 0x80001090
+load mask        = 0x000f
+store older      = 1
+rollback/nuke    = 0

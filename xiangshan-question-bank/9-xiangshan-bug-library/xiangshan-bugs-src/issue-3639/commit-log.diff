@@ -1,0 +1,622 @@
+diff --git a/src/main/scala/xiangshan/L2Top.scala b/src/main/scala/xiangshan/L2Top.scala
+index b7a5a93806e..741222be352 100644
+--- a/src/main/scala/xiangshan/L2Top.scala
++++ b/src/main/scala/xiangshan/L2Top.scala
+@@ -207,7 +207,9 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+       l2.io.l2_tlb_req.resp.bits.paddr.head := io.l2_tlb_req.resp.bits.paddr.head
+       l2.io.l2_tlb_req.resp.bits.pbmt := io.l2_tlb_req.resp.bits.pbmt.head
+       l2.io.l2_tlb_req.resp.bits.miss := io.l2_tlb_req.resp.bits.miss
+-      l2.io.l2_tlb_req.resp.bits.excp.head <> io.l2_tlb_req.resp.bits.excp.head
++      l2.io.l2_tlb_req.resp.bits.excp.head.gpf := io.l2_tlb_req.resp.bits.excp.head.gpf
++      l2.io.l2_tlb_req.resp.bits.excp.head.pf := io.l2_tlb_req.resp.bits.excp.head.pf
++      l2.io.l2_tlb_req.resp.bits.excp.head.af := io.l2_tlb_req.resp.bits.excp.head.af
+       l2.io.l2_tlb_req.pmp_resp.ld := io.l2_pmp_resp.ld
+       l2.io.l2_tlb_req.pmp_resp.st := io.l2_pmp_resp.st
+       l2.io.l2_tlb_req.pmp_resp.instr := io.l2_pmp_resp.instr
+diff --git a/src/main/scala/xiangshan/backend/MemBlock.scala b/src/main/scala/xiangshan/backend/MemBlock.scala
+index ea92f330dc6..72fc2ee6702 100644
+--- a/src/main/scala/xiangshan/backend/MemBlock.scala
++++ b/src/main/scala/xiangshan/backend/MemBlock.scala
+@@ -35,7 +35,7 @@ import xiangshan.backend.exu.MemExeUnit
+ import xiangshan.backend.fu._
+ import xiangshan.backend.fu.FuType._
+ import xiangshan.backend.rob.{RobDebugRollingIO, RobPtr}
+-import xiangshan.backend.fu.util.SdtrigExt
++import xiangshan.backend.fu.util.{HasCSRConst, SdtrigExt}
+ import xiangshan.cache._
+ import xiangshan.cache.mmu._
+ import xiangshan.mem._
+@@ -260,6 +260,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   with HasL1PrefetchSourceParameter
+   with HasCircularQueuePtrHelper
+   with HasMemBlockParameters
++  with HasTlbConst
++  with HasCSRConst
+   with SdtrigExt
+ {
+   val io = IO(new Bundle {
+@@ -1641,11 +1643,14 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     loadMisalignBuffer.io.overwriteExpBuf.vaddr,
+     storeMisalignBuffer.io.overwriteExpBuf.vaddr
+   )
++  val misalignBufExceptionIsHyper = Mux(loadMisalignBuffer.io.overwriteExpBuf.valid,
++    loadMisalignBuffer.io.overwriteExpBuf.isHyper,
++    storeMisalignBuffer.io.overwriteExpBuf.isHyper
++  )
+   val misalignBufExceptionGpaddr = Mux(loadMisalignBuffer.io.overwriteExpBuf.valid,
+     loadMisalignBuffer.io.overwriteExpBuf.gpaddr,
+     storeMisalignBuffer.io.overwriteExpBuf.gpaddr
+   )
+-
+   val misalignBufExceptionIsForVSnonLeafPTE = Mux(loadMisalignBuffer.io.overwriteExpBuf.valid,
+     loadMisalignBuffer.io.overwriteExpBuf.isForVSnonLeafPTE,
+     storeMisalignBuffer.io.overwriteExpBuf.isForVSnonLeafPTE
+@@ -1665,7 +1670,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   val vSegmentExceptionGPAddress = RegEnable(vSegmentUnit.io.exceptionInfo.bits.gpaddr, vSegmentUnit.io.exceptionInfo.valid)
+   val atomicsExceptionIsForVSnonLeafPTE = RegEnable(atomicsUnit.io.exceptionInfo.bits.isForVSnonLeafPTE, atomicsUnit.io.exceptionInfo.valid)
+   val vSegmentExceptionIsForVSnonLeafPTE = RegEnable(vSegmentUnit.io.exceptionInfo.bits.isForVSnonLeafPTE, vSegmentUnit.io.exceptionInfo.valid)
+-  io.mem_to_ooo.lsqio.vaddr := RegNext(Mux(
++
++  val exceptionVaddr = Mux(
+     atomicsException,
+     atomicsExceptionAddress,
+     Mux(misalignBufExceptionOverwrite,
+@@ -1675,7 +1681,64 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+         lsq.io.exceptionAddr.vaddr
+       )
+     )
+-  ))
++  )
++  // whether vaddr need ext or is hyper inst:
++  // VaNeedExt: atomicsException -> false; misalignBufExceptionOverwrite -> true; vSegmentException -> false
++  // IsHyper: atomicsException -> false; vSegmentException -> false
++  val exceptionVaNeedExt = !atomicsException &&
++    (misalignBufExceptionOverwrite ||
++      (!vSegmentException && lsq.io.exceptionAddr.vaNeedExt))
++  val exceptionIsHyper = !atomicsException &&
++    (misalignBufExceptionOverwrite && misalignBufExceptionIsHyper ||
++      (!vSegmentException && lsq.io.exceptionAddr.isHyper && !misalignBufExceptionOverwrite))
++
++  def GenExceptionVa(mode: UInt, isVirt: Bool, vaNeedExt: Bool,
++                     satp: TlbSatpBundle, vsatp: TlbSatpBundle, hgatp: TlbHgatpBundle,
++                     vaddr: UInt) = {
++    require(VAddrBits >= 50)
++
++    val Sv39 = satp.mode === 8.U
++    val Sv48 = satp.mode === 9.U
++    val Sv39x4 = vsatp.mode === 8.U || hgatp.mode === 8.U
++    val Sv48x4 = vsatp.mode === 9.U || hgatp.mode === 9.U
++    val vmEnable = !isVirt && (Sv39 || Sv48) && (mode < ModeM)
++    val s2xlateEnable = isVirt && (Sv39x4 || Sv48x4) && (mode < ModeM)
++
++    val s2xlate = MuxCase(noS2xlate, Seq(
++      !isVirt                                    -> noS2xlate,
++      (vsatp.mode =/= 0.U && hgatp.mode =/= 0.U) -> allStage,
++      (vsatp.mode === 0.U)                       -> onlyStage2,
++      (hgatp.mode === 0.U)                       -> onlyStage1
++    ))
++    val onlyS2 = s2xlate === onlyStage2
++
++    val bareAddr   = ZeroExt(vaddr(PAddrBits - 1, 0), XLEN)
++    val sv39Addr   = SignExt(vaddr.take(39), XLEN)
++    val sv39x4Addr = ZeroExt(vaddr.take(39 + 2), XLEN)
++    val sv48Addr   = SignExt(vaddr.take(48), XLEN)
++    val sv48x4Addr = ZeroExt(vaddr.take(48 + 2), XLEN)
++
++    val ExceptionVa = Wire(UInt(XLEN.W))
++    when (vaNeedExt) {
++      ExceptionVa := Mux1H(Seq(
++        (!(vmEnable || s2xlateEnable)) -> bareAddr,
++        (!onlyS2 && (Sv39 || Sv39x4))  -> sv39Addr,
++        (!onlyS2 && (Sv48 || Sv48x4))  -> sv48Addr,
++        ( onlyS2 && (Sv39 || Sv39x4))  -> sv39x4Addr,
++        ( onlyS2 && (Sv48 || Sv48x4))  -> sv48x4Addr,
++      ))
++    } .otherwise {
++      ExceptionVa := vaddr
++    }
++
++    ExceptionVa
++  }
++
++  io.mem_to_ooo.lsqio.vaddr := RegNext(
++    GenExceptionVa(tlbcsr.priv.dmode, tlbcsr.priv.virt || exceptionIsHyper, exceptionVaNeedExt,
++    tlbcsr.satp, tlbcsr.vsatp, tlbcsr.hgatp, exceptionVaddr)
++  )
++
+   // vsegment instruction is executed atomic, which mean atomicsException and vSegmentException should not raise at the same time.
+   XSError(atomicsException && vSegmentException, "atomicsException and vSegmentException raise at the same time!")
+   io.mem_to_ooo.lsqio.vstart := RegNext(Mux(vSegmentException,
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+index 691f07f89d7..20ed6650a8f 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+@@ -548,6 +548,8 @@ class TlbResp(nDups: Int = 1)(implicit p: Parameters) extends TlbBundle {
+   val fastMiss = Output(Bool())
+   val isForVSnonLeafPTE = Output(Bool())
+   val excp = Vec(nDups, new Bundle {
++    val vaNeedExt = Output(Bool())
++    val isHyper = Output(Bool())
+     val gpf = new TlbExceptionBundle()
+     val pf = new TlbExceptionBundle()
+     val af = new TlbExceptionBundle()
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLB.scala b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+index cb582327d30..5b83bde5f6e 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+@@ -366,6 +366,8 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+       resp(idx).bits.excp(nDups).af.ld := RegNext(preaf) && TlbCmd.isRead(cmd)
+       resp(idx).bits.excp(nDups).af.st := RegNext(preaf) && TlbCmd.isWrite(cmd)
+       resp(idx).bits.excp(nDups).af.instr := false.B
++
++      resp(idx).bits.excp(nDups).vaNeedExt := false.B
+     } .otherwise {
+       // isForVSnonLeafPTE is used only when gpf happens and it caused by a G-stage translation which supports VS-stage translation
+       // it will be sent to CSR in order to modify the m/htinst.
+@@ -386,7 +388,11 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+       resp(idx).bits.excp(nDups).af.ld    := af && TlbCmd.isRead(cmd) && fault_valid
+       resp(idx).bits.excp(nDups).af.st    := af && TlbCmd.isWrite(cmd) && fault_valid
+       resp(idx).bits.excp(nDups).af.instr := af && TlbCmd.isExec(cmd) && fault_valid
++
++      resp(idx).bits.excp(nDups).vaNeedExt := true.B
+     }
++
++    resp(idx).bits.excp(nDups).isHyper := isHyperInst(idx)
+   }
+ 
+   def handle_nonblock(idx: Int): Unit = {
+diff --git a/src/main/scala/xiangshan/mem/MemCommon.scala b/src/main/scala/xiangshan/mem/MemCommon.scala
+index 2fa0e0c8689..4fd5ca0b713 100644
+--- a/src/main/scala/xiangshan/mem/MemCommon.scala
++++ b/src/main/scala/xiangshan/mem/MemCommon.scala
+@@ -81,7 +81,10 @@ class LsPipelineBundle(implicit p: Parameters) extends XSBundle
+   with HasVLSUParameters {
+   val uop = new DynInst
+   val vaddr = UInt(VAddrBits.W)
++  // For exception vaddr generate
+   val fullva = UInt(XLEN.W)
++  val vaNeedExt = Bool()
++  val isHyper = Bool()
+   val paddr = UInt(PAddrBits.W)
+   val gpaddr = UInt(XLEN.W)
+   val isForVSnonLeafPTE = Bool()
+@@ -163,6 +166,8 @@ class LdPrefetchTrainBundle(implicit p: Parameters) extends LsPipelineBundle {
+   def fromLsPipelineBundle(input: LsPipelineBundle, latch: Boolean = false, enable: Bool = true.B) = {
+     if (latch) vaddr := RegEnable(input.vaddr, enable) else vaddr := input.vaddr
+     if (latch) fullva := RegEnable(input.fullva, enable) else fullva := input.fullva
++    if (latch) vaNeedExt := RegEnable(input.vaNeedExt, enable) else vaNeedExt := input.vaNeedExt
++    if (latch) isHyper := RegEnable(input.isHyper, enable) else isHyper := input.isHyper
+     if (latch) paddr := RegEnable(input.paddr, enable) else paddr := input.paddr
+     if (latch) gpaddr := RegEnable(input.gpaddr, enable) else gpaddr := input.gpaddr
+     if (latch) isForVSnonLeafPTE := RegEnable(input.isForVSnonLeafPTE, enable) else isForVSnonLeafPTE := input.isForVSnonLeafPTE
+@@ -243,6 +248,8 @@ class LqWriteBundle(implicit p: Parameters) extends LsPipelineBundle {
+   def fromLsPipelineBundle(input: LsPipelineBundle, latch: Boolean = false, enable: Bool = true.B) = {
+     if(latch) vaddr := RegEnable(input.vaddr, enable) else vaddr := input.vaddr
+     if(latch) fullva := RegEnable(input.fullva, enable) else fullva := input.fullva
++    if(latch) vaNeedExt := RegEnable(input.vaNeedExt, enable) else vaNeedExt := input.vaNeedExt
++    if(latch) isHyper := RegEnable(input.isHyper, enable) else isHyper := input.isHyper
+     if(latch) paddr := RegEnable(input.paddr, enable) else paddr := input.paddr
+     if(latch) gpaddr := RegEnable(input.gpaddr, enable) else gpaddr := input.gpaddr
+     if(latch) isForVSnonLeafPTE := RegEnable(input.isForVSnonLeafPTE, enable) else isForVSnonLeafPTE := input.isForVSnonLeafPTE
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+index d369a57a62c..c4681e9ec4d 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+@@ -35,6 +35,8 @@ import xiangshan.backend.fu.FuType
+ class ExceptionAddrIO(implicit p: Parameters) extends XSBundle {
+   val isStore = Input(Bool())
+   val vaddr = Output(UInt(XLEN.W))
++  val vaNeedExt = Output(Bool())
++  val isHyper = Output(Bool())
+   val vstart = Output(UInt((log2Up(VLEN) + 1).W))
+   val vl = Output(UInt((log2Up(VLEN) + 1).W))
+   val gpaddr = Output(UInt(XLEN.W))
+@@ -228,6 +230,8 @@ class LsqWrapper(implicit p: Parameters) extends XSModule with HasDCacheParamete
+   // s3: ptr updated & new address
+   // address will be used at the next cycle after exception is triggered
+   io.exceptionAddr.vaddr := Mux(RegNext(io.exceptionAddr.isStore), storeQueue.io.exceptionAddr.vaddr, loadQueue.io.exceptionAddr.vaddr)
++  io.exceptionAddr.vaNeedExt := Mux(RegNext(io.exceptionAddr.isStore), storeQueue.io.exceptionAddr.vaNeedExt, loadQueue.io.exceptionAddr.vaNeedExt)
++  io.exceptionAddr.isHyper := Mux(RegNext(io.exceptionAddr.isStore), storeQueue.io.exceptionAddr.isHyper, loadQueue.io.exceptionAddr.isHyper)
+   io.exceptionAddr.vstart := Mux(RegNext(io.exceptionAddr.isStore), storeQueue.io.exceptionAddr.vstart, loadQueue.io.exceptionAddr.vstart)
+   io.exceptionAddr.vl     := Mux(RegNext(io.exceptionAddr.isStore), storeQueue.io.exceptionAddr.vl, loadQueue.io.exceptionAddr.vl)
+   io.exceptionAddr.gpaddr := Mux(RegNext(io.exceptionAddr.isStore), storeQueue.io.exceptionAddr.gpaddr, loadQueue.io.exceptionAddr.gpaddr)
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala
+index 05658fce20f..c7ae0c51598 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala
+@@ -104,6 +104,8 @@ class LqExceptionBuffer(implicit p: Parameters) extends XSModule with HasCircula
+   }
+ 
+   io.exceptionAddr.vaddr  := req.fullva
++  io.exceptionAddr.vaNeedExt := req.vaNeedExt
++  io.exceptionAddr.isHyper := req.isHyper
+   io.exceptionAddr.vstart := req.uop.vpu.vstart
+   io.exceptionAddr.vl     := req.uop.vpu.vl
+   io.exceptionAddr.gpaddr := req.gpaddr
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
+index 58e647cc0d3..9bc6a3040c3 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala
+@@ -119,6 +119,7 @@ class LoadMisalignBuffer(implicit p: Parameters) extends XSModule
+     val overwriteExpBuf = Output(new XSBundle {
+       val valid  = Bool()
+       val vaddr  = UInt(XLEN.W)
++      val isHyper = Bool()
+       val gpaddr = UInt(XLEN.W)
+       val isForVSnonLeafPTE = Bool()
+     })
+@@ -567,11 +568,13 @@ class LoadMisalignBuffer(implicit p: Parameters) extends XSModule
+   // if exception happens in the higher page address part, overwrite the loadExceptionBuffer vaddr
+   val overwriteExpBuf = GatedValidRegNext(req_valid && cross16BytesBoundary && globalException && (curPtr === 1.U))
+   val overwriteVaddr = GatedRegNext(splitLoadResp(curPtr).vaddr)
++  val overwriteIsHyper = GatedRegNext(splitLoadResp(curPtr).isHyper)
+   val overwriteGpaddr = GatedRegNext(splitLoadResp(curPtr).gpaddr)
+   val overwriteIsForVSnonLeafPTE = GatedRegNext(splitLoadResp(curPtr).isForVSnonLeafPTE)
+ 
+   io.overwriteExpBuf.valid := overwriteExpBuf
+   io.overwriteExpBuf.vaddr := overwriteVaddr
++  io.overwriteExpBuf.isHyper := overwriteIsHyper
+   io.overwriteExpBuf.gpaddr := overwriteGpaddr
+   io.overwriteExpBuf.isForVSnonLeafPTE := overwriteIsForVSnonLeafPTE
+ 
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala
+index ad2f5cda5f8..31ecc8af5b9 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala
+@@ -265,6 +265,7 @@ class LoadQueue(implicit p: Parameters) extends XSModule
+     exceptionBuffer.io.req(LoadPipelineWidth + i).bits                  := DontCare
+     exceptionBuffer.io.req(LoadPipelineWidth + i).bits.vaddr            := io.vecFeedback(i).bits.vaddr
+     exceptionBuffer.io.req(LoadPipelineWidth + i).bits.fullva           := io.vecFeedback(i).bits.vaddr
++    exceptionBuffer.io.req(LoadPipelineWidth + i).bits.vaNeedExt        := io.vecFeedback(i).bits.vaNeedExt
+     exceptionBuffer.io.req(LoadPipelineWidth + i).bits.gpaddr           := io.vecFeedback(i).bits.gpaddr
+     exceptionBuffer.io.req(LoadPipelineWidth + i).bits.uop.uopIdx       := io.vecFeedback(i).bits.uopidx
+     exceptionBuffer.io.req(LoadPipelineWidth + i).bits.uop.robIdx       := io.vecFeedback(i).bits.robidx
+@@ -274,6 +275,7 @@ class LoadQueue(implicit p: Parameters) extends XSModule
+   }
+   // mmio non-data error exception
+   exceptionBuffer.io.req.last := uncacheBuffer.io.exception
++  exceptionBuffer.io.req.last.bits.vaNeedExt := true.B
+   exceptionBuffer.io.flushFrmMaBuf := io.flushFrmMaBuf
+ 
+   io.exceptionAddr <> exceptionBuffer.io.exceptionAddr
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+index d5b98058294..62e2434c9ca 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala
+@@ -93,8 +93,9 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+     val writeBack       = Decoupled(new MemExuOutput)
+     val overwriteExpBuf = Output(new XSBundle {
+       val valid = Bool()
+-      val vaddr = UInt(VAddrBits.W)
+-      val gpaddr = UInt(GPAddrBits.W)
++      val vaddr = UInt(XLEN.W)
++      val isHyper = Bool()
++      val gpaddr = UInt(XLEN.W)
+       val isForVSnonLeafPTE = Bool()
+     })
+     val sqControl       = new StoreMaBufToSqControlIO
+@@ -592,12 +593,14 @@ class StoreMisalignBuffer(implicit p: Parameters) extends XSModule
+   // NOTE: spectial case (unaligned store cross page, page fault happens in next page)
+   // if exception happens in the higher page address part, overwrite the storeExceptionBuffer vaddr
+   val overwriteExpBuf = GatedValidRegNext(req_valid && cross16BytesBoundary && globalException && (curPtr === 1.U))
+-  val overwriteAddr = GatedRegNext(splitStoreResp(curPtr).vaddr)
++  val overwriteVaddr = GatedRegNext(splitStoreResp(curPtr).vaddr)
++  val overwriteIsHyper = GatedRegNext(splitStoreResp(curPtr).isHyper)
+   val overwriteGpaddr = GatedRegNext(splitStoreResp(curPtr).gpaddr)
+   val overwriteIsForVSnonLeafPTE = GatedRegNext(splitStoreResp(curPtr).isForVSnonLeafPTE)
+ 
+   io.overwriteExpBuf.valid := overwriteExpBuf
+-  io.overwriteExpBuf.vaddr := overwriteAddr
++  io.overwriteExpBuf.vaddr := overwriteVaddr
++  io.overwriteExpBuf.isHyper := overwriteIsHyper
+   io.overwriteExpBuf.gpaddr := overwriteGpaddr
+   io.overwriteExpBuf.isForVSnonLeafPTE := overwriteIsForVSnonLeafPTE
+ 
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+index 579fd866ff0..6265e40fe63 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+@@ -144,11 +144,13 @@ class StoreExceptionBuffer(implicit p: Parameters) extends XSModule with HasCirc
+     req := reqSel._2(0)
+   }
+ 
+-  io.exceptionAddr.vaddr  := req.fullva
+-  io.exceptionAddr.gpaddr := req.gpaddr
+-  io.exceptionAddr.vstart := req.uop.vpu.vstart
+-  io.exceptionAddr.vl     := req.uop.vpu.vl
+-  io.exceptionAddr.isForVSnonLeafPTE:= req.isForVSnonLeafPTE
++  io.exceptionAddr.vaddr     := req.fullva
++  io.exceptionAddr.vaNeedExt := req.vaNeedExt
++  io.exceptionAddr.isHyper   := req.isHyper
++  io.exceptionAddr.gpaddr    := req.gpaddr
++  io.exceptionAddr.vstart    := req.uop.vpu.vstart
++  io.exceptionAddr.vl        := req.uop.vpu.vl
++  io.exceptionAddr.isForVSnonLeafPTE := req.isForVSnonLeafPTE
+ 
+   when(req_valid && io.flushFrmMaBuf) {
+     req_valid := false.B
+@@ -235,14 +237,15 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   for (i <- 0 until VecStorePipelineWidth) {
+     exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).valid               := io.vecFeedback(i).valid && io.vecFeedback(i).bits.feedback(VecFeedbacks.FLUSH) // have exception
+     exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits                := DontCare
+-    exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.vaddr          := io.vecFeedback(i).bits.vaddr
+     exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.fullva         := io.vecFeedback(i).bits.vaddr
++    exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.vaNeedExt      := io.vecFeedback(i).bits.vaNeedExt
+     exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.gpaddr         := io.vecFeedback(i).bits.gpaddr
+     exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.uop.uopIdx     := io.vecFeedback(i).bits.uopidx
+     exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.uop.robIdx     := io.vecFeedback(i).bits.robidx
+     exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.uop.vpu.vstart := io.vecFeedback(i).bits.vstart
+     exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.uop.vpu.vl     := io.vecFeedback(i).bits.vl
+-    exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.uop.exceptionVec     := io.vecFeedback(i).bits.exceptionVec
++    exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.isForVSnonLeafPTE := io.vecFeedback(i).bits.isForVSnonLeafPTE
++    exceptionBuffer.io.storeAddrIn(StorePipelineWidth * 2 + i).bits.uop.exceptionVec  := io.vecFeedback(i).bits.exceptionVec
+   }
+ 
+ 
+@@ -897,7 +900,8 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+ 
+   exceptionBuffer.io.storeAddrIn.last.valid := io.mmioStout.fire
+   exceptionBuffer.io.storeAddrIn.last.bits := DontCare
+-  exceptionBuffer.io.storeAddrIn.last.bits.vaddr := vaddrModule.io.rdata.head
++  exceptionBuffer.io.storeAddrIn.last.bits.fullva := vaddrModule.io.rdata.head
++  exceptionBuffer.io.storeAddrIn.last.bits.vaNeedExt := true.B
+   exceptionBuffer.io.storeAddrIn.last.bits.uop := uncacheUop
+ 
+   // (4) or vector store:
+@@ -1097,11 +1101,13 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   }
+ 
+   // Read vaddr for mem exception
+-  io.exceptionAddr.vaddr  := exceptionBuffer.io.exceptionAddr.vaddr
+-  io.exceptionAddr.gpaddr := exceptionBuffer.io.exceptionAddr.gpaddr
+-  io.exceptionAddr.vstart := exceptionBuffer.io.exceptionAddr.vstart
+-  io.exceptionAddr.vl     := exceptionBuffer.io.exceptionAddr.vl
+-  io.exceptionAddr.isForVSnonLeafPTE:= exceptionBuffer.io.exceptionAddr.isForVSnonLeafPTE
++  io.exceptionAddr.vaddr     := exceptionBuffer.io.exceptionAddr.vaddr
++  io.exceptionAddr.vaNeedExt := exceptionBuffer.io.exceptionAddr.vaNeedExt
++  io.exceptionAddr.isHyper   := exceptionBuffer.io.exceptionAddr.isHyper
++  io.exceptionAddr.gpaddr    := exceptionBuffer.io.exceptionAddr.gpaddr
++  io.exceptionAddr.vstart    := exceptionBuffer.io.exceptionAddr.vstart
++  io.exceptionAddr.vl        := exceptionBuffer.io.exceptionAddr.vl
++  io.exceptionAddr.isForVSnonLeafPTE := exceptionBuffer.io.exceptionAddr.isForVSnonLeafPTE
+ 
+   // vector commit or replay from
+   val vecCommittmp = Wire(Vec(StoreQueueSize, Vec(VecStorePipelineWidth, Bool())))
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index d6c4ae78b7d..b9ba11403f2 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -887,9 +887,11 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+ 
+   s1_out                   := s1_in
+   s1_out.vaddr             := s1_vaddr
++  s1_out.vaNeedExt         := io.tlb.resp.bits.excp(0).vaNeedExt
++  s1_out.isHyper           := io.tlb.resp.bits.excp(0).isHyper
+   s1_out.paddr             := s1_paddr_dup_lsu
+   s1_out.gpaddr            := s1_gpaddr_dup_lsu
+-  s1_out.isForVSnonLeafPTE           := io.tlb.resp.bits.isForVSnonLeafPTE
++  s1_out.isForVSnonLeafPTE := io.tlb.resp.bits.isForVSnonLeafPTE
+   s1_out.tlbMiss           := s1_tlb_miss
+   s1_out.ptwBack           := io.tlb.resp.bits.ptwBack
+   s1_out.rep_info.debug    := s1_in.uop.debugInfo
+@@ -903,7 +905,10 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+     s1_out.uop.exceptionVec(loadPageFault)   := io.tlb.resp.bits.excp(0).pf.ld && s1_vecActive && !s1_tlb_miss && !s1_in.tlbNoQuery
+     s1_out.uop.exceptionVec(loadGuestPageFault)   := io.tlb.resp.bits.excp(0).gpf.ld && !s1_tlb_miss && !s1_in.tlbNoQuery
+     s1_out.uop.exceptionVec(loadAccessFault) := io.tlb.resp.bits.excp(0).af.ld && s1_vecActive && !s1_tlb_miss && !s1_in.tlbNoQuery
+-    when (!s1_out.isFrmMisAlignBuf && RegNext(io.tlb.req.bits.checkfullva) && (s1_out.uop.exceptionVec(loadPageFault) || s1_out.uop.exceptionVec(loadGuestPageFault) || s1_out.uop.exceptionVec(loadAccessFault))) {
++    when (!s1_out.isvec && RegNext(io.tlb.req.bits.checkfullva) &&
++      (s1_out.uop.exceptionVec(loadPageFault) ||
++        s1_out.uop.exceptionVec(loadGuestPageFault) ||
++        s1_out.uop.exceptionVec(loadAccessFault))) {
+       s1_out.uop.exceptionVec(loadAddrMisaligned) := false.B
+     }
+   } .otherwise {
+@@ -1573,6 +1578,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+   io.vecldout.bits.flushState := DontCare
+   io.vecldout.bits.exceptionVec := ExceptionNO.selectByFu(s3_out.bits.uop.exceptionVec, VlduCfg)
+   io.vecldout.bits.vaddr := s3_in.fullva
++  io.vecldout.bits.vaNeedExt := s3_in.vaNeedExt
+   io.vecldout.bits.gpaddr := s3_in.gpaddr
+   io.vecldout.bits.isForVSnonLeafPTE := s3_in.isForVSnonLeafPTE
+   io.vecldout.bits.mmio := DontCare
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 172180249ef..c8a078a3d5d 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -257,6 +257,8 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   val s1_mmio_cbo  = s1_in.uop.fuOpType === LSUOpType.cbo_clean ||
+                      s1_in.uop.fuOpType === LSUOpType.cbo_flush ||
+                      s1_in.uop.fuOpType === LSUOpType.cbo_inval
++  val s1_vaNeedExt = io.tlb.resp.bits.excp(0).vaNeedExt
++  val s1_isHyper   = io.tlb.resp.bits.excp(0).isHyper
+   val s1_paddr     = io.tlb.resp.bits.paddr(0)
+   val s1_gpaddr    = io.tlb.resp.bits.gpaddr(0)
+   val s1_isForVSnonLeafPTE   = io.tlb.resp.bits.isForVSnonLeafPTE
+@@ -308,15 +310,20 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+ 
+   // get paddr from dtlb, check if rollback is needed
+   // writeback store inst to lsq
+-  s1_out         := s1_in
+-  s1_out.paddr   := s1_paddr
+-  s1_out.gpaddr  := s1_gpaddr
++  s1_out           := s1_in
++  s1_out.paddr     := s1_paddr
++  s1_out.gpaddr    := s1_gpaddr
++  s1_out.vaNeedExt := s1_vaNeedExt
++  s1_out.isHyper   := s1_isHyper
++  s1_out.miss      := false.B
++  s1_out.mmio      := s1_mmio
++  s1_out.tlbMiss   := s1_tlb_miss
++  s1_out.atomic    := s1_mmio
+   s1_out.isForVSnonLeafPTE := s1_isForVSnonLeafPTE
+-  s1_out.miss    := false.B
+-  s1_out.mmio    := s1_mmio
+-  s1_out.tlbMiss := s1_tlb_miss
+-  s1_out.atomic  := s1_mmio
+-  when (!s1_out.isFrmMisAlignBuf && RegNext(io.tlb.req.bits.checkfullva) && (s1_out.uop.exceptionVec(storePageFault) || s1_out.uop.exceptionVec(storeAccessFault) || s1_out.uop.exceptionVec(storeGuestPageFault))) {
++  when (!s1_out.isvec && RegNext(io.tlb.req.bits.checkfullva) &&
++    (s1_out.uop.exceptionVec(storePageFault) ||
++      s1_out.uop.exceptionVec(storeAccessFault) ||
++      s1_out.uop.exceptionVec(storeGuestPageFault))) {
+     s1_out.uop.exceptionVec(storeAddrMisaligned) := false.B
+   }
+   s1_out.uop.exceptionVec(storePageFault)      := io.tlb.resp.bits.excp(0).pf.st && s1_vecActive
+@@ -416,6 +423,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   s2_misalign_stout.valid := s2_valid && s2_can_go && s2_frm_mabuf
+   s2_misalign_stout.bits.mmio := s2_out.mmio
+   s2_misalign_stout.bits.vaddr := s2_out.vaddr
++  s2_misalign_stout.bits.isHyper := s2_out.isHyper
+   s2_misalign_stout.bits.paddr := s2_out.paddr
+   s2_misalign_stout.bits.gpaddr := s2_out.gpaddr
+   s2_misalign_stout.bits.isForVSnonLeafPTE := s2_out.isForVSnonLeafPTE
+@@ -506,6 +514,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+       sx_in(i).mbIndex     := s3_in.mbIndex
+       sx_in(i).mask        := s3_in.mask
+       sx_in(i).vaddr       := s3_in.fullva
++      sx_in(i).vaNeedExt   := s3_in.vaNeedExt
+       sx_in(i).gpaddr      := s3_in.gpaddr
+       sx_in(i).isForVSnonLeafPTE     := s3_in.isForVSnonLeafPTE
+       sx_ready(i) := !s3_valid(i) || sx_in(i).output.uop.robIdx.needFlush(io.redirect) || (if (TotalDelayCycles == 0) io.stout.ready else sx_ready(i+1))
+@@ -545,6 +554,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   io.vecstout.bits.alignedType := sx_last_in.alignedType
+   io.vecstout.bits.mask        := sx_last_in.mask
+   io.vecstout.bits.vaddr       := sx_last_in.vaddr
++  io.vecstout.bits.vaNeedExt   := sx_last_in.vaNeedExt
+   io.vecstout.bits.gpaddr      := sx_last_in.gpaddr
+   io.vecstout.bits.isForVSnonLeafPTE     := sx_last_in.isForVSnonLeafPTE
+   // io.vecstout.bits.reg_offset.map(_ := DontCare)
+diff --git a/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala b/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
+index 3e0f6828c3f..f30afeb805e 100644
+--- a/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
++++ b/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
+@@ -43,6 +43,7 @@ class MBufferBundle(implicit p: Parameters) extends VLSUBundle{
+   // for exception
+   val vstart           = UInt(elemIdxBits.W)
+   val vl               = UInt(elemIdxBits.W)
++  val vaNeedExt        = Bool()
+   val vaddr            = UInt(XLEN.W)
+   val gpaddr           = UInt(GPAddrBits.W)
+   val isForVSnonLeafPTE= Bool()
+@@ -104,6 +105,7 @@ abstract class BaseVMergeBuffer(isVStore: Boolean=false)(implicit p: Parameters)
+     sink.feedback(VecFeedbacks.LAST)        := true.B
+     sink.vstart                             := source.vstart // TODO: if lsq need vl for fof?
+     sink.vaddr                              := source.vaddr
++    sink.vaNeedExt                          := source.vaNeedExt
+     sink.gpaddr                             := source.gpaddr
+     sink.isForVSnonLeafPTE                  := source.isForVSnonLeafPTE
+     sink.vl                                 := source.vl
+@@ -245,6 +247,7 @@ abstract class BaseVMergeBuffer(isVStore: Boolean=false)(implicit p: Parameters)
+         entries(wbMbIndex(i)).vstart       := selElemInfield
+         entries(wbMbIndex(i)).exceptionVec := ExceptionNO.selectByFu(selExceptionVec, fuCfg)
+         entries(wbMbIndex(i)).vaddr        := vaddr
++        entries(wbMbIndex(i)).vaNeedExt    := selPort(0).vaNeedExt
+         entries(wbMbIndex(i)).gpaddr       := selPort(0).gpaddr
+         entries(wbMbIndex(i)).isForVSnonLeafPTE := selPort(0).isForVSnonLeafPTE
+       }.otherwise{
+diff --git a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+index 2ba8912f649..60a4914c5d5 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala
+@@ -38,7 +38,7 @@ import xiangshan.backend.fu.vector.Utils.VecDataToMaskDataVec
+ 
+ class VSegmentBundle(implicit p: Parameters) extends VLSUBundle
+ {
+-  val baseVaddr        = UInt(VAddrBits.W)
++  val baseVaddr        = UInt(XLEN.W)
+   val uop              = new DynInst
+   val paddr            = UInt(PAddrBits.W)
+   val mask             = UInt(VLEN.W)
+@@ -48,8 +48,8 @@ class VSegmentBundle(implicit p: Parameters) extends VLSUBundle
+   val uopFlowNumMask   = UInt(elemIdxBits.W)
+   // for exception
+   val vstart           = UInt(elemIdxBits.W)
+-  val exceptionVaddr   = UInt(VAddrBits.W)
+-  val exceptionGpaddr  = UInt(GPAddrBits.W)
++  val exceptionVaddr   = UInt(XLEN.W)
++  val exceptionGpaddr  = UInt(XLEN.W)
+   val exceptionIsForVSnonLeafPTE = Bool()
+   val exception_va     = Bool()
+   val exception_gpa    = Bool()
+@@ -170,7 +170,7 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+ 
+   val segmentIdx        = RegInit(0.U(elemIdxBits.W))
+   val fieldIdx          = RegInit(0.U(fieldBits.W))
+-  val segmentOffset     = RegInit(0.U(VAddrBits.W))
++  val segmentOffset     = RegInit(0.U(XLEN.W))
+   val splitPtr          = RegInit(0.U.asTypeOf(new VSegUPtr)) // for select load/store data
+   val splitPtrNext      = WireInit(0.U.asTypeOf(new VSegUPtr))
+ 
+@@ -326,7 +326,7 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+     // element number in a vd
+     // TODO Rewrite it in a more elegant way.
+     val uopFlowNum                    = ZeroExt(GenRealFlowNum(instType, emul, lmul, eew, sew, true), elemIdxBits)
+-    instMicroOp.baseVaddr             := io.in.bits.src_rs1(VAddrBits - 1, 0)
++    instMicroOp.baseVaddr             := io.in.bits.src_rs1
+     instMicroOpValid                  := true.B // if is first uop
+     instMicroOp.alignedType           := Mux(isIndexed(instType), sew(1, 0), eew)
+     instMicroOp.uop                   := io.in.bits.uop
+@@ -366,7 +366,7 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+ 
+   //latch vaddr
+   when(state === s_tlb_req){
+-    latchVaddr := vaddr
++    latchVaddr := vaddr(VAddrBits - 1, 0)
+   }
+   /**
+    * tlb req and tlb resq
+@@ -377,7 +377,9 @@ class VSegmentUnit (implicit p: Parameters) extends VLSUModule
+   io.dtlb.resp.ready                  := true.B
+   io.dtlb.req.valid                   := state === s_tlb_req && segmentActive
+   io.dtlb.req.bits.cmd                := Mux(FuType.isVLoad(fuType), TlbCmd.read, TlbCmd.write)
+-  io.dtlb.req.bits.vaddr              := vaddr
++  io.dtlb.req.bits.vaddr              := vaddr(VAddrBits - 1, 0)
++  io.dtlb.req.bits.fullva             := vaddr
++  io.dtlb.req.bits.checkfullva        := true.B
+   io.dtlb.req.bits.size               := instMicroOp.alignedType(2,0)
+   io.dtlb.req.bits.memidx.is_ld       := FuType.isVLoad(fuType)
+   io.dtlb.req.bits.memidx.is_st       := FuType.isVStore(fuType)
+diff --git a/src/main/scala/xiangshan/mem/vector/VSplit.scala b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+index 11030ecd456..b36b54e05fb 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSplit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+@@ -350,7 +350,7 @@ abstract class VSplitBuffer(isVStore: Boolean = false)(implicit p: Parameters) e
+   val usNoSplit        = (issueUsAligned128 || usMaskInSingleUop) &&
+                           !issuePreIsSplit &&
+                           (splitIdx === 0.U)// unit-stride uop don't need to split into two flow
+-  val usSplitVaddr     = genUSSplitAddr(vaddr, splitIdx, VAddrBits)
++  val usSplitVaddr     = genUSSplitAddr(vaddr, splitIdx, XLEN)
+   val regOffset        = getCheckAddrLowBits(issueUsLowBitsAddr, maxMemByteNum) // offset in 256-bits vd
+   XSError((splitIdx > 1.U && usNoSplit) || (splitIdx > 1.U && !issuePreIsSplit) , "Unit-Stride addr split error!\n")
+ 
+diff --git a/src/main/scala/xiangshan/mem/vector/VecBundle.scala b/src/main/scala/xiangshan/mem/vector/VecBundle.scala
+index 8b9c68dfc0a..15cb4d0505c 100644
+--- a/src/main/scala/xiangshan/mem/vector/VecBundle.scala
++++ b/src/main/scala/xiangshan/mem/vector/VecBundle.scala
+@@ -110,6 +110,7 @@ class VecPipelineFeedbackIO(isVStore: Boolean=false) (implicit p: Parameters) ex
+   //val atomic               = Bool()
+   val exceptionVec         = ExceptionVec()
+   val vaddr                = UInt(XLEN.W)
++  val vaNeedExt          = Bool()
+   val gpaddr               = UInt(XLEN.W)
+   val isForVSnonLeafPTE    = Bool()
+   //val vec                  = new OnlyVecExuOutput
+@@ -193,6 +194,7 @@ class FeedbackToLsqIO(implicit p: Parameters) extends VLSUBundle{
+   val robidx = new RobPtr
+   val uopidx = UopIdx()
+   val vaddr = UInt(XLEN.W)
++  val vaNeedExt = Bool()
+   val gpaddr = UInt(GPAddrBits.W)
+   val isForVSnonLeafPTE = Bool()
+   val feedback = Vec(VecFeedbacks.allFeedbacks, Bool())
+diff --git a/src/main/scala/xiangshan/mem/vector/VecCommon.scala b/src/main/scala/xiangshan/mem/vector/VecCommon.scala
+index c6367990642..1fd56c5abd3 100644
+--- a/src/main/scala/xiangshan/mem/vector/VecCommon.scala
++++ b/src/main/scala/xiangshan/mem/vector/VecCommon.scala
+@@ -290,6 +290,7 @@ class VecMemExuOutput(isVector: Boolean = false)(implicit p: Parameters) extends
+   val mbIndex     = UInt(vsmBindexBits.W)
+   val mask        = UInt(VLENB.W)
+   val vaddr       = UInt(XLEN.W)
++  val vaNeedExt   = Bool()
+   val gpaddr      = UInt(GPAddrBits.W)
+   val isForVSnonLeafPTE = Bool()
+ }

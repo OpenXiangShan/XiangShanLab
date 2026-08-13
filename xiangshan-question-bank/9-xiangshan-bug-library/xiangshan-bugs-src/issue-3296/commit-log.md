@@ -1,0 +1,87 @@
+# Commit Log
+- Issue: #3296
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3296
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3296
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3296
+- Changed files: 3
+- Additions: 20
+- Deletions: 8
+
+## Files
+- `src/main/scala/xiangshan/backend/decode/VTypeGen.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala`
+- `src/main/scala/xiangshan/backend/fu/vector/Bundles.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/decode/VTypeGen.scala b/src/main/scala/xiangshan/backend/decode/VTypeGen.scala
+index cabdd2c46c2..b9cb5cda788 100644
+--- a/src/main/scala/xiangshan/backend/decode/VTypeGen.scala
++++ b/src/main/scala/xiangshan/backend/decode/VTypeGen.scala
+@@ -39,8 +39,8 @@ class VTypeGen(implicit p: Parameters) extends XSModule{
+     (firstVsetInstField.WIDTH === "b111".U) && 
+     (firstVsetInstField.ALL(31) === "b0".U)
+ 
+-  private val vtypeArch = RegInit(0.U.asTypeOf(new VType))
+-  private val vtypeSpec = RegInit(0.U.asTypeOf(new VType))
++  private val vtypeArch = RegInit(VType.initVtype())
++  private val vtypeSpec = RegInit(VType.initVtype())
+ 
+   private val vtypeArchNext = WireInit(vtypeArch)
+   private val vtypeSpecNext = WireInit(vtypeSpec)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala
+index 068dec72e1d..6494d94b37e 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/Unprivileged.scala
+@@ -93,7 +93,7 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
+   }).setAddr(CSRs.vcsr)
+ 
+   val vl = Module(new CSRModule("Vl", new CSRBundle {
+-    val VL = RO(VlWidth - 1, 0)
++    val VL = RO(VlWidth - 1, 0).withReset(0.U)
+   }))
+     .setAddr(CSRs.vl)
+ 
+@@ -197,11 +197,13 @@ trait Unprivileged { self: NewCSR with MachineLevel with SupervisorLevel =>
+ }
+ 
+ class CSRVTypeBundle extends CSRBundle {
+-  val VILL  = RO(  63)
+-  val VMA   = RO(   7)
+-  val VTA   = RO(   6)
+-  val VSEW  = RO(5, 3)
+-  val VLMUL = RO(2, 0)
++  // vtype's vill is initialized to 1, when executing vector instructions
++  // which depend on vtype, will raise illegal instruction exception
++  val VILL  = RO(  63).withReset(1.U)
++  val VMA   = RO(   7).withReset(0.U)
++  val VTA   = RO(   6).withReset(0.U)
++  val VSEW  = RO(5, 3).withReset(0.U)
++  val VLMUL = RO(2, 0).withReset(0.U)
+ }
+ 
+ class CSRFrmBundle extends CSRBundle {
+diff --git a/src/main/scala/xiangshan/backend/fu/vector/Bundles.scala b/src/main/scala/xiangshan/backend/fu/vector/Bundles.scala
+index 70729694195..3207555050c 100644
+--- a/src/main/scala/xiangshan/backend/fu/vector/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/fu/vector/Bundles.scala
+@@ -71,6 +71,16 @@ object Bundles {
+       res.vlmul := vtype.vlmul
+       res
+     }
++
++    def initVtype()(implicit p: Parameters) : VType = {
++      val res = Wire(VType())
++      res.illegal := true.B
++      res.vma := false.B
++      res.vta := false.B
++      res.vsew := 0.U
++      res.vlmul := 0.U
++      res
++    }
+   }
+ 
+   object VsetVType {
+```

@@ -1,0 +1,7 @@
+[Spike standalone]
+log: /tmp/case12_spike_limited_20260325_205628/spike.log
+
+22:core   0: 0x0000000080000034 (0x0c800513) li      a0, 200
+23:core   0: 0x0000000080000038 (0x80a07057) vsetvl  zero, zero, a0
+24:core   0: 0x000000008000003c (0x0210b0d7) vadd.vi v1, v1, 1
+25:core   0: exception trap_illegal_instruction, epc 0x000000008000003c

@@ -1,0 +1,4 @@
+exception pc 000000008000008a inst 4b2a16d7 cause 0000000000000002
+v18_low different at pc = 0x00800000b4, right = 0x0000001000380344, wrong = 0x0000001000394444
+v18_high different at pc = 0x00800000b4, right = 0x0000001000380344, wrong = 0x0000001000394444
+Core 0: ABORT at pc = 0x422f9d80c39a

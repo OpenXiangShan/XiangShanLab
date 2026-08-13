@@ -1,0 +1,124 @@
+diff --git a/src/main/scala/xiangshan/backend/Backend.scala b/src/main/scala/xiangshan/backend/Backend.scala
+index a161f874ef2..24ec3d9f33a 100644
+--- a/src/main/scala/xiangshan/backend/Backend.scala
++++ b/src/main/scala/xiangshan/backend/Backend.scala
+@@ -42,7 +42,8 @@ import xiangshan.backend.datapath._
+ import xiangshan.backend.dispatch.CoreDispatchTopDownIO
+ import xiangshan.backend.exu.ExuBlock
+ import xiangshan.backend.fu.vector.Bundles.{VConfig, VType}
+-import xiangshan.backend.fu.{FenceIO, FenceToSbuffer, FuConfig, FuType, PFEvent, PerfCounterIO}
++import xiangshan.backend.fu.{FenceIO, FenceToSbuffer, FuConfig, FuType, PerfCounterIO}
++import xiangshan.backend.fu.NewCSR.PFEvent
+ import xiangshan.backend.issue.EntryBundles._
+ import xiangshan.backend.issue.{Scheduler, SchedulerArithImp, SchedulerImpBase, SchedulerMemImp}
+ import xiangshan.backend.rob.{RobCoreTopDownIO, RobDebugRollingIO, RobLsqIO, RobPtr}
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index c30b446d53c..7e4ca5bd7da 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -30,7 +30,6 @@ import xiangshan.backend.datapath.DataConfig.{FpData, IntData, V0Data, VAddrData
+ import xiangshan.backend.decode.{DecodeStage, FusionDecoder}
+ import xiangshan.backend.dispatch.{CoreDispatchTopDownIO}
+ import xiangshan.backend.dispatch.NewDispatch
+-import xiangshan.backend.fu.PFEvent
+ import xiangshan.backend.fu.vector.Bundles.{VType, Vl}
+ import xiangshan.backend.fu.wrapper.CSRToDecode
+ import xiangshan.backend.rename.{Rename, RenameTableWrapper, SnapshotGenerator}
+diff --git a/src/main/scala/xiangshan/backend/fu/CSR.scala b/src/main/scala/xiangshan/backend/fu/CSR.scala
+index 3ebb993bf72..f502762e225 100644
+--- a/src/main/scala/xiangshan/backend/fu/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/CSR.scala
+@@ -1639,7 +1639,6 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+     difftest.vlenb := vlenb
+   }
+ }
+-*/
+ class PFEvent(implicit p: Parameters) extends XSModule {
+   val io = IO(new Bundle {
+     val distribute_csr = Flipped(new DistributedCSRIO())
+@@ -1665,3 +1664,4 @@ class PFEvent(implicit p: Parameters) extends XSModule {
+     io.hpmevent(i) := perfEvents(i)
+   }
+ }
++*/
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+index 80d76bb680c..ffad1cc0dbe 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+@@ -182,14 +182,14 @@ trait MachineLevel { self: NewCSR =>
+     .setAddr(CSRs.mcountinhibit)
+ 
+   val mhpmevents: Seq[CSRModule[_]] = (3 to 0x1F).map(num =>
+-    Module(new CSRModule(s"Mhpmevent$num", new MhpmeventBundle) with HasOfFromPerfCntBundle {
++    Module(new CSRModule(s"Mhpmevent", new MhpmeventBundle) with HasOfFromPerfCntBundle {
+       when(wen){
+         reg.OF := wdata.OF
+       }.elsewhen(ofFromPerfCnt) {
+         reg.OF := ofFromPerfCnt
+       }
+     })
+-      .setAddr(CSRs.mhpmevent3 - 3 + num)
++      .setAddr(CSRs.mhpmevent3 - 3 + num).suggestName(s"Mhpmevent$num")
+   )
+ 
+   val mscratch = Module(new CSRModule("Mscratch"))
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/PFEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/PFEvent.scala
+new file mode 100644
+index 00000000000..26b84b94fdc
+--- /dev/null
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/PFEvent.scala
+@@ -0,0 +1,27 @@
++package xiangshan.backend.fu.NewCSR
++
++import chisel3._
++import freechips.rocketchip.rocket.CSRs
++import org.chipsalliance.cde.config.Parameters
++import xiangshan.{DistributedCSRIO, XSModule}
++import xiangshan.backend.fu.NewCSR.CSRConfig._
++
++class PFEvent(implicit p: Parameters) extends XSModule {
++  val io = IO(new Bundle {
++    val distribute_csr = Flipped(new DistributedCSRIO())
++    val hpmevent = Output(Vec(perfCntNum, UInt(XLEN.W)))
++  })
++
++  val w = io.distribute_csr.w
++
++  val perfEvents: Seq[CSRModule[_]] = (0 until perfCntNum).map(num =>
++    Module(new CSRModule(s"perfEvents", new MhpmeventBundle))
++      .setAddr(CSRs.mhpmevent3 + num)
++  )
++
++  perfEvents.zip(io.hpmevent).map{case(perf, out) => {
++    perf.w.wen   := w.valid && (w.bits.addr === perf.addr.U)
++    perf.w.wdata := w.bits.data
++    out := perf.rdata
++  }}
++}
+\ No newline at end of file
+diff --git a/src/main/scala/xiangshan/frontend/Frontend.scala b/src/main/scala/xiangshan/frontend/Frontend.scala
+index 6f786ff000b..88bc3c64b43 100644
+--- a/src/main/scala/xiangshan/frontend/Frontend.scala
++++ b/src/main/scala/xiangshan/frontend/Frontend.scala
+@@ -39,7 +39,7 @@ import utility.mbist.MbistPipeline
+ import utility.sram.SramBroadcastBundle
+ import utility.sram.SramHelper
+ import xiangshan._
+-import xiangshan.backend.fu.PFEvent
++import xiangshan.backend.fu.NewCSR.PFEvent
+ import xiangshan.backend.fu.PMP
+ import xiangshan.backend.fu.PMPChecker
+ import xiangshan.backend.fu.PMPReqBundle
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 7a086daae90..066555a5c01 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -36,7 +36,7 @@ import xiangshan.backend.ctrlblock.{DebugLSIO, LsTopdownInfo}
+ import xiangshan.backend.exu.MemExeUnit
+ import xiangshan.backend.fu._
+ import xiangshan.backend.fu.FuType._
+-import xiangshan.backend.fu.NewCSR.{CsrTriggerBundle, TriggerUtil}
++import xiangshan.backend.fu.NewCSR.{CsrTriggerBundle, TriggerUtil, PFEvent}
+ import xiangshan.backend.fu.util.{CSRConst, SdtrigExt}
+ import xiangshan.backend.{BackendToTopBundle, TopToBackendBundle}
+ import xiangshan.backend.rob.{RobDebugRollingIO, RobPtr, RobLsqIO}

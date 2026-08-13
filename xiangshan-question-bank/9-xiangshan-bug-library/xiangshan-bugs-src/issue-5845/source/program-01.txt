@@ -1,0 +1,17 @@
+emu compiled at Apr 14 2026, 20:44:17
+Using simulated 32768B flash
+Core  0's Commit SHA is: 1e64239649, dirty: 1
+Using simulated 8386560MB RAM
+The image is program.elf
+ELF file detected and loading image from extracted elf file
+Loading 206 bytes at address 0x80000000 at offset 0x0
+Loading 16 bytes at address 0x80001000 at offset 0x1000
+The reference model is /home/projects/projects/XiangShan/ready-to-run/riscv64-spike-so
+The first instruction of core 0 has commited. Difftest enabled.
+Assertion failed at /home/projects/projects/XiangShan/build/rtl/LoadUnitS0.sv:780.
+The simulation stopped. There might be some assertion failed.
+Core 0: ABORT at pc = 0x80000060
+Core-0 instrCnt = 23, cycleCnt = 8,408, IPC = 0.002735
+Seed=0 Guest cycle spent: 8,412 (this will be different from cycleCnt if emu loads a snapshot)
+Host time spent: 106,483ms
+Assertion failed at NewLoadUnit.scala:319

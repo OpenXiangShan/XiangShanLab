@@ -1,0 +1,3 @@
+In the previous LLPTW design, there was only one PMP check interface. When the `hptw_need_addr_check` signal was asserted, it would override `need_addr_check`. However, when handling both virtualized and non-virtualized scenarios simultaneously, both signals could be true at the same time. This could prevent the `need_addr_check` request from receiving a PMP response, eventually leading to a deadlock.
+
+Additionally, this commit flushes all inflight MMU requests when the virt value changes, to ensure correct functionality when the MMU is handling both virtualized and non-virtualized requests concurrently.

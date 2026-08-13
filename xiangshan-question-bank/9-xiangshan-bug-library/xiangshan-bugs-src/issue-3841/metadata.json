@@ -1,0 +1,21 @@
+{
+  "number": 3841,
+  "title": "fix(zfh): flh/fsh should raise illegal exception when fs is off.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3841",
+  "state": "closed",
+  "labels": [],
+  "author": "NewPaulWalker",
+  "created_at": "2024-11-06T10:29:20Z",
+  "updated_at": "2024-11-08T08:01:23Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3841/commit-log.md"
+  ],
+  "submitted_at": "2024-11-06",
+  "branch": "",
+  "rtl_commit": ""
+}

@@ -1,0 +1,1 @@
+Core 0: HIT GOOD TRAP at pc = 0x800001d4

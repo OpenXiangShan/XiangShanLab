@@ -1,0 +1,7 @@
+bad_read_observations             = 2
+bad_read_any_meta_consumed        = 2
+bad_read_to_ftq_meta_consumed     = 2
+bad_read_train_meta_consumed      = 2
+split_read_useful_mismatch        = 4
+result_delta                      = 106
+recovered_bit                     = 1

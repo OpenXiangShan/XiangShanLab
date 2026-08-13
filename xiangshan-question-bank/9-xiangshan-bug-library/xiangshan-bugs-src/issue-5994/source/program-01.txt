@@ -1,0 +1,5 @@
+0000000080000040 <victim_branch>:
+    80000040: e019  bnez s0,80000046 <taken_path>
+
+0000000080000042 <fallthrough_path>:
+    80000042: 0385  addi t2,t2,1

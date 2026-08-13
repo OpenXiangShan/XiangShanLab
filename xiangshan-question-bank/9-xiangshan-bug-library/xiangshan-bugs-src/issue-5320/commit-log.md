@@ -1,0 +1,84 @@
+# Commit Log
+- Issue: #5320
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5320
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5320
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5320
+- Changed files: 2
+- Additions: 20
+- Deletions: 10
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/history/phr/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/bpu/history/phr/Phr.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/history/phr/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/history/phr/Bundles.scala
+index 6905703dc44..de514e22aad 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/history/phr/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/history/phr/Bundles.scala
+@@ -69,8 +69,9 @@ class PhrUpdate(implicit p: Parameters) extends PhrBundle {
+ }
+ 
+ class PhrMeta(implicit p: Parameters) extends PhrBundle {
+-  val phrPtr:     PhrPtr = new PhrPtr
+-  val phrLowBits: UInt   = UInt(PathHashHighWidth.W)
++  val phrPtr:         PhrPtr                = new PhrPtr
++  val phrLowBits:     UInt                  = UInt(PathHashHighWidth.W)
++  val predFoldedHist: PhrAllFoldedHistories = new PhrAllFoldedHistories(AllFoldedHistoryInfo) // for debug
+ }
+ 
+ // NOTE: Folded history maintenance logic reuse kmh-v2 ghr folded history management logic,
+diff --git a/src/main/scala/xiangshan/frontend/bpu/history/phr/Phr.scala b/src/main/scala/xiangshan/frontend/bpu/history/phr/Phr.scala
+index a9eacfe98cb..de34e6fb6ad 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/history/phr/Phr.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/history/phr/Phr.scala
+@@ -219,14 +219,15 @@ class Phr(implicit p: Parameters) extends PhrModule with HasPhrParameters with H
+       computeFoldedHist(predictHist, info.FoldedLength)(info.HistoryLength)
+   }
+ 
+-  io.phrMeta.phrPtr     := s1_phrPtr
+-  io.phrMeta.phrLowBits := s1_phrValue(PathHashHighWidth - 1, 0)
+-  io.phr                := phr
+-  io.s0_foldedPhr       := s0_foldedPhr
+-  io.s1_foldedPhr       := s1_foldedPhrReg
+-  io.s2_foldedPhr       := s2_foldedPhrReg
+-  io.s3_foldedPhr       := s3_foldedPhrReg
+-  io.trainFoldedPhr     := metaPhrFolded
++  io.phrMeta.phrPtr         := s1_phrPtr
++  io.phrMeta.phrLowBits     := s1_phrValue(PathHashHighWidth - 1, 0)
++  io.phrMeta.predFoldedHist := s1_foldedPhrReg
++  io.phr                    := phr
++  io.s0_foldedPhr           := s0_foldedPhr
++  io.s1_foldedPhr           := s1_foldedPhrReg
++  io.s2_foldedPhr           := s2_foldedPhrReg
++  io.s3_foldedPhr           := s3_foldedPhrReg
++  io.trainFoldedPhr         := metaPhrFolded
+ 
+   // TODO: Currently unavailable，waiting for ftq commit info
+   // commit time phr checker
+@@ -280,6 +281,7 @@ class Phr(implicit p: Parameters) extends PhrModule with HasPhrParameters with H
+       )
+     }
+ 
++    XSPerfAccumulate(f"predictFHist_diff_commitTrueFHist", predictFHist_diff_commitTrueFHist)
+     XSPerfAccumulate(f"predictFHist_diff_commitTrueFHist", predictFHist_diff_commitTrueFHist)
+     XSPerfAccumulate(f"predictHist_diff_commitHist", predictHist_diff_commitHist)
+     dontTouch(commitHistValue)
+@@ -294,6 +296,13 @@ class Phr(implicit p: Parameters) extends PhrModule with HasPhrParameters with H
+     dontTouch(histFolded_diff_s0Folded)
+   }
+ 
++  require(
++    io.commit.bits.meta.phr.predFoldedHist.hist.length == metaPhrFolded.hist.length,
++    "pred folded hist length mismatch"
++  )
++  private val predictFHist_diff_trainFHist =
++    io.commit.valid && io.commit.bits.meta.phr.predFoldedHist.asUInt =/= metaPhrFolded.asUInt
++  XSPerfAccumulate(f"predictFHist_diff_trainFHist", predictFHist_diff_trainFHist)
+   // TODO: remove dontTouch
+   dontTouch(s0_foldedPhr)
+   dontTouch(s1_foldedPhrReg)
+```

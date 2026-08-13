@@ -1,0 +1,5 @@
+abtb_enable            = 0
+read_bank              = write_bank
+read_bank_r_req_valid  = 1
+force_write            = 0
+write_success          = 0

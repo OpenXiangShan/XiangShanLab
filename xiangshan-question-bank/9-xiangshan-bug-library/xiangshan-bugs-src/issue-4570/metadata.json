@@ -1,0 +1,21 @@
+{
+  "number": 4570,
+  "title": "fix(exceptionGen): clear isEnqExcp when older or curr wb exception coming",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4570",
+  "state": "closed",
+  "labels": [],
+  "author": "Ziyue-Zhang",
+  "created_at": "2025-04-16T06:22:54Z",
+  "updated_at": "2025-04-16T10:51:46Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4570/commit-log.md"
+  ],
+  "submitted_at": "2025-04-16",
+  "branch": "",
+  "rtl_commit": ""
+}

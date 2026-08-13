@@ -1,0 +1,32 @@
+{
+  "number": 6095,
+  "title": "fix(PMPChecker, PMAChecker): non-dmode can't access memory of debug",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/6095",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "module: backend",
+    "module: memory",
+    "topic: functionality",
+    "module: other",
+    "module: top"
+  ],
+  "author": "wissygh",
+  "created_at": "2026-06-15T08:46:29Z",
+  "updated_at": "2026-06-19T16:10:28Z",
+  "submitted_at": "2026-06-15",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6095/commit-log.md"
+  ],
+  "bug_categories": [
+    "backend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

@@ -1,0 +1,18 @@
+{
+  "number": 6215,
+  "title": "Pointer masking (PMLEN=16) not applied to G-stage translation input under vsatp=Bare (onlyStage2) + hgatp=Sv48×4",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6215",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "ruc-jty",
+  "created_at": "2026-07-09T11:13:59Z",
+  "updated_at": "2026-07-17T06:40:58Z",
+  "source_files": [
+    "issue-6215/source/program-01.txt"
+  ],
+  "archive_files": [],
+  "has_comments": true
+}

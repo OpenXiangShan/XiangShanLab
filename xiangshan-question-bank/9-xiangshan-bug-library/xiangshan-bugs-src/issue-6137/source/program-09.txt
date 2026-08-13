@@ -1,0 +1,5 @@
+emu \
+  -i poc_abtb_dcache_gadget.bin \
+  --no-diff \
+  -C 30000 -b 0 -e 30000 \
+  > normal_assert_run.log 2>&1

@@ -1,0 +1,27 @@
+{
+  "number": 4842,
+  "title": "fix(MainPipe): fix `extra_meta_resp` overrided",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4842",
+  "state": "closed",
+  "labels": [
+    "type: bug/confirmed"
+  ],
+  "author": "cz4e",
+  "created_at": "2025-06-27T05:12:39Z",
+  "updated_at": "2025-08-25T06:43:02Z",
+  "submitted_at": "2025-06-27",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4842/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

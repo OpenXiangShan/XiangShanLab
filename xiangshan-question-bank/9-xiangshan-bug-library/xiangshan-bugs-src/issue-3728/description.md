@@ -1,0 +1,3 @@
+`scommit` from RoB represents the number of store instructions committed in this cycle, excluding the stores that raise exceptions. However the FSM for uncache store transitions from `s_wait` to `s_idle` only when `scommit > 0.U`. Therefore when a non-data error is raised from error device and an access fault is reported, the FSM gets blocked on `s_wait` state. Supposing that the next store in SQ raises another exception, the uncache FSM will get into deadlock.
+
+This pr fixes the bug by a little modification on the uncache FSM, that is, when a mmio store that is detected for a non-data error writes back to backend, the FSM will transition into `s_idle` directly, skipping the state of `s_wait`.

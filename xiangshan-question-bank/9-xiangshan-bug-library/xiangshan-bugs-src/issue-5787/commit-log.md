@@ -1,0 +1,318 @@
+# Commit Log
+- Issue: #5787
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5787
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5787
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5787
+- Changed files: 11
+- Additions: 42
+- Deletions: 48
+
+## Files
+- `src/main/scala/xiangshan/Bundle.scala`
+- `src/main/scala/xiangshan/backend/Bundles.scala`
+- `src/main/scala/xiangshan/backend/CtrlBlock.scala`
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+- `src/main/scala/xiangshan/backend/rob/RobBundles.scala`
+- `src/main/scala/xiangshan/frontend/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/Frontend.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+- `src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala`
+- `src/main/scala/xiangshan/frontend/ifu/Ifu.scala`
+- `src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/Bundle.scala b/src/main/scala/xiangshan/Bundle.scala
+index 2f2f7e2bf5c..0df14080d64 100644
+--- a/src/main/scala/xiangshan/Bundle.scala
++++ b/src/main/scala/xiangshan/Bundle.scala
+@@ -452,6 +452,7 @@ class FrontendToCtrlIO(implicit p: Parameters) extends XSBundle {
+   // from backend
+   val toFtq = Flipped(new CtrlToFtqIO)
+   val canAccept = Input(Bool())
++  val backendEmpty = Input(Bool())
+ 
+   val wfi = Flipped(new WfiReqBundle)
+ }
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index 7bf2f7272d0..36b9120bd46 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -571,8 +571,6 @@ object Bundles {
+     val blockBackward   = Bool()
+     val flushPipe       = Bool() // This inst will flush all the pipe when commit, like exception but can commit
+     val canRobCompress  = Bool()
+-    val crossFtqCommit  = UInt(2.W) // use to caculate the ftq idx of ftqentry when commit
+-    val crossFtq        = Bool() // use to caculate the ftq idx of brh instructions when pass to exu
+     val fusionNum       = UInt(2.W)
+     val selImm          = SelImm()
+     val imm             = UInt(32.W)
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index 95a3243cba4..f9e6c6dc7ec 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -365,6 +365,12 @@ class CtrlBlockImp(
+     frontendCommit
+   )
+ 
++  val isEmptyDelay = !(RegNext(VecInit(decode.io.in.map(_.valid))).asUInt.orR ||
++    RegNext(VecInit(rename.io.in.map(_.valid))).asUInt.orR ||
++    RegNext(VecInit(dispatch.io.enqRob.req.map(_.valid))).asUInt.orR) &&
++    RegNext(rob.io.enq.isEmpty)
++  io.frontend.backendEmpty := RegNext(isEmptyDelay)
++
+   io.frontend.toFtq.redirect.valid := s5_flushFromRobValid || s3_redirectGen.valid
+   io.frontend.toFtq.redirect.bits := Mux(s5_flushFromRobValid, frontendFlushBits, s3_redirectGen.bits)
+   io.frontend.toFtq.ftqIdxSelOH.valid := s5_flushFromRobValid || redirectGen.io.stage2Redirect.valid
+@@ -949,7 +955,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
+   }
+   val fromWB = new Bundle {
+     val wbData = Flipped(MixedVec(params.genWrite2RobBundles))
+-    val delayedOldestExuRedirect = Flipped(ValidIO(new Redirect)) 
++    val delayedOldestExuRedirect = Flipped(ValidIO(new Redirect))
+   }
+   val redirect = ValidIO(new Redirect)
+   val fromMem = new Bundle {
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index 3131ea0e3c8..b987dc7d197 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -302,7 +302,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   }
+   for (i <- 0 until CommitWidth) {
+     commitInfo(i).ftqOffset := 0.U
+-    commitInfo(i).ftqIdx := rawInfo(i).ftqIdx - 1.U + rawInfo(i).crossFtqCommit
++    commitInfo(i).ftqIdx := rawInfo(i).ftqIdx - 1.U
+   }
+ 
+   // data for debug
+diff --git a/src/main/scala/xiangshan/backend/rob/RobBundles.scala b/src/main/scala/xiangshan/backend/rob/RobBundles.scala
+index 9134735c66b..f20e112b039 100644
+--- a/src/main/scala/xiangshan/backend/rob/RobBundles.scala
++++ b/src/main/scala/xiangshan/backend/rob/RobBundles.scala
+@@ -70,7 +70,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val realDestSize = UInt(log2Up(MaxUopSize + 1).W)
+     val uopNum = UInt(log2Up(MaxUopSize + 1).W)
+     val needFlush = Bool()
+-    val crossFtqCommit = UInt(2.W) // 59 bit
+     // status end
+ 
+     // debug_begin
+@@ -121,7 +120,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val fpWen = Bool()
+     val rfWen = Bool()
+     val needFlush = Bool()
+-    val crossFtqCommit = UInt(2.W)
+     // trace
+     val traceBlockInPipe = new TracePipe(IretireWidthEncoded)
+     // debug_begin
+@@ -151,7 +149,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     robEntry.dirtyVs := robEnq.dirtyVs
+     // flushPipe needFlush but not exception
+     robEntry.needFlush := robEnq.hasException || robEnq.flushPipe
+-    robEntry.crossFtqCommit := robEnq.crossFtqCommit
+     // trace
+     robEntry.traceBlockInPipe := robEnq.traceBlockInPipe
+     robEntry.debug_ldest.foreach(_ := robEnq.ldest)
+@@ -197,7 +194,6 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     robCommitEntry.dirtyFs := robEntry.fpWen || robEntry.wflags
+     robCommitEntry.dirtyVs := robEntry.dirtyVs
+     robCommitEntry.needFlush := robEntry.needFlush
+-    robCommitEntry.crossFtqCommit := robEntry.crossFtqCommit
+     robCommitEntry.traceBlockInPipe := robEntry.traceBlockInPipe
+     robCommitEntry.debug_pc.foreach(_ := robEntry.debug_pc.get)
+     robCommitEntry.debug_instr.foreach(_ := robEntry.debug_instr.get)
+diff --git a/src/main/scala/xiangshan/frontend/Bundles.scala b/src/main/scala/xiangshan/frontend/Bundles.scala
+index c486e2ee1bf..0b10bfe2f94 100644
+--- a/src/main/scala/xiangshan/frontend/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/Bundles.scala
+@@ -155,14 +155,7 @@ class FrontendRedirect(implicit p: Parameters) extends FrontendBundle {
+ }
+ 
+ class IfuToFtqIO(implicit p: Parameters) extends FrontendBundle {
+-  val mmioCommitRead: MmioCommitRead          = new MmioCommitRead
+-  val wbRedirect:     Valid[FrontendRedirect] = Valid(new FrontendRedirect)
+-}
+-
+-class MmioCommitRead(implicit p: Parameters) extends FrontendBundle {
+-  val valid:          Bool   = Output(Bool())
+-  val mmioFtqPtr:     FtqPtr = Output(new FtqPtr)
+-  val mmioLastCommit: Bool   = Input(Bool())
++  val wbRedirect: Valid[FrontendRedirect] = Valid(new FrontendRedirect)
+ }
+ 
+ class ExceptionType extends Bundle {
+diff --git a/src/main/scala/xiangshan/frontend/Frontend.scala b/src/main/scala/xiangshan/frontend/Frontend.scala
+index ae84d378336..967544c8504 100644
+--- a/src/main/scala/xiangshan/frontend/Frontend.scala
++++ b/src/main/scala/xiangshan/frontend/Frontend.scala
+@@ -238,10 +238,13 @@ class FrontendInlinedImp(outer: FrontendInlined) extends FrontendInlinedImpBase(
+ 
+   // IFU-Ibuffer
+   ifu.io.toIBuffer <> ibuffer.io.in
++  ifu.io.ibufferEmpty := ibuffer.io.empty
+ 
+   ftq.io.fromBackend <> io.backend.toFtq
+   io.backend.fromFtq := ftq.io.toBackend
+-  io.backend.fromIfu := ifu.io.toBackend
++
++  ifu.io.backendEmpty := io.backend.backendEmpty
++  io.backend.fromIfu  := ifu.io.toBackend
+ 
+   ibuffer.io.flush           := needFlush
+   ibuffer.io.decodeCanAccept := io.backend.canAccept
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 6cdf96a1be8..8b225b7e4e1 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -421,14 +421,6 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   io.toBpu.commit.bits.attribute.branchType := DontCare
+   io.toBpu.commit.bits.attribute.rasAction  := commitQueue.io.bpuTrain.bits.rasAction
+ 
+-  // --------------------------------------------------------------------------------
+-  // MMIO fetch
+-  // --------------------------------------------------------------------------------
+-  private val mmioPtr           = io.fromIfu.mmioCommitRead.mmioFtqPtr
+-  private val mmioValid         = io.fromIfu.mmioCommitRead.valid
+-  private val lastMmioCommitted = commitPtr > mmioPtr || commitPtr === mmioPtr && commit
+-  io.fromIfu.mmioCommitRead.mmioLastCommit := RegNext(lastMmioCommitted && mmioValid)
+-
+   // --------------------------------------------------------------------------------
+   // Performance monitoring
+   // --------------------------------------------------------------------------------
+diff --git a/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala b/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala
+index 5c422e09fe5..d8e3513f07b 100644
+--- a/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala
++++ b/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala
+@@ -35,11 +35,15 @@ import xiangshan.frontend.FrontendTopDownBundle
+ 
+ class IBuffer(implicit p: Parameters) extends IBufferModule with HasCircularQueuePtrHelper with HasPerfEvents {
+   class IBufferIO extends Bundle {
+-    val flush:           Bool                        = Input(Bool())
+-    val in:              DecoupledIO[FetchToIBuffer] = Flipped(DecoupledIO(new FetchToIBuffer))
+-    val out:             Vec[DecoupledIO[CtrlFlow]]  = Vec(DecodeWidth, DecoupledIO(new CtrlFlow))
+-    val full:            Bool                        = Output(Bool())
+-    val decodeCanAccept: Bool                        = Input(Bool())
++    val in:  DecoupledIO[FetchToIBuffer] = Flipped(DecoupledIO(new FetchToIBuffer))
++    val out: Vec[DecoupledIO[CtrlFlow]]  = Vec(DecodeWidth, DecoupledIO(new CtrlFlow))
++
++    val flush: Bool = Input(Bool())
++
++    val full:  Bool = Output(Bool())
++    val empty: Bool = Output(Bool())
++
++    val decodeCanAccept: Bool = Input(Bool())
+ 
+     // top-down
+     val backendRedirectTopdown: BackendRedirectTopdown = Input(new BackendRedirectTopdown)
+@@ -100,6 +104,13 @@ class IBuffer(implicit p: Parameters) extends IBufferModule with HasCircularQueu
+   private val enqPtrVec = RegInit(VecInit.tabulate(EnqueueWidth)(_.U.asTypeOf(new IBufPtr)))
+   private val enqPtr    = enqPtrVec(0)
+ 
++  // No bubble for ibuffer.out, so head.valid is enough
++  io.empty := enqPtr === deqPtr && !io.out.head.valid
++  XSError(
++    !io.out.head.valid && io.out.tail.map(_.valid).reduce(_ || _),
++    "Bubble in ibuffer.out"
++  )
++
+   XSError(
+     io.in.valid && io.in.bits.prevIBufEnqPtr =/= enqPtr,
+     "The enqueueing behavior of the IBuffer does not match expectations."
+diff --git a/src/main/scala/xiangshan/frontend/ifu/Ifu.scala b/src/main/scala/xiangshan/frontend/ifu/Ifu.scala
+index e99df64a441..a988382ea83 100644
+--- a/src/main/scala/xiangshan/frontend/ifu/Ifu.scala
++++ b/src/main/scala/xiangshan/frontend/ifu/Ifu.scala
+@@ -67,10 +67,12 @@ class Ifu(implicit p: Parameters) extends IfuModule
+     val fromUncache: InstrUncacheToIfuIO = Flipped(new InstrUncacheToIfuIO)
+ 
+     // IBuffer: enqueue
+-    val toIBuffer: DecoupledIO[FetchToIBuffer] = DecoupledIO(new FetchToIBuffer)
++    val toIBuffer:    DecoupledIO[FetchToIBuffer] = DecoupledIO(new FetchToIBuffer)
++    val ibufferEmpty: Bool                        = Input(Bool())
+ 
+     // Backend: gpaMem
+-    val toBackend: IfuToBackendIO = new IfuToBackendIO
++    val toBackend:    IfuToBackendIO = new IfuToBackendIO
++    val backendEmpty: Bool           = Input(Bool())
+ 
+     // debug extension: frontend trigger
+     val frontendTrigger: FrontendTdataDistributeIO = Flipped(new FrontendTdataDistributeIO)
+@@ -542,14 +544,13 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   }
+ 
+   uncacheUnit.io.req.valid       := s3_valid && s3_useUncacheFetch && !uncacheBusy
+-  uncacheUnit.io.req.bits.ftqIdx := s3_alignFetchBlock(0).ftqIdx
+   uncacheUnit.io.req.bits.pbmt   := s3_icacheMeta(0).itlbPbmt
+   uncacheUnit.io.req.bits.isMmio := s3_icacheMeta(0).pmpMmio
+   uncacheUnit.io.req.bits.paddr  := s3_icacheMeta(0).pAddr
+   uncacheUnit.io.flush           := s3_flush
+   uncacheUnit.io.isFirstInstr    := isFirstInstr
+   uncacheUnit.io.ifuStall        := !io.toIBuffer.ready
+-  io.toFtq.mmioCommitRead <> uncacheUnit.io.mmioCommitRead
++  uncacheUnit.io.emptyAfter      := io.backendEmpty && io.ibufferEmpty
+   io.toUncache <> uncacheUnit.io.toUncache
+   uncacheUnit.io.fromUncache <> io.fromUncache
+ 
+diff --git a/src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala b/src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala
+index 27a1961c0a5..c0e4c3c8887 100644
+--- a/src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala
++++ b/src/main/scala/xiangshan/frontend/ifu/IfuUncacheUnit.scala
+@@ -22,15 +22,12 @@ import xiangshan.cache.mmu.Pbmt
+ import xiangshan.frontend.ExceptionType
+ import xiangshan.frontend.IfuToInstrUncacheIO
+ import xiangshan.frontend.InstrUncacheToIfuIO
+-import xiangshan.frontend.MmioCommitRead
+ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.PrunedAddrInit
+-import xiangshan.frontend.ftq.FtqPtr
+ 
+ class IfuUncacheUnit(implicit p: Parameters) extends IfuModule with IfuHelper {
+   class IfuUncacheIO extends IfuBundle {
+     class IfuUncacheReq(implicit p: Parameters) extends IfuBundle {
+-      val ftqIdx: FtqPtr     = new FtqPtr
+       val pbmt:   UInt       = UInt(Pbmt.width.W)
+       val isMmio: Bool       = Bool()
+       val paddr:  PrunedAddr = PrunedAddr(PAddrBits)
+@@ -40,12 +37,12 @@ class IfuUncacheUnit(implicit p: Parameters) extends IfuModule with IfuHelper {
+       val exception:   ExceptionType = new ExceptionType
+       val crossPage:   Bool          = Bool()
+     }
+-    val req            = Flipped(DecoupledIO(new IfuUncacheReq))
+-    val resp           = Output(ValidIO(new IfuUncacheResp))
+-    val isFirstInstr   = Input(Bool())
+-    val ifuStall       = Input(Bool())
+-    val flush          = Input(Bool())
+-    val mmioCommitRead = new MmioCommitRead
++    val req          = Flipped(DecoupledIO(new IfuUncacheReq))
++    val resp         = Output(ValidIO(new IfuUncacheResp))
++    val isFirstInstr = Input(Bool())
++    val ifuStall     = Input(Bool())
++    val flush        = Input(Bool())
++    val emptyAfter   = Input(Bool())
+     // Uncache: mmio request / response
+     val toUncache   = new IfuToInstrUncacheIO
+     val fromUncache = Flipped(new InstrUncacheToIfuIO)
+@@ -102,7 +99,7 @@ class IfuUncacheUnit(implicit p: Parameters) extends IfuModule with IfuHelper {
+       when(isFirstInstr) {
+         uncacheState := UncacheFsmState.SendReq
+       }.otherwise {
+-        uncacheState := Mux(io.mmioCommitRead.mmioLastCommit, UncacheFsmState.SendReq, UncacheFsmState.WaitLastCommit)
++        uncacheState := Mux(io.emptyAfter, UncacheFsmState.SendReq, UncacheFsmState.WaitLastCommit)
+       }
+     }
+ 
+@@ -145,10 +142,6 @@ class IfuUncacheUnit(implicit p: Parameters) extends IfuModule with IfuHelper {
+   io.resp.bits.uncacheData := uncacheData
+   io.resp.bits.crossPage   := uncacheCrossPage
+ 
+-  // When a single MMIO instruction spans pages,
+-  // should the second send for confirming the oldest instruction be blocked?
+-  io.mmioCommitRead.valid      := uncacheValid && isMmio
+-  io.mmioCommitRead.mmioFtqPtr := RegEnable(io.req.bits.ftqIdx - 1.U, io.req.valid)
+   when(io.flush) {
+     uncacheReset()
+   }
+```

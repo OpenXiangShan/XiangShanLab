@@ -1,0 +1,13 @@
+{
+  "cross_variant_secret_oracle": "reproduced",
+  "secret0_selected_fetch_oracle_count": 9,
+  "secret0_selected_refill_oracle_count": 4,
+  "secret0_selected_target": "0x80000400",
+  "secret0_unselected_fetch_oracle_count": 0,
+  "secret0_unselected_refill_oracle_count": 0,
+  "secret1_selected_fetch_oracle_count": 10,
+  "secret1_selected_refill_oracle_count": 3,
+  "secret1_selected_target": "0x80000800",
+  "secret1_unselected_fetch_oracle_count": 0,
+  "secret1_unselected_refill_oracle_count": 0
+}

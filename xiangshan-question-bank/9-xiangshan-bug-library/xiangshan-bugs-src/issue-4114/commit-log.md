@@ -1,0 +1,1484 @@
+# Commit Log
+- Issue: #4114
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4114
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4114
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4114
+- Changed files: 13
+- Additions: 382
+- Deletions: 360
+
+## Files
+- `src/main/scala/xiangshan/Parameters.scala`
+- `src/main/scala/xiangshan/backend/Bundles.scala`
+- `src/main/scala/xiangshan/backend/CtrlBlock.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnit.scala`
+- `src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala`
+- `src/main/scala/xiangshan/backend/fu/FuType.scala`
+- `src/main/scala/xiangshan/backend/rename/CompressUnit.scala`
+- `src/main/scala/xiangshan/backend/rename/Rename.scala`
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+- `src/main/scala/xiangshan/backend/rob/RobBundles.scala`
+- `src/main/scala/xiangshan/backend/trace/Trace.scala`
+- `src/main/scala/xiangshan/frontend/NewFtq.scala`
+- `src/main/scala/xiangshan/package.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 64a83c61bf6..c0f88089998 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -902,7 +902,8 @@ trait HasXSParameter {
+   def PrivWidth              = coreParams.traceParams.PrivWidth
+   def IaddrWidth             = coreParams.traceParams.IaddrWidth
+   def ItypeWidth             = coreParams.traceParams.ItypeWidth
+-  def IretireWidthInPipe     = log2Up(RenameWidth * 2)
++  def IretireWidthEncoded    = log2Up((2 + RenameWidth + 1) * RenameWidth / 2) // 2 + 3 + ... + (RenameWidth + 1)
++  def IretireWidthCommited   = log2Up(RenameWidth * 2)
+   def IretireWidthCompressed = log2Up(RenameWidth * CommitWidth * 2)
+   def IlastsizeWidth         = coreParams.traceParams.IlastsizeWidth
+ 
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index eae7563c729..e1e73e9327e 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -117,6 +117,7 @@ object Bundles {
+     val numWB           = UInt(log2Up(MaxUopSize).W) // rob need this
+     val commitType      = CommitType() // Todo: remove it
+     val needFrm         = new NeedFrmBundle
++    val lastInFtqEntry  = Bool()
+ 
+     val debug_fuType    = OptionWrapper(backendParams.debugEn, FuType())
+ 
+@@ -180,6 +181,8 @@ object Bundles {
+     val crossPageIPFFix = Bool()
+     val ftqPtr          = new FtqPtr
+     val ftqOffset       = UInt(log2Up(PredictWidth).W)
++    val ftqLastOffset   = UInt(log2Up(PredictWidth).W) // store ftqoffset before channge in rename
++    val stdwriteNeed    = Bool()
+     // passed from DecodedInst
+     val srcType         = Vec(numSrc, SrcType())
+     val ldest           = UInt(LogicRegsWidth.W)
+@@ -195,6 +198,9 @@ object Bundles {
+     val blockBackward   = Bool()
+     val flushPipe       = Bool() // This inst will flush all the pipe when commit, like exception but can commit
+     val canRobCompress  = Bool()
++    val crossFtqCommit  = UInt(2.W) // use to caculate the ftq idx of ftqentry when commit
++    val crossFtq        = Bool() // use to caculate the ftq idx of brh instructions when pass to exu
++    val fusionNum       = UInt(2.W)
+     val selImm          = SelImm()
+     val imm             = UInt(32.W)
+     val fpu             = new FPUCtrlSignals
+@@ -219,10 +225,9 @@ object Bundles {
+     val useRegCache     = Vec(backendParams.numIntRegSrc, Bool())
+     val regCacheIdx     = Vec(backendParams.numIntRegSrc, UInt(RegCacheIdxWidth.W))
+     val robIdx          = new RobPtr
+-    val instrSize       = UInt(log2Ceil(RenameWidth + 1).W)
+     val dirtyFs         = Bool()
+     val dirtyVs         = Bool()
+-    val traceBlockInPipe = new TracePipe(IretireWidthInPipe)
++    val traceBlockInPipe = new TracePipe(IretireWidthEncoded)
+ 
+     val eliminatedMove  = Bool()
+     // Take snapshot at this CFI inst
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index 42f16100c46..03ff40ccce2 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -145,7 +145,7 @@ class CtrlBlockImp(
+   val intScheWbData = io.fromWB.wbData.filter(_.bits.params.schdType.isInstanceOf[IntScheduler])
+   val fpScheWbData = io.fromWB.wbData.filter(_.bits.params.schdType.isInstanceOf[FpScheduler])
+   val vfScheWbData = io.fromWB.wbData.filter(_.bits.params.schdType.isInstanceOf[VfScheduler])
+-  val intCanCompress = intScheWbData.filter(_.bits.params.CanCompress)
++  val staScheWbData = io.fromWB.wbData.filter(_.bits.params.hasStoreAddrFu)
+   val i2vWbData = intScheWbData.filter(_.bits.params.writeVecRf)
+   val f2vWbData = fpScheWbData.filter(_.bits.params.writeVecRf)
+   val memVloadWbData = io.fromWB.wbData.filter(x => x.bits.params.schdType.isInstanceOf[MemScheduler] && x.bits.params.hasVLoadFu)
+@@ -154,23 +154,26 @@ class CtrlBlockImp(
+     val killedByOlder = x.bits.robIdx.needFlush(Seq(s1_s3_redirect, s2_s4_redirect, s3_s5_redirect))
+     val delayed = Wire(Valid(UInt(io.fromWB.wbData.size.U.getWidth.W)))
+     delayed.valid := GatedValidRegNext(valid && !killedByOlder)
+-    val isIntSche = intCanCompress.contains(x)
++    val isIntSche = intScheWbData.contains(x)
+     val isFpSche = fpScheWbData.contains(x)
+     val isVfSche = vfScheWbData.contains(x)
+     val isMemVload = memVloadWbData.contains(x)
+     val isi2v = i2vWbData.contains(x)
+     val isf2v = f2vWbData.contains(x)
++    val isStaSche = staScheWbData.contains(x)
+     val canSameRobidxWbData = if(isVfSche) {
+       i2vWbData ++ f2vWbData ++ vfScheWbData
+     } else if(isi2v) {
+-      intCanCompress ++ fpScheWbData ++ vfScheWbData
++      intScheWbData ++ fpScheWbData ++ vfScheWbData
+     } else if (isf2v) {
+-      intCanCompress ++ fpScheWbData ++ vfScheWbData
++      intScheWbData ++ fpScheWbData ++ vfScheWbData
+     } else if (isIntSche) {
+-      intCanCompress ++ fpScheWbData
++      intScheWbData ++ fpScheWbData
+     } else if (isFpSche) {
+-      intCanCompress ++ fpScheWbData
+-    }  else if (isMemVload) {
++      intScheWbData ++ fpScheWbData
++//    } else if (isStaSche) {
++//      intScheWbData ++ fpScheWbData ++ staScheWbData
++    } else if (isMemVload) {
+       memVloadWbData
+     } else {
+       Seq(x)
+@@ -578,6 +581,9 @@ class CtrlBlockImp(
+     rename.io.in(i).bits := decodePipeRename(i).bits
+     dispatch.io.renameIn(i).valid := decodePipeRename(i).valid && !fusionDecoder.io.clear(i) && !decodePipeRename(i).bits.isMove
+     dispatch.io.renameIn(i).bits := decodePipeRename(i).bits
++    rename.io.validVec(i) := decodePipeRename(i).valid
++    rename.io.isFusionVec(i) := false.B
++    rename.io.fusionCross2FtqVec(i) := false.B
+   }
+ 
+   for (i <- 0 until RenameWidth - 1) {
+@@ -586,21 +592,20 @@ class CtrlBlockImp(
+ 
+     // update the first RenameWidth - 1 instructions
+     decode.io.fusion(i) := fusionDecoder.io.out(i).valid && rename.io.out(i).fire
+-    // TODO: remove this dirty code for ftq update
+-    val sameFtqPtr = rename.io.in(i).bits.ftqPtr.value === rename.io.in(i + 1).bits.ftqPtr.value
+-    val ftqOffset0 = rename.io.in(i).bits.ftqOffset
+-    val ftqOffset1 = rename.io.in(i + 1).bits.ftqOffset
+-    val ftqOffsetDiff = ftqOffset1 - ftqOffset0
+-    val cond1 = sameFtqPtr && ftqOffsetDiff === 1.U
+-    val cond2 = sameFtqPtr && ftqOffsetDiff === 2.U
+-    val cond3 = !sameFtqPtr && ftqOffset1 === 0.U
+-    val cond4 = !sameFtqPtr && ftqOffset1 === 1.U
+     when (fusionDecoder.io.out(i).valid) {
+       fusionDecoder.io.out(i).bits.update(rename.io.in(i).bits)
+       fusionDecoder.io.out(i).bits.update(dispatch.io.renameIn(i).bits)
+-      rename.io.in(i).bits.commitType := Mux(cond1, 4.U, Mux(cond2, 5.U, Mux(cond3, 6.U, 7.U)))
++      val cross2Ftq = decodePipeRename(i).bits.lastInFtqEntry && decodePipeRename(i + 1).bits.lastInFtqEntry
++      val cross1Ftq = decodePipeRename(i).bits.lastInFtqEntry || decodePipeRename(i + 1).bits.lastInFtqEntry
++      rename.io.in(i + 1).bits.lastInFtqEntry := cross1Ftq
++      rename.io.in(i + 1).bits.canRobCompress := !cross2Ftq
++      // if second instruciton of fusion is move and it can also be fusion, it will not act as a move
++      rename.io.in(i + 1).bits.isMove := false.B
++      rename.io.in(i).bits.lastInFtqEntry := false.B
++      rename.io.in(i).bits.canRobCompress := !cross2Ftq
++      rename.io.isFusionVec(i) := true.B
++      rename.io.fusionCross2FtqVec(i) := cross2Ftq
+     }
+-    XSError(fusionDecoder.io.out(i).valid && !cond1 && !cond2 && !cond3 && !cond4, p"new condition $sameFtqPtr $ftqOffset0 $ftqOffset1\n")
+   }
+ 
+   // memory dependency predict
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index 5b1419eaac1..98e1eb41ab3 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -832,6 +832,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+ 
+   decodedInst.connectStaticInst(io.enq.ctrlFlow)
+ 
++  decodedInst.lastInFtqEntry := ctrl_flow.isLastInFtqEntry
+   decodedInst.uopIdx := 0.U
+   decodedInst.firstUop := true.B
+   decodedInst.lastUop := true.B
+diff --git a/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala b/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
+index bde89394e20..58167c107ce 100644
+--- a/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
++++ b/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala
+@@ -165,7 +165,14 @@ class NewDispatch(implicit p: Parameters) extends XSModule with HasPerfEvents wi
+   val fromRename = io.fromRename
+   io.toRenameAllFire := io.fromRename.map(x => !x.valid || x.fire).reduce(_ && _)
+   val fromRenameUpdate = Wire(Vec(RenameWidth, Flipped(ValidIO(new DynInst))))
+-  fromRenameUpdate := fromRename
++
++  // Update ftqidx to dispatch: Due to branch instructions/store compression, the required ftqidx should correspond to the ftqidx of the last instruction in the compressed robentry.
++  for (i <- 0 until RenameWidth) {
++    fromRenameUpdate(i) := fromRename(i)
++    fromRenameUpdate(i).bits.ftqOffset := fromRename(i).bits.ftqLastOffset
++    fromRenameUpdate(i).bits.ftqPtr := fromRename(i).bits.ftqPtr + fromRename(i).bits.crossFtq
++  }
++
+   val renameWidth = io.fromRename.size
+   val issueQueueCount = io.IQValidNumVec
+   val issueQueueNum = allIssueParams.size
+diff --git a/src/main/scala/xiangshan/backend/fu/FuType.scala b/src/main/scala/xiangshan/backend/fu/FuType.scala
+index 5172900babe..11fcd14ddaf 100644
+--- a/src/main/scala/xiangshan/backend/fu/FuType.scala
++++ b/src/main/scala/xiangshan/backend/fu/FuType.scala
+@@ -134,6 +134,7 @@ object FuType extends OHEnumeration {
+   val fpOP = fpArithAll ++ Seq(i2f, i2v)
+   val scalaNeedFrm = Seq(i2f, fmac, fDivSqrt)
+   val vectorNeedFrm = Seq(vfalu, vfma, vfdiv, vfcvt)
++  val blockBackCompress = Seq(brh, jmp)
+ 
+   def X = BitPat.N(num) // Todo: Don't Care
+ 
+@@ -211,6 +212,8 @@ object FuType extends OHEnumeration {
+ 
+   def isVectorNeedFrm(fuType: UInt): Bool = FuTypeOrR(fuType, vectorNeedFrm)
+ 
++  def isBlockBackCompress(fuType: UInt): Bool = FuTypeOrR(fuType, blockBackCompress)
++
+   object FuTypeOrR {
+     def apply(fuType: UInt, fu0: OHType, fus: OHType*): Bool = {
+       apply(fuType, fu0 +: fus)
+diff --git a/src/main/scala/xiangshan/backend/rename/CompressUnit.scala b/src/main/scala/xiangshan/backend/rename/CompressUnit.scala
+index b03dea2a8af..301f437c69d 100644
+--- a/src/main/scala/xiangshan/backend/rename/CompressUnit.scala
++++ b/src/main/scala/xiangshan/backend/rename/CompressUnit.scala
+@@ -34,10 +34,12 @@ import chisel3._
+ import chisel3.util._
+ import freechips.rocketchip.rocket.DecodeLogic
+ import xiangshan._
++import xiangshan.backend.fu.FuType
+ 
+ class CompressUnit(implicit p: Parameters) extends XSModule{
+   val io = IO(new Bundle {
+     val in = Vec(RenameWidth, Flipped(Valid(new DecodedInst)))
++    val oddFtqVec = Vec(RenameWidth, Input(Bool()))
+     val out = new Bundle {
+       val needRobFlags = Vec(RenameWidth, Output(Bool()))
+       val instrSizes = Vec(RenameWidth, Output(UInt(log2Ceil(RenameWidth + 1).W)))
+@@ -49,27 +51,42 @@ class CompressUnit(implicit p: Parameters) extends XSModule{
+   val noExc = io.in.map(in => !in.bits.exceptionVec.asUInt.orR && !TriggerAction.isDmode(in.bits.trigger))
+   val uopCanCompress = io.in.map(_.bits.canRobCompress)
+   val canCompress = io.in.zip(noExc).zip(uopCanCompress).map { case ((in, noExc), canComp) =>
+-    in.valid && !CommitType.isFused(in.bits.commitType) && in.bits.lastUop && noExc && canComp
++    in.valid && in.bits.lastUop && noExc && canComp
++  }
++  val extendedCanCompress = canCompress.zip(io.in).zip(io.oddFtqVec).flatMap { case ((canComp, in), oddFtq) =>
++    Seq((FuType.isBlockBackCompress(in.bits.fuType) && in.valid ) || canComp ,canComp && !oddFtq)
+   }
+ 
+-  val compressTable = (0 until 1 << RenameWidth).map { case keyCandidate =>
++  val compressTable = (0 until 1 << (2 * RenameWidth)).filter { baseCandidate =>
++    // check exist 01 pair
++    !(0 until RenameWidth).exists { i =>
++      val bitPair = (baseCandidate >> (2 * i)) & 0x3
++      bitPair == 0x2
++    }
++  }.zipWithIndex.map{ case (keyCandidate, index) =>
+     // padding 0s at each side for convenience
+-    val key = 0 +: (0 until RenameWidth).map(idx => (keyCandidate >> idx) & 1) :+ 0
++    val key = 0 +: (0 until RenameWidth * 2).map(idx => (keyCandidate >> idx) & 1) :+ 0
+     // count 1s on the left side of key (including itself)
+     def cntL(idx: Int): Int = (if (key(idx - 1) == 1) cntL(idx - 1) else 0) + key(idx)
+     // count 1s on the right side of key (including itself)
+     def cntR(idx: Int): Int = (if (key(idx + 1) == 1) cntR(idx + 1) else 0) + key(idx)
+     // the last instruction among consecutive rob-compressed instructions is marked
+-    val needRobs = (0 until RenameWidth).map(idx => ~(key.tail(idx) & key.tail(idx + 1)) & 1)
++    val needRobsExpand = (0 until RenameWidth * 2).map( idx => ~(key.tail(idx) & key.tail(idx + 1)) & 1)
++    val needRobs = needRobsExpand.grouped(2).map(group => group.reduce(_ | _)).toIndexedSeq
+     // how many instructions are rob-compressed with this instruction (including itself)
+-    val uopSizes = (1 to RenameWidth).map(idx => if (key(idx) == 0) 1 else cntL(idx) + cntR(idx) - 1)
++    val uopSizes = (1 to RenameWidth).map{ idx =>
++      val i = idx * 2 - 1
++      if (key(i) == 0) 1 else (cntL(i) + cntR(i)) / 2
++    }
+     // which instructions are rob-compressed with this instruction
+     val masks = uopSizes.zip(1 to RenameWidth).map { case (size, idx) => // compress masks
+-      if (key(idx) == 0) Seq.fill(RenameWidth)(0).updated(idx - 1, 1)
+-      else Seq.fill(RenameWidth)(0).patch(idx - cntL(idx), Seq.fill(size)(1), size)
++      val i = idx * 2 - 1
++      if (key(i) == 0) Seq.fill(RenameWidth)(0).updated(idx - 1, 1)
++      else Seq.fill(RenameWidth)(0).patch(idx - (cntL(i) + 1)/2, Seq.fill(size)(1), size)
+     }
+ 
+     println("[Rename.Compress]" +
++      " index: "    + index +
+       " i: "        + keyCandidate +
+       " key: "      + key.tail.dropRight(1) +
+       " needRobs: " + needRobs +
+@@ -86,7 +103,7 @@ class CompressUnit(implicit p: Parameters) extends XSModule{
+   }
+ 
+   val default = Seq.fill(3 * RenameWidth)(BitPat.N())
+-  val decoder = DecodeLogic(VecInit(canCompress).asUInt, default, compressTable)
++  val decoder = DecodeLogic(VecInit(extendedCanCompress).asUInt, default, compressTable)
+   (io.out.needRobFlags ++ io.out.instrSizes ++ io.out.masks).zip(decoder).foreach {
+     case (sink, source) => sink := source
+   }
+diff --git a/src/main/scala/xiangshan/backend/rename/Rename.scala b/src/main/scala/xiangshan/backend/rename/Rename.scala
+index 653e565c812..ca96aba1150 100644
+--- a/src/main/scala/xiangshan/backend/rename/Rename.scala
++++ b/src/main/scala/xiangshan/backend/rename/Rename.scala
+@@ -19,6 +19,7 @@ package xiangshan.backend.rename
+ import org.chipsalliance.cde.config.Parameters
+ import chisel3._
+ import chisel3.util._
++import chisel3.util.experimental.decode.TruthTable
+ import utility._
+ import utils._
+ import xiangshan._
+@@ -53,6 +54,10 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     val singleStep = Input(Bool())
+     // from decode
+     val in = Vec(RenameWidth, Flipped(DecoupledIO(new DecodedInst)))
++    // valid vec not clear by fusion(used by compress)
++    val validVec = Vec(RenameWidth, Input(Bool()))
++    val isFusionVec = Vec(RenameWidth, Input(Bool()))
++    val fusionCross2FtqVec = Vec(RenameWidth, Input(Bool()))
+     val fusionInfo = Vec(DecodeWidth - 1, Flipped(new FusionDecodeInfo))
+     // ssit read result
+     val ssit = Flipped(Vec(RenameWidth, Output(new SSITEntry)))
+@@ -161,16 +166,36 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+   //           dispatch1 ready ++ float point free list ready ++ int free list ready ++ vec free list ready     ++ not walk
+   val canOut = dispatchCanAcc && fpFreeList.io.canAllocate && intFreeList.io.canAllocate && vecFreeList.io.canAllocate && v0FreeList.io.canAllocate && vlFreeList.io.canAllocate && !io.rabCommits.isWalk
+ 
+-  compressUnit.io.in.zip(io.in).foreach{ case(sink, source) =>
+-    sink.valid := source.valid && !io.singleStep
++  val isLastFtqVec = io.in.map(_.bits.lastInFtqEntry)
++  val isFusionVec = io.isFusionVec
++  val canRobCompressVec = io.in.map(_.bits.canRobCompress)
++  // count crossftq num in may same robentry
++  val crossFtqNumVec = Wire(Vec(RenameWidth, Bool()))
++  // identify cross odd ftqentry
++  val oddFtqVec = Wire(Vec(RenameWidth, Bool()))
++  val fusionValidVec = isFusionVec.zip(io.fusionCross2FtqVec).map { case (isFusion, cross2Ftq) => isFusion & !cross2Ftq }
++    for (i <- 0 until RenameWidth) {
++    if (i == 0) {
++      crossFtqNumVec(i) := canRobCompressVec(i) && isLastFtqVec(i)
++      oddFtqVec(i) := false.B
++    } else {
++      crossFtqNumVec(i) := (crossFtqNumVec(i - 1) ^ isLastFtqVec(i)) && canRobCompressVec(i)
++      oddFtqVec(i) := crossFtqNumVec(i - 1) && isLastFtqVec(i)
++    }
++  }
++  dontTouch(crossFtqNumVec)
++  dontTouch(oddFtqVec)
++  compressUnit.io.in.zip(io.in).zip(io.validVec).foreach{ case((sink, source), valid) =>
++    sink.valid := valid && !io.singleStep
+     sink.bits := source.bits
+   }
++  compressUnit.io.oddFtqVec := oddFtqVec
+   val needRobFlags = compressUnit.io.out.needRobFlags
+   val instrSizesVec = compressUnit.io.out.instrSizes
+   val compressMasksVec = compressUnit.io.out.masks
+ 
+   // speculatively assign the instruction with an robIdx
+-  val validCount = PopCount(io.in.zip(needRobFlags).map{ case(in, needRobFlag) => in.valid && in.bits.lastUop && needRobFlag}) // number of instructions waiting to enter rob (from decode)
++  val validCount = PopCount(io.in.zip(needRobFlags).zip(io.validVec).map{ case((in, needRobFlag), valid) => valid && in.bits.lastUop && needRobFlag}) // number of instructions waiting to enter rob (from decode)
+   val robIdxHead = RegInit(0.U.asTypeOf(new RobPtr))
+   val lastCycleMisprediction = GatedValidRegNext(io.redirect.valid && !io.redirect.bits.flushItself())
+   val robIdxHeadNext = Mux(io.redirect.valid, io.redirect.bits.robIdx, // redirect: move ptr to given rob index
+@@ -275,6 +300,8 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+ 
+   val walkPdest = Wire(Vec(RenameWidth, UInt(PhyRegIdxWidth.W)))
+ 
++  val instrSize = Wire(Vec(RenameWidth, UInt((log2Ceil(RenameWidth + 1)).W)))
++
+   // uop calculation
+   for (i <- 0 until RenameWidth) {
+     (uops(i): Data).waiveAll :<= (io.in(i).bits: Data).waiveAll
+@@ -307,6 +334,10 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     uops(i).loadWaitBit := io.waittable(i)
+ 
+     uops(i).replayInst := false.B // set by IQ or MemQ
++    uops(i).crossFtq := false.B
++    uops(i).crossFtqCommit := 0.U
++    uops(i).ftqLastOffset := io.in(i).bits.ftqOffset
++    uops(i).stdwriteNeed := false.B
+     // alloc a new phy reg
+     needV0Dest(i) := io.in(i).valid && needDestReg(Reg_V0, io.in(i).bits)
+     needVlDest(i) := io.in(i).valid && needDestReg(Reg_Vl, io.in(i).bits)
+@@ -335,8 +366,9 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     // no valid instruction from decode stage || all resources (dispatch1 + both free lists) ready
+     io.in(i).ready := !io.in(0).valid || canOut
+ 
+-    uops(i).robIdx := robIdxHead + PopCount(io.in.zip(needRobFlags).take(i).map{ case(in, needRobFlag) => in.valid && in.bits.lastUop && needRobFlag})
+-    uops(i).instrSize := instrSizesVec(i)
++    uops(i).robIdx := robIdxHead + PopCount(io.in.zip(needRobFlags).zip(io.validVec).take(i).map{ case((in, needRobFlag), valid) => valid && in.bits.lastUop && needRobFlag})
++    instrSize(i) := instrSizesVec(i) + io.fusionCross2FtqVec(i)
++    uops(i).fusionNum := PopCount(compressMasksVec(i) & Cat(io.isFusionVec.reverse))
+     val hasExceptionExceptFlushPipe = Cat(selectFrontend(uops(i).exceptionVec) :+ uops(i).exceptionVec(illegalInstr) :+ uops(i).exceptionVec(virtualInstr)).orR || TriggerAction.isDmode(uops(i).trigger)
+     when(isMove(i) || hasExceptionExceptFlushPipe) {
+       uops(i).numUops := 0.U
+@@ -344,17 +376,37 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     }
+     if (i > 0) {
+       when(!needRobFlags(i - 1)) {
++        val numFusion = PopCount(compressMasksVec(i) & (Cat(isMove.reverse) | Cat(fusionValidVec.reverse)))
++        val numuops = instrSizesVec(i) - numFusion
++        dontTouch(numFusion)
++        dontTouch(numuops)
+         uops(i).firstUop := false.B
+         uops(i).ftqPtr := uops(i - 1).ftqPtr
+         uops(i).ftqOffset := uops(i - 1).ftqOffset
+-        uops(i).numUops := instrSizesVec(i) - PopCount(compressMasksVec(i) & Cat(isMove.reverse))
+-        uops(i).numWB := instrSizesVec(i) - PopCount(compressMasksVec(i) & Cat(isMove.reverse))
++        uops(i).numUops := instrSizesVec(i) - PopCount(compressMasksVec(i) & (Cat(isMove.reverse) | Cat(fusionValidVec.reverse)))
++        uops(i).numWB := instrSizesVec(i) - PopCount(compressMasksVec(i) & (Cat(isMove.reverse) | Cat(fusionValidVec.reverse)))
+       }
+     }
+     when(!needRobFlags(i)) {
+       uops(i).lastUop := false.B
+-      uops(i).numUops := instrSizesVec(i) - PopCount(compressMasksVec(i) & Cat(isMove.reverse))
+-      uops(i).numWB := instrSizesVec(i) - PopCount(compressMasksVec(i) & Cat(isMove.reverse))
++      uops(i).numUops := instrSizesVec(i) - PopCount(compressMasksVec(i) & (Cat(isMove.reverse) | Cat(fusionValidVec.reverse)))
++      uops(i).numWB := instrSizesVec(i) - PopCount(compressMasksVec(i) & (Cat(isMove.reverse) | Cat(fusionValidVec.reverse)))
++      if (i < RenameWidth - 1) {
++        uops(i).crossFtqCommit := uops(i + 1).crossFtqCommit
++        uops(i).crossFtq := uops(i + 1).crossFtq
++        uops(i).stdwriteNeed := uops(i + 1).stdwriteNeed
++      }
++    }.elsewhen(needRobFlags(i)) {
++      uops(i).crossFtqCommit := PopCount(compressMasksVec(i) & Cat(isLastFtqVec.reverse))
++      uops(i).crossFtq := uops(i).crossFtqCommit(1) || (uops(i).crossFtqCommit(0) && !isLastFtqVec(i))
++      uops(i).stdwriteNeed := FuType.isStore(uops(i).fuType)
++    }
++    if (i < RenameWidth - 1){
++      when(!needRobFlags(i)) {
++        uops(i).commitType := uops(i + 1).commitType
++        // for store/load/brh/jmp need to flush pipe if compress rob should store the last predecodeinfo
++        uops(i).preDecodeInfo.isRVC := uops(i + 1).preDecodeInfo.isRVC
++      }
+     }
+     uops(i).wfflags := (compressMasksVec(i) & Cat(io.in.map(_.bits.wfflags).reverse)).orR
+     uops(i).dirtyFs := (compressMasksVec(i) & Cat(io.in.map(_.bits.fpWen).reverse)).orR
+@@ -452,42 +504,56 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+   /**
+    * trace begin
+    */
+-  // note: fusionInst can't robcompress
+   val inVec = io.in.map(_.bits)
+   val isRVCVec = inVec.map(_.preDecodeInfo.isRVC)
+-  val isFusionVec = inVec.map(_.commitType).map(ctype => CommitType.isFused(ctype))
+-
+-  val canRobCompressVec = compressUnit.io.out.canCompressVec
+-  val iLastSizeVec = isRVCVec.map(isRVC => Mux(isRVC, Ilastsize.HalfWord, Ilastsize.Word))
+-  val halfWordNumVec = isRVCVec.map(isRVC => Mux(isRVC, 1.U, 2.U))
+-  val halfWordNumMatrix = (0 until RenameWidth).map(
+-    i => compressMasksVec(i).asBools.zipWithIndex.map{ case(mask, j) =>
+-      Mux(mask, halfWordNumVec(j), 0.U)
++  val nonRVCNumVec = (0 until RenameWidth).map{
++    i => compressMasksVec(i).asBools.zip(isRVCVec).map{
++      case (mask, isRVC) => (mask && !isRVC).asUInt
+     }
++  }
++
++  /*
++  encode: instrNum, nonRVCNum => commitinfo.iretire
++  (instrNum((log2Ceil(RenameWidth + 1)).W), nonRVCNum(IretireWidthInPipe.W), encode(IretireWidthEncode.W))
++  val instrSizeTable = Seq(
++    (1, 0, 1), (1, 1, 2),
++    (2, 0, 3), (2, 1, 4), (2, 2, 5),
++    (3, 0, 6), (3, 1, 7), (3, 2, 8), (3, 3, 9),
++    (4, 0, 10), (4, 1, 11), (4, 2, 12), (4, 3, 13), (4, 4, 14),
++    (5, 0, 15), (5, 1, 16), (5, 2, 17), (5, 3, 18), (5, 4, 19), (5, 5, 20),
++    (6, 0, 21), (6, 1, 22), (6, 2, 23), (6, 3, 24), (6, 4, 25), (6, 5, 26), (6, 6, 27),
+   )
++   */
++
++  val instrSizeTable = (1 to RenameWidth).map{ instrNum =>
++    (0 to instrNum).map( nonRVCNum => (instrNum, nonRVCNum) )
++  }.flatten
+ 
+   for (i <- 0 until RenameWidth) {
+     // iretire
+-    uops(i).traceBlockInPipe.iretire := Mux(canRobCompressVec(i),
+-      halfWordNumMatrix(i).reduce(_ +& _),
+-      (if(i < RenameWidth -1) Mux(isFusionVec(i), halfWordNumVec(i+1), 0.U) else 0.U) +& halfWordNumVec(i)
++    val nonRVCNum = Wire(UInt((log2Ceil(RenameWidth + 1).W)))
++    nonRVCNum := nonRVCNumVec(i).reduce(_ +& _)
++    uops(i).traceBlockInPipe.iretire := chisel3.util.experimental.decode.decoder(
++      (instrSize(i) ## nonRVCNum),
++      TruthTable(
++        instrSizeTable.zipWithIndex.map { case (table, encode) =>
++          (BitPat(((table._1 << log2Ceil(RenameWidth + 1)) + table._2).U((2 * log2Ceil(RenameWidth + 1)).W)),
++            BitPat((encode + 1).U(IretireWidthEncoded.W)))
++        },
++        BitPat.N(IretireWidthEncoded)
++      )
+     )
+-
+     // ilastsize
+-    val tmp = i
+-    val lastIsRVC = WireInit(false.B)
+-    (tmp until RenameWidth).map { j =>
+-      when(compressMasksVec(i)(j)) {
+-        lastIsRVC := io.in(j).bits.preDecodeInfo.isRVC
++    val lastIsRVC = isRVCVec(i)
++    when (!needRobFlags(i)) {
++      if (i + 1 < RenameWidth) {
++        uops(i).traceBlockInPipe.ilastsize := uops(i + 1).traceBlockInPipe.ilastsize
++        uops(i).traceBlockInPipe.itype := uops(i + 1).traceBlockInPipe.itype
+       }
++    }.elsewhen(needRobFlags(i)) {
++      uops(i).traceBlockInPipe.ilastsize := Mux(lastIsRVC, Ilastsize.HalfWord, Ilastsize.Word)
++      uops(i).traceBlockInPipe.itype := Itype.jumpTypeGen(inVec(i).preDecodeInfo.brType, inVec(i).ldest.asTypeOf(new OpRegType), inVec(i).lsrc(0).asTypeOf((new OpRegType)))
+     }
+-    uops(i).traceBlockInPipe.ilastsize := Mux(canRobCompressVec(i),
+-      Mux(lastIsRVC, Ilastsize.HalfWord, Ilastsize.Word),
+-      (if(i < RenameWidth -1) Mux(isFusionVec(i), iLastSizeVec(i+1), iLastSizeVec(i)) else iLastSizeVec(i))
+-    )
+-
+-    // itype
+-    uops(i).traceBlockInPipe.itype := Itype.jumpTypeGen(inVec(i).preDecodeInfo.brType, inVec(i).ldest.asTypeOf(new OpRegType), inVec(i).lsrc(0).asTypeOf((new OpRegType)))
+   }
+   /**
+    * trace end
+@@ -593,6 +659,9 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     dontTouch(robIdxHeadNext)
+     dontTouch(notInSameSnpt)
+     dontTouch(genSnapshot)
++    fusionValidVec.foreach{ fusionValid =>
++      dontTouch(fusionValid)
++    }
+   }
+   intFreeList.io.snpt := io.snpt
+   fpFreeList.io.snpt := io.snpt
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index e8c9e56cbb4..9572c4560cc 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -48,6 +48,7 @@ import yunsuan.VfaluType
+ import xiangshan.backend.rob.RobBundles._
+ import xiangshan.backend.trace._
+ import chisel3.experimental.BundleLiterals._
++import chisel3.util.experimental.decode.TruthTable
+ 
+ class Rob(params: BackendParams)(implicit p: Parameters) extends LazyModule with HasXSParameter {
+   override def shouldBeInlined: Boolean = false
+@@ -76,7 +77,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     val commits = Output(new RobCommitIO)
+     val trace = new Bundle {
+       val blockCommit = Input(Bool())
+-      val traceCommitInfo = new TraceBundle(hasIaddr = false, CommitWidth, IretireWidthInPipe)
++      val traceCommitInfo = new TraceBundle(hasIaddr = false, CommitWidth, IretireWidthCommited)
+     }
+     val rabCommits = Output(new RabCommitIO)
+     val diffCommits = if (backendParams.basicDebugEn) Some(Output(new DiffCommitIO)) else None
+@@ -248,13 +249,42 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     }
+   }
+ 
+-  // In each robentry, the ftqIdx and ftqOffset belong to the first instruction that was compressed,
+-  // That is Necessary when exceptions happen.
+-  // Update the ftqOffset to correctly notify the frontend which instructions have been committed.
+-  // Instructions in multiple Ftq entries compressed to one RobEntry do not occur.
++  /*
++    decode iretireEncoded => iretires, instrSize
++    (instrNum((log2Ceil(RenameWidth + 1)).W), iretire(IretireWidthInPipe.W), encode(IretireWidthEncode.W))
++    val instrSizeTable = Seq(
++      (1, 1, 1), (1, 2, 2),
++      (2, 2, 3), (2, 3, 4), (2, 4, 5),
++      (3, 3, 6), (3, 4, 7), (3, 5, 8), (3, 6, 9),
++      (4, 4, 10), (4, 5, 11), (4, 6, 12), (4, 7, 13), (4, 8, 14),
++      (5, 5, 15), (5, 6, 16), (5, 7, 17), (5, 8, 18), (5, 9, 19), (5, 10, 20),
++      (6, 6, 21), (6, 7, 22), (6, 8, 23), (6, 9, 24), (6, 10, 25), (6, 11, 26), (6, 12, 27),
++    )
++  */
++  val iretireCommit = Wire(Vec(CommitWidth, UInt(IretireWidthCommited.W)))
++  val instrSizeCommit   = Wire(Vec(CommitWidth, UInt((log2Ceil(RenameWidth + 1)).W)))
++  val instrSizeTable = (1 to RenameWidth).map( instrNum =>
++    (instrNum to (2 * instrNum)).map(iretireNum => (instrNum, iretireNum))
++  ).flatten
++
++  rawInfo.zip(instrSizeCommit).zip(iretireCommit).map { case((raw, instr), iretire) =>
++    iretire := chisel3.util.experimental.decode.decoder(
++      raw.traceBlockInPipe.iretire,
++      TruthTable(
++        instrSizeTable.zipWithIndex.map{case(table, encode) => (BitPat((encode + 1).U(IretireWidthEncoded.W)), BitPat(table._2.U(IretireWidthCommited.W)))},
++        BitPat.N(IretireWidthCommited))
++    )
++    instr := chisel3.util.experimental.decode.decoder(
++      raw.traceBlockInPipe.iretire,
++      TruthTable(
++        instrSizeTable.zipWithIndex.map{case(table, encode) => (BitPat((encode + 1).U(IretireWidthEncoded.W)), BitPat(table._1.U((log2Ceil(RenameWidth + 1)).W)))},
++        BitPat.N((log2Ceil(RenameWidth + 1))))
++    )
++  }
++
+   for (i <- 0 until CommitWidth) {
+-    val lastOffset = (rawInfo(i).traceBlockInPipe.iretire - (1.U << rawInfo(i).traceBlockInPipe.ilastsize.asUInt).asUInt) + rawInfo(i).ftqOffset
+-    commitInfo(i).ftqOffset := Mux(CommitType.isFused(rawInfo(i).commitType), rawInfo(i).ftqOffset, lastOffset)
++    commitInfo(i).ftqOffset := 0.U
++    commitInfo(i).ftqIdx := rawInfo(i).ftqIdx - 1.U + rawInfo(i).crossFtqCommit
+   }
+ 
+   // data for debug
+@@ -974,10 +1004,8 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   val enqRobIdxSeq = io.enq.req.map(req => req.bits.robIdx.value)
+   val enqUopNumVec = VecInit(io.enq.req.map(req => req.bits.numUops))
+   val enqWBNumVec = VecInit(io.enq.req.map(req => req.bits.numWB))
++  private val enqWriteStdVec = VecInit(io.enq.req.map(req => req.bits.stdwriteNeed))
+ 
+-  private val enqWriteStdVec: Vec[Bool] = VecInit(io.enq.req.map {
+-    req => FuType.isStore(req.bits.fuType)
+-  })
+   val fflags_wb = fflagsWBs
+   val vxsat_wb = vxsatWBs
+   for (i <- 0 until RobSize) {
+@@ -1217,8 +1245,8 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   val isCommit = io.commits.isCommit
+   val isCommitReg = GatedValidRegNext(io.commits.isCommit)
+   val instrCntReg = RegInit(0.U(64.W))
+-  val fuseCommitCnt = PopCount(io.commits.commitValid.zip(io.commits.info).map { case (v, i) => RegEnable(v && CommitType.isFused(i.commitType), isCommit) })
+-  val trueCommitCnt = RegEnable(io.commits.commitValid.zip(io.commits.info).map { case (v, i) => Mux(v, i.instrSize, 0.U) }.reduce(_ +& _), isCommit) +& fuseCommitCnt
++  val fuseCommitCnt = RegEnable(io.commits.commitValid.zip(io.commits.info).map { case (v, i) => Mux(v, i.debug_fusionNum.getOrElse(0.U), 0.U) }.reduce(_ +& _), isCommit)
++  val trueCommitCnt = RegEnable(io.commits.commitValid.zip(instrSizeCommit).map { case (v, instrSize) => Mux(v, instrSize, 0.U) }.reduce(_ +& _), isCommit)
+   val retireCounter = Mux(isCommitReg, trueCommitCnt, 0.U)
+   val instrCnt = instrCntReg + retireCounter
+   when(isCommitReg){
+@@ -1252,7 +1280,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     traceBlocks(i).bits.ftqIdx.foreach(_ := rawInfo(i).ftqIdx)
+     traceBlocks(i).bits.ftqOffset.foreach(_ := rawInfo(i).ftqOffset)
+     traceBlockInPipe(i).itype := rawInfo(i).traceBlockInPipe.itype
+-    traceBlockInPipe(i).iretire := rawInfo(i).traceBlockInPipe.iretire
++    traceBlockInPipe(i).iretire := iretireCommit(i)
+     traceBlockInPipe(i).ilastsize := rawInfo(i).traceBlockInPipe.ilastsize
+     traceValids(i) := io.commits.isCommit && io.commits.commitValid(i)
+     // exception/xret only occur in block(0).
+@@ -1366,11 +1394,11 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   XSPerfAccumulate("waitLoadCycle", deqNotWritebacked && deqUopCommitType === CommitType.LOAD)
+   XSPerfAccumulate("waitStoreCycle", deqNotWritebacked && deqUopCommitType === CommitType.STORE)
+   XSPerfAccumulate("robHeadPC", io.commits.info(0).debug_pc.getOrElse(0.U))
+-  XSPerfAccumulate("commitCompressCntAll", PopCount(io.commits.commitValid.zip(io.commits.info).map { case (valid, info) => io.commits.isCommit && valid && info.instrSize > 1.U }))
+-  (2 to RenameWidth).foreach(i =>
+-    XSPerfAccumulate(s"commitCompressCnt${i}", PopCount(io.commits.commitValid.zip(io.commits.info).map { case (valid, info) => io.commits.isCommit && valid && info.instrSize === i.U }))
++  XSPerfAccumulate("commitCompressCntAll", PopCount(io.commits.commitValid.zip(instrSizeCommit).map { case (valid, instrSize) => io.commits.isCommit && valid && instrSize > 1.U }))
++  (1 to RenameWidth).foreach(i =>
++    XSPerfAccumulate(s"commitCompressCnt${i}", PopCount(io.commits.commitValid.zip(instrSizeCommit).map { case (valid, instrSize) => io.commits.isCommit && valid && instrSize === i.U }))
+   )
+-  XSPerfAccumulate("compressSize", io.commits.commitValid.zip(io.commits.info).map { case (valid, info) => Mux(io.commits.isCommit && valid && info.instrSize > 1.U, info.instrSize, 0.U) }.reduce(_ +& _))
++  XSPerfAccumulate("compressSize", io.commits.commitValid.zip(instrSizeCommit).map { case (valid, instrSize) => Mux(io.commits.isCommit && valid && instrSize > 1.U, instrSize, 0.U) }.reduce(_ +& _))
+   val dispatchLatency = commitDebugUop.map(uop => uop.debugInfo.dispatchTime - uop.debugInfo.renameTime)
+   val enqRsLatency = commitDebugUop.map(uop => uop.debugInfo.enqRsTime - uop.debugInfo.dispatchTime)
+   val selectLatency = commitDebugUop.map(uop => uop.debugInfo.selectTime - uop.debugInfo.enqRsTime)
+@@ -1497,6 +1525,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     for (i <- 0 until CommitWidth) {
+       val uop = commitDebugUop(i)
+       val commitInfo = io.commits.info(i)
++      val instrSize = instrSizeCommit(i)
+       val ptr = deqPtrVec(i).value
+       val exuOut = dt_exuDebug(ptr)
+       val eliminatedMove = dt_eliminatedMove(ptr)
+@@ -1518,9 +1547,9 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+       difftest.wpdest := commitInfo.debug_pdest.get
+       difftest.wdest := Mux(isVLoad, instr.VD, commitInfo.debug_ldest.get)
+       difftest.otherwpdest := debug_VecOtherPdest(ptr)
+-      difftest.nFused := CommitType.isFused(commitInfo.commitType).asUInt + commitInfo.instrSize - 1.U
++      difftest.nFused := instrSize - 1.U
+       when(difftest.valid) {
+-        assert(CommitType.isFused(commitInfo.commitType).asUInt + commitInfo.instrSize >= 1.U)
++        assert(instrSize >= 1.U)
+       }
+       if (env.EnableDifftest) {
+         val uop = commitDebugUop(i)
+diff --git a/src/main/scala/xiangshan/backend/rob/RobBundles.scala b/src/main/scala/xiangshan/backend/rob/RobBundles.scala
+index 33dc6666c83..b9ebb1bf1c1 100644
+--- a/src/main/scala/xiangshan/backend/rob/RobBundles.scala
++++ b/src/main/scala/xiangshan/backend/rob/RobBundles.scala
+@@ -60,11 +60,10 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val isRVC = Bool()
+     val isVset = Bool()
+     val isHls = Bool()
+-    val instrSize = UInt(log2Ceil(RenameWidth + 1).W)
+     // data end
+     
+     // trace
+-    val traceBlockInPipe = new TracePipe(IretireWidthInPipe)
++    val traceBlockInPipe = new TracePipe(IretireWidthEncoded)
+     // status begin
+     val valid = Bool()
+     val fflags = UInt(5.W)
+@@ -75,6 +74,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val realDestSize = UInt(log2Up(MaxUopSize + 1).W)
+     val uopNum = UInt(log2Up(MaxUopSize + 1).W)
+     val needFlush = Bool()
++    val crossFtqCommit = UInt(2.W) // 59 bit
+     // status end
+ 
+     // debug_begin
+@@ -83,6 +83,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val debug_ldest = OptionWrapper(backendParams.basicDebugEn, UInt(LogicRegsWidth.W))
+     val debug_pdest = OptionWrapper(backendParams.basicDebugEn, UInt(PhyRegIdxWidth.W))
+     val debug_fuType = OptionWrapper(backendParams.debugEn, FuType())
++    val debug_fusionNum = OptionWrapper(backendParams.debugEn, UInt(2.W))
+     // debug_end
+ 
+     def isWritebacked: Bool = !uopNum.orR && stdWritebacked
+@@ -108,12 +109,12 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val commitType = CommitType()
+     val ftqIdx = new FtqPtr
+     val ftqOffset = UInt(log2Up(PredictWidth).W)
+-    val instrSize = UInt(log2Ceil(RenameWidth + 1).W)
+     val fpWen = Bool()
+     val rfWen = Bool()
+     val needFlush = Bool()
++    val crossFtqCommit = UInt(2.W)
+     // trace
+-    val traceBlockInPipe = new TracePipe(IretireWidthInPipe)
++    val traceBlockInPipe = new TracePipe(IretireWidthEncoded)
+     // debug_begin
+     val debug_pc = OptionWrapper(backendParams.debugEn, UInt(VAddrBits.W))
+     val debug_instr = OptionWrapper(backendParams.debugEn, UInt(32.W))
+@@ -121,6 +122,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val debug_pdest = OptionWrapper(backendParams.basicDebugEn, UInt(PhyRegIdxWidth.W))
+     val debug_otherPdest = OptionWrapper(backendParams.basicDebugEn, Vec(7, UInt(PhyRegIdxWidth.W)))
+     val debug_fuType = OptionWrapper(backendParams.debugEn, FuType())
++    val debug_fusionNum = OptionWrapper(backendParams.debugEn, UInt(2.W))
+     // debug_end
+     val dirtyFs = Bool()
+     val dirtyVs = Bool()
+@@ -134,12 +136,12 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     robEntry.isRVC := robEnq.preDecodeInfo.isRVC
+     robEntry.isVset := robEnq.isVset
+     robEntry.isHls := robEnq.isHls
+-    robEntry.instrSize := robEnq.instrSize
+     robEntry.rfWen := robEnq.rfWen
+     robEntry.fpWen := robEnq.dirtyFs
+     robEntry.dirtyVs := robEnq.dirtyVs
+     // flushPipe needFlush but not exception
+     robEntry.needFlush := robEnq.hasException || robEnq.flushPipe
++    robEntry.crossFtqCommit := robEnq.crossFtqCommit
+     // trace
+     robEntry.traceBlockInPipe := robEnq.traceBlockInPipe
+     robEntry.debug_pc.foreach(_ := robEnq.pc)
+@@ -147,6 +149,7 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     robEntry.debug_ldest.foreach(_ := robEnq.ldest)
+     robEntry.debug_pdest.foreach(_ := robEnq.pdest)
+     robEntry.debug_fuType.foreach(_ := robEnq.fuType)
++    robEntry.debug_fusionNum.foreach(_ := robEnq.fusionNum)
+   }
+ 
+   def connectCommitEntry(robCommitEntry: RobCommitEntryBundle, robEntry: RobEntryBundle): Unit = {
+@@ -169,16 +172,17 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     robCommitEntry.ftqIdx := robEntry.ftqIdx
+     robCommitEntry.ftqOffset := robEntry.ftqOffset
+     robCommitEntry.commitType := robEntry.commitType
+-    robCommitEntry.instrSize := robEntry.instrSize
+     robCommitEntry.dirtyFs := robEntry.fpWen || robEntry.wflags
+     robCommitEntry.dirtyVs := robEntry.dirtyVs
+     robCommitEntry.needFlush := robEntry.needFlush
++    robCommitEntry.crossFtqCommit := robEntry.crossFtqCommit
+     robCommitEntry.traceBlockInPipe := robEntry.traceBlockInPipe
+     robCommitEntry.debug_pc.foreach(_ := robEntry.debug_pc.get)
+     robCommitEntry.debug_instr.foreach(_ := robEntry.debug_instr.get)
+     robCommitEntry.debug_ldest.foreach(_ := robEntry.debug_ldest.get)
+     robCommitEntry.debug_pdest.foreach(_ := robEntry.debug_pdest.get)
+     robCommitEntry.debug_fuType.foreach(_ := robEntry.debug_fuType.get)
++    robCommitEntry.debug_fusionNum.foreach(_ := robEntry.debug_fusionNum.get)
+   }
+ }
+ 
+diff --git a/src/main/scala/xiangshan/backend/trace/Trace.scala b/src/main/scala/xiangshan/backend/trace/Trace.scala
+index 01e6ca4eb0b..55abb883e58 100644
+--- a/src/main/scala/xiangshan/backend/trace/Trace.scala
++++ b/src/main/scala/xiangshan/backend/trace/Trace.scala
+@@ -16,7 +16,7 @@ class TraceParams(
+ class TraceIO(implicit val p: Parameters) extends Bundle with HasXSParameter {
+   val in = new Bundle {
+     val fromEncoder    = Input(new FromEncoder)
+-    val fromRob        = Flipped(new TraceBundle(hasIaddr = false, CommitWidth, IretireWidthInPipe))
++    val fromRob        = Flipped(new TraceBundle(hasIaddr = false, CommitWidth, IretireWidthCommited))
+   }
+   val out = new Bundle {
+     val toPcMem        = new TraceBundle(hasIaddr = false, TraceGroupNum, IretireWidthCompressed)
+diff --git a/src/main/scala/xiangshan/frontend/NewFtq.scala b/src/main/scala/xiangshan/frontend/NewFtq.scala
+index 91492d51e41..099f46e2edb 100644
+--- a/src/main/scala/xiangshan/frontend/NewFtq.scala
++++ b/src/main/scala/xiangshan/frontend/NewFtq.scala
+@@ -233,11 +233,7 @@ class FtqToPrefetchIO(implicit p: Parameters) extends XSBundle {
+   val backendException = UInt(ExceptionType.width.W)
+ }
+ 
+-trait HasBackendRedirectInfo extends HasXSParameter {
+-  def isLoadReplay(r: Valid[Redirect]) = r.bits.flushItself()
+-}
+-
+-class FtqToCtrlIO(implicit p: Parameters) extends XSBundle with HasBackendRedirectInfo {
++class FtqToCtrlIO(implicit p: Parameters) extends XSBundle {
+   // write to backend pc mem
+   val pc_mem_wen   = Output(Bool())
+   val pc_mem_waddr = Output(UInt(log2Ceil(FtqSize).W))
+@@ -248,7 +244,7 @@ class FtqToCtrlIO(implicit p: Parameters) extends XSBundle with HasBackendRedire
+   val newest_entry_ptr    = Output(new FtqPtr)
+ }
+ 
+-class FTBEntryGen(implicit p: Parameters) extends XSModule with HasBackendRedirectInfo with HasBPUParameter {
++class FTBEntryGen(implicit p: Parameters) extends XSModule with HasBPUParameter {
+   val io = IO(new Bundle {
+     val start_addr     = Input(PrunedAddr(VAddrBits))
+     val old_entry      = Input(new FTBEntry)
+@@ -442,7 +438,7 @@ class FTBEntryGen(implicit p: Parameters) extends XSModule with HasBackendRedire
+   io.is_br_full              := hit && is_new_br && may_have_to_replace
+ }
+ 
+-class FtqPcMemWrapper(numOtherReads: Int)(implicit p: Parameters) extends XSModule with HasBackendRedirectInfo {
++class FtqPcMemWrapper(numOtherReads: Int)(implicit p: Parameters) extends XSModule {
+   val io = IO(new Bundle {
+     val ifuPtr_w           = Input(new FtqPtr)
+     val ifuPtrPlus1_w      = Input(new FtqPtr)
+@@ -493,7 +489,7 @@ class FtqPcMemWrapper(numOtherReads: Int)(implicit p: Parameters) extends XSModu
+ }
+ 
+ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelper
+-    with HasBackendRedirectInfo with BPUUtils with HasBPUConst with HasPerfEvents
++    with BPUUtils with HasBPUConst with HasPerfEvents
+     with HasICacheParameters {
+   val io = IO(new Bundle {
+     val fromBpu     = Flipped(new BpuToFtqIO)
+@@ -554,39 +550,40 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   allowBpuIn := !ifuFlush && !backendRedirect.valid && !backendRedirectReg.valid
+   allowToIfu := !ifuFlush && !backendRedirect.valid && !backendRedirectReg.valid
+ 
+-  def copyNum                                              = 5
+-  val bpuPtr, ifuPtr, pfPtr, ifuWbPtr, commPtr, robCommPtr = RegInit(FtqPtr(false.B, 0.U))
+-  val ifuPtrPlus1                                          = RegInit(FtqPtr(false.B, 1.U))
+-  val ifuPtrPlus2                                          = RegInit(FtqPtr(false.B, 2.U))
+-  val pfPtrPlus1                                           = RegInit(FtqPtr(false.B, 1.U))
+-  val commPtrPlus1                                         = RegInit(FtqPtr(false.B, 1.U))
+-  val copied_ifu_ptr                                       = Seq.fill(copyNum)(RegInit(FtqPtr(false.B, 0.U)))
+-  val copied_bpu_ptr                                       = Seq.fill(copyNum)(RegInit(FtqPtr(false.B, 0.U)))
++  def copyNum = 5
++  val bpuPtr, ifuPtr, pfPtr, ifuWbPtr, commitPtr: FtqPtr      = RegInit(FtqPtr(false.B, 0.U))
++  val ifuPtrPlus1:                                FtqPtr      = RegInit(FtqPtr(false.B, 1.U))
++  val ifuPtrPlus2:                                FtqPtr      = RegInit(FtqPtr(false.B, 2.U))
++  val pfPtrPlus1:                                 FtqPtr      = RegInit(FtqPtr(false.B, 1.U))
++  val commitPtrPlus1:                             FtqPtr      = RegInit(FtqPtr(false.B, 1.U))
++  val copied_ifu_ptr:                             Seq[FtqPtr] = Seq.fill(copyNum)(RegInit(FtqPtr(false.B, 0.U)))
++  val copied_bpu_ptr:                             Seq[FtqPtr] = Seq.fill(copyNum)(RegInit(FtqPtr(false.B, 0.U)))
+   require(FtqSize >= 4)
+-  val ifuPtr_write       = WireInit(ifuPtr)
+-  val ifuPtrPlus1_write  = WireInit(ifuPtrPlus1)
+-  val ifuPtrPlus2_write  = WireInit(ifuPtrPlus2)
+-  val pfPtr_write        = WireInit(pfPtr)
+-  val pfPtrPlus1_write   = WireInit(pfPtrPlus1)
+-  val ifuWbPtr_write     = WireInit(ifuWbPtr)
+-  val commPtr_write      = WireInit(commPtr)
+-  val commPtrPlus1_write = WireInit(commPtrPlus1)
+-  val robCommPtr_write   = WireInit(robCommPtr)
+-  ifuPtr       := ifuPtr_write
+-  ifuPtrPlus1  := ifuPtrPlus1_write
+-  ifuPtrPlus2  := ifuPtrPlus2_write
+-  pfPtr        := pfPtr_write
+-  pfPtrPlus1   := pfPtrPlus1_write
+-  ifuWbPtr     := ifuWbPtr_write
+-  commPtr      := commPtr_write
+-  commPtrPlus1 := commPtrPlus1_write
++  val ifuPtr_write:         FtqPtr = WireInit(ifuPtr)
++  val ifuPtrPlus1_write:    FtqPtr = WireInit(ifuPtrPlus1)
++  val ifuPtrPlus2_write:    FtqPtr = WireInit(ifuPtrPlus2)
++  val pfPtr_write:          FtqPtr = WireInit(pfPtr)
++  val pfPtrPlus1_write:     FtqPtr = WireInit(pfPtrPlus1)
++  val ifuWbPtr_write:       FtqPtr = WireInit(ifuWbPtr)
++  val commitPtr_write:      FtqPtr = WireInit(commitPtr)
++  val commitPtrPlus1_write: FtqPtr = WireInit(commitPtrPlus1)
++  ifuPtr         := ifuPtr_write
++  ifuPtrPlus1    := ifuPtrPlus1_write
++  ifuPtrPlus2    := ifuPtrPlus2_write
++  pfPtr          := pfPtr_write
++  pfPtrPlus1     := pfPtrPlus1_write
++  ifuWbPtr       := ifuWbPtr_write
++  commitPtr      := commitPtr_write
++  commitPtrPlus1 := commitPtrPlus1_write
+   copied_ifu_ptr.map { ptr =>
+     ptr := ifuPtr_write
+     dontTouch(ptr)
+   }
+-  robCommPtr := robCommPtr_write
+-  val validEntries = distanceBetween(bpuPtr, commPtr)
+-  val canCommit    = Wire(Bool())
++  val validEntries = distanceBetween(bpuPtr, commitPtr)
++
++  private val readyToCommit = Wire(Bool())
++  private val canCommit     = Wire(Bool())
++  private val shouldCommit  = RegInit(VecInit(Seq.fill(FtqSize)(false.B)))
+ 
+   // Instruction page fault and instruction access fault are sent from backend with redirect requests.
+   // When IPF and IAF are sent, backendPcFaultIfuPtr points to the FTQ entry whose first instruction
+@@ -614,7 +611,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   // **********************************************************************
+   // **************************** enq from bpu ****************************
+   // **********************************************************************
+-  val new_entry_ready = validEntries < FtqSize.U || canCommit
++  val new_entry_ready = validEntries < FtqSize.U || readyToCommit
+   io.fromBpu.resp.ready := new_entry_ready
+ 
+   val bpu_s2_resp     = io.fromBpu.resp.bits.s2
+@@ -683,19 +680,6 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   val pred_stage                   = Reg(Vec(FtqSize, UInt(2.W)))
+   val pred_s1_cycle                = if (!env.FPGAPlatform) Some(Reg(Vec(FtqSize, UInt(64.W)))) else None
+ 
+-  val c_empty :: c_toCommit :: c_committed :: c_flushed :: Nil = Enum(4)
+-  val commitStateQueueReg = RegInit(VecInit(Seq.fill(FtqSize) {
+-    VecInit(Seq.fill(PredictWidth)(c_empty))
+-  }))
+-  val commitStateQueueEnable = WireInit(VecInit(Seq.fill(FtqSize)(false.B)))
+-  val commitStateQueueNext   = WireInit(commitStateQueueReg)
+-
+-  for (f <- 0 until FtqSize) {
+-    when(commitStateQueueEnable(f)) {
+-      commitStateQueueReg(f) := commitStateQueueNext(f)
+-    }
+-  }
+-
+   val f_to_send :: f_sent :: Nil = Enum(2)
+   val entry_fetch_status         = RegInit(VecInit(Seq.fill(FtqSize)(f_sent)))
+ 
+@@ -710,11 +694,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   val last_cycle_cfiIndex     = RegEnable(bpu_in_resp.cfiIndex(3), bpu_in_fire)
+   val last_cycle_bpu_in_stage = RegEnable(bpu_in_stage, bpu_in_fire)
+ 
+-  def extra_copyNum_for_commitStateQueue = 2
+-  val copied_last_cycle_bpu_in =
+-    VecInit(Seq.fill(copyNum + extra_copyNum_for_commitStateQueue)(RegNext(bpu_in_fire)))
+-  val copied_last_cycle_bpu_in_ptr_for_ftq =
+-    VecInit(Seq.fill(extra_copyNum_for_commitStateQueue)(RegEnable(bpu_in_resp_ptr, bpu_in_fire)))
++  val copied_last_cycle_bpu_in = VecInit(Seq.fill(copyNum)(RegNext(bpu_in_fire)))
+ 
+   newest_entry_target_modified := false.B
+   newest_entry_ptr_modified    := false.B
+@@ -728,6 +708,8 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+     newest_entry_target                  := last_cycle_bpu_target
+     newest_entry_ptr_modified            := true.B
+     newest_entry_ptr                     := last_cycle_bpu_in_ptr
++
++    shouldCommit(last_cycle_bpu_in_idx) := true.B
+   }
+ 
+   // reduce fanout by delay write for a cycle
+@@ -743,23 +725,6 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+     }
+   }
+ 
+-  // reduce fanout using copied last_cycle_bpu_in and copied last_cycle_bpu_in_ptr
+-  val copied_last_cycle_bpu_in_for_ftq = copied_last_cycle_bpu_in.takeRight(extra_copyNum_for_commitStateQueue)
+-  copied_last_cycle_bpu_in_for_ftq.zip(copied_last_cycle_bpu_in_ptr_for_ftq).zipWithIndex.map {
+-    case ((in, ptr), i) =>
+-      when(in) {
+-        val perSetEntries = FtqSize / extra_copyNum_for_commitStateQueue // 32
+-        require(FtqSize % extra_copyNum_for_commitStateQueue == 0)
+-        for (j <- 0 until perSetEntries) {
+-          when(ptr.value === (i * perSetEntries + j).U) {
+-            commitStateQueueNext(i * perSetEntries + j) := VecInit(Seq.fill(PredictWidth)(c_empty))
+-            // Clock gating optimization, use 1 gate cell to control a row
+-            commitStateQueueEnable(i * perSetEntries + j) := true.B
+-          }
+-        }
+-      }
+-  }
+-
+   bpuPtr := bpuPtr + enq_fire
+   copied_bpu_ptr.map(_ := bpuPtr + enq_fire)
+   when(io.toIfu.req.fire && allowToIfu) {
+@@ -817,7 +782,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+ 
+   XSError(isBefore(bpuPtr, ifuPtr) && !isFull(bpuPtr, ifuPtr), "\nifuPtr is before bpuPtr!\n")
+   XSError(isBefore(bpuPtr, pfPtr) && !isFull(bpuPtr, pfPtr), "\npfPtr is before bpuPtr!\n")
+-  XSError(isBefore(ifuWbPtr, commPtr) && !isFull(ifuWbPtr, commPtr), "\ncommPtr is before ifuWbPtr!\n")
++  XSError(isBefore(ifuWbPtr, commitPtr) && !isFull(ifuWbPtr, commitPtr), "\ncommPtr is before ifuWbPtr!\n")
+ 
+   (0 until copyNum).map(i => XSError(copied_bpu_ptr(i) =/= bpuPtr, "\ncopiedBpuPtr is different from bpuPtr!\n"))
+ 
+@@ -841,8 +806,8 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   ftq_pc_mem.io.ifuPtrPlus2_w  := ifuPtrPlus2_write
+   ftq_pc_mem.io.pfPtr_w        := pfPtr_write
+   ftq_pc_mem.io.pfPtrPlus1_w   := pfPtrPlus1_write
+-  ftq_pc_mem.io.commPtr_w      := commPtr_write
+-  ftq_pc_mem.io.commPtrPlus1_w := commPtrPlus1_write
++  ftq_pc_mem.io.commPtr_w      := commitPtr_write
++  ftq_pc_mem.io.commPtrPlus1_w := commitPtrPlus1_write
+ 
+   io.toIfu.req.bits.ftqIdx := ifuPtr
+ 
+@@ -1004,18 +969,6 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   val start_pc_reg       = RegEnable(pdWb.bits.pc(0), pdWb.valid)
+   val wb_idx_reg         = RegEnable(ifu_wb_idx, pdWb.valid)
+ 
+-  when(ifu_wb_valid) {
+-    val comm_stq_wen = VecInit(pds.map(_.valid).zip(pdWb.bits.instrRange).map {
+-      case (v, inRange) => v && inRange
+-    })
+-    commitStateQueueEnable(ifu_wb_idx) := true.B
+-    (commitStateQueueNext(ifu_wb_idx) zip comm_stq_wen).map {
+-      case (qe, v) => when(v) {
+-          qe := c_toCommit
+-        }
+-    }
+-  }
+-
+   when(ifu_wb_valid) {
+     ifuWbPtr_write := ifuWbPtr + 1.U
+   }
+@@ -1230,7 +1183,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+ 
+     update_target(r_idx) := redirect.bits.cfiUpdate.target // TODO: remove this
+     if (isBackend) {
+-      mispredict_vec(r_idx)(r_offset) := r_mispred
++      mispredict_vec(r_idx)(r_offset) := r_mispred && redirect.bits.level === RedirectLevel.flushAfter
+     }
+   }
+ 
+@@ -1292,6 +1245,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+     val notIfu                     = redirectVec.dropRight(1).map(r => r.valid).reduce(_ || _)
+     val (idx, offset, flushItSelf) = (r.ftqIdx, r.ftqOffset, RedirectLevel.flushItself(r.level))
+     val next                       = idx + 1.U
++
+     bpuPtr := next
+     copied_bpu_ptr.map(_ := next)
+     ifuPtr_write      := next
+@@ -1300,21 +1254,10 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+     ifuPtrPlus2_write := idx + 3.U
+     pfPtr_write       := next
+     pfPtrPlus1_write  := idx + 2.U
+-  }
+-  when(RegNext(redirectVec.map(r => r.valid).reduce(_ || _))) {
+-    val r                          = PriorityMux(redirectVec.map(r => r.valid -> r.bits))
+-    val notIfu                     = redirectVec.dropRight(1).map(r => r.valid).reduce(_ || _)
+-    val (idx, offset, flushItSelf) = (r.ftqIdx, r.ftqOffset, RedirectLevel.flushItself(r.level))
+-    when(RegNext(notIfu)) {
+-      commitStateQueueEnable(RegNext(idx.value)) := true.B
+-      commitStateQueueNext(RegNext(idx.value)).zipWithIndex.foreach { case (s, i) =>
+-        when(i.U > RegNext(offset)) {
+-          s := c_empty
+-        }
+-        when(i.U === RegNext(offset) && RegNext(flushItSelf)) {
+-          s := c_flushed
+-        }
+-      }
++
++    when(flushItSelf) {
++      shouldCommit(idx.value)  := false.B
++      shouldCommit(next.value) := false.B
+     }
+   }
+ 
+@@ -1323,29 +1266,6 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   io.toIfu.redirect.valid   := stage2Flush
+   io.toIfu.topdown_redirect := fromBackendRedirect
+ 
+-  // commit
+-  for (c <- io.fromBackend.rob_commits) {
+-    when(c.valid) {
+-      commitStateQueueEnable(c.bits.ftqIdx.value)                 := true.B
+-      commitStateQueueNext(c.bits.ftqIdx.value)(c.bits.ftqOffset) := c_committed
+-      // TODO: remove this
+-      // For instruction fusions, we also update the next instruction
+-      when(c.bits.commitType === 4.U) {
+-        commitStateQueueNext(c.bits.ftqIdx.value)(c.bits.ftqOffset + 1.U) := c_committed
+-      }.elsewhen(c.bits.commitType === 5.U) {
+-        commitStateQueueNext(c.bits.ftqIdx.value)(c.bits.ftqOffset + 2.U) := c_committed
+-      }.elsewhen(c.bits.commitType === 6.U) {
+-        val index = (c.bits.ftqIdx + 1.U).value
+-        commitStateQueueEnable(index)  := true.B
+-        commitStateQueueNext(index)(0) := c_committed
+-      }.elsewhen(c.bits.commitType === 7.U) {
+-        val index = (c.bits.ftqIdx + 1.U).value
+-        commitStateQueueEnable(index)  := true.B
+-        commitStateQueueNext(index)(1) := c_committed
+-      }
+-    }
+-  }
+-
+   // ****************************************************************
+   // **************************** to bpu ****************************
+   // ****************************************************************
+@@ -1366,7 +1286,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   )
+ 
+   XSError(
+-    io.toBpu.redirect.valid && isBefore(io.toBpu.redirect.bits.ftqIdx, commPtr),
++    io.toBpu.redirect.valid && isBefore(io.toBpu.redirect.bits.ftqIdx, commitPtr),
+     "Ftq received a redirect after its commit, check backend or replay"
+   )
+ 
+@@ -1374,90 +1294,68 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   val bpu_ftb_update_stall    = RegInit(0.U(2.W)) // 2-cycle stall, so we need 3 states
+   may_have_stall_from_bpu := bpu_ftb_update_stall =/= 0.U
+ 
+-  val validInstructions     = commitStateQueueReg(commPtr.value).map(s => s === c_toCommit || s === c_committed)
+-  val lastInstructionStatus = PriorityMux(validInstructions.reverse.zip(commitStateQueueReg(commPtr.value).reverse))
+-  val firstInstructionFlushed = commitStateQueueReg(commPtr.value)(0) === c_flushed ||
+-    commitStateQueueReg(commPtr.value)(0) === c_empty && commitStateQueueReg(commPtr.value)(1) === c_flushed
+-  canCommit := commPtr =/= ifuWbPtr && !may_have_stall_from_bpu &&
+-    (isAfter(robCommPtr, commPtr) ||
+-      validInstructions.reduce(_ || _) && lastInstructionStatus === c_committed)
+-  val canMoveCommPtr = commPtr =/= ifuWbPtr && !may_have_stall_from_bpu &&
+-    (isAfter(robCommPtr, commPtr) ||
+-      validInstructions.reduce(_ || _) && lastInstructionStatus === c_committed ||
+-      firstInstructionFlushed)
+-
+-  when(io.fromBackend.rob_commits.map(_.valid).reduce(_ | _)) {
+-    robCommPtr_write := ParallelPriorityMux(
++  // TODO: frontend does not need this many rob commit channels
++  private val robCommitPtr: FtqPtr = WireInit(FtqPtr(false.B, 0.U))
++  private val backendCommit = io.fromBackend.rob_commits.map(_.valid).reduce(_ | _)
++  when(backendCommit) {
++    robCommitPtr := ParallelPriorityMux(
+       io.fromBackend.rob_commits.map(_.valid).reverse,
+       io.fromBackend.rob_commits.map(_.bits.ftqIdx).reverse
+     )
+-  }.elsewhen(isAfter(commPtr, robCommPtr)) {
+-    robCommPtr_write := commPtr
+-  }.otherwise {
+-    robCommPtr_write := robCommPtr
+   }
++  private val robCommitPtrReg: FtqPtr = RegEnable(robCommitPtr, FtqPtr(false.B, 0.U), backendCommit)
++  private val committedPtr = Mux(backendCommit, robCommitPtr, robCommitPtrReg)
++  canCommit     := commitPtr < committedPtr
++  readyToCommit := canCommit && shouldCommit(commitPtr.value)
++  when(canCommit) {
++    commitPtr_write      := commitPtrPlus1
++    commitPtrPlus1_write := commitPtrPlus1 + 1.U
++  }
++  // frontend commit is one cycle later than backend commit because reading srams needs one cycle
++  val s2_commitPtr     = RegEnable(commitPtr, readyToCommit)
++  val s2_readyToCommit = RegNext(readyToCommit, init = false.B)
+ 
+   /**
+     *************************************************************************************
+     * MMIO instruction fetch is allowed only if MMIO is the oldest instruction.
+     *************************************************************************************
+     */
+-  val mmioReadPtr = io.mmioCommitRead.mmioFtqPtr
+-  val mmioLastCommit = isAfter(commPtr, mmioReadPtr) ||
+-    commPtr === mmioReadPtr && validInstructions.reduce(_ || _) && lastInstructionStatus === c_committed
++  val mmioReadPtr    = io.mmioCommitRead.mmioFtqPtr
++  val mmioLastCommit = isAfter(commitPtr, mmioReadPtr) || commitPtr === mmioReadPtr && canCommit
+   io.mmioCommitRead.mmioLastCommit := RegNext(mmioLastCommit)
+ 
+   // commit reads
+-  val commit_pc_bundle = RegNext(ftq_pc_mem.io.commPtr_rdata)
+-  val commit_target =
++  val s2_commitPcBundle = RegNext(ftq_pc_mem.io.commPtr_rdata)
++  val s2_commitTarget =
+     Mux(
+-      RegNext(commPtr === newest_entry_ptr),
++      RegNext(commitPtr === newest_entry_ptr),
+       RegEnable(newest_entry_target, newest_entry_target_modified),
+       RegNext(ftq_pc_mem.io.commPtrPlus1_rdata.startAddr)
+     )
+-  ftq_pd_mem.io.ren.get.last := canCommit
+-  ftq_pd_mem.io.raddr.last   := commPtr.value
+-  val commit_pd = ftq_pd_mem.io.rdata.last
+-  ftq_redirect_mem.io.ren.get.last := canCommit
+-  ftq_redirect_mem.io.raddr.last   := commPtr.value
+-  val commit_spec_meta = ftq_redirect_mem.io.rdata.last
+-  ftq_meta_1r_sram.io.ren(0)   := canCommit
+-  ftq_meta_1r_sram.io.raddr(0) := commPtr.value
+-  val commit_meta      = ftq_meta_1r_sram.io.rdata(0).meta
+-  val commit_ftb_entry = ftq_meta_1r_sram.io.rdata(0).ftb_entry
+-
+-  // need one cycle to read mem and srams
+-  val do_commit_ptr = RegEnable(commPtr, canCommit)
+-  val do_commit     = RegNext(canCommit, init = false.B)
+-  when(canMoveCommPtr) {
+-    commPtr_write      := commPtrPlus1
+-    commPtrPlus1_write := commPtrPlus1 + 1.U
+-  }
+-  val commit_state   = RegEnable(commitStateQueueReg(commPtr.value), canCommit)
+-  val can_commit_cfi = WireInit(cfiIndex_vec(commPtr.value))
+-  val do_commit_cfi  = WireInit(cfiIndex_vec(do_commit_ptr.value))
+-  //
+-  // when (commitStateQueue(commPtr.value)(can_commit_cfi.bits) =/= c_commited) {
+-  //  can_commit_cfi.valid := false.B
+-  // }
+-  val commit_cfi = RegEnable(can_commit_cfi, canCommit)
+-  val debug_cfi  = commitStateQueueReg(do_commit_ptr.value)(do_commit_cfi.bits) =/= c_committed && do_commit_cfi.valid
+-
+-  val commit_mispredict: Vec[Bool] =
+-    VecInit((RegEnable(mispredict_vec(commPtr.value), canCommit) zip commit_state).map {
+-      case (mis, state) => mis && state === c_committed
+-    })
+-  val commit_instCommited: Vec[Bool] = VecInit(commit_state.map(_ === c_committed)) // [PredictWidth]
+-  val can_commit_hit     = entry_hit_status(commPtr.value)
+-  val commit_hit         = RegEnable(can_commit_hit, canCommit)
+-  val diff_commit_target = RegEnable(update_target(commPtr.value), canCommit) // TODO: remove this
+-  val commit_stage       = RegEnable(pred_stage(commPtr.value), canCommit)
+-  val commit_valid       = commit_hit === h_hit || commit_cfi.valid           // hit or taken
+-
+-  val to_bpu_hit = can_commit_hit === h_hit || can_commit_hit === h_false_hit
++  ftq_pd_mem.io.ren.get.last := readyToCommit
++  ftq_pd_mem.io.raddr.last   := commitPtr.value
++  val s2_commitPd = ftq_pd_mem.io.rdata.last
++  ftq_redirect_mem.io.ren.get.last := readyToCommit
++  ftq_redirect_mem.io.raddr.last   := commitPtr.value
++  val s2_commitSpecMeta = ftq_redirect_mem.io.rdata.last
++  ftq_meta_1r_sram.io.ren(0)   := readyToCommit
++  ftq_meta_1r_sram.io.raddr(0) := commitPtr.value
++  val s2_commitMeta     = ftq_meta_1r_sram.io.rdata(0).meta
++  val s2_commitFtbEntry = ftq_meta_1r_sram.io.rdata(0).ftb_entry
++
++  val s1_commitCfi = WireInit(cfiIndex_vec(commitPtr.value))
++  val s2_commitCfi = RegEnable(s1_commitCfi, readyToCommit)
++
++  val s2_commitMispredict: Vec[Bool] = RegEnable(mispredict_vec(commitPtr.value), readyToCommit)
++  val s1_commitHit   = entry_hit_status(commitPtr.value)
++  val s2_commitHit   = RegEnable(s1_commitHit, readyToCommit)
++  val s2_commitStage = RegEnable(pred_stage(commitPtr.value), readyToCommit)
++  val s2_commitValid = s2_commitHit === h_hit || s2_commitCfi.valid // hit or taken
++
++  val to_bpu_hit = s1_commitHit === h_hit || s1_commitHit === h_false_hit
+   switch(bpu_ftb_update_stall) {
+     is(0.U) {
+-      when(can_commit_cfi.valid && !to_bpu_hit && canCommit) {
++      when(s1_commitCfi.valid && !to_bpu_hit && readyToCommit) {
+         bpu_ftb_update_stall := 2.U // 2-cycle stall
+       }
+     }
+@@ -1473,68 +1371,55 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   }
+   XSError(bpu_ftb_update_stall === 3.U, "bpu_ftb_update_stall should be 0, 1 or 2")
+ 
+-  // TODO: remove this
+-  XSError(do_commit && diff_commit_target =/= commit_target, "\ncommit target should be the same as update target\n")
+-
+   // update latency stats
+-  val update_latency = GTimer() - pred_s1_cycle.getOrElse(dummy_s1_pred_cycle_vec)(do_commit_ptr.value) + 1.U
++  val update_latency = GTimer() - pred_s1_cycle.getOrElse(dummy_s1_pred_cycle_vec)(s2_commitPtr.value) + 1.U
+   XSPerfHistogram("bpu_update_latency", update_latency, io.toBpu.update.valid, 0, 64, 2)
+ 
+   io.toBpu.update       := DontCare
+-  io.toBpu.update.valid := commit_valid && do_commit
++  io.toBpu.update.valid := s2_commitValid && s2_readyToCommit
+   val update = io.toBpu.update.bits
+-  update.false_hit   := commit_hit === h_false_hit
+-  update.pc          := commit_pc_bundle.startAddr
+-  update.meta        := commit_meta
+-  update.cfi_idx     := commit_cfi
+-  update.full_target := commit_target
+-  update.from_stage  := commit_stage
+-  update.spec_info   := commit_spec_meta
+-  XSError(commit_valid && do_commit && debug_cfi, "\ncommit cfi can be non c_commited\n")
+-
+-  val commit_real_hit  = commit_hit === h_hit
++  update.false_hit   := s2_commitHit === h_false_hit
++  update.pc          := s2_commitPcBundle.startAddr
++  update.meta        := s2_commitMeta
++  update.cfi_idx     := s2_commitCfi
++  update.full_target := s2_commitTarget
++  update.from_stage  := s2_commitStage
++  update.spec_info   := s2_commitSpecMeta
++
++  val s2_commitRealHit = s2_commitHit === h_hit
+   val update_ftb_entry = update.ftb_entry
+ 
+   val ftbEntryGen = Module(new FTBEntryGen).io
+-  ftbEntryGen.start_addr     := commit_pc_bundle.startAddr
+-  ftbEntryGen.old_entry      := commit_ftb_entry
+-  ftbEntryGen.pd             := commit_pd
+-  ftbEntryGen.cfiIndex       := commit_cfi
+-  ftbEntryGen.target         := commit_target
+-  ftbEntryGen.hit            := commit_real_hit
+-  ftbEntryGen.mispredict_vec := commit_mispredict
++  ftbEntryGen.start_addr     := s2_commitPcBundle.startAddr
++  ftbEntryGen.old_entry      := s2_commitFtbEntry
++  ftbEntryGen.pd             := s2_commitPd
++  ftbEntryGen.cfiIndex       := s2_commitCfi
++  ftbEntryGen.target         := s2_commitTarget
++  ftbEntryGen.hit            := s2_commitRealHit
++  ftbEntryGen.mispredict_vec := s2_commitMispredict
+ 
+   update_ftb_entry         := ftbEntryGen.new_entry
+   update.new_br_insert_pos := ftbEntryGen.new_br_insert_pos
+   update.mispred_mask      := ftbEntryGen.mispred_mask
+   update.old_entry         := ftbEntryGen.is_old_entry
+-  update.pred_hit          := commit_hit === h_hit || commit_hit === h_false_hit
++  update.pred_hit          := s2_commitHit === h_hit || s2_commitHit === h_false_hit
+   update.br_taken_mask     := ftbEntryGen.taken_mask
+-  update.br_committed := (ftbEntryGen.new_entry.brValids zip ftbEntryGen.new_entry.brOffset) map {
+-    case (valid, offset) => valid && commit_instCommited(offset)
+-  }
+-  update.jmp_taken := ftbEntryGen.jmp_taken
+-
+-  // update.full_pred.fromFtbEntry(ftbEntryGen.new_entry, update.pc)
+-  // update.full_pred.jalr_target := commit_target
+-  // update.full_pred.hit := true.B
+-  // when (update.full_pred.is_jalr) {
+-  //   update.full_pred.targets.last := commit_target
+-  // }
++  update.br_committed      := ftbEntryGen.new_entry.brValids
++  update.jmp_taken         := ftbEntryGen.jmp_taken
+ 
+   // ******************************************************************************
+   // **************************** commit perf counters ****************************
+   // ******************************************************************************
+ 
+-  val commit_inst_mask        = VecInit(commit_state.map(c => c === c_committed && do_commit)).asUInt
+-  val commit_mispred_mask     = commit_mispredict.asUInt
++  val commit_mispred_mask     = s2_commitMispredict.asUInt
+   val commit_not_mispred_mask = ~commit_mispred_mask
+ 
+-  val commit_br_mask  = commit_pd.brMask.asUInt
+-  val commit_jmp_mask = UIntToOH(commit_pd.jmpOffset) & Fill(PredictWidth, commit_pd.jmpInfo.valid.asTypeOf(UInt(1.W)))
++  val commit_br_mask = s2_commitPd.brMask.asUInt
++  val commit_jmp_mask =
++    UIntToOH(s2_commitPd.jmpOffset) & Fill(PredictWidth, s2_commitPd.jmpInfo.valid.asTypeOf(UInt(1.W)))
+   val commit_cfi_mask = commit_br_mask | commit_jmp_mask
+ 
+-  val mbpInstrs = commit_inst_mask & commit_cfi_mask
++  val mbpInstrs = commit_cfi_mask
+ 
+   val mbpRights = mbpInstrs & commit_not_mispred_mask
+   val mbpWrongs = mbpInstrs & commit_mispred_mask
+@@ -1547,17 +1432,16 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   val ftqBranchTraceDB = ChiselDB.createTable(s"FTQTable$hartId", new FtqDebugBundle)
+   // Cfi Info
+   for (i <- 0 until PredictWidth) {
+-    val pc      = commit_pc_bundle.startAddr + (i * instBytes).U
+-    val v       = commit_state(i) === c_committed
+-    val isBr    = commit_pd.brMask(i)
+-    val isJmp   = commit_pd.jmpInfo.valid && commit_pd.jmpOffset === i.U
++    val pc      = s2_commitPcBundle.startAddr + (i * instBytes).U
++    val isBr    = s2_commitPd.brMask(i)
++    val isJmp   = s2_commitPd.jmpInfo.valid && s2_commitPd.jmpOffset === i.U
+     val isCfi   = isBr || isJmp
+-    val isTaken = commit_cfi.valid && commit_cfi.bits === i.U
+-    val misPred = commit_mispredict(i)
++    val isTaken = s2_commitCfi.valid && s2_commitCfi.bits === i.U
++    val misPred = s2_commitMispredict(i)
+     // val ghist = commit_spec_meta.ghist.predHist
+-    val histPtr   = commit_spec_meta.histPtr
+-    val predCycle = commit_meta(63, 0)
+-    val target    = commit_target
++    val histPtr   = s2_commitSpecMeta.histPtr
++    val predCycle = s2_commitMeta(63, 0)
++    val target    = s2_commitTarget
+ 
+     val brIdx = OHToUInt(Reverse(Cat(update_ftb_entry.brValids.zip(update_ftb_entry.brOffset).map { case (v, offset) =>
+       v && offset === i.U
+@@ -1566,12 +1450,12 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+       v && offset === i.U
+     }.reduce(_ || _)
+     val addIntoHist =
+-      ((commit_hit === h_hit) && inFtbEntry) || (!(commit_hit === h_hit) && i.U === commit_cfi.bits && isBr && commit_cfi.valid)
++      ((s2_commitHit === h_hit) && inFtbEntry) || (!(s2_commitHit === h_hit) && i.U === s2_commitCfi.bits && isBr && s2_commitCfi.valid)
+     XSDebug(
+-      v && do_commit && isCfi,
++      s2_readyToCommit && isCfi,
+       p"cfi_update: isBr(${isBr}) pc(${Hexadecimal(pc.toUInt)}) " +
+         p"taken(${isTaken}) mispred(${misPred}) cycle($predCycle) hist(${histPtr.value}) " +
+-        p"startAddr(${Hexadecimal(commit_pc_bundle.startAddr.toUInt)}) AddIntoHist(${addIntoHist}) " +
++        p"startAddr(${Hexadecimal(s2_commitPcBundle.startAddr.toUInt)}) AddIntoHist(${addIntoHist}) " +
+         p"brInEntry(${inFtbEntry}) brIdx(${brIdx}) target(${Hexadecimal(target.toUInt)})\n"
+     )
+ 
+@@ -1580,15 +1464,15 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+     logbundle.target    := target
+     logbundle.isBr      := isBr
+     logbundle.isJmp     := isJmp
+-    logbundle.isCall    := isJmp && commit_pd.hasCall
+-    logbundle.isRet     := isJmp && commit_pd.hasRet
++    logbundle.isCall    := isJmp && s2_commitPd.hasCall
++    logbundle.isRet     := isJmp && s2_commitPd.hasRet
+     logbundle.misPred   := misPred
+     logbundle.isTaken   := isTaken
+-    logbundle.predStage := commit_stage
++    logbundle.predStage := s2_commitStage
+ 
+     ftqBranchTraceDB.log(
+       data = logbundle /* hardware of type T */,
+-      en = isWriteFTQTable.orR && v && do_commit && isCfi,
++      en = isWriteFTQTable.orR && s2_readyToCommit && isCfi,
+       site = "FTQ" + p(XSCoreParamsKey).HartId.toString,
+       clock = clock,
+       reset = reset
+@@ -1611,7 +1495,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   XSPerfAccumulate("bpu_to_ifu_bubble", bpuPtr === ifuPtr)
+   XSPerfAccumulate(
+     "bpu_to_ifu_bubble_when_ftq_full",
+-    (bpuPtr === ifuPtr) && isFull(bpuPtr, commPtr) && io.toIfu.req.ready
++    (bpuPtr === ifuPtr) && isFull(bpuPtr, commitPtr) && io.toIfu.req.ready
+   )
+ 
+   XSPerfAccumulate("redirectAhead_ValidNum", ftqIdxAhead.map(_.valid).reduce(_ | _))
+@@ -1621,12 +1505,10 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   val from_bpu = io.fromBpu.resp.bits
+   val to_ifu   = io.toIfu.req.bits
+ 
+-  XSPerfHistogram("commit_num_inst", PopCount(commit_inst_mask), do_commit, 0, PredictWidth + 1, 1)
+-
+-  val commit_jal_mask  = UIntToOH(commit_pd.jmpOffset) & Fill(PredictWidth, commit_pd.hasJal.asTypeOf(UInt(1.W)))
+-  val commit_jalr_mask = UIntToOH(commit_pd.jmpOffset) & Fill(PredictWidth, commit_pd.hasJalr.asTypeOf(UInt(1.W)))
+-  val commit_call_mask = UIntToOH(commit_pd.jmpOffset) & Fill(PredictWidth, commit_pd.hasCall.asTypeOf(UInt(1.W)))
+-  val commit_ret_mask  = UIntToOH(commit_pd.jmpOffset) & Fill(PredictWidth, commit_pd.hasRet.asTypeOf(UInt(1.W)))
++  val commit_jal_mask  = UIntToOH(s2_commitPd.jmpOffset) & Fill(PredictWidth, s2_commitPd.hasJal.asTypeOf(UInt(1.W)))
++  val commit_jalr_mask = UIntToOH(s2_commitPd.jmpOffset) & Fill(PredictWidth, s2_commitPd.hasJalr.asTypeOf(UInt(1.W)))
++  val commit_call_mask = UIntToOH(s2_commitPd.jmpOffset) & Fill(PredictWidth, s2_commitPd.hasCall.asTypeOf(UInt(1.W)))
++  val commit_ret_mask  = UIntToOH(s2_commitPd.jmpOffset) & Fill(PredictWidth, s2_commitPd.hasRet.asTypeOf(UInt(1.W)))
+ 
+   val mbpBRights = mbpRights & commit_br_mask
+   val mbpJRights = mbpRights & commit_jal_mask
+@@ -1640,7 +1522,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   val mbpCWrongs = mbpWrongs & commit_call_mask
+   val mbpRWrongs = mbpWrongs & commit_ret_mask
+ 
+-  val commit_pred_stage = RegNext(pred_stage(commPtr.value))
++  val commit_pred_stage = RegNext(pred_stage(commitPtr.value))
+ 
+   def pred_stage_map(src: UInt, name: String) =
+     (0 until numBpStages).map(i =>
+@@ -1658,7 +1540,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   def u(cond: Bool) = update_valid && cond
+   val ftb_false_hit = u(update.false_hit)
+   // assert(!ftb_false_hit)
+-  val ftb_hit = u(commit_hit === h_hit)
++  val ftb_hit = u(s2_commitHit === h_hit)
+ 
+   val ftb_new_entry                = u(ftbEntryGen.is_init_entry)
+   val ftb_new_entry_only_br        = ftb_new_entry && !update_ftb_entry.jmpValid
+@@ -1670,7 +1552,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   val ftb_modified_entry =
+     u(ftbEntryGen.is_new_br || ftbEntryGen.is_jalr_target_modified || ftbEntryGen.is_strong_bias_modified)
+   val ftb_modified_entry_new_br               = u(ftbEntryGen.is_new_br)
+-  val ftb_modified_entry_ifu_redirected       = u(ifuRedirected(do_commit_ptr.value))
++  val ftb_modified_entry_ifu_redirected       = u(ifuRedirected(s2_commitPtr.value))
+   val ftb_modified_entry_jalr_target_modified = u(ftbEntryGen.is_jalr_target_modified)
+   val ftb_modified_entry_br_full              = ftb_modified_entry && ftbEntryGen.is_br_full
+   val ftb_modified_entry_strong_bias          = ftb_modified_entry && ftbEntryGen.is_strong_bias_modified
+@@ -1722,16 +1604,16 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
+   // --------------------------- Debug --------------------------------
+   // XSDebug(enq_fire, p"enq! " + io.fromBpu.resp.bits.toPrintable)
+   XSDebug(io.toIfu.req.fire, p"fire to ifu " + io.toIfu.req.bits.toPrintable)
+-  XSDebug(do_commit, p"deq! [ptr] $do_commit_ptr\n")
+-  XSDebug(true.B, p"[bpuPtr] $bpuPtr, [ifuPtr] $ifuPtr, [ifuWbPtr] $ifuWbPtr [commPtr] $commPtr\n")
++  XSDebug(s2_readyToCommit, p"deq! [ptr] $s2_commitPtr\n")
++  XSDebug(true.B, p"[bpuPtr] $bpuPtr, [ifuPtr] $ifuPtr, [ifuWbPtr] $ifuWbPtr [commPtr] $commitPtr\n")
+   XSDebug(
+     true.B,
+     p"[in] v:${io.fromBpu.resp.valid} r:${io.fromBpu.resp.ready} " +
+       p"[out] v:${io.toIfu.req.valid} r:${io.toIfu.req.ready}\n"
+   )
+   XSDebug(
+-    do_commit,
+-    p"[deq info] cfiIndex: $commit_cfi, $commit_pc_bundle, target: ${Hexadecimal(commit_target.toUInt)}\n"
++    s2_readyToCommit,
++    p"[deq info] cfiIndex: $s2_commitCfi, $s2_commitPcBundle, target: ${Hexadecimal(s2_commitTarget.toUInt)}\n"
+   )
+ 
+   //   def ubtbCheck(commit: FtqEntry, predAns: Seq[PredictorAnswer], isWrong: Bool) = {
+diff --git a/src/main/scala/xiangshan/package.scala b/src/main/scala/xiangshan/package.scala
+index f4694b831ce..4114867a044 100644
+--- a/src/main/scala/xiangshan/package.scala
++++ b/src/main/scala/xiangshan/package.scala
+@@ -162,17 +162,16 @@ package object xiangshan {
+   }
+ 
+   object CommitType {
+-    def NORMAL = "b000".U  // int/fp
+-    def BRANCH = "b001".U  // branch
+-    def LOAD   = "b010".U  // load
+-    def STORE  = "b011".U  // store
+-
+-    def apply() = UInt(3.W)
+-    def isFused(commitType: UInt): Bool = commitType(2)
+-    def isLoadStore(commitType: UInt): Bool = !isFused(commitType) && commitType(1)
++    def NORMAL = "b00".U  // int/fp
++    def BRANCH = "b01".U  // branch
++    def LOAD   = "b10".U  // load
++    def STORE  = "b11".U  // store
++
++    def apply() = UInt(2.W)
++    def isLoadStore(commitType: UInt): Bool = commitType(1)
+     def lsInstIsStore(commitType: UInt): Bool = commitType(0)
+     def isStore(commitType: UInt): Bool = isLoadStore(commitType) && lsInstIsStore(commitType)
+-    def isBranch(commitType: UInt): Bool = commitType(0) && !commitType(1) && !isFused(commitType)
++    def isBranch(commitType: UInt): Bool = commitType(0) && !commitType(1)
+   }
+ 
+   object RedirectLevel {
+```

@@ -1,0 +1,18 @@
+=> mstaus.MIE set here has no effect 
+    80056cb0:   30046073                csrsi   mstatus,8
+    80056cb4:   000032b7                lui     t0,0x3
+    80056cb8:   10000813                li      a6,256
+    80056cbc:   30083073                csrc    mstatus,a6
+    80056cc0:   28a28293                addi    t0,t0,650 # 328a <LEN-0x9f76e>
+    80056cc4:   10000813                li      a6,256
+    80056cc8:   30082073                csrs    mstatus,a6
+    80056ccc:   305a9873                csrrw   a6,mtvec,s5
+    80056cd0:   1c8a0a13                addi    s4,s4,456 # 331c8 <LEN-0x6f830>
+    80056cd4:   08000a93                li      s5,128
+    80056cd8:   300aa073                csrs    mstatus,s5
+    80056cdc:   300e2073                csrs    mstatus,t3
+    80056ce0:   030af83b                remuw   a6,s5,a6
+    80056ce4:   01ed00a3                sb      t5,1(s10)
+    80056ce8:   0ff0000f                fence
+=> We wait for the inetrrupt here
+    80056cec:   0000006f                j       80056cec

@@ -1,0 +1,25 @@
+{
+  "number": 4898,
+  "title": "fix(ICache,Ifu): set memBackTypeMM and memPageTypeNC correctly",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4898",
+  "state": "closed",
+  "labels": [],
+  "author": "ngc7331",
+  "created_at": "2025-07-22T10:19:29Z",
+  "updated_at": "2025-07-25T13:00:41Z",
+  "submitted_at": "2025-07-22",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4898/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

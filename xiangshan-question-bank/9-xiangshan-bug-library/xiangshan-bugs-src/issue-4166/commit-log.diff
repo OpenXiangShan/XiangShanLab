@@ -1,0 +1,155 @@
+diff --git a/difftest b/difftest
+index 7c070eee8d7..07d1b3e4528 160000
+--- a/difftest
++++ b/difftest
+@@ -1 +1 @@
+-Subproject commit 7c070eee8d73c0f47d8c814a51701291ad8ee419
++Subproject commit 07d1b3e45287a5c332f3ddd8bf992424f30f8f91
+diff --git a/ready-to-run b/ready-to-run
+index 98f779c9140..7b4e611a04e 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit 98f779c914017c6fcf173a81c492a77aa9692dbb
++Subproject commit 7b4e611a04e7e226039ff8b3087d00c1aed8bb11
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
+index a2640480140..0f679129170 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
+@@ -236,7 +236,7 @@ class CSRToAIABundle extends Bundle {
+ }
+ 
+ class AIAToCSRBundle extends Bundle {
+-  private val NumVSIRFiles = 63
++  private val NumVSIRFiles = 5
+   val rdata = ValidIO(new Bundle {
+     val data = UInt(XLEN.W)
+     val illegal = Bool()
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
+index 85e6bc06a30..31c744c74b5 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
+@@ -65,15 +65,16 @@ class CSRPermitModule extends Module {
+   val pPermit_EX_II = privilegePermitMod.io.out.privilege_EX_II
+   val pPermit_EX_VI = privilegePermitMod.io.out.privilege_EX_VI
+ 
++  val vPermit_EX_II = virtualLevelPermitMod.io.out.virtualLevelPermit_EX_II
+   val vPermit_EX_VI = virtualLevelPermitMod.io.out.virtualLevelPermit_EX_VI
+ 
+   val indirectPermit_EX_II = indirectCSRPermitMod.io.out.indirectCSR_EX_II
+   val indirectPermit_EX_VI = indirectCSRPermitMod.io.out.indirectCSR_EX_VI
+ 
+-  val directPermit_illegal = mPermit_EX_II || sPermit_EX_II || pPermit_EX_II || pPermit_EX_VI || vPermit_EX_VI
++  val directPermit_illegal = mPermit_EX_II || sPermit_EX_II || pPermit_EX_II || pPermit_EX_VI || vPermit_EX_II || vPermit_EX_VI
+ 
+   val csrAccess_EX_II = csrAccess && (
+-    (mPermit_EX_II || sPermit_EX_II || pPermit_EX_II) ||
++    (mPermit_EX_II || sPermit_EX_II || pPermit_EX_II || vPermit_EX_II) ||
+     (!directPermit_illegal && indirectPermit_EX_II)
+   )
+   val csrAccess_EX_VI = csrAccess && (
+@@ -380,6 +381,7 @@ class VirtualLevelPermitModule extends Module {
+       val aia = new aiaIO
+     })
+     val out = Output(new Bundle {
++      val virtualLevelPermit_EX_II = Bool()
+       val virtualLevelPermit_EX_VI = Bool()
+     })
+   })
+@@ -390,7 +392,10 @@ class VirtualLevelPermitModule extends Module {
+     io.in.privState,
+   )
+ 
+-  private val vtvm = io.in.status.vtvm
++  private val (vtvm, vgein) = (
++    io.in.status.vtvm,
++    io.in.status.vgein,
++  )
+ 
+   private val (hcounteren, scounteren) = (
+     io.in.xcounteren.hcounteren,
+@@ -415,6 +420,9 @@ class VirtualLevelPermitModule extends Module {
+ 
+   private val rwSatp_EX_VI = privState.isModeVS && vtvm && (addr === CSRs.satp.U)
+ 
++  private val rwVStopei_EX_II = (privState.isModeM || privState.isModeHS) && (addr === CSRs.vstopei.U) && (vgein === 0.U || vgein > CSRConfig.GEILEN.U)
++  private val rwStopei_EX_VI = privState.isModeVS && (addr === CSRs.stopei.U) && (vgein === 0.U || vgein > CSRConfig.GEILEN.U)
++
+   private val rwSip_Sie_EX_VI = privState.isModeVS && hvictlVTI && (addr === CSRs.sip.U || addr === CSRs.sie.U)
+ 
+   private val rwStimecmp_EX_VI = privState.isModeVS && (addr === CSRs.stimecmp.U) &&
+@@ -466,7 +474,8 @@ class VirtualLevelPermitModule extends Module {
+   private val xstateControlAccess_EX_VI = accessStateen0_EX_VI || accessEnvcfg_EX_VI || accessIND_EX_VI || accessAIA_EX_VI ||
+     accessTopie_EX_VI || accessContext_EX_VI || accessCustom_EX_VI
+ 
+-  io.out.virtualLevelPermit_EX_VI := rwSatp_EX_VI || rwSip_Sie_EX_VI || rwStimecmp_EX_VI || accessHPM_EX_VI || xstateControlAccess_EX_VI
++  io.out.virtualLevelPermit_EX_II := rwVStopei_EX_II
++  io.out.virtualLevelPermit_EX_VI := rwSatp_EX_VI || rwStopei_EX_VI || rwSip_Sie_EX_VI || rwStimecmp_EX_VI || accessHPM_EX_VI || xstateControlAccess_EX_VI
+ }
+ 
+ class IndirectCSRPermitModule extends Module {
+@@ -538,6 +547,7 @@ class statusIO extends Bundle {
+   val tvm = Bool()
+   // Virtual Trap Virtual Memory
+   val vtvm = Bool()
++  val vgein = UInt(6.W)
+   val mstatusFSOff = Bool()
+   val vsstatusFSOff = Bool()
+   val mstatusVSOff = Bool()
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala
+index 0ade0e8fd56..75badb62ad8 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/HypervisorLevel.scala
+@@ -219,9 +219,7 @@ class HstatusBundle extends CSRBundle {
+ 
+ }
+ 
+-object HstatusVgeinField extends CSREnum with WLRLApply {
+-  override def isLegal(enumeration: CSREnumType): Bool = enumeration.asUInt <= GEILEN.U
+-}
++object HstatusVgeinField extends CSREnum with WLRLApply
+ 
+ class HstatusModule(implicit p: Parameters) extends CSRModule("Hstatus", new HstatusBundle)
+   with SretEventSinkBundle
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 832038603ea..5b02561ccdb 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -25,7 +25,7 @@ import xiangshan.backend.trace._
+ import scala.collection.immutable.SeqMap
+ 
+ object CSRConfig {
+-  final val GEILEN = 63
++  final val GEILEN = 5 // m,s,5vs
+ 
+   final val ASIDLEN = 16 // the length of ASID of XS implementation
+ 
+@@ -469,6 +469,8 @@ class NewCSR(implicit val p: Parameters) extends Module
+   permitMod.io.in.status.tvm  := mstatus.regOut.TVM.asBool
+   permitMod.io.in.status.vtvm := hstatus.regOut.VTVM.asBool
+ 
++  permitMod.io.in.status.vgein := hstatus.regOut.VGEIN.asUInt
++
+   permitMod.io.in.xcounteren.mcounteren := mcounteren.rdata
+   permitMod.io.in.xcounteren.hcounteren := hcounteren.rdata
+   permitMod.io.in.xcounteren.scounteren := scounteren.rdata
+@@ -1552,12 +1554,13 @@ class NewCSR(implicit val p: Parameters) extends Module
+     }).orR
+     diffMhpmeventOverflowEvent.mhpmeventOverflow := VecInit(mhpmevents.map(_.regOut.asInstanceOf[MhpmeventBundle].OF.asBool)).asUInt
+ 
+-    val diffAIAXtopeiEvent = DifftestModule(new DiffAIAXtopeiEvent)
+-    diffAIAXtopeiEvent.coreid := hartId
+-    diffAIAXtopeiEvent.valid := fromAIA.rdata.valid
+-    diffAIAXtopeiEvent.mtopei := mtopei.rdata
+-    diffAIAXtopeiEvent.stopei := stopei.rdata
+-    diffAIAXtopeiEvent.vstopei := vstopei.rdata
++    val diffSyncAIAEvent = DifftestModule(new DiffSyncAIAEvent)
++    diffSyncAIAEvent.coreid := hartId
++    diffSyncAIAEvent.valid := fromAIA.rdata.valid
++    diffSyncAIAEvent.mtopei := mtopei.rdata
++    diffSyncAIAEvent.stopei := stopei.rdata
++    diffSyncAIAEvent.vstopei := vstopei.rdata
++    diffSyncAIAEvent.hgeip := hgeip.rdata
+ 
+     val diffCustomMflushpwr = DifftestModule(new DiffSyncCustomMflushpwrEvent)
+     diffCustomMflushpwr.coreid := hartId

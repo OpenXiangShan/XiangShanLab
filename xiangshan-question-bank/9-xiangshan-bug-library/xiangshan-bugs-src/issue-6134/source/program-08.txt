@@ -1,0 +1,17 @@
+validation_monitor_8div_7000_12000.json:
+  predicate                  = PASS
+  pbmt_seen_count            = 3292
+  all_uncache_fire_count     = 81
+  unsafe_uncache_fire_count  = 43
+
+attack_chain_monitor.json:
+  predicate            = PASS
+  unsafe_ifu_fire_count = 43
+  tl_get_fire_count     = 81
+  attack_chain_count    = 81
+
+external_timing_monitor.json:
+  predicate             = PASS
+  tl_timing_chain_count = 11
+  tl_target_get_count   = 81
+  tl_grant_valid_count  = 81

@@ -1,0 +1,21 @@
+{
+  "number": 3538,
+  "title": "fix(XSNoCTop): add port `hartIsInReset` for StandAloneDebugModule.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3538",
+  "state": "closed",
+  "labels": [],
+  "author": "wissygh",
+  "created_at": "2024-09-11T03:09:18Z",
+  "updated_at": "2024-09-11T10:37:28Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3538/commit-log.md"
+  ],
+  "submitted_at": "2024-09-11",
+  "branch": "",
+  "rtl_commit": ""
+}

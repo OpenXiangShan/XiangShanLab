@@ -1,0 +1,21 @@
+{
+  "number": 4623,
+  "title": "fix(criticalError): Stop counting `wfi_cycles` when disable `wfiResume`",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4623",
+  "state": "closed",
+  "labels": [],
+  "author": "wissygh",
+  "created_at": "2025-04-24T06:12:53Z",
+  "updated_at": "2025-08-25T06:43:56Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4623/commit-log.md"
+  ],
+  "submitted_at": "2025-04-24",
+  "branch": "",
+  "rtl_commit": ""
+}

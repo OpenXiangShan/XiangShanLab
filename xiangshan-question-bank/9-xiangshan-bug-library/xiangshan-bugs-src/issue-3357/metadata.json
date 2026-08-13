@@ -1,0 +1,21 @@
+{
+  "number": 3357,
+  "title": "PTW, RVH: fix the x state of stage1 pf/af when the first s2xlate happens gpf in PTW",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3357",
+  "state": "closed",
+  "labels": [],
+  "author": "pxk27",
+  "created_at": "2024-08-07T11:47:35Z",
+  "updated_at": "2024-08-08T17:36:22Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3357/commit-log.md"
+  ],
+  "submitted_at": "2024-08-07",
+  "branch": "",
+  "rtl_commit": ""
+}

@@ -1,0 +1,15 @@
+00000000800033f6 <_l1533>:
+    800033f6:	eb63d3b7          	lui	t2,0xeb63d
+    800033fa:	53d3839b          	addiw	t2,t2,1341 # ffffffffeb63d53d <_end+0xffffffff6b5dd33d>
+    800033fe:	03ba                	slli	t2,t2,0xe
+    80003400:	82738393          	addi	t2,t2,-2009
+    80003404:	03ba                	slli	t2,t2,0xe
+    80003406:	90738393          	addi	t2,t2,-1785
+    8000340a:	3523bef3          	csrrc	t4,mireg2,t2
+    8000340e:	8976                	mv	s2,t4
+    80003410:	c076                	sw	t4,0(sp)
+...
+    8000348c:	00a98b83          	lb	s7,10(s3)
+
+0000000080003490 <_l1549>:
+    80003490:	00c4dc3b          	srlw	s8,s1,a2

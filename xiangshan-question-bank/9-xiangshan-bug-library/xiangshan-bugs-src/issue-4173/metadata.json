@@ -1,0 +1,24 @@
+{
+  "number": 4173,
+  "title": "timing(ICache): move mshr_resp selector 1 cycle ahead",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4173",
+  "state": "closed",
+  "labels": [],
+  "author": "ngc7331",
+  "created_at": "2025-01-14T08:22:10Z",
+  "updated_at": "2025-01-22T09:32:20Z",
+  "source_files": [
+    "issue-4173/source/program-01.txt",
+    "issue-4173/source/program-02.txt"
+  ],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4173/commit-log.md"
+  ],
+  "submitted_at": "2025-01-14",
+  "branch": "",
+  "rtl_commit": ""
+}

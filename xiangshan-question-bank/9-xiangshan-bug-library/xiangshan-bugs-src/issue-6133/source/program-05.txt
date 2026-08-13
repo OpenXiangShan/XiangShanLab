@@ -1,0 +1,30 @@
+cd /path/to/unzipped/poc
+
+/opt/riscv/bin/riscv64-unknown-elf-gcc \
+  -nostdlib -nostartfiles \
+  -march=rv64gc -mabi=lp64 \
+  -T linker.ld \
+  -o poc_uncache_overflow.elf \
+  poc_uncache_overflow.S
+
+/opt/riscv/bin/riscv64-unknown-elf-objcopy \
+  -O binary \
+  poc_uncache_overflow.elf \
+  poc_uncache_overflow.bin
+
+/opt/riscv/bin/riscv64-unknown-elf-objdump \
+  -dr poc_uncache_overflow.elf \
+  > poc_uncache_overflow.objdump
+
+/root/HardwareAgent/XiangShan/build_vcd/emu \
+  --max-cycles=8400 \
+  -b 8200 -e 8320 \
+  --dump-wave-full \
+  --wave-path=validation_uncache_8200_8320.vcd \
+  -i poc_uncache_overflow.bin \
+  > validation_uncache_8200_8320_nodiff.run.log 2>&1
+
+python3 validate_uncache_overflow_vcd.py \
+  validation_uncache_8200_8320.vcd \
+  validation_uncache_8200_8320.validation.json \
+  > validation_uncache_8200_8320.validation.log

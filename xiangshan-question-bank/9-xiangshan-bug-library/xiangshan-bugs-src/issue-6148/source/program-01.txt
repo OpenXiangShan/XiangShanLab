@@ -1,0 +1,5 @@
+case                 result_delta  ITTAGE conflict  branch mispredicts  TAGE-reason mispredicts
+no hammer bank0      137           275              29                  9
+no hammer bank1      137           275              29                  9
+hammer bank0         787           91               59                  40
+hammer bank1         560           12               47                  25

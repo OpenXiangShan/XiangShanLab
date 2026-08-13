@@ -1,0 +1,9 @@
+victim secret-dependent control flow
+        ->
+different MainBTB/replacer-state footprint
+        ->
+attacker probes aliasing branch PCs
+        ->
+different BTB miss / mispredict / frontend flush behavior
+        ->
+attacker distinguishes a secret-dependent control-flow bit

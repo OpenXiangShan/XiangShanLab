@@ -1,0 +1,3 @@
+ mcause different at pc = 0x00800003da, right = 0x000000000000000c, wrong = 0x0000000000000000
+   mepc different at pc = 0x00800003da, right = 0x0000004000000000, wrong = 0x00000000800001cc
+  mtval different at pc = 0x00800003da, right = 0x0000004000000000, wrong = 0x0000000000000000

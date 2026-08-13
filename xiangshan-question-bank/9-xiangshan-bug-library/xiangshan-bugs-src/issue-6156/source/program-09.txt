@@ -1,0 +1,15 @@
+$XS_EMU \
+  --max-cycles=1700 \
+  -b 1450 -e 1560 \
+  --dump-wave-full \
+  --wave-path=validation_satp_fault_1450_1560.vcd \
+  --dump-commit-trace \
+  -i poc.bin \
+  --diff "$XS_DIFF" \
+  > validation_wave_diff.log 2>&1
+
+python3 validate_satp_first_fetch.py \
+  validation_satp_fault_1450_1560.vcd \
+  validation_wave_diff.log \
+  validation_monitor.json \
+  > validation_monitor.log

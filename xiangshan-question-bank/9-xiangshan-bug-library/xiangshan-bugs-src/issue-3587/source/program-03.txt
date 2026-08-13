@@ -1,0 +1,2 @@
+Core 0: ABORT at pc = 0x7e7a8e7a7
+instrCnt = 1, cycleCnt = 2,101, IPC = 0.000476

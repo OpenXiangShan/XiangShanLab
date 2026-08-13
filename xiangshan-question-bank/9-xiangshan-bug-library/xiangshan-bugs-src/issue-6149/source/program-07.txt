@@ -1,0 +1,9 @@
+mkdir xiangshan-ras-enable-secret-fetch-poc
+cd xiangshan-ras-enable-secret-fetch-poc
+unzip /path/to/xiangshan-ras-enable-secret-fetch-poc.zip
+
+EMU=/path/to/emu \
+RISCV_GCC=/path/to/riscv64-unknown-elf-gcc \
+RISCV_OBJCOPY=/path/to/riscv64-unknown-elf-objcopy \
+RISCV_OBJDUMP=/path/to/riscv64-unknown-elf-objdump \
+bash ./run_both_secret_fetch.sh

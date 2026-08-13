@@ -1,0 +1,532 @@
+# Commit Log
+- Issue: #5395
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5395
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5395
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5395
+- Changed files: 5
+- Additions: 176
+- Deletions: 152
+
+## Files
+- `src/main/scala/xiangshan/frontend/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/Frontend.scala`
+- `src/main/scala/xiangshan/frontend/FrontendParameters.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+- `src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/Bundles.scala b/src/main/scala/xiangshan/frontend/Bundles.scala
+index 204572717de..c9ea5879183 100644
+--- a/src/main/scala/xiangshan/frontend/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/Bundles.scala
+@@ -414,3 +414,25 @@ object BlameBpuSource {
+     blame
+   }
+ }
++
++class BpuPerfInfo(implicit p: Parameters) extends FrontendBundle {
++  val bpRight: UInt = UInt(XLEN.W)
++  val bpWrong: UInt = UInt(XLEN.W)
++}
++
++class BpuTopDownInfo(implicit p: Parameters) extends FrontendBundle {
++  val btbMissBubble:    Bool = Bool()
++  val tageMissBubble:   Bool = Bool()
++  val scMissBubble:     Bool = Bool()
++  val ittageMissBubble: Bool = Bool()
++  val rasMissBubble:    Bool = Bool()
++}
++
++class FrontendPerfInfo(implicit p: Parameters) extends FrontendBundle {
++  val ibufFull: Bool        = Bool()
++  val bpuInfo:  BpuPerfInfo = new BpuPerfInfo
++}
++
++class FrontendDebugTopDownInfo(implicit p: Parameters) extends FrontendBundle {
++  val robHeadVaddr: Valid[PrunedAddr] = Valid(PrunedAddr(VAddrBits))
++}
+diff --git a/src/main/scala/xiangshan/frontend/Frontend.scala b/src/main/scala/xiangshan/frontend/Frontend.scala
+index d1c6911a5f6..0681815f422 100644
+--- a/src/main/scala/xiangshan/frontend/Frontend.scala
++++ b/src/main/scala/xiangshan/frontend/Frontend.scala
+@@ -1,136 +1,150 @@
+-/***************************************************************************************
+-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+-* Copyright (c) 2020-2021 Peng Cheng Laboratory
+-*
+-* XiangShan is licensed under Mulan PSL v2.
+-* You can use this software according to the terms and conditions of the Mulan PSL v2.
+-* You may obtain a copy of Mulan PSL v2 at:
+-*          http://license.coscl.org.cn/MulanPSL2
+-*
+-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+-*
+-* See the Mulan PSL v2 for more details.
+-*
+-*
+-* Acknowledgement
+-*
+-* This implementation is inspired by several key papers:
+-* [1] Alex Ramirez, Oliverio J. Santana, Josep L. Larriba-Pey, and Mateo Valero. "[Fetching instruction streams.]
+-* (https://doi.org/10.1109/MICRO.2002.1176264)" 35th Annual IEEE/ACM International Symposium on Microarchitecture
+-* (MICRO). 2002.
+-* [2] Yasuo Ishii, Jaekyu Lee, Krishnendra Nathella, and Dam Sunwoo. "[Rebasing instruction prefetching: An industry
+-* perspective.](https://doi.org/10.1109/LCA.2020.3035068)" IEEE Computer Architecture Letters 19.2: 147-150. 2020.
+-* [3] Yasuo Ishii, Jaekyu Lee, Krishnendra Nathella, and Dam Sunwoo. "[Re-establishing fetch-directed instruction
+-* prefetching: An industry perspective.](https://doi.org/10.1109/ISPASS51385.2021.00034)" 2021 IEEE International
+-* Symposium on Performance Analysis of Systems and Software (ISPASS). 2021.
+-***************************************************************************************/
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++// Acknowledgement
++//
++// This implementation is inspired by several key papers:
++// [1] Alex Ramirez, Oliverio J. Santana, Josep L. Larriba-Pey, and Mateo Valero. "[Fetching instruction streams.]
++// (https://doi.org/10.1109/MICRO.2002.1176264)" 35th Annual IEEE/ACM International Symposium on Microarchitecture
++// (MICRO). 2002.
++// [2] Yasuo Ishii, Jaekyu Lee, Krishnendra Nathella, and Dam Sunwoo. "[Rebasing instruction prefetching: An industry
++// perspective.](https://doi.org/10.1109/LCA.2020.3035068)" IEEE Computer Architecture Letters 19.2: 147-150. 2020.
++// [3] Yasuo Ishii, Jaekyu Lee, Krishnendra Nathella, and Dam Sunwoo. "[Re-establishing fetch-directed instruction
++// prefetching: An industry perspective.](https://doi.org/10.1109/ISPASS51385.2021.00034)" 2021 IEEE International
++// Symposium on Performance Analysis of Systems and Software (ISPASS). 2021.
+ 
+ package xiangshan.frontend
+ import chisel3._
+ import chisel3.util._
+ import freechips.rocketchip.diplomacy.LazyModule
+ import freechips.rocketchip.diplomacy.LazyModuleImp
+-import ftq.Ftq
+-import ftq.FtqPtr
+ import org.chipsalliance.cde.config.Parameters
+-import utility._
++import utility.ClockGate
++import utility.DelayN
++import utility.DFTResetSignals
++import utility.HasPerfEvents
++import utility.HPerfMonitor
++import utility.ModuleNode
++import utility.PerfEvent
++import utility.ResetGen
++import utility.ResetGenNode
++import utility.XSPerfAccumulate
++import utility.XSPerfHistogram
+ import utility.mbist.MbistInterface
+ import utility.mbist.MbistPipeline
+ import utility.sram.SramBroadcastBundle
+ import utility.sram.SramHelper
+-import xiangshan._
++import xiangshan.CustomCSRCtrlIO
++import xiangshan.DebugOptionsKey
++import xiangshan.FrontendToCtrlIO
++import xiangshan.L1BusErrorUnitInfo
++import xiangshan.SfenceBundle
++import xiangshan.SoftIfetchPrefetchBundle
++import xiangshan.TlbCsrBundle
+ import xiangshan.backend.fu.NewCSR.PFEvent
+ import xiangshan.backend.fu.PMP
+ import xiangshan.backend.fu.PMPChecker
+-import xiangshan.backend.fu.PMPReqBundle
+-import xiangshan.cache.mmu._
++import xiangshan.cache.mmu.PTWFilter
++import xiangshan.cache.mmu.PTWRepeaterNB
++import xiangshan.cache.mmu.TLB
++import xiangshan.cache.mmu.TlbPtwIO
++import xiangshan.cache.mmu.VectorTlbPtwIO
+ import xiangshan.frontend.bpu.Bpu
++import xiangshan.frontend.ftq.Ftq
+ import xiangshan.frontend.ibuffer.IBuffer
+-import xiangshan.frontend.icache._
+-import xiangshan.frontend.ifu._
++import xiangshan.frontend.icache.ICache
++import xiangshan.frontend.ifu.Ifu
+ import xiangshan.frontend.instruncache.InstrUncache
+ import xiangshan.frontend.simfrontend.SimFrontendInlinedImp
+ 
+-class Frontend()(implicit p: Parameters) extends LazyModule with HasXSParameter {
++class FrontendIO(implicit p: Parameters) extends FrontendBundle {
++  val hartId:       UInt             = Input(UInt(hartIdLen.W))
++  val reset_vector: PrunedAddr       = Input(PrunedAddr(PAddrBits))
++  val sfence:       SfenceBundle     = Input(new SfenceBundle)
++  val fencei:       Bool             = Input(Bool())
++  val ptw:          TlbPtwIO         = new TlbPtwIO
++  val backend:      FrontendToCtrlIO = new FrontendToCtrlIO
++  val softPrefetch: Vec[Valid[SoftIfetchPrefetchBundle]] =
++    Vec(backendParams.LduCnt, Flipped(Valid(new SoftIfetchPrefetchBundle)))
++  val error: L1BusErrorUnitInfo = Output(new L1BusErrorUnitInfo)
++
++  // ctrl
++  val tlbCsr:  TlbCsrBundle    = Input(new TlbCsrBundle)
++  val csrCtrl: CustomCSRCtrlIO = Input(new CustomCSRCtrlIO)
++
++  val resetInFrontend: Bool = Output(Bool())
++
++  // perf
++  val frontendInfo: FrontendPerfInfo         = Output(new FrontendPerfInfo)
++  val debugTopDown: FrontendDebugTopDownInfo = Flipped(new FrontendDebugTopDownInfo)
++
++  // mbist
++  val dft:       Option[SramBroadcastBundle] = Option.when(hasDFT)(Input(new SramBroadcastBundle))
++  val dft_reset: Option[DFTResetSignals]     = Option.when(hasMbist)(Input(new DFTResetSignals))
++}
++
++class Frontend()(implicit p: Parameters) extends LazyModule with HasFrontendParameters {
+   override def shouldBeInlined: Boolean = false
+-  val inner       = LazyModule(new FrontendInlined)
+-  lazy val module = new FrontendImp(this)
++
++  val inner:       FrontendInlined = LazyModule(new FrontendInlined)
++  lazy val module: FrontendImp     = new FrontendImp(this)
+ }
+ 
+ class FrontendImp(wrapper: Frontend)(implicit p: Parameters) extends LazyModuleImp(wrapper) {
+-  val io      = IO(wrapper.inner.module.io.cloneType)
+-  val io_perf = IO(wrapper.inner.module.io_perf.cloneType)
++  val io:      FrontendIO     = IO(wrapper.inner.module.io.cloneType)
++  val io_perf: Vec[PerfEvent] = IO(wrapper.inner.module.io_perf.cloneType)
++
+   io <> wrapper.inner.module.io
+   io_perf <> wrapper.inner.module.io_perf
++
+   if (p(DebugOptionsKey).ResetGen) {
+     ResetGen(ResetGenNode(Seq(ModuleNode(wrapper.inner.module))), reset, sim = false, io.dft_reset)
+   }
+ }
+ 
+-abstract class FrontendInlinedImpBase(outer: FrontendInlined) extends LazyModuleImp(outer) with HasXSParameter
++abstract class FrontendInlinedImpBase(outer: FrontendInlined) extends LazyModuleImp(outer)
++    with HasFrontendParameters
+     with HasPerfEvents {
+-  val io = IO(new Bundle() {
+-    val hartId       = Input(UInt(hartIdLen.W))
+-    val reset_vector = Input(PrunedAddr(PAddrBits))
+-    val fencei       = Input(Bool())
+-    val ptw          = new TlbPtwIO()
+-    val backend      = new FrontendToCtrlIO
+-    val softPrefetch = Vec(backendParams.LduCnt, Flipped(Valid(new SoftIfetchPrefetchBundle)))
+-    val sfence       = Input(new SfenceBundle)
+-    val tlbCsr       = Input(new TlbCsrBundle)
+-    val csrCtrl      = Input(new CustomCSRCtrlIO)
+-    val error        = Output(new L1BusErrorUnitInfo)
+-    val frontendInfo = new Bundle {
+-      val ibufFull = Output(Bool())
+-      val bpuInfo = new Bundle {
+-        val bpRight = Output(UInt(XLEN.W))
+-        val bpWrong = Output(UInt(XLEN.W))
+-      }
+-    }
+-    val resetInFrontend = Output(Bool())
+-    val debugTopDown = new Bundle {
+-      val robHeadVaddr = Flipped(Valid(PrunedAddr(VAddrBits)))
+-    }
+-    val dft       = Option.when(hasDFT)(Input(new SramBroadcastBundle))
+-    val dft_reset = Option.when(hasMbist)(Input(new DFTResetSignals()))
+-  })
++  val io: FrontendIO = IO(new FrontendIO)
+ }
+ 
+-class FrontendInlined()(implicit p: Parameters) extends LazyModule with HasXSParameter {
++class FrontendInlined()(implicit p: Parameters) extends LazyModule with HasFrontendParameters {
+   override def shouldBeInlined: Boolean = true
+ 
+-  val instrUncache = LazyModule(new InstrUncache())
+-  val icache       = LazyModule(new ICache())
++  val instrUncache: InstrUncache = LazyModule(new InstrUncache)
++  val icache:       ICache       = LazyModule(new ICache)
+ 
+   lazy val module: FrontendInlinedImpBase =
+     if (env.EnableSimFrontend) new SimFrontendInlinedImp(this) else new FrontendInlinedImp(this)
+ }
+ 
+ class FrontendInlinedImp(outer: FrontendInlined) extends FrontendInlinedImpBase(outer) {
++  private val instrUncache = outer.instrUncache.module
++  private val icache       = outer.icache.module
++  private val bpu          = Module(new Bpu)
++  private val ifu          = Module(new Ifu)
++  private val ibuffer      = Module(new IBuffer)
++  private val ftq          = Module(new Ftq)
++
++  private val needFlush            = RegNext(io.backend.toFtq.redirect.valid)
++  private val flushControlRedirect = RegNext(io.backend.toFtq.redirect.bits.debugIsCtrl)
++  private val flushMemVioRedirect  = RegNext(io.backend.toFtq.redirect.bits.debugIsMemVio)
+ 
+-  // decouped-frontend modules
+-  val instrUncache = outer.instrUncache.module
+-  val icache       = outer.icache.module
+-  val bpu          = Module(new Bpu)
+-  val ifu          = Module(new Ifu)
+-  val ibuffer      = Module(new IBuffer)
+-  val ftq          = Module(new Ftq)
+-
+-  val needFlush            = RegNext(io.backend.toFtq.redirect.valid)
+-  val FlushControlRedirect = RegNext(io.backend.toFtq.redirect.bits.debugIsCtrl)
+-  val FlushMemVioRedirect  = RegNext(io.backend.toFtq.redirect.bits.debugIsMemVio)
+-  val FlushControlBTBMiss  = Wire(Bool())
+-  val FlushTAGEMiss        = Wire(Bool())
+-  val FlushSCMiss          = Wire(Bool())
+-  val FlushITTAGEMiss      = Wire(Bool())
+-  val FlushRASMiss         = Wire(Bool())
+-
+-  // TODO: what the fuck are these magic numbers?
+-  val tlbCsr  = DelayN(io.tlbCsr, 1)
+-  val csrCtrl = DelayN(io.csrCtrl, 2)
+-  val sfence  = DelayN(io.sfence, 2)
++  private val tlbCsr  = DelayN(io.tlbCsr, TlbCsrPortDelay)
++  private val csrCtrl = DelayN(io.csrCtrl, CsrCtrlPortDelay)
++  private val sfence  = DelayN(io.sfence, SfencePortDelay)
+ 
+   // trigger
+   ifu.io.frontendTrigger := csrCtrl.frontend_trigger
+@@ -196,12 +210,11 @@ class FrontendInlinedImp(outer: FrontendInlined) extends FrontendInlinedImpBase(
+   icache.io.softPrefetchReq <> io.softPrefetch
+ 
+   // wfi (backend-icache, backend-instrUncache)
+-  // DelayN for better timing, FIXME: maybe 1 cycle is not enough, to be evaluated
+-  private val wfiReq = DelayN(io.backend.wfi.wfiReq, 1)
++  private val wfiReq = DelayN(io.backend.wfi.wfiReq, WfiReqPortDelay)
+   icache.io.wfi.wfiReq       := wfiReq
+   instrUncache.io.wfi.wfiReq := wfiReq
+   // return safe only when both icache & instrUncache are safe, also only when has wfiReq (like, safe := wfiReq.fire)
+-  io.backend.wfi.wfiSafe := DelayN(wfiReq && icache.io.wfi.wfiSafe && instrUncache.io.wfi.wfiSafe, 1)
++  io.backend.wfi.wfiSafe := DelayN(wfiReq && icache.io.wfi.wfiSafe && instrUncache.io.wfi.wfiSafe, WfiSafePortDealy)
+ 
+   // IFU-Ftq
+   ifu.io.fromFtq <> ftq.io.toIfu
+@@ -233,21 +246,11 @@ class FrontendInlinedImp(outer: FrontendInlined) extends FrontendInlinedImpBase(
+   io.backend.fromIfu := ifu.io.toBackend
+   io.frontendInfo.bpuInfo <> ftq.io.bpuInfo
+ 
+-  ibuffer.io.flush                := needFlush
+-  ibuffer.io.ControlRedirect      := FlushControlRedirect
+-  ibuffer.io.MemVioRedirect       := FlushMemVioRedirect
+-  ibuffer.io.ControlBTBMissBubble := FlushControlBTBMiss
+-  ibuffer.io.TAGEMissBubble       := FlushTAGEMiss
+-  ibuffer.io.SCMissBubble         := FlushSCMiss
+-  ibuffer.io.ITTAGEMissBubble     := FlushITTAGEMiss
+-  ibuffer.io.RASMissBubble        := FlushRASMiss
+-  ibuffer.io.decodeCanAccept      := io.backend.canAccept
+-
+-  FlushControlBTBMiss := ftq.io.ControlBTBMissBubble
+-  FlushTAGEMiss       := ftq.io.TAGEMissBubble
+-  FlushSCMiss         := ftq.io.SCMissBubble
+-  FlushITTAGEMiss     := ftq.io.ITTAGEMissBubble
+-  FlushRASMiss        := ftq.io.RASMissBubble
++  ibuffer.io.flush           := needFlush
++  ibuffer.io.controlRedirect := flushControlRedirect
++  ibuffer.io.memVioRedirect  := flushMemVioRedirect
++  ibuffer.io.bpuTopDownInfo  := ftq.io.bpuTopDownInfo
++  ibuffer.io.decodeCanAccept := io.backend.canAccept
+ 
+   io.backend.cfVec <> ibuffer.io.out
+   io.backend.stallReason <> ibuffer.io.stallReason
+@@ -256,7 +259,7 @@ class FrontendInlinedImp(outer: FrontendInlined) extends FrontendInlinedImpBase(
+   ifu.io.fromUncache <> instrUncache.io.toIfu
+   instrUncache.io.flush := false.B
+ 
+-  val errorReg = RegNext(icache.io.error)
++  private val errorReg = RegNext(icache.io.error)
+   io.error <> RegNext(errorReg.bits.toL1BusErrorUnitInfo(errorReg.valid))
+ 
+   icache.io.hartId := io.hartId
+@@ -267,16 +270,16 @@ class FrontendInlinedImp(outer: FrontendInlined) extends FrontendInlinedImpBase(
+   io.resetInFrontend       := reset.asBool
+ 
+   // PFEvent
+-  val pfevent = Module(new PFEvent)
++  private val pfevent = Module(new PFEvent)
+   pfevent.io.distribute_csr := io.csrCtrl.distribute_csr
+-  val csrevents = pfevent.io.hpmevent.take(8)
++  private val csrevents = pfevent.io.hpmevent.take(8)
+ 
+-  val perfFromUnits = Seq(ifu, ibuffer, icache, ftq).flatMap(_.getPerfEvents)
+-  val perfFromIO    = Seq()
+-  val perfBlock     = Seq()
+-  val perfFromITLB  = itlb.getPerfEvents.map { case (str, idx) => ("itlb_" + str, idx) }
++  private val perfFromUnits = Seq(ifu, ibuffer, icache, ftq).flatMap(_.getPerfEvents)
++  private val perfFromIO    = Seq()
++  private val perfBlock     = Seq()
++  private val perfFromITLB  = itlb.getPerfEvents.map { case (str, idx) => ("itlb_" + str, idx) }
+   // let index = 0 be no event
+-  val allPerfEvents = Seq(("noEvent", 0.U)) ++ perfFromUnits ++ perfFromIO ++ perfBlock ++ perfFromITLB
++  private val allPerfEvents = Seq(("noEvent", 0.U)) ++ perfFromUnits ++ perfFromIO ++ perfBlock ++ perfFromITLB
+ 
+   if (printEventCoding) {
+     for (((name, inc), i) <- allPerfEvents.zipWithIndex) {
+@@ -284,8 +287,8 @@ class FrontendInlinedImp(outer: FrontendInlined) extends FrontendInlinedImpBase(
+     }
+   }
+ 
+-  val allPerfInc          = allPerfEvents.map(_._2.asTypeOf(new PerfEvent))
+-  override val perfEvents = HPerfMonitor(csrevents, allPerfInc).getPerfEvents
++  private val allPerfInc = allPerfEvents.map(_._2.asTypeOf(new PerfEvent))
++  override val perfEvents: Seq[(String, UInt)] = HPerfMonitor(csrevents, allPerfInc).getPerfEvents
+   generatePerfEvent()
+ 
+   private val mbistPl = MbistPipeline.PlaceMbistPipeline(Int.MaxValue, "MbistPipeFrontend", hasMbist)
+@@ -316,7 +319,7 @@ class FrontendInlinedImp(outer: FrontendInlined) extends FrontendInlinedImpBase(
+     cg.cgen := false.B
+   }
+ 
+-  sigFromSrams.foreach { case sig => sig := DontCare }
++  sigFromSrams.foreach(_ := DontCare)
+   sigFromSrams.zip(io.dft).foreach {
+     case (sig, dft) =>
+       if (hasMbist) {
+diff --git a/src/main/scala/xiangshan/frontend/FrontendParameters.scala b/src/main/scala/xiangshan/frontend/FrontendParameters.scala
+index 6ca409d6704..41a0e93d385 100644
+--- a/src/main/scala/xiangshan/frontend/FrontendParameters.scala
++++ b/src/main/scala/xiangshan/frontend/FrontendParameters.scala
+@@ -63,6 +63,15 @@ case class FrontendParameters(
+ trait HasFrontendParameters extends HasXSParameter {
+   def frontendParameters: FrontendParameters = coreParams.frontendParameters
+ 
++  // frontend-backend/memblock port delays
++  // these are highly coupled with pipeline design, so it's not parameterized for now
++  // we define them as constants here for better code readability, change with caution
++  def TlbCsrPortDelay:  Int = 1
++  def CsrCtrlPortDelay: Int = 2
++  def SfencePortDelay:  Int = 2
++  def WfiReqPortDelay:  Int = 1
++  def WfiSafePortDealy: Int = 1
++
+   def FetchPorts: Int = frontendParameters.FetchPorts
+ 
+   def FetchBlockSize:    Int = frontendParameters.FetchBlockSize
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index c2cbfa1b158..b519a915fc3 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -35,7 +35,9 @@ import xiangshan.RedirectLevel
+ import xiangshan.TopDownCounters
+ import xiangshan.backend.CtrlToFtqIO
+ import xiangshan.frontend.BlameBpuSource
++import xiangshan.frontend.BpuPerfInfo
+ import xiangshan.frontend.BpuToFtqIO
++import xiangshan.frontend.BpuTopDownInfo
+ import xiangshan.frontend.ExceptionType
+ import xiangshan.frontend.FetchRequestBundle
+ import xiangshan.frontend.FrontendTopDownBundle
+@@ -47,7 +49,6 @@ import xiangshan.frontend.PrunedAddrInit
+ import xiangshan.frontend.bpu.BpuMeta
+ import xiangshan.frontend.bpu.BpuPredictionSource
+ import xiangshan.frontend.bpu.BpuSpeculationMeta
+-import xiangshan.frontend.bpu.BranchInfo
+ import xiangshan.frontend.bpu.HalfAlignHelper
+ import xiangshan.frontend.bpu.ras.RasMeta
+ 
+@@ -70,17 +71,10 @@ class Ftq(implicit p: Parameters) extends FtqModule
+     val fromBackend: CtrlToFtqIO = Flipped(new CtrlToFtqIO)
+     val toBackend:   FtqToCtrlIO = new FtqToCtrlIO
+ 
+-    val bpuInfo = new Bundle {
+-      val bpRight: UInt = Output(UInt(XLEN.W))
+-      val bpWrong: UInt = Output(UInt(XLEN.W))
+-    }
++    val bpuInfo: BpuPerfInfo = Output(new BpuPerfInfo)
+ 
+     // for perf
+-    val ControlBTBMissBubble: Bool = Output(Bool())
+-    val TAGEMissBubble:       Bool = Output(Bool())
+-    val SCMissBubble:         Bool = Output(Bool())
+-    val ITTAGEMissBubble:     Bool = Output(Bool())
+-    val RASMissBubble:        Bool = Output(Bool())
++    val bpuTopDownInfo: BpuTopDownInfo = Output(new BpuTopDownInfo)
+   }
+ 
+   val io: FtqIO = IO(new FtqIO)
+@@ -398,11 +392,11 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   // io.toIfu.req.bits.topdownInfo is assigned above
+   io.toIfu.topdownRedirect := backendRedirect
+ 
+-  io.ControlBTBMissBubble := false.B // TODO: add more info to distinguish
+-  io.TAGEMissBubble       := RegNext(backendRedirect.valid && backendRedirect.bits.attribute.isConditional)
+-  io.SCMissBubble         := false.B // TODO: add SC info
+-  io.ITTAGEMissBubble     := RegNext(backendRedirect.valid && backendRedirect.bits.attribute.needIttage)
+-  io.RASMissBubble        := RegNext(backendRedirect.valid && backendRedirect.bits.attribute.isReturn)
++  io.bpuTopDownInfo.btbMissBubble    := false.B // TODO: add more info to distinguish
++  io.bpuTopDownInfo.tageMissBubble   := RegNext(backendRedirect.valid && backendRedirect.bits.attribute.isConditional)
++  io.bpuTopDownInfo.scMissBubble     := false.B // TODO: add SC info
++  io.bpuTopDownInfo.ittageMissBubble := RegNext(backendRedirect.valid && backendRedirect.bits.attribute.needIttage)
++  io.bpuTopDownInfo.rasMissBubble    := RegNext(backendRedirect.valid && backendRedirect.bits.attribute.isReturn)
+ 
+   val perfEvents: Seq[(String, UInt)] = Seq()
+   generatePerfEvent()
+diff --git a/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala b/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala
+index eedef9930de..2af35a10991 100644
+--- a/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala
++++ b/src/main/scala/xiangshan/frontend/ibuffer/IBuffer.scala
+@@ -29,7 +29,7 @@ import utility.XSPerfAccumulate
+ import xiangshan.CtrlFlow
+ import xiangshan.StallReasonIO
+ import xiangshan.TopDownCounters
+-import xiangshan.frontend.ExceptionType
++import xiangshan.frontend.BpuTopDownInfo
+ import xiangshan.frontend.FetchToIBuffer
+ import xiangshan.frontend.FrontendTopDownBundle
+ 
+@@ -41,15 +41,11 @@ class IBuffer(implicit p: Parameters) extends IBufferModule with HasCircularQueu
+     val full:            Bool                        = Output(Bool())
+     val decodeCanAccept: Bool                        = Input(Bool())
+ 
+-    // FIXME: topdown, why not use a bundle?
+-    val ControlRedirect:      Bool          = Input(Bool())
+-    val ControlBTBMissBubble: Bool          = Input(Bool())
+-    val TAGEMissBubble:       Bool          = Input(Bool())
+-    val SCMissBubble:         Bool          = Input(Bool())
+-    val ITTAGEMissBubble:     Bool          = Input(Bool())
+-    val RASMissBubble:        Bool          = Input(Bool())
+-    val MemVioRedirect:       Bool          = Input(Bool())
+-    val stallReason:          StallReasonIO = new StallReasonIO(DecodeWidth)
++    // top-down
++    val bpuTopDownInfo:  BpuTopDownInfo = Input(new BpuTopDownInfo)
++    val controlRedirect: Bool           = Input(Bool())
++    val memVioRedirect:  Bool           = Input(Bool())
++    val stallReason:     StallReasonIO  = new StallReasonIO(DecodeWidth)
+   }
+ 
+   val io: IBufferIO = IO(new IBufferIO)
+@@ -374,19 +370,19 @@ class IBuffer(implicit p: Parameters) extends IBufferModule with HasCircularQueu
+   private val topdownStage = RegInit(0.U.asTypeOf(new FrontendTopDownBundle))
+   topdownStage := io.in.bits.topdownInfo
+   when(io.flush) {
+-    when(io.ControlRedirect) {
+-      when(io.ControlBTBMissBubble) {
++    when(io.controlRedirect) {
++      when(io.bpuTopDownInfo.btbMissBubble) {
+         topdownStage.reasons(TopDownCounters.BTBMissBubble.id) := true.B
+-      }.elsewhen(io.TAGEMissBubble) {
++      }.elsewhen(io.bpuTopDownInfo.tageMissBubble) {
+         topdownStage.reasons(TopDownCounters.TAGEMissBubble.id) := true.B
+-      }.elsewhen(io.SCMissBubble) {
++      }.elsewhen(io.bpuTopDownInfo.scMissBubble) {
+         topdownStage.reasons(TopDownCounters.SCMissBubble.id) := true.B
+-      }.elsewhen(io.ITTAGEMissBubble) {
++      }.elsewhen(io.bpuTopDownInfo.ittageMissBubble) {
+         topdownStage.reasons(TopDownCounters.ITTAGEMissBubble.id) := true.B
+-      }.elsewhen(io.RASMissBubble) {
++      }.elsewhen(io.bpuTopDownInfo.rasMissBubble) {
+         topdownStage.reasons(TopDownCounters.RASMissBubble.id) := true.B
+       }
+-    }.elsewhen(io.MemVioRedirect) {
++    }.elsewhen(io.memVioRedirect) {
+       topdownStage.reasons(TopDownCounters.MemVioRedirectBubble.id) := true.B
+     }.otherwise {
+       topdownStage.reasons(TopDownCounters.OtherRedirectBubble.id) := true.B
+```

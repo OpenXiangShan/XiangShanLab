@@ -1,0 +1,7 @@
+diff --git a/rocket-chip b/rocket-chip
+index 39821a349fc..ad55d84d88a 160000
+--- a/rocket-chip
++++ b/rocket-chip
+@@ -1 +1 @@
+-Subproject commit 39821a349fcbc66314072907462943ec8d32b907
++Subproject commit ad55d84d88aa6fb9383f7531cdd1d36c5e617f69

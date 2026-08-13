@@ -1,0 +1,21 @@
+{
+  "number": 3513,
+  "title": "submodule(CoupledL2): fix bugs in PCredit management",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3513",
+  "state": "closed",
+  "labels": [],
+  "author": "linjuanZ",
+  "created_at": "2024-09-07T08:28:36Z",
+  "updated_at": "2024-09-08T03:57:13Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3513/commit-log.md"
+  ],
+  "submitted_at": "2024-09-07",
+  "branch": "",
+  "rtl_commit": ""
+}

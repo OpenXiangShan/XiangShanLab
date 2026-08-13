@@ -1,0 +1,1 @@
+For onlyStage2 situations, gpaddr is equal to vaddr. Therefore, for cross-page requests, we need to pass gpaddr out correctly (see comments) Also, in previous design, we would set gpaddr offset to all zero when cross-page in loadmisalign buffer. This has been removed and all gpaddrs are generated in tlb.

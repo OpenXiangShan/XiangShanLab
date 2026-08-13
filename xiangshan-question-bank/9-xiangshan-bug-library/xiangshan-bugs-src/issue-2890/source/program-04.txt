@@ -1,0 +1,11 @@
+# LUT4 error:
+Assertion failed at line 170883.
+The simulation stopped. There might be some assertion failed.
+Core 0: ABORT at pc = 0x80001248
+instrCnt = 278, cycleCnt = 3643, IPC = 0.076311
+Seed=0 Guest cycle spent: 3646 (this will be different from cycleCnt if emu loads a snapshot)
+Host time spent: 8451ms
+[ERROR][time=                3645] TOP.SimTop.l_soc.core_with_l2.core.frontend.ftq:
+commit cfi can be non c_commited
+Assertion failed
+    at LogUtils.scala:54 assert(false.B)

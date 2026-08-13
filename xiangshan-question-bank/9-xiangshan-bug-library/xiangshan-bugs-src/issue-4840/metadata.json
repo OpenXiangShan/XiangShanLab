@@ -1,0 +1,25 @@
+{
+  "number": 4840,
+  "title": "fix(LSU): fix misalignbuffer response acceptance process",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4840",
+  "state": "closed",
+  "labels": [],
+  "author": "Anzooooo",
+  "created_at": "2025-06-26T03:59:49Z",
+  "updated_at": "2025-06-27T10:11:43Z",
+  "submitted_at": "2025-06-26",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4840/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

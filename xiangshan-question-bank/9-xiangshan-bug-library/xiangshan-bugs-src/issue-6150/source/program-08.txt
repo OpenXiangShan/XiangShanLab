@@ -1,0 +1,3 @@
+cd ../secret_fetch_oracle
+EMU_VCD=/path/to/emu ./reproduce.sh
+cat comparison.log

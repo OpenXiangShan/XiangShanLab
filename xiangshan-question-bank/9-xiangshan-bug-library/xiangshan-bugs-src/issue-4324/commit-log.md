@@ -1,0 +1,34 @@
+# Commit Log
+- Issue: #4324
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4324
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4324
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4324
+- Changed files: 1
+- Additions: 2
+- Deletions: 4
+
+## Files
+- `src/main/scala/xiangshan/L2Top.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/L2Top.scala b/src/main/scala/xiangshan/L2Top.scala
+index 2d75edb9549..a300d3bc8f3 100644
+--- a/src/main/scala/xiangshan/L2Top.scala
++++ b/src/main/scala/xiangshan/L2Top.scala
+@@ -152,10 +152,8 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+ 
+   // filter out in-core addresses before sent to mmio_port
+   // Option[AddressSet] ++ Option[AddressSet] => List[AddressSet]
+-  private def mmioFilters: Seq[AddressSet] = p(DebugModuleKey).get.address +: (
+-    icacheParameters.cacheCtrlAddressOpt ++
+-    dcacheParameters.cacheCtrlAddressOpt
+-  ).toSeq
++  private def cacheAddressSet: Seq[AddressSet] = (icacheParameters.cacheCtrlAddressOpt ++ dcacheParameters.cacheCtrlAddressOpt).toSeq
++  private def mmioFilters = if(SeperateDMBus) (p(DebugModuleKey).get.address +: cacheAddressSet) else cacheAddressSet
+   mmio_port :=
+     TLFilter(TLFilter.mSubtract(mmioFilters)) :=
+     TLBuffer() :=
+```

@@ -1,0 +1,8 @@
+cycle                  = 9817
+abtb_enable            = 0
+bpu_s2_start_byte      = 0x80000060  # branch_site
+abtb_s2_start_byte     = 0x80001000  # stale ABTB s2/debug start, gadget line
+pred_start_byte        = 0x80001000  # stale prediction start
+ic_req_fire            = true
+ic_resp_valid          = true
+ic_hit                 = true

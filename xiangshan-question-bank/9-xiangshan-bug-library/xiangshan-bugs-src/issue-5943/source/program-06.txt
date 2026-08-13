@@ -1,0 +1,4 @@
+
+val vaddr = selVaddr + addrOffset
+...
+entry.vaddr := vaddr

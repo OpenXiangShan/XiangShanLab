@@ -1,0 +1,1 @@
+Previously, When `StoreQueue` process NC Store, the `rdataPtr` will be moved when `io.toUncacheBuffer.idResp.valid && !io.toUncacheBuffer.idResp.bits.is2lq`, but `handleFinish` will be set when  `io.toUncacheBuffer.req.fire`, which is too early, may lead to `deqPtr` move early.

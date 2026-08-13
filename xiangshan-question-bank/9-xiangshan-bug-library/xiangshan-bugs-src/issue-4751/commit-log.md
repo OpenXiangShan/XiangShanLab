@@ -1,0 +1,30 @@
+# Commit Log
+- Issue: #4751
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4751
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4751
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4751
+- Changed files: 1
+- Additions: 1
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 5c306ae75b8..8d16466df91 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -996,7 +996,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+ 
+   s1_out                   := s1_in
+   s1_out.vaddr             := s1_vaddr
+-  s1_out.fullva            := io.tlb.resp.bits.fullva
++  s1_out.fullva            := Mux(s1_in.isFrmMisAlignBuf, s1_in.vaddr, io.tlb.resp.bits.fullva)
+   s1_out.vaNeedExt         := io.tlb.resp.bits.excp(0).vaNeedExt
+   s1_out.isHyper           := io.tlb.resp.bits.excp(0).isHyper
+   s1_out.paddr             := s1_paddr_dup_lsu
+```

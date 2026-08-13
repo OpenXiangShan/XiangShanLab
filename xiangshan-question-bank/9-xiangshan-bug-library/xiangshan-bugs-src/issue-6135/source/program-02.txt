@@ -1,0 +1,7 @@
+/opt/riscv/bin/riscv64-unknown-elf-gcc \
+  -DSECRET_BIT=<0-or-1> \
+  -march=rv64gc_zicsr_zifencei -mabi=lp64d -mcmodel=medany \
+  -nostdlib -nostartfiles -static -fno-pic \
+  -T link.ld -Wl,--no-relax \
+  -o ras_disable_sidechannel_secret<secret>.elf \
+  ras_disable_sidechannel.S

@@ -1,0 +1,60 @@
+# Commit Log
+- Issue: #5201
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5201
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5201
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5201
+- Changed files: 2
+- Additions: 4
+- Deletions: 4
+
+## Files
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+- `src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 4b46b5c8b50..5a9ce03756e 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -129,7 +129,7 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   // Interaction with BPU
+   // --------------------------------------------------------------------------------
+ 
+-  private val bpTrainStallCnt = RegInit(0.U(log2Ceil(BpTrainStall)))
++  private val bpTrainStallCnt = RegInit(0.U((log2Ceil(BpTrainStallLimit) + 1).W))
+   when(io.toBpu.train.valid && !io.toBpu.train.ready) {
+     bpTrainStallCnt := bpTrainStallCnt + 1.U
+   }.otherwise {
+@@ -140,7 +140,7 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   // BPU
+   io.fromBpu.prediction.ready := distanceBetween(bpuPtr(0), commitPtr(0)) < FtqSize.U &&
+     distanceBetween(bpuPtr(0), ifuPtr(0)) < BpRunAheadDistance.U &&
+-    bpTrainStallCnt < BpTrainStall.U
++    bpTrainStallCnt < BpTrainStallLimit.U
+   io.fromBpu.meta.ready            := true.B
+   io.fromBpu.speculationMeta.ready := true.B
+ 
+diff --git a/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala b/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala
+index 7da155261ac..78f50a0214f 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala
+@@ -23,7 +23,7 @@ case class FtqParameters(
+     FtqSize:            Int = 64,
+     ResolveQueueSize:   Int = 64,
+     BpRunAheadDistance: Int = 8,
+-    BpTrainStall:       Int = 8
++    BpTrainStallLimit:  Int = 8
+ ) {
+   // sanity check
+   require(isPow2(FtqSize))
+@@ -33,5 +33,5 @@ trait HasFtqParameters extends HasFrontendParameters {
+   def ftqParameters:      FtqParameters = frontendParameters.ftqParameters
+   def ResolveQueueSize:   Int           = ftqParameters.ResolveQueueSize
+   def BpRunAheadDistance: Int           = ftqParameters.BpRunAheadDistance
+-  def BpTrainStall:       Int           = ftqParameters.BpTrainStall
++  def BpTrainStallLimit:  Int           = ftqParameters.BpTrainStallLimit
+ }
+```

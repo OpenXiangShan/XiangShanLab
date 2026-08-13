@@ -1,0 +1,7 @@
+redirect.valid       = 1
+redirect.bits.pc     = 0x80000040
+redirect.bits.target = 0x80000042
+redirect.bits.isRVC  = 0
+redirect.bits.ftqOffset = 0
+redirect.bits.isMisPred = 1
+redirect.bits.taken = 0

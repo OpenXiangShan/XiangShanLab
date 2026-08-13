@@ -1,0 +1,66 @@
+# Commit Log
+- Issue: #3360
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3360
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3360
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3360
+- Changed files: 2
+- Additions: 9
+- Deletions: 3
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index f41ec05af04..9a54dc0de1b 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -305,6 +305,8 @@ class NewCSR(implicit val p: Parameters) extends Module
+   trapHandleMod.io.in.medeleg := medeleg.regOut
+   trapHandleMod.io.in.hideleg := hideleg.regOut
+   trapHandleMod.io.in.hedeleg := hedeleg.regOut
++  trapHandleMod.io.in.mvien := mvien.regOut
++  trapHandleMod.io.in.hvien := hvien.regOut
+   trapHandleMod.io.in.mtvec := mtvec.regOut
+   trapHandleMod.io.in.stvec := stvec.regOut
+   trapHandleMod.io.in.vstvec := vstvec.regOut
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala
+index 45a7606ebe5..70857119479 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/TrapHandleModule.scala
+@@ -17,6 +17,8 @@ class TrapHandleModule extends Module {
+   private val hideleg = io.in.hideleg.asUInt
+   private val medeleg = io.in.medeleg.asUInt
+   private val hedeleg = io.in.hedeleg.asUInt
++  private val mvien = io.in.mvien.asUInt
++  private val hvien = io.in.hvien.asUInt
+ 
+   private val hasTrap = trapInfo.valid
+   private val hasIR = hasTrap && trapInfo.bits.isInterrupt
+@@ -70,9 +72,9 @@ class TrapHandleModule extends Module {
+   private val highestPrioIR = highestPrioIRVec.asUInt
+   private val highestPrioEX = highestPrioEXVec.asUInt
+ 
+-  private val mIRVec  = highestPrioIR
+-  private val hsIRVec = highestPrioIR & mideleg
+-  private val vsIRVec = highestPrioIR & mideleg & hideleg
++  private val mIRVec  = dontTouch(WireInit(highestPrioIR))
++  private val hsIRVec = (mIRVec  & mideleg) | (mIRVec  & mvien & ~mideleg)
++  private val vsIRVec = (hsIRVec & hideleg) | (hsIRVec & hvien & ~hideleg)
+ 
+   private val mEXVec  = highestPrioEX
+   private val hsEXVec = highestPrioEX & medeleg
+@@ -159,6 +161,8 @@ class TrapHandleIO extends Bundle {
+     val medeleg = new MedelegBundle
+     val hideleg = new HidelegBundle
+     val hedeleg = new HedelegBundle
++    val mvien = new MvienBundle
++    val hvien = new HvienBundle
+     // trap vector
+     val mtvec = Input(new XtvecBundle)
+     val stvec = Input(new XtvecBundle)
+```

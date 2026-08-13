@@ -1,0 +1,1485 @@
+# Commit Log
+- Issue: #3958
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3958
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3958
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3958
+- Changed files: 22
+- Additions: 470
+- Deletions: 292
+
+## Files
+- `difftest`
+- `ready-to-run`
+- `scripts/xiangshan.py`
+- `src/main/scala/xiangshan/Parameters.scala`
+- `src/main/scala/xiangshan/backend/Bundles.scala`
+- `src/main/scala/xiangshan/backend/MemBlock.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnit.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala`
+- `src/main/scala/xiangshan/backend/decode/UopInfoGen.scala`
+- `src/main/scala/xiangshan/backend/issue/Scheduler.scala`
+- `src/main/scala/xiangshan/backend/rename/Rename.scala`
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+- `src/main/scala/xiangshan/cache/CacheConstants.scala`
+- `src/main/scala/xiangshan/cache/L1Cache.scala`
+- `src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala`
+- `src/main/scala/xiangshan/cache/dcache/mainpipe/AMOALU.scala`
+- `src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala`
+- `src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala`
+- `src/main/scala/xiangshan/mem/MemCommon.scala`
+- `src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala`
+- `src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala`
+- `src/main/scala/xiangshan/package.scala`
+
+## Diff
+```diff
+diff --git a/difftest b/difftest
+index b3d2aaf9f26..82e96e3e3f0 160000
+--- a/difftest
++++ b/difftest
+@@ -1 +1 @@
+-Subproject commit b3d2aaf9f2679743323f166825caaebc89c2ebfa
++Subproject commit 82e96e3e3f08f3d2c66f95e8658652999cb24458
+diff --git a/ready-to-run b/ready-to-run
+index 567138c30ae..b8fb97b91d5 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit 567138c30ae3b5987124342303753151541ee96c
++Subproject commit b8fb97b91d5dfc7ae87368fcbd28dff234cb16b3
+diff --git a/scripts/xiangshan.py b/scripts/xiangshan.py
+index fc7354f8305..cd536944ffc 100644
+--- a/scripts/xiangshan.py
++++ b/scripts/xiangshan.py
+@@ -352,7 +352,8 @@ def __get_ci_misc(self, name=None):
+             "isa_misc/xret_clear_mprv.bin",
+             "isa_misc/satp_ppn.bin",
+             "cache-management/softprefetchtest-riscv64-xs.bin",
+-            "smstateen/rvh_test.bin"
++            "smstateen/rvh_test.bin",
++            "zacas/zacas-riscv64-xs.bin"
+         ]
+         misc_tests = map(lambda x: os.path.join(base_dir, x), workloads)
+         return misc_tests
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 901a92206c6..0b8ca035e46 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -651,6 +651,8 @@ trait HasXSParameter {
+   def AddrBytes = AddrBits / 8 // unused
+   def DataBits = XLEN
+   def DataBytes = DataBits / 8
++  def QuadWordBits = DataBits * 2
++  def QuadWordBytes = QuadWordBits / 8
+   def VDataBytes = VLEN / 8
+   def HasFPU = coreParams.HasFPU
+   def HasVPU = coreParams.HasVPU
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index e0f4d921f10..cb05f983236 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -263,6 +263,8 @@ object Bundles {
+       fuType === FuType.ldu.U && LSUOpType.isHlv(fuOpType) || fuType === FuType.stu.U && LSUOpType.isHsv(fuOpType)
+     }
+ 
++    def isAMOCAS: Bool = FuType.isAMO(fuType) && LSUOpType.isAMOCAS(fuOpType)
++
+     def srcIsReady: Vec[Bool] = {
+       VecInit(this.srcType.zip(this.srcState).map {
+         case (t, s) => SrcType.isNotReg(t) || SrcState.isReady(s)
+diff --git a/src/main/scala/xiangshan/backend/MemBlock.scala b/src/main/scala/xiangshan/backend/MemBlock.scala
+index 67720b0c511..74656132247 100644
+--- a/src/main/scala/xiangshan/backend/MemBlock.scala
++++ b/src/main/scala/xiangshan/backend/MemBlock.scala
+@@ -363,9 +363,6 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   val hybridUnits = Seq.fill(HyuCnt)(Module(new HybridUnit)) // Todo: replace it with HybridUnit
+   val stData = stdExeUnits.map(_.io.out)
+   val exeUnits = loadUnits ++ storeUnits
+-  // val vlWrapper = Module(new VectorLoadWrapper)
+-  // val vsUopQueue = Module(new VsUopQueue)
+-  // val vsFlowQueue = Module(new VsFlowQueue)
+ 
+   // The number of vector load/store units is decoupled with the number of load/store units
+   val vlSplit = Seq.fill(VlduCnt)(Module(new VLSplitImp))
+@@ -455,6 +452,10 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   atomicsUnit.io.out.ready := ldaExeWbReqs(AtomicWBPort).ready
+   loadUnits(AtomicWBPort).io.ldout.ready := ldaExeWbReqs(AtomicWBPort).ready
+ 
++  val st_data_atomics = Seq.tabulate(StdCnt)(i =>
++    stData(i).valid && FuType.storeIsAMO(stData(i).bits.uop.fuType)
++  )
++
+   // misalignBuffer will overwrite the source from ldu if it is about to writeback
+   val misalignWritebackOverride = Mux(
+      loadMisalignBuffer.io.writeBack.valid,
+@@ -472,7 +473,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   io.mem_to_ooo.writebackSta <> storeUnits.map(_.io.stout)
+   io.mem_to_ooo.writebackStd.zip(stdExeUnits).foreach {x =>
+     x._1.bits  := x._2.io.out.bits
+-    x._1.valid := x._2.io.out.fire
++    // AMOs do not need to write back std now.
++    x._1.valid := x._2.io.out.fire && !FuType.storeIsAMO(x._2.io.out.bits.uop.fuType)
+   }
+   io.mem_to_ooo.writebackHyuLda <> hybridUnits.map(_.io.ldout)
+   io.mem_to_ooo.writebackHyuSta <> hybridUnits.map(_.io.stout)
+@@ -1047,6 +1049,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+ 
+     // Lsq to std unit's rs
+     lsq.io.std.storeDataIn(StaCnt + i) := stData(StaCnt + i)
++    lsq.io.std.storeDataIn(StaCnt + i).valid := stData(StaCnt + i).valid && !st_data_atomics(StaCnt + i)
+     // prefetch
+     hybridUnits(i).io.stu_io.prefetch_req <> sbuffer.io.store_prefetch(StaCnt + i)
+ 
+@@ -1185,7 +1188,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+         lsq.io.std.storeDataIn(i).bits := vsSplit(i).io.vstd.get.bits
+         stData(i).ready := false.B
+       }.otherwise {
+-        lsq.io.std.storeDataIn(i).valid := stData(i).valid
++        lsq.io.std.storeDataIn(i).valid := stData(i).valid && !st_data_atomics(i)
+         lsq.io.std.storeDataIn(i).bits.uop := stData(i).bits.uop
+         lsq.io.std.storeDataIn(i).bits.data := stData(i).bits.data
+         lsq.io.std.storeDataIn(i).bits.mask.map(_ := 0.U)
+@@ -1194,7 +1197,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+         stData(i).ready := true.B
+       }
+     } else {
+-        lsq.io.std.storeDataIn(i).valid := stData(i).valid
++        lsq.io.std.storeDataIn(i).valid := stData(i).valid && !st_data_atomics(i)
+         lsq.io.std.storeDataIn(i).bits.uop := stData(i).bits.uop
+         lsq.io.std.storeDataIn(i).bits.data := stData(i).bits.data
+         lsq.io.std.storeDataIn(i).bits.mask.map(_ := 0.U)
+@@ -1590,16 +1593,11 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     io.ooo_to_mem.issueHya(i).valid && FuType.storeIsAMO((io.ooo_to_mem.issueHya(i).bits.uop.fuType))
+   )
+ 
+-  val st_data_atomics = Seq.tabulate(StdCnt)(i =>
+-    stData(i).valid && FuType.storeIsAMO(stData(i).bits.uop.fuType)
+-  )
+-
+   for (i <- 0 until StaCnt) when(st_atomics(i)) {
+     io.ooo_to_mem.issueSta(i).ready := atomicsUnit.io.in.ready
+     storeUnits(i).io.stin.valid := false.B
+ 
+     state := s_atomics(i)
+-    assert(!st_atomics.zipWithIndex.filterNot(_._2 == i).unzip._1.reduce(_ || _))
+   }
+   for (i <- 0 until HyuCnt) when(st_atomics(StaCnt + i)) {
+     io.ooo_to_mem.issueHya(i).ready := atomicsUnit.io.in.ready
+@@ -1609,7 +1607,6 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     assert(!st_atomics.zipWithIndex.filterNot(_._2 == StaCnt + i).unzip._1.reduce(_ || _))
+   }
+   when (atomicsUnit.io.out.valid) {
+-    assert((0 until StaCnt + HyuCnt).map(state === s_atomics(_)).reduce(_ || _))
+     state := s_normal
+   }
+ 
+@@ -1617,9 +1614,10 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   atomicsUnit.io.in.bits  := Mux1H(Seq.tabulate(StaCnt)(i =>
+     st_atomics(i) -> io.ooo_to_mem.issueSta(i).bits) ++
+     Seq.tabulate(HyuCnt)(i => st_atomics(StaCnt+i) -> io.ooo_to_mem.issueHya(i).bits))
+-  atomicsUnit.io.storeDataIn.valid := st_data_atomics.reduce(_ || _)
+-  atomicsUnit.io.storeDataIn.bits  := Mux1H(Seq.tabulate(StdCnt)(i =>
+-    st_data_atomics(i) -> stData(i).bits))
++  atomicsUnit.io.storeDataIn.zipWithIndex.foreach { case (stdin, i) =>
++    stdin.valid := st_data_atomics(i)
++    stdin.bits := stData(i).bits
++  }
+   atomicsUnit.io.redirect <> redirect
+ 
+   // TODO: complete amo's pmp support
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index cac93cf66c9..719e3a23e43 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -240,6 +240,7 @@ object XDecode extends DecodeConstants {
+     AMOMINU_W -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amominu_w, SelImm.X, xWen = T, noSpec = T, blockBack = T),
+     AMOMAX_W  -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amomax_w , SelImm.X, xWen = T, noSpec = T, blockBack = T),
+     AMOMAXU_W -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amomaxu_w, SelImm.X, xWen = T, noSpec = T, blockBack = T),
++    AMOCAS_W  -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amocas_w, SelImm.X, uopSplitType = UopSplitType.AMO_CAS_W, xWen = T, noSpec = T, blockBack = T),
+ 
+     AMOADD_D  -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amoadd_d , SelImm.X, xWen = T, noSpec = T, blockBack = T),
+     AMOXOR_D  -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amoxor_d , SelImm.X, xWen = T, noSpec = T, blockBack = T),
+@@ -250,6 +251,9 @@ object XDecode extends DecodeConstants {
+     AMOMINU_D -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amominu_d, SelImm.X, xWen = T, noSpec = T, blockBack = T),
+     AMOMAX_D  -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amomax_d , SelImm.X, xWen = T, noSpec = T, blockBack = T),
+     AMOMAXU_D -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amomaxu_d, SelImm.X, xWen = T, noSpec = T, blockBack = T),
++    AMOCAS_D  -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amocas_d, SelImm.X, uopSplitType = UopSplitType.AMO_CAS_D, xWen = T, noSpec = T, blockBack = T),
++
++    AMOCAS_Q  -> XSDecode(SrcType.reg, SrcType.reg, SrcType.X, FuType.mou, LSUOpType.amocas_q, SelImm.X, uopSplitType = UopSplitType.AMO_CAS_Q, xWen = T, noSpec = T, blockBack = T),
+ 
+     LR_W    -> XSDecode(SrcType.reg, SrcType.imm, SrcType.X, FuType.mou, LSUOpType.lr_w, SelImm.X, xWen = T, noSpec = T, blockBack = T),
+     LR_D    -> XSDecode(SrcType.reg, SrcType.imm, SrcType.X, FuType.mou, LSUOpType.lr_d, SelImm.X, xWen = T, noSpec = T, blockBack = T),
+@@ -865,6 +869,9 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   private val isAes64ks1iIllegal =
+     FuType.FuTypeOrR(decodedInst.fuType, FuType.bku) && (decodedInst.fuOpType === BKUOpType.aes64ks1i) && inst.isRnumIllegal
+ 
++  private val isAmocasQ = FuType.FuTypeOrR(decodedInst.fuType, FuType.mou) && decodedInst.fuOpType === LSUOpType.amocas_q
++  private val isAmocasQIllegal = isAmocasQ && (inst.RD(0) === 1.U || inst.RS2(0) === 1.U)
++
+   private val exceptionII =
+     decodedInst.selImm === SelImm.INVALID_INSTR ||
+     io.fromCSR.illegalInst.sfenceVMA  && FuType.FuTypeOrR(decodedInst.fuType, FuType.fence) && decodedInst.fuOpType === FenceOpType.sfence  ||
+@@ -886,7 +893,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+     io.fromCSR.illegalInst.cboZ       && isCboZero ||
+     io.fromCSR.illegalInst.cboCF      && (isCboClean || isCboFlush) ||
+     io.fromCSR.illegalInst.cboI       && isCboInval ||
+-    isAes64ks1iIllegal
++    isAes64ks1iIllegal ||
++    isAmocasQIllegal
+ 
+   private val exceptionVI =
+     io.fromCSR.virtualInst.sfenceVMA  && FuType.FuTypeOrR(decodedInst.fuType, FuType.fence) && decodedInst.fuOpType === FenceOpType.sfence ||
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala
+index ca7becc8c9f..6f20aab81fa 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala
+@@ -206,6 +206,70 @@ class DecodeUnitComp()(implicit p : Parameters) extends XSModule with DecodeUnit
+   csBundle(0.U).flushPipe := vstartReg =/= 0.U
+ 
+   switch(typeOfSplit) {
++    is(UopSplitType.AMO_CAS_W) {
++      csBundle(0).uopIdx := 0.U
++      csBundle(0).fuOpType := Cat(0.U(3.W), LSUOpType.amocas_w)
++      csBundle(0).lsrc(0) := src1
++      csBundle(0).lsrc(1) := dest
++      csBundle(0).waitForward := true.B
++      csBundle(0).blockBackward := false.B
++
++      csBundle(1).uopIdx := 1.U
++      csBundle(1).fuOpType := Cat(1.U(3.W), LSUOpType.amocas_w)
++      csBundle(1).lsrc(0) := src1
++      csBundle(1).lsrc(1) := src2
++      csBundle(1).rfWen := false.B
++      csBundle(1).waitForward := false.B
++      csBundle(1).blockBackward := true.B
++    }
++    is(UopSplitType.AMO_CAS_D) {
++      csBundle(0).uopIdx := 0.U
++      csBundle(0).fuOpType := Cat(0.U(3.W), LSUOpType.amocas_d)
++      csBundle(0).lsrc(0) := src1
++      csBundle(0).lsrc(1) := dest
++      csBundle(0).waitForward := true.B
++      csBundle(0).blockBackward := false.B
++
++      csBundle(1).uopIdx := 1.U
++      csBundle(1).fuOpType := Cat(1.U(3.W), LSUOpType.amocas_d)
++      csBundle(1).lsrc(0) := src1
++      csBundle(1).lsrc(1) := src2
++      csBundle(1).rfWen := false.B
++      csBundle(1).waitForward := false.B
++      csBundle(1).blockBackward := true.B
++    }
++    is(UopSplitType.AMO_CAS_Q) {
++      csBundle(0).uopIdx := 0.U
++      csBundle(0).fuOpType := Cat(0.U(3.W), LSUOpType.amocas_q)
++      csBundle(0).lsrc(0) := src1
++      csBundle(0).lsrc(1) := dest
++      csBundle(0).waitForward := true.B
++      csBundle(0).blockBackward := false.B
++
++      csBundle(1).uopIdx := 1.U
++      csBundle(1).fuOpType := Cat(1.U(3.W), LSUOpType.amocas_q)
++      csBundle(1).lsrc(0) := src1
++      csBundle(1).lsrc(1) := src2
++      csBundle(1).rfWen := false.B
++      csBundle(1).waitForward := false.B
++      csBundle(1).blockBackward := false.B
++
++      csBundle(2).uopIdx := 2.U
++      csBundle(2).fuOpType := Cat(2.U(3.W), LSUOpType.amocas_q)
++      csBundle(2).lsrc(0) := src1
++      csBundle(2).lsrc(1) := Mux(dest === 0.U, 0.U, dest + 1.U)
++      csBundle(2).ldest := Mux(dest === 0.U, 0.U, dest + 1.U)
++      csBundle(2).waitForward := false.B
++      csBundle(2).blockBackward := false.B
++
++      csBundle(3).uopIdx := 3.U
++      csBundle(3).fuOpType := Cat(3.U(3.W), LSUOpType.amocas_q)
++      csBundle(3).lsrc(0) := src1
++      csBundle(3).lsrc(1) := Mux(src2 === 0.U, 0.U, src2 + 1.U)
++      csBundle(3).rfWen := false.B
++      csBundle(3).waitForward := false.B
++      csBundle(3).blockBackward := true.B
++    }
+     is(UopSplitType.VSET) {
+       // In simple decoder, rfWen and vecWen are not set
+       when(isVsetSimple) {
+diff --git a/src/main/scala/xiangshan/backend/decode/UopInfoGen.scala b/src/main/scala/xiangshan/backend/decode/UopInfoGen.scala
+index acd3bf8b155..6dc28380d67 100644
+--- a/src/main/scala/xiangshan/backend/decode/UopInfoGen.scala
++++ b/src/main/scala/xiangshan/backend/decode/UopInfoGen.scala
+@@ -236,10 +236,13 @@ class UopInfoGen (implicit p: Parameters) extends XSModule {
+     UopSplitType.VEC_US_FF_LD -> (numOfUopVLoadStoreStrided +& 2.U),
+     UopSplitType.VEC_S_LDST -> (numOfUopVLoadStoreStrided +& 2.U),    // with two move instructions
+     UopSplitType.VEC_I_LDST -> (numOfUopVLoadStoreIndexed +& 1.U),
++    UopSplitType.AMO_CAS_W -> 2.U,
++    UopSplitType.AMO_CAS_D -> 2.U,
++    UopSplitType.AMO_CAS_Q -> 4.U,
+   ))
+ 
+   // number of writeback num
+-  val numOfWB = numOfUop
++  val numOfWB = Mux(UopSplitType.isAMOCAS(typeOfSplit), numOfUop >> 1, numOfUop)
+ 
+   // vector instruction's uop UopSplitType are not SCA_SIM, and when the number of uop is 1, we can regard it as a simple instruction
+   isComplex := typeOfSplit =/= UopSplitType.SCA_SIM
+diff --git a/src/main/scala/xiangshan/backend/issue/Scheduler.scala b/src/main/scala/xiangshan/backend/issue/Scheduler.scala
+index a94453f4cbf..14d49f04ac9 100644
+--- a/src/main/scala/xiangshan/backend/issue/Scheduler.scala
++++ b/src/main/scala/xiangshan/backend/issue/Scheduler.scala
+@@ -608,7 +608,8 @@ class SchedulerMemImp(override val wrapper: Scheduler)(implicit params: SchdBloc
+   d2IqStaOut.zip(staEnqs).zip(stdEnqs).foreach{ case((dp, staIQ), stdIQ) =>
+     val isAllReady = staIQ.ready && stdIQ.ready
+     dp.ready := isAllReady
+-    staIQ.valid := dp.valid && isAllReady
++    val isDropAmocasSta = dp.bits.isAMOCAS && dp.bits.uopIdx(0) === 1.U
++    staIQ.valid := dp.valid && isAllReady && !isDropAmocasSta
+     stdIQ.valid := dp.valid && isAllReady && FuType.FuTypeOrR(dp.bits.fuType, FuType.stu, FuType.mou)
+   }
+ 
+diff --git a/src/main/scala/xiangshan/backend/rename/Rename.scala b/src/main/scala/xiangshan/backend/rename/Rename.scala
+index f79f04b7bb7..6dc87eb8a29 100644
+--- a/src/main/scala/xiangshan/backend/rename/Rename.scala
++++ b/src/main/scala/xiangshan/backend/rename/Rename.scala
+@@ -357,6 +357,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+       compressMasksVec(i) & Cat(io.in.map(in =>
+         // vector instructions' uopSplitType cannot be UopSplitType.SCA_SIM
+         in.bits.uopSplitType =/= UopSplitType.SCA_SIM &&
++        !UopSplitType.isAMOCAS(in.bits.uopSplitType) &&
+         // vfmv.f.s, vcpop.m, vfirst.m and vmv.x.s don't change vector state
+         !Seq(
+           (FuType.vfalu, VfaluType.vfmv_f_s), // vfmv.f.s
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index 6bc89dc02bf..9efba065546 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -963,7 +963,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   val enqWBNumVec = VecInit(io.enq.req.map(req => req.bits.numWB))
+ 
+   private val enqWriteStdVec: Vec[Bool] = VecInit(io.enq.req.map {
+-    req => FuType.isAMO(req.bits.fuType) || FuType.isStore(req.bits.fuType)
++    req => FuType.isStore(req.bits.fuType)
+   })
+   val fflags_wb = fflagsWBs
+   val vxsat_wb = vxsatWBs
+diff --git a/src/main/scala/xiangshan/cache/CacheConstants.scala b/src/main/scala/xiangshan/cache/CacheConstants.scala
+index 35ee409b811..5374f6e0854 100644
+--- a/src/main/scala/xiangshan/cache/CacheConstants.scala
++++ b/src/main/scala/xiangshan/cache/CacheConstants.scala
+@@ -48,10 +48,15 @@ trait MemoryOpConstants {
+   def M_CLEAN   = "b10011".U // write back dirty data and retain R/W permissions
+   def M_SFENCE  = "b10100".U // flush TLB
+   def M_WOK     = "b10111".U // check write permissions but don't perform a write
++  def M_XA_CASQ = "b11000".U // AMOCAS.Q
++  def M_XA_CASW = "b11010".U // AMOCAS.W
++  def M_XA_CASD = "b11011".U // AMOCAS.D
+ 
+   def isAMOLogical(cmd: UInt) = cmd === M_XA_SWAP || cmd === M_XA_XOR || cmd === M_XA_OR || cmd === M_XA_AND
+   def isAMOArithmetic(cmd: UInt) = cmd === M_XA_ADD || cmd === M_XA_MIN || cmd === M_XA_MAX || cmd === M_XA_MINU || cmd === M_XA_MAXU
+-  def isAMO(cmd: UInt) = isAMOLogical(cmd) || isAMOArithmetic(cmd)
++  def isAMOCAS(cmd: UInt) = cmd === M_XA_CASW || cmd === M_XA_CASD || cmd === M_XA_CASQ
++  def isAMOCASQ(cmd: UInt) = cmd === M_XA_CASQ
++  def isAMO(cmd: UInt) = isAMOLogical(cmd) || isAMOArithmetic(cmd) || isAMOCAS(cmd)
+   def isPrefetch(cmd: UInt) = cmd === M_PFR || cmd === M_PFW
+   def isRead(cmd: UInt) = cmd === M_XRD || cmd === M_XLR || cmd === M_XSC || isAMO(cmd)
+   def isWrite(cmd: UInt) = cmd === M_XWR || cmd === M_PWR || cmd === M_XSC || isAMO(cmd)
+diff --git a/src/main/scala/xiangshan/cache/L1Cache.scala b/src/main/scala/xiangshan/cache/L1Cache.scala
+index 2db33135557..9f00ecb150f 100644
+--- a/src/main/scala/xiangshan/cache/L1Cache.scala
++++ b/src/main/scala/xiangshan/cache/L1Cache.scala
+@@ -73,6 +73,7 @@ trait HasL1CacheParameters extends HasXSParameter
+   def wordBits = DataBits
+   def wordBytes = wordBits / 8
+   def wordOffBits = log2Up(wordBytes)
++  def quadWordOffBits = log2Up(QuadWordBytes)
+   // the number of words in a block
+   def blockWords = blockBytes / wordBytes
+   def refillWords = refillBytes / wordBytes
+@@ -89,6 +90,7 @@ trait HasL1CacheParameters extends HasXSParameter
+   def get_beat(addr: UInt) = addr(blockOffBits - 1, beatOffBits)
+   def get_row(addr: UInt) = addr(blockOffBits - 1, rowOffBits)
+   def get_word(addr: UInt) = addr(blockOffBits - 1, wordOffBits)
++  def get_quad_word(addr: UInt) = addr(blockOffBits - 1, quadWordOffBits)
+ 
+   def beatRows = beatBits/rowBits
+   def rowWords = rowBits/wordBits
+diff --git a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+index 4a87a11dccf..74dc8c8f119 100644
+--- a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
++++ b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+@@ -562,7 +562,7 @@ class UncacheWordIO(implicit p: Parameters) extends DCacheBundle
+ class MainPipeResp(implicit p: Parameters) extends DCacheBundle {
+   //distinguish amo
+   val source  = UInt(sourceTypeWidth.W)
+-  val data    = UInt(DataBits.W)
++  val data    = UInt(QuadWordBits.W)
+   val miss    = Bool()
+   val miss_id = UInt(log2Up(cfg.nMissEntries).W)
+   val replay  = Bool()
+@@ -1377,8 +1377,6 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
+   io.lsu.atomics.resp.valid := RegNext(atomic_resp_valid)
+   io.lsu.atomics.resp.bits := RegEnable(mainPipe.io.atomic_resp.bits, atomic_resp_valid)
+   io.lsu.atomics.block_lr := mainPipe.io.block_lr
+-  // atomicsReplayUnit.io.pipe_resp := RegNext(mainPipe.io.atomic_resp)
+-  // atomicsReplayUnit.io.block_lr <> mainPipe.io.block_lr
+ 
+   // Request
+   val missReqArb = Module(new TreeArbiter(new MissReq, MissReqPortCount))
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/AMOALU.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/AMOALU.scala
+index d51f8cf4c80..742df34df3d 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/AMOALU.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/AMOALU.scala
+@@ -22,48 +22,6 @@ package xiangshan.cache
+ import chisel3._
+ import chisel3.util._
+ 
+-class StoreGen(typ: UInt, addr: UInt, dat: UInt, maxSize: Int) {
+-  val size = typ(log2Up(log2Up(maxSize)+1)-1,0)
+-  def misaligned =
+-    (addr & ((1.U << size) - 1.U)(log2Up(maxSize)-1,0)).orR
+-
+-  def mask = {
+-    var res = 1.U
+-    for (i <- 0 until log2Up(maxSize)) {
+-      val upper = Mux(addr(i), res, 0.U) | Mux(size >= (i+1).U, ((BigInt(1) << (1 << i))-1).U, 0.U)
+-      val lower = Mux(addr(i), 0.U, res)
+-      res = Cat(upper, lower)
+-    }
+-    res
+-  }
+-
+-  protected def genData(i: Int): UInt =
+-    if (i >= log2Up(maxSize)) dat
+-    else Mux(size === i.U, Fill(1 << (log2Up(maxSize)-i), dat((8 << i)-1,0)), genData(i+1))
+-
+-  def data = genData(0)
+-  def wordData = genData(2)
+-}
+-
+-class LoadGen(typ: UInt, signed: Bool, addr: UInt, dat: UInt, zero: Bool, maxSize: Int) {
+-  private val size = new StoreGen(typ, addr, dat, maxSize).size
+-
+-  private def genData(logMinSize: Int): UInt = {
+-    var res = dat
+-    for (i <- log2Up(maxSize)-1 to logMinSize by -1) {
+-      val pos = 8 << i
+-      val shifted = Mux(addr(i), res(2*pos-1,pos), res(pos-1,0))
+-      val doZero = (i == 0).B && zero
+-      val zeroed = Mux(doZero, 0.U, shifted)
+-      res = Cat(Mux(size === i.U || doZero, Fill(8*maxSize-pos, signed && zeroed(pos-1)), res(8*maxSize-1,pos)), zeroed)
+-    }
+-    res
+-  }
+-
+-  def wordData = genData(2)
+-  def data = genData(0)
+-}
+-
+ class AMOALU(operandBits: Int) extends Module
+   with MemoryOpConstants {
+   val minXLen = 32
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+index 16439245067..35a84dec199 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+@@ -56,8 +56,9 @@ class MainPipeReq(implicit p: Parameters) extends DCacheBundle {
+ 
+   // which word does amo work on?
+   val word_idx = UInt(log2Up(cfg.blockBytes * 8 / DataBits).W)
+-  val amo_data   = UInt(DataBits.W)
+-  val amo_mask   = UInt((DataBits / 8).W)
++  val amo_data   = UInt(QuadWordBits.W)
++  val amo_mask   = UInt(QuadWordBytes.W)
++  val amo_cmp    = UInt(QuadWordBits.W) // data to be compared in AMOCAS
+ 
+   // error
+   val error = Bool()
+@@ -76,6 +77,8 @@ class MainPipeReq(implicit p: Parameters) extends DCacheBundle {
+   def isStore: Bool = source === STORE_SOURCE.U
+   def isAMO: Bool = source === AMO_SOURCE.U
+ 
++  def quad_word_idx = word_idx >> 1
++
+   def convertStoreReq(store: DCacheLineReq): MainPipeReq = {
+     val req = Wire(new MainPipeReq)
+     req := DontCare
+@@ -125,7 +128,6 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+     val store_req = Flipped(DecoupledIO(new DCacheLineReq))
+     val store_replay_resp = ValidIO(new DCacheLineResp)
+     val store_hit_resp = ValidIO(new DCacheLineResp)
+-    val release_update = ValidIO(new ReleaseUpdate)
+     // atmoics
+     val atomic_req = Flipped(DecoupledIO(new MainPipeReq))
+     val atomic_resp = ValidIO(new MainPipeResp)
+@@ -468,6 +470,10 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   }
+ 
+   val s2_data_word = s2_store_data_merged(s2_req.word_idx)
++  val s2_data_quad_word = VecInit((0 until DCacheBanks).map(i => {
++    if (i == (DCacheBanks - 1)) s2_store_data_merged(i)
++    else Cat(s2_store_data_merged(i + 1), s2_store_data_merged(i))
++  }))(s2_req.word_idx)
+ 
+   XSError(s2_valid && s2_can_go_to_s3 && s2_req.miss && !io.refill_info.valid, "MainPipe req can go to s3 but no refill data")
+ 
+@@ -488,6 +494,7 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val s3_banked_store_wmask = RegEnable(s2_banked_store_wmask, s2_fire_to_s3)
+   val s3_store_data_merged = RegEnable(s2_store_data_merged, s2_fire_to_s3)
+   val s3_data_word = RegEnable(s2_data_word, s2_fire_to_s3)
++  val s3_data_quad_word = RegEnable(s2_data_quad_word, s2_fire_to_s3)
+   val s3_data = RegEnable(s2_data, s2_fire_to_s3)
+   val s3_l2_error = RegEnable(s2_l2_error, s2_fire_to_s3)
+   // data_error will be reported by data array 1 cycle after data read resp
+@@ -544,7 +551,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val probe_update_meta = s3_req_probe_dup(0) && s3_tag_match_dup && s3_coh_dup(0) =/= probe_new_coh
+   val store_update_meta = s3_req.isStore && !s3_req_probe_dup(1) && s3_hit_coh =/= s3_new_hit_coh_dup(0)
+   val amo_update_meta = s3_req.isAMO && !s3_req_probe_dup(2) && s3_hit_coh_dup =/= s3_new_hit_coh_dup(1)
+-  val amo_wait_amoalu = s3_req.isAMO && s3_req_cmd_dup(0) =/= M_XLR && s3_req_cmd_dup(1) =/= M_XSC
++  val amo_wait_amoalu = s3_req.isAMO && s3_req_cmd_dup(0) =/= M_XLR && s3_req_cmd_dup(1) =/= M_XSC &&
++    !isAMOCAS(s3_req_cmd_dup(0))
+   val update_meta = (miss_update_meta || probe_update_meta || store_update_meta || amo_update_meta) && !s3_req_replace_dup(0)
+ 
+   def missCohGen(cmd: UInt, param: UInt, dirty: Bool) = {
+@@ -573,13 +581,15 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val lrsc_addr  = Reg(UInt())
+   val s3_lr = !s3_req_probe_dup(3) && s3_req.isAMO && s3_req_cmd_dup(3) === M_XLR
+   val s3_sc = !s3_req_probe_dup(4) && s3_req.isAMO && s3_req_cmd_dup(4) === M_XSC
++  val s3_cas = !s3_req_probe_dup(3) && s3_req.isAMO && isAMOCAS(s3_req_cmd_dup(3))
+   val s3_lrsc_addr_match = lrsc_valid_dup(0) && lrsc_addr === get_block_addr(s3_req.addr)
+   val s3_sc_fail = s3_sc && !s3_lrsc_addr_match
+   val debug_s3_sc_fail_addr_match = s3_sc && lrsc_addr === get_block_addr(s3_req.addr) && !lrsc_valid_dup(0)
+-  val s3_sc_resp = Mux(s3_sc_fail, 1.U, 0.U)
++
++  val s3_cas_fail = s3_cas && (FillInterleaved(8, s3_req.amo_mask) & (s3_req.amo_cmp ^ s3_data_quad_word)) =/= 0.U
+ 
+   val s3_can_do_amo = (s3_req_miss_dup(0) && !s3_req_probe_dup(5) && s3_req.isAMO) || s3_amo_hit
+-  val s3_can_do_amo_write = s3_can_do_amo && isWrite(s3_req_cmd_dup(5)) && !s3_sc_fail
++  val s3_can_do_amo_write = s3_can_do_amo && isWrite(s3_req_cmd_dup(5)) && !s3_sc_fail && !s3_cas_fail
+ 
+   val lrsc_valid = lrsc_count > 0.U
+ 
+@@ -662,9 +672,9 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   amoalu.io.rhs  := s3_req.amo_data
+ 
+   // merge amo write data
+-//  val amo_bitmask = FillInterleaved(8, s3_req.amo_mask)
+-  val s3_amo_data_merged = Wire(Vec(DCacheBanks, UInt(DCacheSRAMRowBits.W)))
++  val s3_amo_data_merged = Wire(Vec(DCacheBanks, UInt(DCacheSRAMRowBits.W))) // exclude AMOCAS
+   val s3_sc_data_merged = Wire(Vec(DCacheBanks, UInt(DCacheSRAMRowBits.W)))
++  val s3_cas_data_merged = Wire(Vec(DCacheBanks, UInt(DCacheSRAMRowBits.W)))
+   for (i <- 0 until DCacheBanks) {
+     val old_data = s3_store_data_merged(i)
+     val new_data = amoalu.io.out
+@@ -677,6 +687,22 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+     s3_sc_data_merged(i) := mergePutData(old_data, s3_req.amo_data,
+       Mux(s3_req_word_idx_dup(i) === i.U && !s3_sc_fail, s3_req.amo_mask, 0.U(wordBytes.W))
+     )
++    val l_select = !s3_cas_fail && s3_req_word_idx_dup(i) === i.U
++    val h_select = !s3_cas_fail && s3_req_cmd_dup(0) === M_XA_CASQ &&
++      (if (i % 2 == 1) s3_req_word_idx_dup(i) === (i - 1).U else false.B)
++    s3_cas_data_merged(i) := mergePutData(
++      old_data = old_data,
++      new_data = Mux(h_select, s3_req.amo_data >> DataBits, s3_req.amo_data.take(DataBits)),
++      wmask = Mux(
++        h_select,
++        s3_req.amo_mask >> wordBytes,
++        Mux(
++          l_select,
++          s3_req.amo_mask.take(wordBytes),
++          0.U(wordBytes.W)
++        )
++      )
++    )
+   }
+   val s3_amo_data_merged_reg = RegEnable(s3_amo_data_merged, do_amoalu)
+   when(do_amoalu){
+@@ -746,7 +772,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val s3_s_amoalu_dup_for_meta_w_valid = RegInit(false.B)
+   val amo_wait_amoalu_dup_for_meta_w_valid = s3_req_source_dup_for_meta_w_valid === AMO_SOURCE.U &&
+     s3_req_cmd_dup_for_meta_w_valid =/= M_XLR &&
+-    s3_req_cmd_dup_for_meta_w_valid =/= M_XSC
++    s3_req_cmd_dup_for_meta_w_valid =/= M_XSC &&
++    !isAMOCAS(s3_req_cmd_dup(0))
+   val do_amoalu_dup_for_meta_w_valid = amo_wait_amoalu_dup_for_meta_w_valid && s3_valid_dup_for_meta_w_valid && !s3_s_amoalu_dup_for_meta_w_valid
+ 
+   val s3_store_hit_dup_for_meta_w_valid = RegEnable(s2_store_hit, s2_fire_to_s3)
+@@ -775,7 +802,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val lrsc_valid_dup_for_meta_w_valid = lrsc_count_dup_for_meta_w_valid > LRSCBackOff.U
+   val s3_lrsc_addr_match_dup_for_meta_w_valid = lrsc_valid_dup_for_meta_w_valid && lrsc_addr_dup_for_meta_w_valid === get_block_addr(s3_req_addr_dup_for_meta_w_valid)
+   val s3_sc_fail_dup_for_meta_w_valid = s3_sc_dup_for_meta_w_valid && !s3_lrsc_addr_match_dup_for_meta_w_valid
+-  val s3_can_do_amo_write_dup_for_meta_w_valid = s3_can_do_amo_dup_for_meta_w_valid && isWrite(s3_req_cmd_dup_for_meta_w_valid) && !s3_sc_fail_dup_for_meta_w_valid
++  val s3_can_do_amo_write_dup_for_meta_w_valid = s3_can_do_amo_dup_for_meta_w_valid &&
++    isWrite(s3_req_cmd_dup_for_meta_w_valid) && !s3_sc_fail_dup_for_meta_w_valid && !s3_cas_fail
+   val update_data_dup_for_meta_w_valid = s3_req_miss_dup_for_meta_w_valid || s3_store_hit_dup_for_meta_w_valid || s3_can_do_amo_write_dup_for_meta_w_valid
+ 
+   val s3_probe_can_go_dup_for_meta_w_valid = s3_req_probe_dup_for_meta_w_valid &&
+@@ -861,7 +889,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val s3_s_amoalu_dup_for_err_w_valid = RegInit(false.B)
+   val amo_wait_amoalu_dup_for_err_w_valid = s3_req_source_dup_for_err_w_valid === AMO_SOURCE.U &&
+     s3_req_cmd_dup_for_err_w_valid =/= M_XLR &&
+-    s3_req_cmd_dup_for_err_w_valid =/= M_XSC
++    s3_req_cmd_dup_for_err_w_valid =/= M_XSC &&
++    !isAMOCAS(s3_req_cmd_dup(0))
+   val do_amoalu_dup_for_err_w_valid = amo_wait_amoalu_dup_for_err_w_valid && s3_valid_dup_for_err_w_valid && !s3_s_amoalu_dup_for_err_w_valid
+ 
+   val s3_store_hit_dup_for_err_w_valid = RegEnable(s2_store_hit, s2_fire_to_s3)
+@@ -890,7 +919,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val lrsc_valid_dup_for_err_w_valid = lrsc_count_dup_for_err_w_valid > LRSCBackOff.U
+   val s3_lrsc_addr_match_dup_for_err_w_valid = lrsc_valid_dup_for_err_w_valid && lrsc_addr_dup_for_err_w_valid === get_block_addr(s3_req_addr_dup_for_err_w_valid)
+   val s3_sc_fail_dup_for_err_w_valid = s3_sc_dup_for_err_w_valid && !s3_lrsc_addr_match_dup_for_err_w_valid
+-  val s3_can_do_amo_write_dup_for_err_w_valid = s3_can_do_amo_dup_for_err_w_valid && isWrite(s3_req_cmd_dup_for_err_w_valid) && !s3_sc_fail_dup_for_err_w_valid
++  val s3_can_do_amo_write_dup_for_err_w_valid = s3_can_do_amo_dup_for_err_w_valid &&
++    isWrite(s3_req_cmd_dup_for_err_w_valid) && !s3_sc_fail_dup_for_err_w_valid && !s3_cas_fail
+   val update_data_dup_for_err_w_valid = s3_req_miss_dup_for_err_w_valid || s3_store_hit_dup_for_err_w_valid || s3_can_do_amo_write_dup_for_err_w_valid
+ 
+   val s3_probe_can_go_dup_for_err_w_valid = s3_req_probe_dup_for_err_w_valid &&
+@@ -957,7 +987,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val s3_s_amoalu_dup_for_tag_w_valid = RegInit(false.B)
+   val amo_wait_amoalu_dup_for_tag_w_valid = s3_req_source_dup_for_tag_w_valid === AMO_SOURCE.U &&
+     s3_req_cmd_dup_for_tag_w_valid =/= M_XLR &&
+-    s3_req_cmd_dup_for_tag_w_valid =/= M_XSC
++    s3_req_cmd_dup_for_tag_w_valid =/= M_XSC &&
++    !isAMOCAS(s3_req_cmd_dup(0))
+   val do_amoalu_dup_for_tag_w_valid = amo_wait_amoalu_dup_for_tag_w_valid && s3_valid_dup_for_tag_w_valid && !s3_s_amoalu_dup_for_tag_w_valid
+ 
+   val s3_store_hit_dup_for_tag_w_valid = RegEnable(s2_store_hit, s2_fire_to_s3)
+@@ -986,7 +1017,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val lrsc_valid_dup_for_tag_w_valid = lrsc_count_dup_for_tag_w_valid > LRSCBackOff.U
+   val s3_lrsc_addr_match_dup_for_tag_w_valid = lrsc_valid_dup_for_tag_w_valid && lrsc_addr_dup_for_tag_w_valid === get_block_addr(s3_req_addr_dup_for_tag_w_valid)
+   val s3_sc_fail_dup_for_tag_w_valid = s3_sc_dup_for_tag_w_valid && !s3_lrsc_addr_match_dup_for_tag_w_valid
+-  val s3_can_do_amo_write_dup_for_tag_w_valid = s3_can_do_amo_dup_for_tag_w_valid && isWrite(s3_req_cmd_dup_for_tag_w_valid) && !s3_sc_fail_dup_for_tag_w_valid
++  val s3_can_do_amo_write_dup_for_tag_w_valid = s3_can_do_amo_dup_for_tag_w_valid &&
++    isWrite(s3_req_cmd_dup_for_tag_w_valid) && !s3_sc_fail_dup_for_tag_w_valid && !s3_cas_fail
+   val update_data_dup_for_tag_w_valid = s3_req_miss_dup_for_tag_w_valid || s3_store_hit_dup_for_tag_w_valid || s3_can_do_amo_write_dup_for_tag_w_valid
+ 
+   val s3_probe_can_go_dup_for_tag_w_valid = s3_req_probe_dup_for_tag_w_valid &&
+@@ -1053,7 +1085,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val s3_s_amoalu_dup_for_data_w_valid = RegInit(false.B)
+   val amo_wait_amoalu_dup_for_data_w_valid = s3_req_source_dup_for_data_w_valid === AMO_SOURCE.U &&
+     s3_req_cmd_dup_for_data_w_valid =/= M_XLR &&
+-    s3_req_cmd_dup_for_data_w_valid =/= M_XSC
++    s3_req_cmd_dup_for_data_w_valid =/= M_XSC &&
++    !isAMOCAS(s3_req_cmd_dup(0))
+   val do_amoalu_dup_for_data_w_valid = amo_wait_amoalu_dup_for_data_w_valid && s3_valid_dup_for_data_w_valid && !s3_s_amoalu_dup_for_data_w_valid
+ 
+   val s3_store_hit_dup_for_data_w_valid = RegEnable(s2_store_hit, s2_fire_to_s3)
+@@ -1082,7 +1115,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val lrsc_valid_dup_for_data_w_valid = lrsc_count_dup_for_data_w_valid > LRSCBackOff.U
+   val s3_lrsc_addr_match_dup_for_data_w_valid = lrsc_valid_dup_for_data_w_valid && lrsc_addr_dup_for_data_w_valid === get_block_addr(s3_req_addr_dup_for_data_w_valid)
+   val s3_sc_fail_dup_for_data_w_valid = s3_sc_dup_for_data_w_valid && !s3_lrsc_addr_match_dup_for_data_w_valid
+-  val s3_can_do_amo_write_dup_for_data_w_valid = s3_can_do_amo_dup_for_data_w_valid && isWrite(s3_req_cmd_dup_for_data_w_valid) && !s3_sc_fail_dup_for_data_w_valid
++  val s3_can_do_amo_write_dup_for_data_w_valid = s3_can_do_amo_dup_for_data_w_valid &&
++    isWrite(s3_req_cmd_dup_for_data_w_valid) && !s3_sc_fail_dup_for_data_w_valid && !s3_cas_fail
+   val update_data_dup_for_data_w_valid = s3_req_miss_dup_for_data_w_valid || s3_store_hit_dup_for_data_w_valid || s3_can_do_amo_write_dup_for_data_w_valid
+ 
+   val s3_probe_can_go_dup_for_data_w_valid = s3_req_probe_dup_for_data_w_valid &&
+@@ -1124,7 +1158,11 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+       s3_banked_store_wmask_dup_for_data_w_valid,
+       Mux(
+         s3_can_do_amo_write_dup_for_data_w_valid,
+-        UIntToOH(s3_req_word_idx_dup_for_data_w_valid),
++        Mux(
++          isAMOCASQ(s3_req_cmd_dup(0)),
++          FillInterleaved(2, UIntToOH(s3_req.quad_word_idx)),
++          UIntToOH(s3_req_word_idx_dup_for_data_w_valid)
++        ),
+         banked_none_wmask
+       )
+     )
+@@ -1184,7 +1222,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+     val s3_s_amoalu_dup_for_data_w_bank = RegInit(false.B)
+     val amo_wait_amoalu_dup_for_data_w_bank = s3_req_source_dup_for_data_w_bank === AMO_SOURCE.U &&
+       s3_req_cmd_dup_for_data_w_bank =/= M_XLR &&
+-      s3_req_cmd_dup_for_data_w_bank =/= M_XSC
++      s3_req_cmd_dup_for_data_w_bank =/= M_XSC &&
++      !isAMOCAS(s3_req_cmd_dup(0))
+     val do_amoalu_dup_for_data_w_bank = amo_wait_amoalu_dup_for_data_w_bank && s3_valid_dup_for_data_w_bank(i) && !s3_s_amoalu_dup_for_data_w_bank
+ 
+     val s3_store_hit_dup_for_data_w_bank = RegEnable(s2_store_hit, s2_fire_to_s3)
+@@ -1213,7 +1252,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+     val lrsc_valid_dup_for_data_w_bank = lrsc_count_dup_for_data_w_bank > LRSCBackOff.U
+     val s3_lrsc_addr_match_dup_for_data_w_bank = lrsc_valid_dup_for_data_w_bank && lrsc_addr_dup_for_data_w_bank === get_block_addr(s3_req_addr_dup_for_data_w_bank)
+     val s3_sc_fail_dup_for_data_w_bank = s3_sc_dup_for_data_w_bank && !s3_lrsc_addr_match_dup_for_data_w_bank
+-    val s3_can_do_amo_write_dup_for_data_w_bank = s3_can_do_amo_dup_for_data_w_bank && isWrite(s3_req_cmd_dup_for_data_w_bank) && !s3_sc_fail_dup_for_data_w_bank
++    val s3_can_do_amo_write_dup_for_data_w_bank = s3_can_do_amo_dup_for_data_w_bank &&
++      isWrite(s3_req_cmd_dup_for_data_w_bank) && !s3_sc_fail_dup_for_data_w_bank && !s3_cas_fail
+     val update_data_dup_for_data_w_bank = s3_req_miss_dup_for_data_w_bank || s3_store_hit_dup_for_data_w_bank || s3_can_do_amo_write_dup_for_data_w_bank
+ 
+     val s3_probe_can_go_dup_for_data_w_bank = s3_req_probe_dup_for_data_w_bank &&
+@@ -1289,7 +1329,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val s3_s_amoalu_dup_for_wb_valid = RegInit(false.B)
+   val amo_wait_amoalu_dup_for_wb_valid = s3_req_source_dup_for_wb_valid === AMO_SOURCE.U &&
+     s3_req_cmd_dup_for_wb_valid =/= M_XLR &&
+-    s3_req_cmd_dup_for_wb_valid =/= M_XSC
++    s3_req_cmd_dup_for_wb_valid =/= M_XSC &&
++    !isAMOCAS(s3_req_cmd_dup(0))
+   val do_amoalu_dup_for_wb_valid = amo_wait_amoalu_dup_for_wb_valid && s3_valid_dup_for_wb_valid && !s3_s_amoalu_dup_for_wb_valid
+ 
+   val s3_store_hit_dup_for_wb_valid = RegEnable(s2_store_hit, s2_fire_to_s3)
+@@ -1318,7 +1359,8 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   val lrsc_valid_dup_for_wb_valid = lrsc_count_dup_for_wb_valid > LRSCBackOff.U
+   val s3_lrsc_addr_match_dup_for_wb_valid = lrsc_valid_dup_for_wb_valid && lrsc_addr_dup_for_wb_valid === get_block_addr(s3_req_addr_dup_for_wb_valid)
+   val s3_sc_fail_dup_for_wb_valid = s3_sc_dup_for_wb_valid && !s3_lrsc_addr_match_dup_for_wb_valid
+-  val s3_can_do_amo_write_dup_for_wb_valid = s3_can_do_amo_dup_for_wb_valid && isWrite(s3_req_cmd_dup_for_wb_valid) && !s3_sc_fail_dup_for_wb_valid
++  val s3_can_do_amo_write_dup_for_wb_valid = s3_can_do_amo_dup_for_wb_valid &&
++    isWrite(s3_req_cmd_dup_for_wb_valid) && !s3_sc_fail_dup_for_wb_valid && !s3_cas_fail
+   val update_data_dup_for_wb_valid = s3_req_miss_dup_for_wb_valid || s3_store_hit_dup_for_wb_valid || s3_can_do_amo_write_dup_for_wb_valid
+ 
+   val s3_probe_can_go_dup_for_wb_valid = s3_req_probe_dup_for_wb_valid &&
+@@ -1464,22 +1506,9 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+   io.store_hit_resp.bits.replay := false.B
+   io.store_hit_resp.bits.id := s3_req.id
+ 
+-  io.release_update.valid := s3_valid_dup(9) && (s3_store_can_go || s3_amo_can_go) && s3_hit && update_data
+-  io.release_update.bits.addr := s3_req_addr_dup(3)
+-  io.release_update.bits.mask := Mux(s3_store_hit_dup(1), s3_banked_store_wmask, banked_amo_wmask)
+-  io.release_update.bits.data := Mux(
+-    amo_wait_amoalu,
+-    s3_amo_data_merged_reg,
+-    Mux(
+-      s3_sc,
+-      s3_sc_data_merged,
+-      s3_store_data_merged
+-    )
+-  ).asUInt
+-
+   val atomic_hit_resp = Wire(new MainPipeResp)
+   atomic_hit_resp.source := s3_req.source
+-  atomic_hit_resp.data := Mux(s3_sc, s3_sc_resp, s3_data_word)
++  atomic_hit_resp.data := Mux(s3_sc, s3_sc_fail.asUInt, s3_data_quad_word)
+   atomic_hit_resp.miss := false.B
+   atomic_hit_resp.miss_id := s3_req.miss_id
+   atomic_hit_resp.error := s3_error
+@@ -1569,7 +1598,11 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+     Mux(
+       s3_sc_dup_for_data_w_valid,
+       s3_sc_data_merged_dup_for_data_w_valid,
+-      s3_store_data_merged
++      Mux(
++        s3_cas,
++        s3_cas_data_merged,
++        s3_store_data_merged
++      )
+     )
+   )
+   //assert(RegNext(!io.meta_write.valid || !s3_req.replace))
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
+index 81c13bdf7c5..0034c0c1be4 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
+@@ -25,6 +25,7 @@ package xiangshan.cache
+ 
+ import chisel3._
+ import chisel3.util._
++import chisel3.experimental.dataview._
+ import coupledL2.VaddrKey
+ import coupledL2.IsKeywordKey
+ import difftest._
+@@ -55,10 +56,11 @@ class MissReqWoStoreData(implicit p: Parameters) extends DCacheBundle {
+   // store
+   val full_overwrite = Bool()
+ 
+-  // which word does amo work on?
++  // amo
+   val word_idx = UInt(log2Up(blockWords).W)
+-  val amo_data = UInt(DataBits.W)
+-  val amo_mask = UInt((DataBits / 8).W)
++  val amo_data   = UInt(QuadWordBits.W)
++  val amo_mask   = UInt(QuadWordBytes.W)
++  val amo_cmp    = UInt(QuadWordBits.W) // data to be compared in AMOCAS
+ 
+   val req_coh = new ClientMetadata
+   val id = UInt(reqIdWidth.W)
+@@ -113,22 +115,7 @@ class MissReq(implicit p: Parameters) extends MissReqWoStoreData {
+   }
+ 
+   def toMissReqWoStoreData(): MissReqWoStoreData = {
+-    val out = Wire(new MissReqWoStoreData)
+-    out.source := source
+-    out.pf_source := pf_source
+-    out.cmd := cmd
+-    out.addr := addr
+-    out.vaddr := vaddr
+-    out.full_overwrite := full_overwrite
+-    out.word_idx := word_idx
+-    out.amo_data := amo_data
+-    out.amo_mask := amo_mask
+-    out.req_coh := req_coh
+-    out.id := id
+-    out.cancel := cancel
+-    out.pc := pc
+-    out.lqIdx := lqIdx
+-    out
++    this.viewAsSupertype(new MissReqWoStoreData)
+   }
+ }
+ 
+diff --git a/src/main/scala/xiangshan/mem/MemCommon.scala b/src/main/scala/xiangshan/mem/MemCommon.scala
+index 600887672d6..acb7c78da92 100644
+--- a/src/main/scala/xiangshan/mem/MemCommon.scala
++++ b/src/main/scala/xiangshan/mem/MemCommon.scala
+@@ -54,17 +54,6 @@ object genVWmask {
+   }
+ }
+ 
+-object genWdata {
+-  def apply(data: UInt, sizeEncode: UInt): UInt = {
+-    LookupTree(sizeEncode, List(
+-      "b00".U -> Fill(16, data(7, 0)),
+-      "b01".U -> Fill(8, data(15, 0)),
+-      "b10".U -> Fill(4, data(31, 0)),
+-      "b11".U -> Fill(2, data(63,0))
+-    ))
+-  }
+-}
+-
+ object shiftDataToLow {
+   def apply(addr: UInt, data : UInt): UInt = {
+     Mux(addr(3), (data >> 64).asUInt, data)
+diff --git a/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala b/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala
+index d6579b2b190..d236b06a19b 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala
+@@ -37,10 +37,13 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+   with MemoryOpConstants
+   with HasDCacheParameters
+   with SdtrigExt{
++
++  val StdCnt  = backendParams.StdCnt
++
+   val io = IO(new Bundle() {
+     val hartId        = Input(UInt(hartIdLen.W))
+     val in            = Flipped(Decoupled(new MemExuInput))
+-    val storeDataIn   = Flipped(Valid(new MemExuOutput)) // src2 from rs
++    val storeDataIn   = Flipped(Vec(StdCnt, Valid(new MemExuOutput)))
+     val out           = Decoupled(new MemExuOutput)
+     val dcache        = new AtomicWordIO
+     val dtlb          = new TlbRequestIO(2)
+@@ -59,11 +62,38 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+   //-------------------------------------------------------
+   // Atomics Memory Accsess FSM
+   //-------------------------------------------------------
+-  val s_invalid :: s_tlb_and_flush_sbuffer_req :: s_pm :: s_wait_flush_sbuffer_resp :: s_cache_req :: s_cache_resp :: s_cache_resp_latch :: s_finish :: Nil = Enum(8)
++  val s_invalid :: s_tlb_and_flush_sbuffer_req :: s_pm :: s_wait_flush_sbuffer_resp :: s_cache_req :: s_cache_resp :: s_cache_resp_latch :: s_finish :: s_finish2 :: Nil = Enum(9)
+   val state = RegInit(s_invalid)
+   val out_valid = RegInit(false.B)
+   val data_valid = RegInit(false.B)
+-  val in = Reg(new MemExuInput())
++
++  val uop = Reg(io.in.bits.uop.cloneType)
++  val isLr = LSUOpType.isLr(uop.fuOpType)
++  val isSc = LSUOpType.isSc(uop.fuOpType)
++  val isAMOCAS = LSUOpType.isAMOCAS(uop.fuOpType)
++  val isNotLr = !isLr
++  val isNotSc = !isSc
++  // AMOCAS.Q needs to write two int registers, therefore backend issues two sta uops for AMOCAS.Q.
++  // `pdest2` is used to record the pdest of the second uop
++  val pdest1, pdest2 = Reg(UInt(PhyRegIdxWidth.W))
++  val pdest1Valid, pdest2Valid = RegInit(false.B)
++  /**
++    * The # of std uops that an atomic instruction require:
++    * (1) For AMOs (except AMOCAS) and LR/SC, 1 std uop is wanted: X(rs2) with uopIdx = 0
++    * (2) For AMOCAS.W/D, 2 std uops are wanted: X(rd), X(rs2) with uopIdx = 0, 1
++    * (3) For AMOCAS.Q, 4 std uops are wanted: X(rd), X(rs2), X(rd+1), X(rs2+1) with uopIdx = 0, 1, 2, 3
++    * stds are not needed for write-back.
++    * 
++    * The # of sta uops that an atomic instruction require, also the # of write-back:
++    * (1) For AMOs(except AMOCAS.Q) and LR/SC, 1 sta uop is wanted: X(rs1) with uopIdx = 0
++    * (2) For AMOCAS.Q, 2 sta uop is wanted: X(rs1)*2 with uopIdx = 0, 2
++    */
++  val rs1, rs2_l, rs2_h, rd_l, rd_h = Reg(UInt(XLEN.W))
++  val stds = Seq(rd_l, rs2_l, rd_h, rs2_h)
++  val rs2 = Cat(rs2_h, Mux(isAMOCAS, rs2_l, stds.head))
++  val rd = Cat(rd_h, rd_l)
++  val stdCnt = RegInit(0.U(log2Ceil(stds.length + 1).W))
++
+   val exceptionVec = RegInit(0.U.asTypeOf(ExceptionVec()))
+   val trigger = RegInit(TriggerAction.None)
+   val atom_override_xtval = RegInit(false.B)
+@@ -71,7 +101,8 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+   // paddr after translation
+   val paddr = Reg(UInt())
+   val gpaddr = Reg(UInt())
+-  val vaddr = Reg(UInt())
++  val vaddr = rs1
++
+   val is_mmio = Reg(Bool())
+   val is_nc = RegInit(false.B)
+   val isForVSnonLeafPTE = Reg(Bool())
+@@ -79,21 +110,14 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+   // dcache response data
+   val resp_data = Reg(UInt())
+   val resp_data_wire = WireInit(0.U)
+-  val is_lrsc_valid = Reg(Bool())
++  val success = Reg(Bool())
+   // sbuffer is empty or not
+   val sbuffer_empty = io.flush_sbuffer.empty
+ 
+-
+-  // Difftest signals
+-  val paddr_reg = Reg(UInt(64.W))
+-  val data_reg = Reg(UInt(64.W))
+-  val mask_reg = Reg(UInt(8.W))
+-  val fuop_reg = Reg(UInt(8.W))
+-
+-  io.exceptionInfo.valid := atom_override_xtval
+-  io.exceptionInfo.bits.vaddr := vaddr
+-  io.exceptionInfo.bits.gpaddr := gpaddr
+-  io.exceptionInfo.bits.isForVSnonLeafPTE := isForVSnonLeafPTE
++  // Only the least significant AMOFuOpWidth = 6 bits of fuOpType are used,
++  // therefore the MSBs are reused to identify uopIdx
++  val stdUopIdxs = io.storeDataIn.map(_.bits.uop.fuOpType >> LSUOpType.AMOFuOpWidth)
++  val staUopIdx = io.in.bits.uop.fuOpType >> LSUOpType.AMOFuOpWidth
+ 
+   // assign default value to output signals
+   io.in.ready          := false.B
+@@ -109,35 +133,49 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+   io.flush_sbuffer.valid := false.B
+ 
+   when (state === s_invalid) {
+-    io.in.ready := true.B
+     when (io.in.fire) {
+-      in := io.in.bits
+-      in.src(1) := in.src(1) // leave src2 unchanged
++      uop := io.in.bits.uop
++      rs1 := io.in.bits.src_rs1
+       state := s_tlb_and_flush_sbuffer_req
+       have_sent_first_tlb_req := false.B
+     }
+   }
+ 
+-  when (io.storeDataIn.fire) {
+-    in.src(1) := io.storeDataIn.bits.data
+-    data_valid := true.B
++  when (io.in.fire) {
++    val pdest = io.in.bits.uop.pdest
++    when (staUopIdx === 0.U) {
++      pdest1Valid := true.B
++      pdest1 := pdest
++    }.elsewhen (staUopIdx === 2.U) {
++      pdest2Valid := true.B
++      pdest2 := pdest
++    }.otherwise {
++      assert(false.B, "unrecognized sta uopIdx")
++    }
+   }
+ 
+-  // TODO: remove this for AMOCAS
+-  assert(!(io.storeDataIn.fire && data_valid), "atomic unit re-receive data")
+-
+-  // Send TLB feedback to store issue queue
+-  // we send feedback right after we receives request
+-  // also, we always treat amo as tlb hit
+-  // since we will continue polling tlb all by ourself
+-  io.feedbackSlow.valid       := GatedValidRegNext(GatedValidRegNext(io.in.valid))
+-  io.feedbackSlow.bits.hit    := true.B
+-  io.feedbackSlow.bits.robIdx  := RegEnable(io.in.bits.uop.robIdx, io.in.valid)
+-  io.feedbackSlow.bits.sqIdx   := RegEnable(io.in.bits.uop.sqIdx, io.in.valid)
+-  io.feedbackSlow.bits.lqIdx   := RegEnable(io.in.bits.uop.lqIdx, io.in.valid)
+-  io.feedbackSlow.bits.flushState := DontCare
+-  io.feedbackSlow.bits.sourceType := DontCare
+-  io.feedbackSlow.bits.dataInvalidSqIdx := DontCare
++  stds.zipWithIndex.foreach { case (data, i) =>
++    val sels = io.storeDataIn.zip(stdUopIdxs).map { case (in, uopIdx) =>
++      val sel = in.fire && uopIdx === i.U
++      when (sel) { data := in.bits.data }
++      sel
++    }
++    OneHot.checkOneHot(sels)
++  }
++  stdCnt := stdCnt + PopCount(io.storeDataIn.map(_.fire))
++
++  val StdCntNCAS = 1 // LR/SC and AMO need only 1 src besides rs1
++  val StdCntCASWD = 2 // AMOCAS.W/D needs 2 src regs (rs2 and rd) besides rs1
++  val StdCntCASQ = 4 // AMOCAS.Q needs 4 src regs (rs2, rs2+1, rd, rd+1) besides rs1
++  when (!data_valid) {
++    data_valid := state =/= s_invalid && (
++      LSUOpType.isAMOCASQ(uop.fuOpType) && stdCnt === StdCntCASQ.U ||
++      LSUOpType.isAMOCASWD(uop.fuOpType) && stdCnt === StdCntCASWD.U ||
++      !isAMOCAS && stdCnt === StdCntNCAS.U
++    )
++  }
++  assert(stdCnt <= stds.length.U, "unexpected std")
++  assert(!(Cat(io.storeDataIn.map(_.fire)).orR && data_valid), "atomic unit re-receive data")
+ 
+   // atomic trigger
+   val csrCtrl = io.csrCtrl
+@@ -155,13 +193,13 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+   val backendTriggerHitVec = WireInit(VecInit(Seq.fill(TriggerNum)(false.B)))
+   val backendTriggerCanFireVec = RegInit(VecInit(Seq.fill(TriggerNum)(false.B)))
+ 
+-  assert(state === s_invalid || in.uop.fuOpType(1,0) === "b10".U || in.uop.fuOpType(1,0) === "b11".U,
+-    "Only word or doubleword is supported")
+-  val isLr = in.uop.fuOpType === LSUOpType.lr_w || in.uop.fuOpType === LSUOpType.lr_d
+-  val isSc = in.uop.fuOpType === LSUOpType.sc_w || in.uop.fuOpType === LSUOpType.sc_d
+-  val isNotLr = !isLr
+-  val isNotSc = !isSc
+-  
++  assert(state === s_invalid ||
++    uop.fuOpType(1,0) === "b10".U ||
++    uop.fuOpType(1,0) === "b11".U ||
++    LSUOpType.isAMOCASQ(uop.fuOpType),
++    "Only word or doubleword or quadword is supported"
++  )
++
+   // store trigger
+   val store_hit = Wire(Vec(TriggerNum, Bool()))
+   for (j <- 0 until TriggerNum) {
+@@ -184,7 +222,8 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+   }
+   backendTriggerHitVec := store_hit.zip(load_hit).map { case (sh, lh) => sh || lh }
+   // triggerCanFireVec will update at T+1
+-  TriggerCheckCanFire(TriggerNum, backendTriggerCanFireVec, backendTriggerHitVec, backendTriggerTimingVec, backendTriggerChainVec)
++  TriggerCheckCanFire(TriggerNum, backendTriggerCanFireVec, backendTriggerHitVec,
++    backendTriggerTimingVec, backendTriggerChainVec)
+ 
+   val actionVec = VecInit(tdata.map(_.action))
+   val triggerAction = Wire(TriggerAction())
+@@ -195,36 +234,21 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+   // tlb translation, manipulating signals && deal with exception
+   // at the same time, flush sbuffer
+   when (state === s_tlb_and_flush_sbuffer_req) {
+-    // send req to dtlb
+-    // keep firing until tlb hit
+-    io.dtlb.req.valid       := true.B
+-    io.dtlb.req.bits.vaddr  := in.src(0)
+-    io.dtlb.req.bits.fullva := in.src(0)
+-    io.dtlb.req.bits.checkfullva := true.B
+-    io.dtlb.resp.ready      := true.B
+-    io.dtlb.req.bits.cmd    := Mux(isLr, TlbCmd.atom_read, TlbCmd.atom_write)
+-    io.dtlb.req.bits.debug.pc := in.uop.pc
+-    io.dtlb.req.bits.debug.robIdx := in.uop.robIdx
+-    io.dtlb.req.bits.debug.isFirstIssue := false.B
+-    io.out.bits.uop.debugInfo.tlbFirstReqTime := GTimer() // FIXME lyq: it will be always assigned
+-
+-    // send req to sbuffer to flush it if it is not empty
+-    io.flush_sbuffer.valid := !sbuffer_empty
+-
+     // do not accept tlb resp in the first cycle
+     // this limition is for hw prefetcher
+     // when !have_sent_first_tlb_req, tlb resp may come from hw prefetch
+     have_sent_first_tlb_req := true.B
+ 
+-    when (io.dtlb.resp.fire && have_sent_first_tlb_req){
++    when (io.dtlb.resp.fire && have_sent_first_tlb_req) {
+       paddr   := io.dtlb.resp.bits.paddr(0)
+       gpaddr  := io.dtlb.resp.bits.gpaddr(0)
+       vaddr   := io.dtlb.resp.bits.fullva
+       isForVSnonLeafPTE := io.dtlb.resp.bits.isForVSnonLeafPTE
+       // exception handling
+-      val addrAligned = LookupTree(in.uop.fuOpType(1,0), List(
+-        "b10".U   -> (in.src(0)(1,0) === 0.U), //w
+-        "b11".U   -> (in.src(0)(2,0) === 0.U)  //d
++      val addrAligned = LookupTree(uop.fuOpType(1,0), List(
++        "b10".U -> (vaddr(1,0) === 0.U), // W
++        "b11".U -> (vaddr(2,0) === 0.U), // D
++        "b00".U -> (vaddr(3,0) === 0.U)  // Q
+       ))
+       exceptionVec(loadAddrMisaligned)  := !addrAligned && isLr
+       exceptionVec(storeAddrMisaligned) := !addrAligned && !isLr
+@@ -248,7 +272,7 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+           state := s_finish
+           out_valid := true.B
+           atom_override_xtval := true.B
+-        } .otherwise {
++        }.otherwise {
+           state := s_pm
+         }
+       }
+@@ -284,57 +308,31 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+     }
+   }
+ 
+-  when (state === s_cache_req) {
+-    val pipe_req = io.dcache.req.bits
+-    pipe_req := DontCare
+-
+-    pipe_req.cmd := LookupTree(in.uop.fuOpType, List(
+-      LSUOpType.lr_w      -> M_XLR,
+-      LSUOpType.sc_w      -> M_XSC,
+-      LSUOpType.amoswap_w -> M_XA_SWAP,
+-      LSUOpType.amoadd_w  -> M_XA_ADD,
+-      LSUOpType.amoxor_w  -> M_XA_XOR,
+-      LSUOpType.amoand_w  -> M_XA_AND,
+-      LSUOpType.amoor_w   -> M_XA_OR,
+-      LSUOpType.amomin_w  -> M_XA_MIN,
+-      LSUOpType.amomax_w  -> M_XA_MAX,
+-      LSUOpType.amominu_w -> M_XA_MINU,
+-      LSUOpType.amomaxu_w -> M_XA_MAXU,
+-
+-      LSUOpType.lr_d      -> M_XLR,
+-      LSUOpType.sc_d      -> M_XSC,
+-      LSUOpType.amoswap_d -> M_XA_SWAP,
+-      LSUOpType.amoadd_d  -> M_XA_ADD,
+-      LSUOpType.amoxor_d  -> M_XA_XOR,
+-      LSUOpType.amoand_d  -> M_XA_AND,
+-      LSUOpType.amoor_d   -> M_XA_OR,
+-      LSUOpType.amomin_d  -> M_XA_MIN,
+-      LSUOpType.amomax_d  -> M_XA_MAX,
+-      LSUOpType.amominu_d -> M_XA_MINU,
+-      LSUOpType.amomaxu_d -> M_XA_MAXU
++  def genWdataAMO(data: UInt, sizeEncode: UInt): UInt = {
++    LookupTree(sizeEncode(1, 0), List(
++      "b10".U -> Fill(4, data(31, 0)),
++      "b11".U -> Fill(2, data(63, 0)),
++      "b00".U -> data(127, 0)
+     ))
+-    pipe_req.miss := false.B
+-    pipe_req.probe := false.B
+-    pipe_req.probe_need_data := false.B
+-    pipe_req.source := AMO_SOURCE.U
+-    pipe_req.addr   := get_block_addr(paddr)
+-    pipe_req.vaddr  := get_block_addr(vaddr) // vaddr
+-    pipe_req.word_idx  := get_word(paddr)
+-    pipe_req.amo_data  := genWdata(in.src(1), in.uop.fuOpType(1,0))
+-    pipe_req.amo_mask  := genWmask(paddr, in.uop.fuOpType(1,0))
+-
+-    io.dcache.req.valid := Mux(
+-      io.dcache.req.bits.cmd === M_XLR,
+-      !io.dcache.block_lr, // block lr to survive in lr storm
+-      data_valid // wait until src(1) is ready
+-    )
++  }
+ 
+-    when(io.dcache.req.fire){
++  def genWmaskAMO(addr: UInt, sizeEncode: UInt): UInt = {
++    /**
++      * `MainPipeReq` uses `word_idx` to recognize which 64-bits data bank to operate on. Double-word atomics are
++      * always 8B aligned and quad-word atomics are always 16B aligned except for misaligned exception, therefore
++      * `word_idx` is enough and there is no need to shift according address. Only word atomics needs LSBs of the
++      * address to shift mask inside a 64-bits aligned range.
++      */
++    LookupTree(sizeEncode(1, 0), List(
++      "b10".U -> (0xf.U << addr(2,0)), // W
++      "b11".U -> 0xff.U, // D
++      "b00".U -> 0xffff.U // Q
++    ))
++  }
++
++  when (state === s_cache_req) {
++    when (io.dcache.req.fire) {
+       state := s_cache_resp
+-      paddr_reg := paddr
+-      data_reg := io.dcache.req.bits.amo_data
+-      mask_reg := io.dcache.req.bits.amo_mask
+-      fuop_reg := in.uop.fuOpType
+     }
+   }
+ 
+@@ -352,12 +350,12 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+     // TODO: add assertions:
+     // 1. add a replay delay counter?
+     // 2. when req gets into MissQueue, it should not miss any more
+-    when(io.dcache.resp.fire) {
+-      when(io.dcache.resp.bits.miss) {
+-        when(io.dcache.resp.bits.replay) {
++    when (io.dcache.resp.fire) {
++      when (io.dcache.resp.bits.miss) {
++        when (io.dcache.resp.bits.replay) {
+           state := s_cache_req
+         }
+-      } .otherwise {
++      }.otherwise {
+         dcache_resp_data := io.dcache.resp.bits.data
+         dcache_resp_id := io.dcache.resp.bits.id
+         dcache_resp_error := io.dcache.resp.bits.error
+@@ -367,18 +365,21 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+   }
+ 
+   when (state === s_cache_resp_latch) {
+-    is_lrsc_valid :=  dcache_resp_id
+-    val rdataSel = LookupTree(paddr(2, 0), List(
+-      "b000".U -> dcache_resp_data(63, 0),
+-      "b100".U -> dcache_resp_data(63, 32)
+-    ))
++    success := dcache_resp_id
++    val rdataSel = Mux(
++      paddr(2, 0) === 0.U,
++      dcache_resp_data,
++      dcache_resp_data >> 32
++    )
++    assert(paddr(2, 0) === "b000".U || paddr(2, 0) === "b100".U)
+ 
+     resp_data_wire := Mux(
+       isSc,
+       dcache_resp_data,
+-      LookupTree(in.uop.fuOpType(1,0), List(
+-        "b10".U -> SignExt(rdataSel(31, 0), XLEN), // w
+-        "b11".U -> SignExt(rdataSel(63, 0), XLEN)  // d
++      LookupTree(uop.fuOpType(1,0), List(
++        "b10".U -> SignExt(rdataSel(31, 0), QuadWordBits), // W
++        "b11".U -> SignExt(rdataSel(63, 0), QuadWordBits), // D
++        "b00".U -> rdataSel // Q
+       ))
+     )
+ 
+@@ -394,48 +395,158 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
+     out_valid := true.B
+   }
+ 
+-  io.out.valid := out_valid
+-  XSError((state === s_finish) =/= out_valid, "out_valid reg error\n")
+-  io.out.bits := DontCare
+-  io.out.bits.uop := in.uop
+-  io.out.bits.uop.exceptionVec := exceptionVec
+-  io.out.bits.uop.trigger := trigger
+-  io.out.bits.uop.fuType := FuType.mou.U
+-  io.out.bits.data := resp_data
+-  io.out.bits.debug.isMMIO := is_mmio
+-  io.out.bits.debug.isNC := is_nc
+-  io.out.bits.debug.paddr := paddr
+-  when (io.out.fire) {
+-    XSDebug("atomics writeback: pc %x data %x\n", io.out.bits.uop.pc, io.dcache.resp.bits.data)
+-    state := s_invalid
+-    out_valid := false.B
++  when (state === s_finish) {
++    when (io.out.fire) {
++      when (LSUOpType.isAMOCASQ(uop.fuOpType)) {
++        // enter `s_finish2` to write the 2nd uop back
++        state := s_finish2
++        out_valid := true.B
++      }.otherwise {
++        // otherwise the FSM ends here
++        resetFSM()
++      }
++    }
+   }
+ 
+-  when (state === s_finish) {
+-    data_valid := false.B
++  when (state === s_finish2) {
++    when (io.out.fire) {
++      resetFSM()
++    }
+   }
+ 
+   when (io.redirect.valid) {
+     atom_override_xtval := false.B
+   }
++
++  def resetFSM(): Unit = {
++    state := s_invalid
++    out_valid := false.B
++    data_valid := false.B
++    stdCnt := 0.U
++    pdest1Valid := false.B
++    pdest2Valid := false.B
++  }
++
++  /**
++    * IO assignment
++    */
++  io.exceptionInfo.valid := atom_override_xtval
++  io.exceptionInfo.bits.vaddr := vaddr
++  io.exceptionInfo.bits.gpaddr := gpaddr
++  io.exceptionInfo.bits.isForVSnonLeafPTE := isForVSnonLeafPTE
++
++  // Send TLB feedback to store issue queue
++  // we send feedback right after we receives request
++  // also, we always treat amo as tlb hit
++  // since we will continue polling tlb all by ourself
++  io.feedbackSlow.valid       := GatedValidRegNext(GatedValidRegNext(io.in.valid))
++  io.feedbackSlow.bits.hit    := true.B
++  io.feedbackSlow.bits.robIdx  := RegEnable(io.in.bits.uop.robIdx, io.in.valid)
++  io.feedbackSlow.bits.sqIdx   := RegEnable(io.in.bits.uop.sqIdx, io.in.valid)
++  io.feedbackSlow.bits.lqIdx   := RegEnable(io.in.bits.uop.lqIdx, io.in.valid)
++  io.feedbackSlow.bits.flushState := DontCare
++  io.feedbackSlow.bits.sourceType := DontCare
++  io.feedbackSlow.bits.dataInvalidSqIdx := DontCare
++
++  // send req to dtlb
++  // keep firing until tlb hit
++  io.dtlb.req.valid       := state === s_tlb_and_flush_sbuffer_req
++  io.dtlb.req.bits.vaddr  := vaddr
++  io.dtlb.req.bits.fullva := vaddr
++  io.dtlb.req.bits.checkfullva := true.B
++  io.dtlb.resp.ready      := true.B
++  io.dtlb.req.bits.cmd    := Mux(isLr, TlbCmd.atom_read, TlbCmd.atom_write)
++  io.dtlb.req.bits.debug.pc := uop.pc
++  io.dtlb.req.bits.debug.robIdx := uop.robIdx
++  io.dtlb.req.bits.debug.isFirstIssue := false.B
++  io.out.bits.uop.debugInfo.tlbFirstReqTime := GTimer() // FIXME lyq: it will be always assigned
++
++  // send req to sbuffer to flush it if it is not empty
++  io.flush_sbuffer.valid := !sbuffer_empty && state === s_tlb_and_flush_sbuffer_req
++
++  // When is sta issue port ready:
++  // (1) AtomicsUnit is idle, or
++  // (2) For AMOCAS.Q, the second uop with the pdest of the higher bits of rd is not received yet
++  io.in.ready := state === s_invalid || LSUOpType.isAMOCASQ(uop.fuOpType) && (!pdest2Valid || !pdest1Valid)
++
++  io.out.valid := out_valid && Mux(state === s_finish2, pdest2Valid, pdest1Valid)
++  XSError((state === s_finish || state === s_finish2) =/= out_valid, "out_valid reg error\n")
++  io.out.bits := DontCare
++  io.out.bits.uop := uop
++  io.out.bits.uop.fuType := FuType.mou.U
++  io.out.bits.uop.pdest := Mux(state === s_finish2, pdest2, pdest1)
++  io.out.bits.uop.exceptionVec := exceptionVec
++  io.out.bits.uop.trigger := trigger
++  io.out.bits.data := Mux(state === s_finish2, resp_data >> XLEN, resp_data)
++  io.out.bits.debug.isMMIO := is_mmio
++  io.out.bits.debug.paddr := paddr
++
++  io.dcache.req.valid := Mux(
++    io.dcache.req.bits.cmd === M_XLR,
++    !io.dcache.block_lr, // block lr to survive in lr storm
++    data_valid // wait until src(1) is ready
++  ) && state === s_cache_req
++  val pipe_req = io.dcache.req.bits
++  pipe_req := DontCare
++  pipe_req.cmd := LookupTree(uop.fuOpType, List(
++    // TODO: optimize this
++    LSUOpType.lr_w      -> M_XLR,
++    LSUOpType.sc_w      -> M_XSC,
++    LSUOpType.amoswap_w -> M_XA_SWAP,
++    LSUOpType.amoadd_w  -> M_XA_ADD,
++    LSUOpType.amoxor_w  -> M_XA_XOR,
++    LSUOpType.amoand_w  -> M_XA_AND,
++    LSUOpType.amoor_w   -> M_XA_OR,
++    LSUOpType.amomin_w  -> M_XA_MIN,
++    LSUOpType.amomax_w  -> M_XA_MAX,
++    LSUOpType.amominu_w -> M_XA_MINU,
++    LSUOpType.amomaxu_w -> M_XA_MAXU,
++    LSUOpType.amocas_w  -> M_XA_CASW,
++
++    LSUOpType.lr_d      -> M_XLR,
++    LSUOpType.sc_d      -> M_XSC,
++    LSUOpType.amoswap_d -> M_XA_SWAP,
++    LSUOpType.amoadd_d  -> M_XA_ADD,
++    LSUOpType.amoxor_d  -> M_XA_XOR,
++    LSUOpType.amoand_d  -> M_XA_AND,
++    LSUOpType.amoor_d   -> M_XA_OR,
++    LSUOpType.amomin_d  -> M_XA_MIN,
++    LSUOpType.amomax_d  -> M_XA_MAX,
++    LSUOpType.amominu_d -> M_XA_MINU,
++    LSUOpType.amomaxu_d -> M_XA_MAXU,
++    LSUOpType.amocas_d  -> M_XA_CASD,
++
++    LSUOpType.amocas_q  -> M_XA_CASQ
++  ))
++  pipe_req.miss := false.B
++  pipe_req.probe := false.B
++  pipe_req.probe_need_data := false.B
++  pipe_req.source := AMO_SOURCE.U
++  pipe_req.addr   := get_block_addr(paddr)
++  pipe_req.vaddr  := get_block_addr(vaddr)
++  pipe_req.word_idx  := get_word(paddr)
++  pipe_req.amo_data := genWdataAMO(rs2, uop.fuOpType)
++  pipe_req.amo_mask := genWmaskAMO(paddr, uop.fuOpType)
++  pipe_req.amo_cmp  := genWdataAMO(rd, uop.fuOpType)
+   
+   if (env.EnableDifftest) {
+     val difftest = DifftestModule(new DiffAtomicEvent)
++    val en = io.dcache.req.fire
+     difftest.coreid := io.hartId
+     difftest.valid  := state === s_cache_resp_latch
+-    difftest.addr   := paddr_reg
+-    difftest.data   := data_reg
+-    difftest.mask   := mask_reg
+-    difftest.fuop   := fuop_reg
+-    difftest.out    := resp_data_wire
++    difftest.addr   := RegEnable(paddr, en)
++    difftest.data   := RegEnable(io.dcache.req.bits.amo_data.asTypeOf(difftest.data), en)
++    difftest.mask   := RegEnable(io.dcache.req.bits.amo_mask, en)
++    difftest.cmp    := RegEnable(io.dcache.req.bits.amo_cmp.asTypeOf(difftest.cmp), en)
++    difftest.fuop   := RegEnable(uop.fuOpType, en)
++    difftest.out    := resp_data_wire.asTypeOf(difftest.out)
+   }
+ 
+   if (env.EnableDifftest || env.AlwaysBasicDiff) {
+     val uop = io.out.bits.uop
+     val difftest = DifftestModule(new DiffLrScEvent)
+     difftest.coreid := io.hartId
+-    difftest.valid := io.out.fire &&
+-      (uop.fuOpType === LSUOpType.sc_d || uop.fuOpType === LSUOpType.sc_w)
+-    difftest.success := is_lrsc_valid
++    difftest.valid := io.out.fire && state === s_finish && isSc
++    difftest.success := success
+   }
+ }
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index c4e0d23ec9c..f30042b6ec8 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -201,7 +201,6 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   s0_out.vaddr        := s0_vaddr
+   s0_out.fullva       := s0_fullva
+   // Now data use its own io
+-  // s1_out.data := genWdata(s1_in.src(1), s1_in.uop.fuOpType(1,0))
+   s0_out.data         := s0_stin.src(1)
+   s0_out.uop          := s0_uop
+   s0_out.miss         := false.B
+diff --git a/src/main/scala/xiangshan/package.scala b/src/main/scala/xiangshan/package.scala
+index 37842aa06d7..69e1127ee70 100644
+--- a/src/main/scala/xiangshan/package.scala
++++ b/src/main/scala/xiangshan/package.scala
+@@ -594,6 +594,7 @@ package object xiangshan {
+     // since atomics use a different fu type
+     // so we can safely reuse other load/store's encodings
+     // bit encoding: | optype(4bit) | size (2bit) |
++    def AMOFuOpWidth = 6
+     def lr_w      = "b000010".U
+     def sc_w      = "b000110".U
+     def amoswap_w = "b001010".U
+@@ -605,6 +606,7 @@ package object xiangshan {
+     def amomax_w  = "b100010".U
+     def amominu_w = "b100110".U
+     def amomaxu_w = "b101010".U
++    def amocas_w  = "b101110".U
+ 
+     def lr_d      = "b000011".U
+     def sc_d      = "b000111".U
+@@ -617,17 +619,25 @@ package object xiangshan {
+     def amomax_d  = "b100011".U
+     def amominu_d = "b100111".U
+     def amomaxu_d = "b101011".U
++    def amocas_d  = "b101111".U
++
++    def amocas_q  = "b101100".U
+ 
+     def size(op: UInt) = op(1,0)
+ 
+     def getVecLSMop(fuOpType: UInt): UInt = fuOpType(6, 5)
+ 
+-    def isAllUS  (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && (fuOpType(8) ^ fuOpType(7))// Unit-Stride Whole Masked
+-    def isUStride(fuOpType: UInt): Bool = fuOpType(6, 0) === "b00_00000".U && (fuOpType(8) ^ fuOpType(7))
+-    def isWhole  (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01000".U && (fuOpType(8) ^ fuOpType(7))
+-    def isMasked (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01011".U && (fuOpType(8) ^ fuOpType(7))
+-    def isStrided(fuOpType: UInt): Bool = fuOpType(6, 5) === "b10".U && (fuOpType(8) ^ fuOpType(7))
+-    def isIndexed(fuOpType: UInt): Bool = fuOpType(5) && (fuOpType(8) ^ fuOpType(7))
++    def isAllUS   (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && (fuOpType(8) ^ fuOpType(7))// Unit-Stride Whole Masked
++    def isUStride (fuOpType: UInt): Bool = fuOpType(6, 0) === "b00_00000".U && (fuOpType(8) ^ fuOpType(7))
++    def isWhole   (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01000".U && (fuOpType(8) ^ fuOpType(7))
++    def isMasked  (fuOpType: UInt): Bool = fuOpType(6, 5) === "b00".U && fuOpType(4, 0) === "b01011".U && (fuOpType(8) ^ fuOpType(7))
++    def isStrided (fuOpType: UInt): Bool = fuOpType(6, 5) === "b10".U && (fuOpType(8) ^ fuOpType(7))
++    def isIndexed (fuOpType: UInt): Bool = fuOpType(5) && (fuOpType(8) ^ fuOpType(7))
++    def isLr      (fuOpType: UInt): Bool = fuOpType === lr_w || fuOpType === lr_d
++    def isSc      (fuOpType: UInt): Bool = fuOpType === sc_w || fuOpType === sc_d
++    def isAMOCASQ (fuOpType: UInt): Bool = fuOpType === amocas_q
++    def isAMOCASWD(fuOpType: UInt): Bool = fuOpType === amocas_w || fuOpType === amocas_d
++    def isAMOCAS  (fuOpType: UInt): Bool = fuOpType(5, 2) === "b1011".U
+   }
+ 
+   object BKUOpType {
+@@ -792,12 +802,18 @@ package object xiangshan {
+     def VEC_M0M          = "b000000".U // VEC_M0M
+     def VEC_MMM          = "b000000".U // VEC_MMM
+     def VEC_MVNR         = "b000100".U // vmvnr
++    
++    def AMO_CAS_W        = "b110101".U // amocas_w
++    def AMO_CAS_D        = "b110110".U // amocas_d
++    def AMO_CAS_Q        = "b110111".U // amocas_q
+     def dummy     = "b111111".U
+ 
+     def X = BitPat("b000000")
+ 
+     def apply() = UInt(6.W)
+     def needSplit(UopSplitType: UInt) = UopSplitType(4) || UopSplitType(5)
++
++    def isAMOCAS(UopSplitType: UInt): Bool = UopSplitType === AMO_CAS_W || UopSplitType === AMO_CAS_D || UopSplitType === AMO_CAS_Q
+   }
+ 
+   object ExceptionNO {
+```

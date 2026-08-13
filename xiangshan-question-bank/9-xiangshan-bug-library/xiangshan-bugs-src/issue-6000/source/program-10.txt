@@ -1,0 +1,1 @@
+[XSBUG_JUMP_ISRVC_OBS] pc=0x0000080000000 target=0x0000000080000010 ftqOffset= 3 redirectValid=1 redirect_isRVC=0 needRedirect=1 targetWrong=1 fixedTaken=1 predTaken=0

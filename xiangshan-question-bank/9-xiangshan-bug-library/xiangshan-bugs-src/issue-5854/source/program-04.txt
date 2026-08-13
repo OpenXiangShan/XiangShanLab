@@ -1,0 +1,7 @@
+// PageTableWalker.scala:1045~1050
+  if (HasBitmapCheck) {
+    io.out.bits.af := Mux(bitmap_enable, entries(mem_ptr).af || entries(mem_ptr).cf, entries(mem_ptr).af)
+    io.out.bits.bitmapCheck.get.jmp_bitmap_check := entries(mem_ptr).jmp_bitmap_check
+    io.out.bits.bitmapCheck.get.ptes := entries(mem_ptr).ptes
+    io.out.bits.bitmapCheck.get.cfs := entries(mem_ptr).cfs
+  }

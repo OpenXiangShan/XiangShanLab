@@ -1,0 +1,10 @@
+    # A target with G=1 must not treat pmpaddr[0]=1 as a 4-byte TOR
+    # boundary. A full-width access at granularity_cross_addr should not be
+    # accepted by checking only the access start address.
+    la      t0, granularity_cross_addr
+    addi    t0, t0, BOUNDARY_OFFSET_BYTES
+    srli    t0, t0, 2
+    csrw    pmpaddr0, t0
+    la      t0, denied_window_end
+    srli    t0, t0, 2
+    csrw    pmpaddr1, t0

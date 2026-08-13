@@ -1,0 +1,123 @@
+# Commit Log
+- Issue: #4079
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4079
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4079
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4079
+- Changed files: 2
+- Additions: 23
+- Deletions: 5
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 93857559110..60db497c8b1 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -87,6 +87,7 @@ class NewCSRInput(implicit p: Parameters) extends Bundle {
+   val mret = Input(Bool())
+   val sret = Input(Bool())
+   val dret = Input(Bool())
++  val redirectFlush = Input(Bool())
+ }
+ 
+ class NewCSROutput(implicit p: Parameters) extends Bundle {
+@@ -247,6 +248,9 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val ren   = io.in.bits.ren && valid
+   val raddr = io.in.bits.addr
+ 
++  // flush
++  val redirectFlush = io.in.bits.redirectFlush
++
+   val hasTrap = io.fromRob.trap.valid
+   val trapVec = io.fromRob.trap.bits.trapVec
+   val trapPC = io.fromRob.trap.bits.pc
+@@ -954,14 +958,18 @@ class NewCSR(implicit val p: Parameters) extends Module
+   /** State machine of newCSR */
+   switch(state) {
+     is(s_idle) {
+-      when(valid && asyncAccess) {
++      when(valid && redirectFlush) {
++        stateNext := s_idle
++      }.elsewhen(valid && asyncAccess) {
+         stateNext := s_waitIMSIC
+       }.elsewhen(valid) {
+         stateNext := s_finish
+       }
+     }
+     is(s_waitIMSIC) {
+-      when(fromAIA.rdata.valid) {
++      when(redirectFlush) {
++        stateNext := s_idle
++      }.elsewhen(fromAIA.rdata.valid) {
+         when(io.out.ready) {
+           stateNext := s_idle
+         }.otherwise {
+@@ -970,7 +978,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+       }
+     }
+     is(s_finish) {
+-      when(io.out.ready) {
++      when(redirectFlush || io.out.ready) {
+         stateNext := s_idle
+       }
+     }
+@@ -995,7 +1003,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val normalCSRValid = state === s_idle && valid && !asyncAccess
+   val waitIMSICValid = state === s_waitIMSIC && fromAIA.rdata.valid
+ 
+-  io.out.valid := waitIMSICValid || state === s_finish
++  io.out.valid := (waitIMSICValid || state === s_finish) && !redirectFlush
+   io.out.bits.EX_II := DataHoldBypass(Mux1H(Seq(
+     normalCSRValid -> (permitMod.io.out.EX_II || noCSRIllegal),
+     waitIMSICValid -> imsic_EX_II,
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index 4cd38247139..5f656669134 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -15,6 +15,7 @@ import xiangshan.backend.Bundles.TrapInstInfo
+ import xiangshan.backend.decode.Imm_Z
+ import xiangshan.backend.fu.NewCSR.CSRBundles.PrivState
+ import xiangshan.backend.fu.NewCSR.CSRDefines.PrivMode
++import xiangshan.backend.rob.RobPtr
+ import xiangshan.frontend.FtqPtr
+ 
+ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+@@ -89,6 +90,14 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+     CSROpType.isCSRRSorRC(func)
+   )
+ 
++  private val robIdxReg = RegEnable(io.in.bits.ctrl.robIdx, io.in.fire)
++  private val thisRobIdx = Wire(new RobPtr)
++  when (io.in.valid) {
++    thisRobIdx := io.in.bits.ctrl.robIdx
++  }.otherwise {
++    thisRobIdx := robIdxReg
++  }
++  private val redirectFlush = thisRobIdx.needFlush(io.flush)
+ 
+   csrMod.io.in match {
+     case in =>
+@@ -103,6 +112,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+       in.bits.mnret := isMNret
+       in.bits.sret := isSret
+       in.bits.dret := isDret
++      in.bits.redirectFlush := redirectFlush
+   }
+   csrMod.io.trapInst := trapInstMod.io.currentTrapInst
+   csrMod.io.fetchMalTval := trapTvalMod.io.tval
+@@ -273,7 +283,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   val redirect = io.out.bits.res.redirect.get.bits
+   redirect := 0.U.asTypeOf(redirect)
+   redirect.level := RedirectLevel.flushAfter
+-  redirect.robIdx := RegEnable(io.in.bits.ctrl.robIdx, io.in.fire)
++  redirect.robIdx := robIdxReg
+   redirect.ftqIdx := RegEnable(io.in.bits.ctrl.ftqIdx.get, io.in.fire)
+   redirect.ftqOffset := RegEnable(io.in.bits.ctrl.ftqOffset.get, io.in.fire)
+   redirect.cfiUpdate.predTaken := true.B
+```

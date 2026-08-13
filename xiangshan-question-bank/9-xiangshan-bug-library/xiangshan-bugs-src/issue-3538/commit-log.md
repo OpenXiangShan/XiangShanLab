@@ -1,0 +1,101 @@
+# Commit Log
+- Issue: #3538
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3538
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3538
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3538
+- Changed files: 4
+- Additions: 10
+- Deletions: 0
+
+## Files
+- `src/main/scala/top/XSNoCTop.scala`
+- `src/main/scala/xiangshan/XSCore.scala`
+- `src/main/scala/xiangshan/XSTile.scala`
+- `src/main/scala/xiangshan/XSTileWrap.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/top/XSNoCTop.scala b/src/main/scala/top/XSNoCTop.scala
+index dffb3a14add..c21f6c7db67 100644
+--- a/src/main/scala/top/XSNoCTop.scala
++++ b/src/main/scala/top/XSNoCTop.scala
+@@ -96,6 +96,7 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
+     val io = IO(new Bundle {
+       val hartId = Input(UInt(p(MaxHartIdBits).W))
+       val riscv_halt = Output(Bool())
++      val hartIsInReset = Output(Bool())
+       val riscv_rst_vec = Input(UInt(soc.PAddrBits.W))
+       val chi = new PortIO
+       val nodeID = Input(UInt(soc.NodeIDWidthList(issue).W))
+@@ -134,6 +135,7 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
+     core_with_l2.module.io.hartId := io.hartId
+     core_with_l2.module.io.nodeID.get := io.nodeID
+     io.riscv_halt := core_with_l2.module.io.cpu_halt
++    io.hartIsInReset := core_with_l2.module.io.hartIsInReset
+     core_with_l2.module.io.reset_vector := io.riscv_rst_vec
+ 
+     EnableClintAsyncBridge match {
+diff --git a/src/main/scala/xiangshan/XSCore.scala b/src/main/scala/xiangshan/XSCore.scala
+index 932b61db738..7d38fa1910a 100644
+--- a/src/main/scala/xiangshan/XSCore.scala
++++ b/src/main/scala/xiangshan/XSCore.scala
+@@ -82,6 +82,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
+     val clintTime = Input(ValidIO(UInt(64.W)))
+     val reset_vector = Input(UInt(PAddrBits.W))
+     val cpu_halt = Output(Bool())
++    val resetIsInFrontend = Output(Bool())
+     val l2_pf_enable = Output(Bool())
+     val perfEvents = Input(Vec(numPCntHc * coreParams.L2NBanks, new PerfEvent))
+     val beu_errors = Output(new XSL1BusErrors())
+@@ -233,6 +234,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
+   memBlock.io.debugRolling := backend.io.debugRolling
+ 
+   io.cpu_halt := memBlock.io.outer_cpu_halt
++  io.resetIsInFrontend := frontend.reset.asBool
+   io.beu_errors.icache <> memBlock.io.outer_beu_errors_icache
+   io.beu_errors.dcache <> memBlock.io.error.bits.toL1BusErrorUnitInfo(memBlock.io.error.valid)
+   io.beu_errors.l2 <> DontCare
+diff --git a/src/main/scala/xiangshan/XSTile.scala b/src/main/scala/xiangshan/XSTile.scala
+index a48ecf044dd..faeb99eeeac 100644
+--- a/src/main/scala/xiangshan/XSTile.scala
++++ b/src/main/scala/xiangshan/XSTile.scala
+@@ -108,6 +108,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+       val msiInfo = Input(ValidIO(new MsiInfoBundle))
+       val reset_vector = Input(UInt(PAddrBits.W))
+       val cpu_halt = Output(Bool())
++      val hartIsInReset = Output(Bool())
+       val debugTopDown = new Bundle {
+         val robHeadPaddr = Valid(UInt(PAddrBits.W))
+         val l3MissMatch = Input(Bool())
+@@ -131,6 +132,9 @@ class XSTile()(implicit p: Parameters) extends LazyModule
+     l2top.module.reset_vector.fromTile := io.reset_vector
+     l2top.module.cpu_halt.fromCore := core.module.io.cpu_halt
+     io.cpu_halt := l2top.module.cpu_halt.toTile
++    val hartIsInReset = RegInit(true.B)
++    hartIsInReset := core.module.io.resetIsInFrontend || reset.asBool
++    io.hartIsInReset := hartIsInReset
+ 
+     core.module.io.perfEvents <> DontCare
+ 
+diff --git a/src/main/scala/xiangshan/XSTileWrap.scala b/src/main/scala/xiangshan/XSTileWrap.scala
+index 72a5667824e..18f4c5e9591 100644
+--- a/src/main/scala/xiangshan/XSTileWrap.scala
++++ b/src/main/scala/xiangshan/XSTileWrap.scala
+@@ -51,6 +51,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+       val msiInfo = Input(ValidIO(new MsiInfoBundle))
+       val reset_vector = Input(UInt(PAddrBits.W))
+       val cpu_halt = Output(Bool())
++      val hartIsInReset = Output(Bool())
+       val debugTopDown = new Bundle {
+         val robHeadPaddr = Valid(UInt(PAddrBits.W))
+         val l3MissMatch = Input(Bool())
+@@ -73,6 +74,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
+     tile.module.io.msiInfo := imsicAsync.o.msiInfo
+     tile.module.io.reset_vector := io.reset_vector
+     io.cpu_halt := tile.module.io.cpu_halt 
++    io.hartIsInReset := tile.module.io.hartIsInReset
+     io.debugTopDown <> tile.module.io.debugTopDown
+     tile.module.io.nodeID.foreach(_ := io.nodeID.get)
+```

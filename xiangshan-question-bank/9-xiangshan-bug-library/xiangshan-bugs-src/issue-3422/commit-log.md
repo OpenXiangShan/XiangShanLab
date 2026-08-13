@@ -1,0 +1,34 @@
+# Commit Log
+- Issue: #3422
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3422
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3422
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3422
+- Changed files: 1
+- Additions: 3
+- Deletions: 3
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index be530536a6b..9090de21d3d 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -590,9 +590,9 @@ class NewCSR(implicit val p: Parameters) extends Module
+     println(mod.dumpFields)
+   }
+ 
+-  trapEntryMEvent .valid := hasTrap && entryPrivState.isModeM && !entryDebugMode
+-  trapEntryHSEvent.valid := hasTrap && entryPrivState.isModeHS && !entryDebugMode
+-  trapEntryVSEvent.valid := hasTrap && entryPrivState.isModeVS && !entryDebugMode
++  trapEntryMEvent .valid := hasTrap && entryPrivState.isModeM && !entryDebugMode && !debugMode
++  trapEntryHSEvent.valid := hasTrap && entryPrivState.isModeHS && !entryDebugMode && !debugMode
++  trapEntryVSEvent.valid := hasTrap && entryPrivState.isModeVS && !entryDebugMode && !debugMode
+ 
+   Seq(trapEntryMEvent, trapEntryHSEvent, trapEntryVSEvent, trapEntryDEvent).foreach { eMod =>
+     eMod.in match {
+```

@@ -1,0 +1,84 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
+index 0cfa01d568d..1af01a4970b 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRAIA.scala
+@@ -13,12 +13,12 @@ import scala.collection.immutable.SeqMap
+ trait CSRAIA { self: NewCSR with HypervisorLevel =>
+   val miselect = Module(new CSRModule("Miselect", new MISelectBundle) with HasISelectBundle {
+     private val value = reg.ALL.asUInt
+-    inIMSICRange := value >= 0x70.U && value < 0x100.U && value(0) =/= 1.U
++    inIMSICRange := value >= 0x70.U && value < 0x100.U
+     isIllegal :=
+       value < 0x30.U ||
++      value >= 0x30.U && value < 0x40.U && value(0) === 1.U ||
+       value >= 0x40.U && value < 0x70.U ||
+-      value >= 0x100.U ||
+-      value(0) === 1.U
++      value >= 0x100.U
+   })
+     .setAddr(CSRs.miselect)
+ 
+@@ -40,12 +40,12 @@ trait CSRAIA { self: NewCSR with HypervisorLevel =>
+ 
+   val siselect = Module(new CSRModule("Siselect", new SISelectBundle) with HasISelectBundle {
+     private val value = reg.ALL.asUInt
+-    inIMSICRange := value >= 0x70.U && value < 0x100.U && value(0) =/= 1.U
++    inIMSICRange := value >= 0x70.U && value < 0x100.U
+     isIllegal :=
+       value < 0x30.U ||
++      value >= 0x30.U && value < 0x40.U && value(0) === 1.U ||
+       value >= 0x40.U && value < 0x70.U ||
+-      value >= 0x100.U ||
+-      value(0) === 1.U
++      value >= 0x100.U
+   })
+     .setAddr(CSRs.siselect)
+ 
+@@ -67,11 +67,10 @@ trait CSRAIA { self: NewCSR with HypervisorLevel =>
+ 
+   val vsiselect = Module(new CSRModule("VSiselect", new VSISelectBundle) with HasISelectBundle {
+     private val value = reg.ALL.asUInt
+-    inIMSICRange := value >= 0x70.U && value < 0x100.U && value(0) =/= 1.U
++    inIMSICRange := value >= 0x70.U && value < 0x100.U
+     isIllegal :=
+       value < 0x70.U ||
+-      value >= 0x100.U ||
+-      value(0) === 1.U
++      value >= 0x100.U
+   })
+     .setAddr(CSRs.vsiselect)
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
+index cd3368dce77..fd38cf9faad 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
+@@ -253,9 +253,8 @@ class CSRPermitModule extends Module {
+ 
+   private val rwSireg_EX_II = csrAccess && ((privState.isModeHS && mvienSEIE && siselect >= 0x70.U && siselect <= 0xFF.U) ||
+     ((privState.isModeM || privState.isModeHS) && siselectIsIllegal) ||
+-    (privState.isModeVS && vsiselect > 0x1FF.U)) && addr === CSRs.sireg.U
+-  private val rwSireg_EX_VI = csrAccess && (privState.isModeVS && (vsiselect >= 0x30.U && vsiselect <= 0x3F.U) || 
+-    privState.isModeVU) && addr === CSRs.sireg.U
++    (privState.isModeVS && (vsiselect < 0x30.U || (vsiselect >= 0x40.U && vsiselect < 0x70.U) || vsiselect > 0xFF.U))) && addr === CSRs.sireg.U
++  private val rwSireg_EX_VI = csrAccess && (privState.isModeVS && (vsiselect >= 0x30.U && vsiselect <= 0x3F.U)) && addr === CSRs.sireg.U
+ 
+   private val rwVSireg_EX_II = csrAccess && (privState.isModeM || privState.isModeHS) && vsiselectIsIllegal && addr === CSRs.vsireg.U
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 9f5a7beaf0d..d73add7ad5f 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -427,12 +427,12 @@ class NewCSR(implicit val p: Parameters) extends Module
+   sstcIRGen.i.henvcfgSTCE := henvcfg.regOut.STCE.asBool
+ 
+   miregiprios.foreach { mod =>
+-    mod.w.wen := (addr === mireg.addr.U) && (miselect.regOut.ALL.asUInt === mod.addr.U)
++    mod.w.wen := wen && (addr === mireg.addr.U) && (miselect.regOut.ALL.asUInt === mod.addr.U)
+     mod.w.wdata := wdata
+   }
+ 
+   siregiprios.foreach { mod =>
+-    mod.w.wen := (addr === sireg.addr.U) && (siselect.regOut.ALL.asUInt === mod.addr.U)
++    mod.w.wen := wen && (addr === sireg.addr.U) && (siselect.regOut.ALL.asUInt === mod.addr.U)
+     mod.w.wdata := wdata
+   }

@@ -1,0 +1,15 @@
+attack phase start = 16780  # final RAS_ENABLE 1->0 transition
+
+disabled prediction:
+  time           = 16956
+  csr_ras_enable = 0
+  type           = s3_disabled_ras_prediction
+  target_name    = gadget1
+  target         = 0x40000042
+  ras_top        = 0x40000042
+
+post-prediction FTQ fetch:
+  time           = 16958
+  csr_ras_enable = 0
+  start          = 0x40000042
+  target_name    = gadget1

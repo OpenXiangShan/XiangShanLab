@@ -1,0 +1,23 @@
+{
+  "number": 3499,
+  "title": "timing(FTQ): calculate requests sent to prefetcher one cycle in advance",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3499",
+  "state": "closed",
+  "labels": [
+    "topic: timing"
+  ],
+  "author": "Yan-Muzi",
+  "created_at": "2024-09-05T02:07:22Z",
+  "updated_at": "2024-10-25T08:06:50Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3499/commit-log.md"
+  ],
+  "submitted_at": "2024-09-05",
+  "branch": "",
+  "rtl_commit": ""
+}

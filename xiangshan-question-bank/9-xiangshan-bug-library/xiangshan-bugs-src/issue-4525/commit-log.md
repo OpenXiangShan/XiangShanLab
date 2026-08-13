@@ -1,0 +1,41 @@
+# Commit Log
+- Issue: #4525
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4525
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4525
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4525
+- Changed files: 1
+- Additions: 5
+- Deletions: 3
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+index c85e8653a8c..edb65093fb0 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+@@ -882,14 +882,16 @@ class LLPTW(implicit p: Parameters) extends XSModule with HasPtwConst with HasPe
+         val req_paddr = MakeAddr(entries(i).ppn, getVpnn(entries(i).req_info.vpn, 0))
+         val req_hpaddr = MakeAddr(entries(i).hptw_resp.genPPNS2(get_pn(req_paddr)), getVpnn(entries(i).req_info.vpn, 0))
+         val index =  Mux(entries(i).req_info.s2xlate === allStage, req_hpaddr, req_paddr)(log2Up(l2tlbParams.blockBytes)-1, log2Up(XLEN/8))
+-        val allStageExcp = ptes(index).isPf(0.U, s1Pbmte) || !ptes(index).isLeaf() || ptes(index).isStage1Gpf(io.csr.hgatp.mode)
+-        state(i) := Mux((entries(i).req_info.s2xlate === allStage && !allStageExcp),
++        val vsStagePf = ptes(index).isPf(0.U, s1Pbmte) || !ptes(index).isLeaf() // Pagefault in vs-Stage
++        // Pagefault in g-Stage; when vsStagePf valid, should not check gStagepf
++        val gStagePf = ptes(index).isStage1Gpf(io.csr.hgatp.mode) && !vsStagePf
++        state(i) := Mux(entries(i).req_info.s2xlate === allStage && !(vsStagePf || gStagePf),
+                         state_last_hptw_req,
+                         Mux(bitmap_enable, state_bitmap_check, state_mem_out))
+         mem_resp_hit(i) := true.B
+         entries(i).ppn := Mux(ptes(index).n === 0.U, ptes(index).getPPN(), Cat(ptes(index).getPPN()(ptePPNLen - 1, pteNapotBits), entries(i).req_info.vpn(pteNapotBits - 1, 0))) // for last stage 2 translation
+         // af will be judged in L2 TLB `contiguous_pte_to_merge_ptwResp`
+-        entries(i).hptw_resp.gpf := Mux(entries(i).req_info.s2xlate === allStage, ptes(index).isStage1Gpf(io.csr.hgatp.mode), false.B)
++        entries(i).hptw_resp.gpf := Mux(entries(i).req_info.s2xlate === allStage, gStagePf, false.B)
+       }
+     }
+   }
+```

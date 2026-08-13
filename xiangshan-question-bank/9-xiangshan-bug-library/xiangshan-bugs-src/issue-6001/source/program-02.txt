@@ -1,0 +1,1 @@
+(isZero=0, greaterThan255=1, prioNum=0)

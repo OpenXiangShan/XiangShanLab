@@ -1,0 +1,9 @@
+commit group [15]: pc 00800005e2 cmtcnt 10 <--
+
+============== Commit Instr Trace ==============
+...
+[27] commit pc 00000000800005e2 inst 02b700a7 wen 1 dst 32 data 0000000000000010 idx 02b (00) vsm.v   v1, (a4)
+[28] commit pc 00000000800005e6 inst 0c507757 wen 1 dst 14 data 0000000000000002 idx 02c vsetvli a4, zero, e8, mf8, ta, 
+[29] commit pc 00000000800005ea inst c22027f3 wen 1 dst 15 data 0000000000000010 idx 02d csrr    a5, vlenb
+[30] commit pc 00000000800005f4 inst fa078793 wen 1 dst 15 data ffffffffffffff80 idx 02e addi    a5, a5, -96
+[31] commit pc 00000000800005fe inst 0d877057 wen 0 dst 00 data ffffffffffffff9d idx 02f vsetvli zero, a4, e64, m1, ta,  <--

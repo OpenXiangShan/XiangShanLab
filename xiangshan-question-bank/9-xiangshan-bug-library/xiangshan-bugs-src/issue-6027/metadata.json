@@ -1,0 +1,16 @@
+{
+  "number": 6027,
+  "title": "`onlyC3Enable` is always false",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6027",
+  "state": "closed",
+  "labels": [
+    "module: backend",
+    "type: bug/fixed"
+  ],
+  "author": "LeeHaofeng",
+  "created_at": "2026-05-26T09:48:11Z",
+  "updated_at": "2026-06-25T09:08:21Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true
+}

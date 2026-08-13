@@ -1,0 +1,2 @@
+Assertion failed at $NOOP_HOME/build/rtl/DCache.sv:1979.
+The simulation stopped. There might be some assertion failed.

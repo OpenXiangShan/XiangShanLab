@@ -1,0 +1,8 @@
+direct-only fetch block:
+  contains no jalr / jr / ret
+  contains no non-RAS indirect branch
+
+but:
+  ittage.table.req.valid = 1
+  direct-only fetches contend with ITTAGE write-buffer drain
+  software-visible mcycle delta changes with direct-only hammer bank

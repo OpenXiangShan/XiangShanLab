@@ -1,0 +1,171 @@
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index fc12998ee1d..2b85ca027dc 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -862,6 +862,7 @@ object Bundles {
+     val instr = UInt(32.W)
+     val commitType = CommitType()
+     val exceptionVec = ExceptionVec()
++    val isFetchBkpt = Bool()
+     val isFetchMalAddr = Bool()
+     val gpaddr = UInt(XLEN.W)
+     val singleStep = Bool()
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+index 58f77763009..2a1f5b402e0 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/CSREvent.scala
+@@ -123,6 +123,7 @@ class TrapEntryEventInput(implicit val p: Parameters) extends Bundle with HasXSP
+   val isCrossPageIPF = Input(Bool())
+   val isHls = Input(Bool())
+   val isFetchMalAddr = Input(Bool())
++  val isFetchBkpt = Input(Bool())
+   val trapIsForVSnonLeafPTE = Input(Bool())
+ 
+   // always current privilege
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+index a93171d994d..8b796c58623 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+@@ -62,6 +62,8 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+   private val isFetchExcp    = isException && ExceptionNO.getFetchFault.map(_.U === highPrioTrapNO).reduce(_ || _)
+   private val isMemExcp      = isException && (ExceptionNO.getLoadFault ++ ExceptionNO.getStoreFault).map(_.U === highPrioTrapNO).reduce(_ || _)
+   private val isBpExcp       = isException && ExceptionNO.EX_BP.U === highPrioTrapNO
++  private val isFetchBkpt    = isBpExcp && in.isFetchBkpt
++  private val isMemBkpt      = isBpExcp && !in.isFetchBkpt
+   private val isHlsExcp      = isException && in.isHls
+   private val fetchCrossPage = in.isCrossPageIPF
+   private val isFetchMalAddr = in.isFetchMalAddr
+@@ -71,14 +73,14 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+   private val isFetchGuestExcp = isException && ExceptionNO.EX_IGPF.U === highPrioTrapNO
+   // Software breakpoint exceptions are permitted to write either 0 or the pc to xtval
+   // We fill pc here
+-  private val tvalFillPc       = (isFetchExcp || isFetchGuestExcp) && !fetchCrossPage || isBpExcp
++  private val tvalFillPc       = (isFetchExcp || isFetchGuestExcp) && !fetchCrossPage || isFetchBkpt
+   private val tvalFillPcPlus2  = (isFetchExcp || isFetchGuestExcp) && fetchCrossPage
+-  private val tvalFillMemVaddr = isMemExcp
++  private val tvalFillMemVaddr = isMemExcp || isMemBkpt
+   private val tvalFillGVA      =
+     isHlsExcp && isMemExcp ||
+     isLSGuestExcp|| isFetchGuestExcp ||
+-    (isFetchExcp || isBpExcp) && fetchIsVirt ||
+-    isMemExcp && memIsVirt
++    (isFetchExcp || isFetchBkpt) && fetchIsVirt ||
++    (isMemExcp || isMemBkpt) && memIsVirt
+   private val tvalFillInst     = isIllegalInst
+ 
+   private val tval = Mux1H(Seq(
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+index 498c9f4c234..0c7f8f21d85 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+@@ -59,6 +59,8 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   private val isFetchExcp    = isException && ExceptionNO.getFetchFault.map(_.U === highPrioTrapNO).reduce(_ || _)
+   private val isMemExcp      = isException && (ExceptionNO.getLoadFault ++ ExceptionNO.getStoreFault).map(_.U === highPrioTrapNO).reduce(_ || _)
+   private val isBpExcp       = isException && ExceptionNO.EX_BP.U === highPrioTrapNO
++  private val isFetchBkpt = isBpExcp && in.isFetchBkpt
++  private val isMemBkpt = isBpExcp && !in.isFetchBkpt
+   private val isHlsExcp      = isException && in.isHls
+   private val fetchCrossPage = in.isCrossPageIPF
+   private val isFetchMalAddr = in.isFetchMalAddr
+@@ -68,14 +70,14 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   private val isFetchGuestExcp = isException && ExceptionNO.EX_IGPF.U === highPrioTrapNO
+   // Software breakpoint exceptions are permitted to write either 0 or the pc to xtval
+   // We fill pc here
+-  private val tvalFillPc       = (isFetchExcp || isFetchGuestExcp) && !fetchCrossPage || isBpExcp
++  private val tvalFillPc       = (isFetchExcp || isFetchGuestExcp) && !fetchCrossPage || isFetchBkpt
+   private val tvalFillPcPlus2  = (isFetchExcp || isFetchGuestExcp) && fetchCrossPage
+-  private val tvalFillMemVaddr = isMemExcp
++  private val tvalFillMemVaddr = isMemExcp || isMemBkpt
+   private val tvalFillGVA      =
+     isHlsExcp && isMemExcp ||
+     isLSGuestExcp|| isFetchGuestExcp ||
+-    (isFetchExcp || isBpExcp) && fetchIsVirt ||
+-    isMemExcp && memIsVirt
++    (isFetchExcp || isFetchBkpt) && fetchIsVirt ||
++    (isMemExcp || isMemBkpt) && memIsVirt
+   private val tvalFillInst     = isIllegalInst
+ 
+   private val tval = Mux1H(Seq(
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+index c457ba28b45..63045276d5d 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+@@ -75,18 +75,20 @@ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSR
+   private val isFetchExcp    = isException && Seq(/*EX_IAM, */ EX_IAF, EX_IPF).map(_.U === highPrioTrapNO).reduce(_ || _)
+   private val isMemExcp      = isException && Seq(EX_LAM, EX_LAF, EX_SAM, EX_SAF, EX_LPF, EX_SPF).map(_.U === highPrioTrapNO).reduce(_ || _)
+   private val isBpExcp       = isException && EX_BP.U === highPrioTrapNO
++  private val isFetchBkpt    = isBpExcp && in.isFetchBkpt
++  private val isMemBkpt      = isBpExcp && !in.isFetchBkpt
+   private val fetchCrossPage = in.isCrossPageIPF
+   private val isFetchMalAddr = in.isFetchMalAddr
+   private val isIllegalInst  = isException && (EX_II.U === highPrioTrapNO || EX_VI.U === highPrioTrapNO)
+ 
+   // Software breakpoint exceptions are permitted to write either 0 or the pc to xtval
+   // We fill pc here
+-  private val tvalFillPc       = isFetchExcp && !fetchCrossPage || isBpExcp
++  private val tvalFillPc       = isFetchExcp && !fetchCrossPage || isFetchBkpt
+   private val tvalFillPcPlus2  = isFetchExcp && fetchCrossPage
+   private val tvalFillMemVaddr = isMemExcp
+   private val tvalFillGVA      =
+-    (isFetchExcp || isBpExcp) && fetchIsVirt ||
+-    isMemExcp && memIsVirt
++    (isFetchExcp || isFetchBkpt) && fetchIsVirt ||
++    (isMemExcp || isMemBkpt) && memIsVirt
+   private val tvalFillInst     = isIllegalInst
+ 
+   private val tval = Mux1H(Seq(
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index ef07dd93de6..d94cb831fb0 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -132,6 +132,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+         val pcGPA = UInt(VaddrMaxWidth.W)
+         val instr = UInt(InstWidth.W)
+         val trapVec = UInt(64.W)
++        val isFetchBkpt = Bool()
+         val singleStep = Bool()
+         val trigger = TriggerAction()
+         val crossPageIPFFix = Bool()
+@@ -238,6 +239,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val singleStep = io.fromRob.trap.bits.singleStep
+   val trapIsHls = io.fromRob.trap.bits.isHls
+   val trapIsFetchMalAddr = io.fromRob.trap.bits.isFetchMalAddr
++  val trapIsFetchBkpt = io.fromRob.trap.bits.isFetchBkpt
+   val trapIsForVSnonLeafPTE = io.fromRob.trap.bits.isForVSnonLeafPTE
+ 
+   // debug_intrrupt
+@@ -669,6 +671,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+         in.isCrossPageIPF := trapIsCrossPageIPF
+         in.isHls := trapIsHls
+         in.isFetchMalAddr := trapIsFetchMalAddr
++        in.isFetchBkpt := trapIsFetchBkpt
+         in.trapIsForVSnonLeafPTE := trapIsForVSnonLeafPTE
+ 
+         in.iMode.PRVM := PRVM
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index dd38329a2a5..86507a04e6a 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -116,6 +116,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   // Todo: shrink the width of trap vector.
+   // We use 64bits trap vector in CSR, and 24 bits exceptionVec in exception bundle.
+   csrMod.io.fromRob.trap.bits.trapVec := csrIn.exception.bits.exceptionVec.asUInt
++  csrMod.io.fromRob.trap.bits.isFetchBkpt := csrIn.exception.bits.isFetchBkpt
+   csrMod.io.fromRob.trap.bits.singleStep := csrIn.exception.bits.singleStep
+   csrMod.io.fromRob.trap.bits.crossPageIPFFix := csrIn.exception.bits.crossPageIPFFix
+   csrMod.io.fromRob.trap.bits.isInterrupt := csrIn.exception.bits.isInterrupt
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index ebce9ab9e70..117674de432 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -604,6 +604,10 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   io.exception.bits.instr := RegEnable(debug_deqUop.instr, exceptionHappen)
+   io.exception.bits.commitType := RegEnable(deqDispatchData.commitType, exceptionHappen)
+   io.exception.bits.exceptionVec := RegEnable(exceptionDataRead.bits.exceptionVec, exceptionHappen)
++  io.exception.bits.isFetchBkpt := RegEnable(
++    exceptionDataRead.bits.isEnqExcp && exceptionDataRead.bits.exceptionVec(ExceptionNO.EX_BP),
++    exceptionHappen,
++  )
+   io.exception.bits.isFetchMalAddr := RegEnable(exceptionDataRead.bits.isFetchMalAddr && deqHasException, exceptionHappen)
+   io.exception.bits.singleStep := RegEnable(exceptionDataRead.bits.singleStep, exceptionHappen)
+   io.exception.bits.crossPageIPFFix := RegEnable(exceptionDataRead.bits.crossPageIPFFix, exceptionHappen)

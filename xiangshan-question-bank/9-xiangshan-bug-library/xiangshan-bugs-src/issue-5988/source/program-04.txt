@@ -1,0 +1,8 @@
+  site_A1_setIdx=0x00
+  site_B1_setIdx=0x40
+  site_A1_replacerSetIdx=0x00
+  site_B1_replacerSetIdx=0x00
+  cpu_image_loaded=1
+  cpu_guest_cycle_seen=1
+  cpu_good_trap=1
+  cpu_mbtb_allocate_seen=1

@@ -1,0 +1,3 @@
+In the previous design, the `spRefill` signal will be true when the `refill.levelOH.sp` or `memPte(0).isNapot(refill.level_dup(0))` conditions is met, and acted as a control signal to control the refill of the sp entries. However, `memPte(0).isNapot(refill.level_dup(0))` does not determine whether `refill.level_dup(0)` is valid. When `refill.level_dup(0)` is X, it causes `spRefill` to also be X, which in turn causes X-prop.
+
+This commit adds `refill.levelOH.l0` to `isNapot`. On the one hand, only `levelOH.l0` (4KB page) can be a Svnapot page; on the other hand, the assignment of `refill.levelOH.l0` takes `refill.valid` into account, thus avoiding X-prop.

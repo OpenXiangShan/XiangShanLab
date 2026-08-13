@@ -1,0 +1,26 @@
+diff --git a/src/main/scala/xiangshan/L2Top.scala b/src/main/scala/xiangshan/L2Top.scala
+index cb4112fcbbb..5c96933e191 100644
+--- a/src/main/scala/xiangshan/L2Top.scala
++++ b/src/main/scala/xiangshan/L2Top.scala
+@@ -252,7 +252,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
+     beu.module.io.errors.uncache := io.beu_errors.uncache
+     resetDelayN.io.in := io.reset_vector.fromTile
+     io.reset_vector.toCore := resetDelayN.io.out
+-    io.hartId.toCore := RegNext(io.hartId.fromTile)
++    io.hartId.toCore := io.hartId.fromTile
+     // add buffer to satisfy PE
+     io.msiInfo.toCore.valid := RegNext(io.msiInfo.fromTile.valid)
+     io.msiInfo.toCore.bits := RegEnable(io.msiInfo.fromTile.bits, io.msiInfo.fromTile.valid)
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index d24f13f62ad..3276309bf3a 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -1994,7 +1994,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+     )
+   ))
+   io.mem_to_ooo.topToBackendBypass match { case x =>
+-    x.hartId            := RegNext(io.hartId)
++    x.hartId            := io.hartId
+     x.l2FlushDone       := RegNext(io.l2_flush_done)
+     x.externalInterrupt.msip  := RegNext(outer.clint_int_sink.in.head._1(0))
+     x.externalInterrupt.mtip  := RegNext(outer.clint_int_sink.in.head._1(1))

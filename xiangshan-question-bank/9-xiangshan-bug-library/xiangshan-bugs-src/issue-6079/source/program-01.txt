@@ -1,0 +1,3 @@
+vstart different:
+  NEMU (right): 0x0000000000000000
+  DUT  (wrong): 0x000000000000003e  (= 62)

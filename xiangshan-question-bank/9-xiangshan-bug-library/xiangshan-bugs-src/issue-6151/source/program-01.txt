@@ -1,0 +1,3 @@
+(A) vl=0 vlseg2e8.v : 541 cyc/iter   // Since vl=0, it seems incorrect for the execution of the vlseg2e8.v to consume such a substantial number of cycles.
+(B) vl=2 vlseg2e8.v :  61 cyc/iter   // control: normal execution
+(C) vl=0 vle8.v     :   9 cyc/iter   // control: non-segment vl=0, correctly fast

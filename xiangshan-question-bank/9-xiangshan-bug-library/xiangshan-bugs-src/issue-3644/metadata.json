@@ -1,0 +1,21 @@
+{
+  "number": 3644,
+  "title": "fix(CSR,interrupt): use rdata instead of regOut to produce interrupt",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3644",
+  "state": "closed",
+  "labels": [],
+  "author": "huxuan0307",
+  "created_at": "2024-09-24T16:57:59Z",
+  "updated_at": "2024-09-26T12:53:34Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3644/commit-log.md"
+  ],
+  "submitted_at": "2024-09-24",
+  "branch": "",
+  "rtl_commit": ""
+}

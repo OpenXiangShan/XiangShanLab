@@ -1,0 +1,5 @@
+{
+  "both_variants_reproduce_no_alt_altdiffers": 1,
+  "secret_controls_buggy_useful_write": 1,
+  "wrongpath_gadget_load_observed": 1
+}

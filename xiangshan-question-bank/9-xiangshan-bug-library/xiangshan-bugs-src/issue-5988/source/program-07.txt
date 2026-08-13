@@ -1,0 +1,1 @@
+  EMU=/path/to/xiangshan/emu bash poc.sh

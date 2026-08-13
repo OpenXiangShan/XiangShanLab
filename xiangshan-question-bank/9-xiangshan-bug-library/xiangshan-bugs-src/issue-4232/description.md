@@ -1,0 +1,1 @@
+If the instruction is invalid, the corresponding pre-decoding information should be 0. Because when the IFU module detects a prediction error, the misOffset issued may not correspond to a valid instruction.

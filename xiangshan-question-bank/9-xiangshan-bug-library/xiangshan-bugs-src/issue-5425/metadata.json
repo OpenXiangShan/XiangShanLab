@@ -1,0 +1,24 @@
+{
+  "number": 5425,
+  "title": "Assertion failed at DCache on vector indexed segment store instructions",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5425",
+  "state": "closed",
+  "labels": [
+    "type: bug/invalid",
+    "module: unknown"
+  ],
+  "author": "cesarus777",
+  "created_at": "2025-12-24T14:56:59Z",
+  "updated_at": "2026-03-25T08:34:03Z",
+  "source_files": [
+    "issue-5425/source/snippy-rvv-test-994-suxi.zip",
+    "issue-5425/source/program-01.txt",
+    "issue-5425/source/program-02.txt",
+    "issue-5425/source/program-03.txt",
+    "issue-5425/source/program-04.txt"
+  ],
+  "archive_files": [
+    "issue-5425/source/snippy-rvv-test-994-suxi.zip"
+  ],
+  "has_comments": true
+}

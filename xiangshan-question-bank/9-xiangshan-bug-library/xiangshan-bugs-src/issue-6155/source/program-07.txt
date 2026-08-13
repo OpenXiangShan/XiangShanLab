@@ -1,0 +1,2 @@
+abtb_io_enable = 0
+bpu_s0_fire    = 1

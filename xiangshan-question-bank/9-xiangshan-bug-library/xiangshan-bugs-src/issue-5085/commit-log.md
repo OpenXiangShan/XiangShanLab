@@ -1,0 +1,102 @@
+# Commit Log
+- Issue: #5085
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5085
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5085
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5085
+- Changed files: 3
+- Additions: 18
+- Deletions: 5
+
+## Files
+- `src/main/scala/xiangshan/frontend/ftq/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+- `src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+index 42ff7842cc7..50187c37d17 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+@@ -37,6 +37,7 @@ class MetaEntry(implicit p: Parameters) extends FtqBundle {
+ 
+ class ResolveEntry(implicit p: Parameters) extends FtqBundle {
+   val ftqIdx:     FtqPtr     = new FtqPtr
++  val flushed:    Bool       = Bool()
+   val startVAddr: PrunedAddr = PrunedAddr(VAddrBits)
+   // TODO: Reconsider branch number
+   val branches: Vec[Valid[BranchInfo]] = Vec(ResolveEntryBranchNumber, Valid(new BranchInfo))
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 5e82f4efa31..e92928ee871 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -23,6 +23,7 @@ package xiangshan.frontend.ftq
+ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
++import utility.DelayN
+ import utility.HasCircularQueuePtrHelper
+ import utility.HasPerfEvents
+ import utility.ParallelPriorityMux
+@@ -290,15 +291,19 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   io.toBpu.redirect.bits.speculationMeta := speculationQueue(redirect.bits.ftqIdx.value)
+   io.toBpu.redirectFromIFU               := ifuRedirect.valid
+ 
++  resolveQueue.io.backendRedirect    := DelayN(backendRedirect.valid, 2)
++  resolveQueue.io.backendRedirectPtr := DelayN(backendRedirect.bits.ftqIdx, 2)
++
+   // --------------------------------------------------------------------------------
+   // Resolve and train BPU
+   // --------------------------------------------------------------------------------
++
+   resolveQueue.io.backendResolve := io.fromBackend.resolve
+ 
+-  metaQueue.io.ren   := resolveQueue.io.bpuTrain.valid
++  metaQueue.io.ren   := resolveQueue.io.bpuTrain.valid && !resolveQueue.io.bpuTrain.bits.flushed
+   metaQueue.io.raddr := resolveQueue.io.bpuTrain.bits.ftqIdx.value
+ 
+-  io.toBpu.train.valid           := RegNext(resolveQueue.io.bpuTrain.valid)
++  io.toBpu.train.valid           := RegNext(resolveQueue.io.bpuTrain.valid && !resolveQueue.io.bpuTrain.bits.flushed)
+   io.toBpu.train.bits.meta       := metaQueue.io.rdata.meta
+   io.toBpu.train.bits.startVAddr := RegEnable(resolveQueue.io.bpuTrain.bits.startVAddr, resolveQueue.io.bpuTrain.valid)
+   io.toBpu.train.bits.branches   := RegEnable(resolveQueue.io.bpuTrain.bits.branches, resolveQueue.io.bpuTrain.valid)
+diff --git a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+index 0196415621b..78d0b2a08e3 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+@@ -25,8 +25,10 @@ import xiangshan.frontend.bpu.HalfAlignHelper
+ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelper {
+ 
+   class ResolveQueueIO extends Bundle {
+-    val backendResolve: Vec[Valid[Resolve]] = Input(Vec(backendParams.BrhCnt, Valid(new Resolve)))
+-    val bpuTrain:       Valid[ResolveEntry] = Output(Valid(new ResolveEntry))
++    val backendResolve:     Vec[Valid[Resolve]] = Input(Vec(backendParams.BrhCnt, Valid(new Resolve)))
++    val backendRedirect:    Bool                = Input(Bool())
++    val backendRedirectPtr: FtqPtr              = Input(new FtqPtr)
++    val bpuTrain:           Valid[ResolveEntry] = Output(Valid(new ResolveEntry))
+   }
+ 
+   val io: ResolveQueueIO = IO(new ResolveQueueIO)
+@@ -79,6 +81,10 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+     }
+   }
+ 
++  when(io.backendRedirect) {
++    mem.foreach(entry => entry.bits.flushed := entry.bits.ftqIdx > io.backendRedirectPtr)
++  }
++
+   private val deqValid = mem(deqPtr.value).valid && !io.backendResolve.map(branch =>
+     branch.valid && branch.bits.ftqIdx === mem(deqPtr.value).bits.ftqIdx
+   ).reduce(_ || _)
+@@ -89,7 +95,8 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+   when(deqValid) {
+     deqPtr := deqPtr + 1.U
+ 
+-    mem(deqPtr.value).valid := false.B
++    mem(deqPtr.value).valid        := false.B
++    mem(deqPtr.value).bits.flushed := false.B
+     mem(deqPtr.value).bits.branches.foreach(_.valid := false.B)
+   }
+```

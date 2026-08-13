@@ -1,0 +1,21 @@
+{
+  "number": 4128,
+  "title": "feat(Backend): Accelerate CSRR instructions by performing out-of-order execution on most CSRs",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4128",
+  "state": "closed",
+  "labels": [],
+  "author": "Squareless-XD",
+  "created_at": "2025-01-04T02:40:33Z",
+  "updated_at": "2025-02-19T08:37:23Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4128/commit-log.md"
+  ],
+  "submitted_at": "2025-01-04",
+  "branch": "",
+  "rtl_commit": ""
+}

@@ -1,0 +1,69 @@
+# Commit Log
+- Issue: #6121
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6121
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6121
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6121
+- Changed files: 2
+- Additions: 6
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/backend/CtrlBlock.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeStage.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index aabc2d59cf8..cb393f038e9 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -511,6 +511,7 @@ class CtrlBlockImp(
+   decode.io.vlRat <> rat.io.vlReadPorts
+   decode.io.fusion := 0.U.asTypeOf(decode.io.fusion) // Todo
+   decode.io.stallReason.in <> io.frontend.stallReason
++  decode.io.backendCanAccept := io.frontend.canAccept
+ 
+   // snapshot check
+   class CFIRobIdx extends Bundle {
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeStage.scala b/src/main/scala/xiangshan/backend/decode/DecodeStage.scala
+index 6b16d57d2a2..2b425bbd22e 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeStage.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeStage.scala
+@@ -56,6 +56,7 @@ class DecodeStageIO(implicit p: Parameters) extends XSBundle {
+   val csrCtrl = Input(new CustomCSRCtrlIO)
+   val fromCSR = Input(new CSRToDecode)
+   val fusion = Vec(DecodeWidth - 1, Input(Bool()))
++  val backendCanAccept = Input(Bool())
+ 
+   // vtype update
+   val fromRob = new Bundle {
+@@ -85,7 +86,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+ 
+   val io = IO(new DecodeStageIO)
+ 
+-  io.in.zipWithIndex.foreach{ case (d, i) => 
++  io.in.zipWithIndex.foreach{ case (d, i) =>
+     PerfCCT.updateInstPos(d.bits.debug_seqNum, PerfCCT.InstPos.AtDecode.id.U, d.valid, clock, reset)
+   }
+ 
+@@ -315,6 +316,8 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+   XSPerfAccumulate("wait_cycle", !io.in.head.valid && io.out.head.ready)
+   XSPerfAccumulate("inst_spec", PopCount(io.in.map(_.fire)))
+   XSPerfAccumulate("recovery_bubble", recoveryFlag)
++  XSPerfAccumulate("frontend_stall_cycle", GatedValidRegNext(!io.in.head.valid && io.backendCanAccept))
++  XSPerfAccumulate("backend_stall_cycle",  GatedValidRegNext(io.in.head.valid && !io.in.head.ready))
+ 
+   XSPerfHistogram("in_valid_range", PopCount(io.in.map(_.valid)), true.B, 0, DecodeWidth + 1, 1)
+   XSPerfHistogram("in_fire_range", PopCount(io.in.map(_.fire)), true.B, 0, DecodeWidth + 1, 1)
+@@ -323,7 +326,7 @@ class DecodeStage(implicit p: Parameters) extends XSModule
+ 
+   val fusionValid = VecInit(io.fusion.map(x => GatedValidRegNext(x)))
+   val inValidNotReady = io.in.map(in => GatedValidRegNext(in.valid && !in.ready))
+-  val frontendStall = GatedValidRegNext(!io.in.head.valid && io.in.head.ready)
++  val frontendStall = GatedValidRegNext(!io.in.head.valid && io.backendCanAccept)
+   val backendStall  = GatedValidRegNext(io.in.head.valid && !io.in.head.ready)
+   val perfEvents = Seq(
+     ("decoder_fused_instr",  PopCount(fusionValid)       ),
+```

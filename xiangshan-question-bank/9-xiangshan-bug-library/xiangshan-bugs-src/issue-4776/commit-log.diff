@@ -1,0 +1,81 @@
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index d392341c7a9..959bdc840ad 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -253,7 +253,8 @@ object Bundles {
+     // schedule
+     val replayInst      = Bool()
+ 
+-    val debug_fuType    = OptionWrapper(backendParams.debugEn, FuType())
++    val debug_fuType    = Option.when(backendParams.debugEn)(FuType())
++    val debug_sim_trig  = Option.when(backendParams.debugEn)(Bool())
+ 
+     val numLsElem       = NumLsElem()
+ 
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index 5b1419eaac1..8263fa60ff4 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -558,10 +558,11 @@ object ZfaDecode extends DecodeConstants {
+ }
+ 
+ /**
+- * XiangShan Trap Decode constants
++ * XiangShan Debug Decode constants
+  */
+-object XSTrapDecode extends DecodeConstants {
++object XSDebugDecode extends DecodeConstants {
+   def TRAP = BitPat("b000000000000?????000000001101011")
++  def SIM_TRIG = BitPat("b11011111101010010010000000010011") // HINT, slti x0, x18, -518
+   val decodeArray: Array[(BitPat, XSDecodeBase)] = Array(
+     TRAP    -> XSDecode(SrcType.reg, SrcType.imm, SrcType.X, FuType.alu, ALUOpType.add, SelImm.IMM_I, xWen = T, xsTrap = T, noSpec = T, blockBack = T)
+   )
+@@ -807,7 +808,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+ //    FDivSqrtDecode.table ++
+     BitmanipDecode.table ++
+     ScalarCryptoDecode.table ++
+-    XSTrapDecode.table ++
++    XSDebugDecode.table ++
+     CBODecode.table ++
+     SvinvalDecode.table ++
+     HypervisorDecode.table ++
+diff --git a/src/main/scala/xiangshan/backend/rename/Rename.scala b/src/main/scala/xiangshan/backend/rename/Rename.scala
+index e5e7ee5982c..b454b841e3d 100644
+--- a/src/main/scala/xiangshan/backend/rename/Rename.scala
++++ b/src/main/scala/xiangshan/backend/rename/Rename.scala
+@@ -23,7 +23,7 @@ import utility._
+ import utils._
+ import xiangshan._
+ import xiangshan.backend.Bundles.{DecodedInst, DynInst}
+-import xiangshan.backend.decode.{FusionDecodeInfo, ImmUnion, Imm_I, Imm_LUI_LOAD, Imm_U, Imm_Z}
++import xiangshan.backend.decode.{FusionDecodeInfo, ImmUnion, Imm_I, Imm_LUI_LOAD, Imm_U, Imm_Z, XSDebugDecode}
+ import xiangshan.backend.fu.FuType
+ import xiangshan.backend.rename.freelist._
+ import xiangshan.backend.rob.{RobEnqIO, RobPtr}
+@@ -380,6 +380,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+         ).map(x => FuTypeOrR(in.bits.fuType, x._1) && in.bits.fuOpType === x._2).reduce(_ || _)
+       ).reverse)
+     ).orR
++    uops(i).debug_sim_trig.foreach(_ := (compressMasksVec(i) & Cat(io.in.map(_.bits.instr === XSDebugDecode.SIM_TRIG).reverse)).orR)
+     // psrc0,psrc1,psrc2 don't require v0ReadPorts because their srcType can distinguish whether they are V0 or not
+     uops(i).psrc(0) := Mux1H(uops(i).srcType(0)(2, 0), Seq(io.intReadPorts(i)(0), io.fpReadPorts(i)(0), io.vecReadPorts(i)(0)))
+     uops(i).psrc(1) := Mux1H(uops(i).srcType(1)(2, 0), Seq(io.intReadPorts(i)(1), io.fpReadPorts(i)(1), io.vecReadPorts(i)(1)))
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index fc3876ba1e1..1dfecb4d647 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -1413,6 +1413,14 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   // rolling
+   io.debugRolling.robTrueCommit := ifCommitReg(trueCommitCnt)
+ 
++  // debug trigger for simulation
++  if (backendParams.debugEn) {
++    val debug_sim_trig = dontTouch(Wire(Bool()))
++    debug_sim_trig := io.commits.isCommit && (io.commits.commitValid zip commitDebugUop map {
++      case (valid, uop) => valid && uop.debug_sim_trig.get
++    }).reduce(_ || _)
++  }
++
+   /**
+    * DataBase info:
+    * log trigger is at writeback valid

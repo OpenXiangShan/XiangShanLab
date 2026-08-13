@@ -1,0 +1,5 @@
+$ make ARCH=riscv64-xs && /xs-env/XiangShan/build/emu --no-diff -i ./build/-riscv64-xs.bin 2>/dev/null
+add:         1294
+mul:         2125
+LMUL=1 vadd: 4244
+LMUL=2 vadd: 3136

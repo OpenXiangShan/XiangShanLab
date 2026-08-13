@@ -1,0 +1,3 @@
+mcause: 2 (illegal instruction)
+mepc:   0x80001ba4
+mtval:  0x5e003457

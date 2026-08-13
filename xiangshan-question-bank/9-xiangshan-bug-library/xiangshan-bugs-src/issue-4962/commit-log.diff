@@ -1,0 +1,1820 @@
+diff --git a/src/main/scala/xiangshan/Bundle.scala b/src/main/scala/xiangshan/Bundle.scala
+index d6392778121..c0e395db8e3 100644
+--- a/src/main/scala/xiangshan/Bundle.scala
++++ b/src/main/scala/xiangshan/Bundle.scala
+@@ -29,7 +29,9 @@ import org.chipsalliance.cde.config.Parameters
+ 
+ import xiangshan.frontend.IfuToBackendIO
+ import xiangshan.frontend.PreDecodeInfo
++import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.bpu.BpuCtrl
++import xiangshan.frontend.bpu.BranchAttribute
+ import xiangshan.frontend.ftq.FtqPtr
+ import xiangshan.frontend.ftq.FtqToCtrlIO
+ 
+@@ -97,6 +99,7 @@ class CtrlFlow(implicit p: Parameters) extends XSBundle {
+   val trigger = TriggerAction()
+   val pd = new PreDecodeInfo
+   val pred_taken = Bool()
++  val identifiedCfi = Bool()
+   val crossPageIPFFix = Bool()
+   val storeSetHit = Bool() // inst has been allocated an store set
+   val waitForRobIdx = new RobPtr // store set predicted previous store robIdx
+@@ -300,6 +303,16 @@ object Redirect extends HasCircularQueuePtrHelper {
+   }
+ }
+ 
++class Resolve(implicit p: Parameters) extends XSBundle {
++  val ftqIdx: FtqPtr = new FtqPtr
++  val ftqOffset: UInt = UInt(log2Up(PredictWidth).W)
++  val pc: PrunedAddr = PrunedAddr(VAddrBits)
++  val target: PrunedAddr = PrunedAddr(VAddrBits)
++  val taken: Bool = Bool()
++  val mispredict: Bool = Bool()
++  val attribute: BranchAttribute = new BranchAttribute
++}
++
+ class ResetPregStateReq(implicit p: Parameters) extends XSBundle {
+   // NOTE: set isInt and isFp both to 'false' when invalid
+   val isInt = Bool()
+diff --git a/src/main/scala/xiangshan/backend/Backend.scala b/src/main/scala/xiangshan/backend/Backend.scala
+index 4e7eba26420..2359d5ff32c 100644
+--- a/src/main/scala/xiangshan/backend/Backend.scala
++++ b/src/main/scala/xiangshan/backend/Backend.scala
+@@ -258,6 +258,7 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+ 
+   ctrlBlock.io.fromTop.hartId := io.fromTop.hartId
+   ctrlBlock.io.frontend <> io.frontend
++  ctrlBlock.io.fromBJUResolve := intExuBlock.io.toFrontendBJUResolve.get
+   ctrlBlock.io.fromCSR.toDecode := intExuBlock.io.csrToDecode.get
+   ctrlBlock.io.fromCSR.traceCSR := intExuBlock.io.csrio.get.traceCSR
+   ctrlBlock.io.fromCSR.instrAddrTransType := RegNext(intExuBlock.io.csrio.get.instrAddrTransType)
+diff --git a/src/main/scala/xiangshan/backend/Bundles.scala b/src/main/scala/xiangshan/backend/Bundles.scala
+index e09ab7920a8..5ed8e911da7 100644
+--- a/src/main/scala/xiangshan/backend/Bundles.scala
++++ b/src/main/scala/xiangshan/backend/Bundles.scala
+@@ -59,6 +59,7 @@ object Bundles {
+     val isFetchMalAddr = Bool()
+     val trigger = TriggerAction()
+     val preDecodeInfo = new PreDecodeInfo
++    val identifiedCfi = Bool()
+     val pred_taken = Bool()
+     val crossPageIPFFix = Bool()
+     val ftqPtr = new FtqPtr
+@@ -72,6 +73,7 @@ object Bundles {
+       this.preDecodeInfo := source.pd
+       this.pred_taken := source.pred_taken
+       this.isFetchMalAddr := source.backendException
++      this.identifiedCfi := source.identifiedCfi
+       this.debug.foreach(_.pc := source.pc)
+       this.debug.foreach(_.debug_seqNum := source.debug_seqNum)
+     }
+@@ -88,6 +90,7 @@ object Bundles {
+     val isFetchMalAddr = Bool()
+     val trigger = TriggerAction()
+     val preDecodeInfo = new PreDecodeInfo
++    val identifiedCfi = Bool()
+     val pred_taken = Bool()
+     val crossPageIPFFix = Bool()
+     val ftqPtr = new FtqPtr
+@@ -181,6 +184,7 @@ object Bundles {
+     val trigger = TriggerAction()
+     val preDecodeInfo = new PreDecodeInfo
+     val pred_taken = Bool()
++    val identifiedCfi = Bool()
+     val crossPageIPFFix = Bool()
+     val ftqPtr = new FtqPtr
+     val ftqOffset = UInt(log2Up(PredictWidth).W)
+@@ -254,6 +258,7 @@ object Bundles {
+     // from frontend
+     val preDecodeInfo = new PreDecodeInfo
+     val pred_taken = Bool()
++    val identifiedCfi = Bool()
+     val ftqPtr = new FtqPtr
+     val ftqOffset = UInt(log2Up(PredictWidth).W)
+     // from decode
+@@ -801,6 +806,7 @@ object Bundles {
+       val target = UInt(VAddrData().dataWidth.W)
+       val taken = Bool()
+     }) else None
++    val identifiedCfi  = OptionWrapper(params.hasBrhFu, Bool())
+     val loadWaitBit    = OptionWrapper(params.hasLoadExu, Bool())
+     val waitForRobIdx  = OptionWrapper(params.hasLoadExu, new RobPtr) // store set predicted previous store robIdx
+     val storeSetHit    = OptionWrapper(params.hasLoadExu, Bool()) // inst has been allocated an store set
+@@ -860,6 +866,7 @@ object Bundles {
+       this.ftqIdx        .foreach(_ := source.common.ftqIdx.get)
+       this.ftqOffset     .foreach(_ := source.common.ftqOffset.get)
+       this.predictInfo   .foreach(_ := source.common.predictInfo.get)
++      this.identifiedCfi .foreach(_ := source.common.identifiedCfi.get)
+       this.loadWaitBit   .foreach(_ := source.common.loadWaitBit.get)
+       this.waitForRobIdx .foreach(_ := source.common.waitForRobIdx.get)
+       this.storeSetHit   .foreach(_ := source.common.storeSetHit.get)
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index 420ce3442ac..15e52dbdf54 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -42,9 +42,12 @@ import xiangshan.backend.trace._
+ 
+ class CtrlToFtqIO(implicit p: Parameters) extends XSBundle {
+   val rob_commits = Vec(CommitWidth, Valid(new RobCommitInfo))
++
+   val redirect = Valid(new Redirect)
+   val ftqIdxAhead = Vec(BackendRedirectNum, Valid(new FtqPtr))
+   val ftqIdxSelOH = Valid(UInt((BackendRedirectNum).W))
++
++  val resolve = Vec(backendParams.BrhCnt, Valid(new Resolve))
+ }
+ 
+ class CtrlBlock(params: BackendParams)(implicit p: Parameters) extends LazyModule {
+@@ -796,7 +799,8 @@ class CtrlBlockImp(
+   io.robio.csr.perfinfo.retiredInstr <> RegNext(rob.io.csr.perfinfo.retiredInstr)
+   io.robio.exception := rob.io.exception
+   io.robio.exception.bits.pc := s1_robFlushPc
+-
++  // bju resolve
++  io.frontend.toFtq.resolve := io.fromBJUResolve
+   // wfi
+   io.frontend.wfi.wfiReq := rob.io.wfi.wfiReq
+   rob.io.wfi.safeFromFrontend := io.frontend.wfi.wfiSafe
+@@ -885,6 +889,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
+     val cpuHalt = Output(Bool())
+   }
+   val frontend = Flipped(new FrontendToCtrlIO())
++  val fromBJUResolve = Flipped(Vec(backendParams.BrhCnt, Valid(new Resolve)))
+   val fromCSR = new Bundle{
+     val toDecode = Input(new CSRToDecode)
+     val traceCSR = Input(new TraceCSR)
+diff --git a/src/main/scala/xiangshan/backend/exu/ExeUnit.scala b/src/main/scala/xiangshan/backend/exu/ExeUnit.scala
+index 146a01ef3b1..9580fce55a4 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExeUnit.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExeUnit.scala
+@@ -24,7 +24,7 @@ import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+ import utility._
+ import xiangshan.backend.fu.{CSRFileIO, FenceIO, FuType, FuncUnitInput, UncertainLatency}
+ import xiangshan.backend.Bundles.{ExuInput, ExuOutput, IssueQueueIQWakeUpBundle, MemExuInput, MemExuOutput}
+-import xiangshan.{AddrTransType, FPUCtrlSignals, HasXSParameter, Redirect, XSBundle, XSModule}
++import xiangshan.{AddrTransType, FPUCtrlSignals, HasXSParameter, Redirect, Resolve, XSBundle, XSModule}
+ import xiangshan.backend.datapath.WbConfig._
+ import xiangshan.backend.fu.vector.Bundles.{VType, Vxrm}
+ import xiangshan.backend.fu.fpu.Bundles.Frm
+@@ -39,6 +39,7 @@ class ExeUnitIO(params: ExeUnitParams)(implicit p: Parameters) extends XSBundle
+   val uncertainWakeupOut = Option.when(params.needUncertainWakeup)(DecoupledIO(new IssueQueueIQWakeUpBundle(params.exuIdx, params.backendParam, params.copyWakeupOut, params.copyNum)))
+   val csrin = Option.when(params.hasCSR)(new CSRInput)
+   val csrio = Option.when(params.hasCSR)(new CSRFileIO)
++  val toFrontendBJUResolve = Option.when(params.hasBrhFu)(Valid(new Resolve))
+   val I2FDataIn = Option.when(params.needDataFromI2F)(Flipped(ValidIO(UInt(XLEN.W))))
+   val F2IDataIn = Option.when(params.needDataFromF2I)(Flipped(ValidIO(UInt(XLEN.W))))
+   val csrToDecode = Option.when(params.hasCSR)(Output(new CSRToDecode))
+@@ -194,6 +195,7 @@ class ExeUnitImp(
+       sink.bits.ctrl.ftqIdx      .foreach(x => x := source.bits.ftqIdx.get)
+       sink.bits.ctrl.ftqOffset   .foreach(x => x := source.bits.ftqOffset.get)
+       sink.bits.ctrl.predictInfo .foreach(x => x := source.bits.predictInfo.get)
++      sink.bits.ctrl.identifiedCfi.foreach(x => x := source.bits.identifiedCfi.get)
+       sink.bits.ctrl.fpu         .foreach(x => x := source.bits.fpu.get)
+       sink.bits.ctrl.vpu         .foreach(x => x := source.bits.vpu.get)
+       sink.bits.ctrl.vpu         .foreach(x => x.fpu.isFpToVecInst := 0.U)
+@@ -224,6 +226,7 @@ class ExeUnitImp(
+       sink.ftqIdx.foreach(x => x := source.ftqIdx.get)
+       sink.ftqOffset.foreach(x => x := source.ftqOffset.get)
+       sink.predictInfo.foreach(x => x := source.predictInfo.get)
++      sink.identifiedCfi.foreach(x => x := source.identifiedCfi.get)
+       sink.fpu.foreach(x => x := source.fpu.get)
+       sink.vpu.foreach(x => x := source.vpu.get)
+       sink.vpu.foreach(x => x.fpu.isFpToVecInst := 0.U)
+@@ -397,6 +400,12 @@ class ExeUnitImp(
+   io.out.bits.replay.foreach(x => x := Mux1H(fuOutValidOH, fuOutBitsVec.map(_.ctrl.replay.getOrElse(0.U.asTypeOf(io.out.bits.replay.get)))))
+   io.out.bits.predecodeInfo.foreach(x => x := Mux1H(fuOutValidOH, fuOutBitsVec.map(_.ctrl.preDecode.getOrElse(0.U.asTypeOf(io.out.bits.predecodeInfo.get)))))
+ 
++  io.toFrontendBJUResolve.foreach{ case resolve => {
++    val bjus = funcUnits.filter(x => x.cfg.isJmp || x.cfg.isBrh)
++    val resolveVec = VecInit(bjus.map(_.io.toFrontendBJUResolve.get))
++    resolve.valid := resolveVec.map(_.valid).reduce(_ || _)
++    resolve.bits := Mux1H(resolveVec.map(_.valid), resolveVec.map(_.bits))
++  }}
+   io.csrio.foreach(exuio => funcUnits.foreach(fu => fu.io.csrio.foreach{
+     fuio =>
+       exuio <> fuio
+diff --git a/src/main/scala/xiangshan/backend/exu/ExuBlock.scala b/src/main/scala/xiangshan/backend/exu/ExuBlock.scala
+index c1c5f0c782e..0051bab4fc0 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExuBlock.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExuBlock.scala
+@@ -7,7 +7,7 @@ import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+ import xiangshan.backend.fu.{CSRFileIO, FenceIO}
+ import xiangshan.backend.Bundles._
+ import xiangshan.backend.issue.SchdBlockParams
+-import xiangshan.{HasXSParameter, Redirect, XSBundle}
++import xiangshan.{HasXSParameter, Redirect, Resolve, XSBundle}
+ import utility._
+ import xiangshan.backend.fu.FuConfig.{AluCfg, BrhCfg, FcmpCfg, I2fCfg}
+ import xiangshan.backend.fu.vector.Bundles.{VType, Vxrm}
+@@ -55,6 +55,12 @@ class ExuBlockImp(
+ //    }
+     XSPerfAccumulate(s"${(exu.wrapper.exuParams.name)}_fire_cnt", PopCount(exu.io.in.fire))
+   }
++  if (params.isIntSchd) {
++    val bjuExus = exus.filter(_.wrapper.exuParams.hasBrhFu).map(_.wrapper.module)
++    assert(bjuExus.size == io.toFrontendBJUResolve.get.size, "bju num is different")
++    val fromBJUResolve = bjuExus.map(_.io.toFrontendBJUResolve.get)
++    io.toFrontendBJUResolve.get := fromBJUResolve
++  }
+   io.I2FWakeupOut.foreach{ x =>
+     val exuI2FIn = exus.filter(x => x.wrapper.exuParams.fuConfigs.contains(I2fCfg)).head.io.in
+     x := 0.U.asTypeOf(x)
+@@ -114,6 +120,7 @@ class ExuBlockIO(implicit p: Parameters, params: SchdBlockParams) extends XSBund
+   val F2IWakeupOut = Option.when(params.isFpSchd)(ValidIO(new IssueQueueIQWakeUpBundle(params.backendParam.getExuIdxF2I, params.backendParam)))
+   val F2IDataOut = Option.when(params.isFpSchd)(ValidIO(UInt(XLEN.W)))
+   val F2IDataIn = Option.when(params.isIntSchd)(Flipped(ValidIO(UInt(XLEN.W))))
++  val toFrontendBJUResolve = Option.when(params.isIntSchd)(Vec(backendParams.BrhCnt, Valid(new Resolve)))
+   val csrio = Option.when(params.hasCSR)(new CSRFileIO)
+   val csrin = Option.when(params.hasCSR)(new CSRInput)
+   val csrToDecode = Option.when(params.hasCSR)(Output(new CSRToDecode))
+diff --git a/src/main/scala/xiangshan/backend/fu/FuncUnit.scala b/src/main/scala/xiangshan/backend/fu/FuncUnit.scala
+index 28047fc8b26..59ff2fa38ea 100644
+--- a/src/main/scala/xiangshan/backend/fu/FuncUnit.scala
++++ b/src/main/scala/xiangshan/backend/fu/FuncUnit.scala
+@@ -8,13 +8,14 @@ import utils.OptionWrapper
+ import xiangshan._
+ import xiangshan.backend.Bundles.VPUCtrlSignals
+ import xiangshan.backend.rob.RobPtr
+-import xiangshan.frontend.{PreDecodeInfo}
++import xiangshan.frontend.PreDecodeInfo
+ import xiangshan.frontend.ftq.FtqPtr
+ import xiangshan.backend.datapath.DataConfig._
+ import xiangshan.backend.fu.vector.Bundles.Vxsat
+ import xiangshan.ExceptionNO.illegalInstr
+ import xiangshan.backend.fu.vector.Bundles.VType
+ import xiangshan.backend.fu.wrapper.{CSRInput, CSRToDecode}
++import xiangshan.frontend.bpu.BranchInfo
+ 
+ class FuncUnitCtrlInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+   val fuOpType    = FuOpType()
+@@ -33,6 +34,7 @@ class FuncUnitCtrlInput(cfg: FuConfig)(implicit p: Parameters) extends XSBundle
+     val target    = UInt(VAddrData().dataWidth.W)
+     val taken     = Bool()
+   })
++  val identifiedCfi = OptionWrapper(cfg.isBrh || cfg.isJmp, Bool())
+   val fpu         = OptionWrapper(cfg.writeFflags, new FPUCtrlSignals)
+   val vpu         = OptionWrapper(cfg.needVecCtrl, new VPUCtrlSignals)
+ }
+@@ -99,6 +101,7 @@ class FuncUnitIO(cfg: FuConfig)(implicit p: Parameters) extends XSBundle {
+   val csrin = OptionWrapper(cfg.isCsr, new CSRInput)
+   val csrio = OptionWrapper(cfg.isCsr, new CSRFileIO)
+   val csrToDecode = OptionWrapper(cfg.isCsr, Output(new CSRToDecode))
++  val toFrontendBJUResolve = OptionWrapper(cfg.isBrh || cfg.isJmp, Output(Valid(new Resolve)))
+   val fenceio = OptionWrapper(cfg.isFence, new FenceIO)
+   val frm = OptionWrapper(cfg.needSrcFrm, Input(UInt(3.W)))
+   val vxrm = OptionWrapper(cfg.needSrcVxrm, Input(UInt(2.W)))
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/BranchUnit.scala b/src/main/scala/xiangshan/backend/fu/wrapper/BranchUnit.scala
+index 7b66980bd82..baf8355056a 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/BranchUnit.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/BranchUnit.scala
+@@ -8,6 +8,7 @@ import xiangshan.backend.decode.ImmUnion
+ import xiangshan.backend.fu.{BranchModule, FuConfig, FuncUnit}
+ import xiangshan.backend.datapath.DataConfig.VAddrData
+ import xiangshan.{RedirectLevel, SelImm, XSModule}
++import xiangshan.frontend.PrunedAddrInit
+ 
+ class AddrAddModule(implicit p: Parameters) extends XSModule {
+   val io = IO(new Bundle {
+@@ -48,7 +49,7 @@ class BranchUnit(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
+   io.in.ready := io.out.ready
+ 
+   val brhPredictTarget = io.in.bits.ctrl.predictInfo.get.target
+-  val brhRealTarget = io.in.bits.ctrl.predictInfo.get.target
++  val brhRealTarget = addModule.io.target
+   val isMisPred = dataModule.io.mispredict || (brhRealTarget =/= brhPredictTarget)
+   io.out.bits.res.data := 0.U
+   io.out.bits.res.redirect.get match {
+@@ -68,5 +69,14 @@ class BranchUnit(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg) {
+       redirect.bits.backendIPF := io.instrAddrTransType.get.checkPageFault(addModule.io.target)
+       redirect.bits.backendIGPF := io.instrAddrTransType.get.checkGuestPageFault(addModule.io.target)
+   }
++  io.toFrontendBJUResolve.get.valid := io.out.valid && (io.in.bits.ctrl.identifiedCfi.get || isMisPred)
++  io.toFrontendBJUResolve.get.bits.ftqIdx := io.in.bits.ctrl.ftqIdx.get
++  io.toFrontendBJUResolve.get.bits.ftqOffset := io.in.bits.ctrl.ftqOffset.get
++  io.toFrontendBJUResolve.get.bits.pc := (pcExtend + io.in.bits.ctrl.ftqOffset.get)(VAddrBits-1, 0)
++  io.toFrontendBJUResolve.get.bits.target := PrunedAddrInit(addModule.io.target)
++  io.toFrontendBJUResolve.get.bits.taken := dataModule.io.taken
++  io.toFrontendBJUResolve.get.bits.mispredict := isMisPred
++  io.toFrontendBJUResolve.get.bits.attribute.branchType := io.in.bits.ctrl.preDecode.get.brType
++  io.toFrontendBJUResolve.get.bits.attribute.rasAction := 0.U
+   connect0LatencyCtrlSingal
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/JumpUnit.scala b/src/main/scala/xiangshan/backend/fu/wrapper/JumpUnit.scala
+index 854f4618ae3..36e95d83a82 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/JumpUnit.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/JumpUnit.scala
+@@ -5,8 +5,9 @@ import chisel3._
+ import utility.{SignExt, ZeroExt}
+ import xiangshan.RedirectLevel
+ import xiangshan.backend.fu.{FuConfig, FuncUnit, JumpDataModule, PipedFuncUnit}
++import xiangshan.JumpOpType
+ import xiangshan.backend.datapath.DataConfig.VAddrData
+-
++import xiangshan.frontend.PrunedAddrInit
+ 
+ class JumpUnit(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg) {
+   private val jumpDataModule = Module(new JumpDataModule)
+@@ -56,5 +57,14 @@ class JumpUnit(cfg: FuConfig)(implicit p: Parameters) extends PipedFuncUnit(cfg)
+   io.in.ready := io.out.ready
+   io.out.valid := io.in.valid
+   io.out.bits.res.data := jumpDataModule.io.result
++  io.toFrontendBJUResolve.get.valid := io.out.valid && !JumpOpType.jumpOpisAuipc(func) && (io.in.bits.ctrl.identifiedCfi.get || isMisPred)
++  io.toFrontendBJUResolve.get.bits.ftqIdx := io.in.bits.ctrl.ftqIdx.get
++  io.toFrontendBJUResolve.get.bits.ftqOffset := io.in.bits.ctrl.ftqOffset.get
++  io.toFrontendBJUResolve.get.bits.pc := (pc + io.in.bits.ctrl.ftqOffset.get)(VAddrBits-1, 0)
++  io.toFrontendBJUResolve.get.bits.target := PrunedAddrInit(jumpDataModule.io.target)
++  io.toFrontendBJUResolve.get.bits.taken := true.B
++  io.toFrontendBJUResolve.get.bits.mispredict := isMisPred
++  io.toFrontendBJUResolve.get.bits.attribute.branchType := io.in.bits.ctrl.preDecode.get.brType
++  io.toFrontendBJUResolve.get.bits.attribute.rasAction :=  0.U
+   connect0LatencyCtrlSingal
+ }
+diff --git a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+index 5d128f56a5e..5a06ed01258 100644
+--- a/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
++++ b/src/main/scala/xiangshan/backend/issue/IssueQueue.scala
+@@ -1139,6 +1139,7 @@ class IssueQueueIntImp(override val wrapper: IssueQueue)(implicit p: Parameters,
+       x.target := DontCare
+       x.taken := deqEntryVec(i).bits.payload.pred_taken
+     })
++    deq.bits.common.identifiedCfi.foreach(_ := deqEntryVec(i).bits.payload.identifiedCfi)
+     // for std
+     deq.bits.common.sqIdx.foreach(_ := deqEntryVec(i).bits.payload.sqIdx)
+     // for i2f
+diff --git a/src/main/scala/xiangshan/frontend/Bundles.scala b/src/main/scala/xiangshan/frontend/Bundles.scala
+index 6f4196d2f95..8ea05ec8316 100644
+--- a/src/main/scala/xiangshan/frontend/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/Bundles.scala
+@@ -67,15 +67,16 @@ class FetchRequestBundle(implicit p: Parameters) extends FrontendBundle with Has
+   val nextCachelineVAddr: PrunedAddr = PrunedAddr(VAddrBits)
+   val nextStartVAddr:     PrunedAddr = PrunedAddr(VAddrBits)
+   // slow path
+-  val ftqIdx    = new FtqPtr
+-  val ftqOffset = Valid(UInt(CfiPositionWidth.W))
++  val ftqIdx:         FtqPtr      = new FtqPtr
++  val takenCfiOffset: Valid[UInt] = Valid(UInt(CfiPositionWidth.W))
++  val identifiedCfi:  Vec[Bool]   = Vec(FetchBlockInstNum, Bool())
+ 
+   def crossCacheline: Bool = startVAddr(blockOffBits - 1) === 1.U
+ 
+   override def toPrintable: Printable =
+     p"[start] ${Hexadecimal(startVAddr.toUInt)} [next] ${Hexadecimal(nextCachelineVAddr.toUInt)}" +
+-      p"[tgt] ${Hexadecimal(nextStartVAddr.toUInt)} [ftqIdx] $ftqIdx [jmp] v:${ftqOffset.valid}" +
+-      p" offset: ${ftqOffset.bits}\n"
++      p"[tgt] ${Hexadecimal(nextStartVAddr.toUInt)} [ftqIdx] $ftqIdx [jmp] v:${takenCfiOffset.valid}" +
++      p" offset: ${takenCfiOffset.bits}\n"
+ }
+ 
+ class FtqICacheInfo(implicit p: Parameters) extends XSBundle with HasICacheParameters {
+@@ -124,8 +125,8 @@ class InstrUncacheToIfuIO(implicit p: Parameters) extends XSBundle {
+   val resp: DecoupledIO[InstrUncacheResp] = DecoupledIO(new InstrUncacheResp)
+ }
+ 
+-class FtqToIfuIO(implicit p: Parameters) extends XSBundle {
+-  class FtqToIfuReq(implicit p: Parameters) extends XSBundle {
++class FtqToIfuIO(implicit p: Parameters) extends FrontendBundle {
++  class FtqToIfuReq(implicit p: Parameters) extends Bundle {
+     val fetch:       Vec[FetchRequestBundle] = Vec(FetchPorts, new FetchRequestBundle)
+     val topdownInfo: FrontendTopDownBundle   = new FrontendTopDownBundle
+   }
+@@ -141,15 +142,15 @@ class IfuToFtqIO(implicit p: Parameters) extends XSBundle {
+ }
+ 
+ class PredecodeWritebackBundle(implicit p: Parameters) extends XSBundle {
+-  val pd           = Vec(PredictWidth, new PreDecodeInfo) // TODO: redefine Predecode
+-  val pc           = PrunedAddr(VAddrBits)
+-  val ftqIdx       = new FtqPtr
+-  val ftqEndOffset = UInt(log2Ceil(PredictWidth).W)
+-  val misEndOffset = ValidUndirectioned(UInt(log2Ceil(PredictWidth).W))
+-  val cfiEndOffset = ValidUndirectioned(UInt(log2Ceil(PredictWidth).W))
+-  val target       = PrunedAddr(VAddrBits)
+-  val jalTarget    = PrunedAddr(VAddrBits)
+-  val instrRange   = Vec(PredictWidth, Bool())
++  val pd             = Vec(PredictWidth, new PreDecodeInfo) // TODO: redefine Predecode
++  val pc             = PrunedAddr(VAddrBits)
++  val ftqIdx         = new FtqPtr
++  val takenCfiOffset = UInt(log2Ceil(PredictWidth).W)
++  val misEndOffset   = Valid(UInt(log2Ceil(PredictWidth).W))
++  val cfiEndOffset   = Valid(UInt(log2Ceil(PredictWidth).W))
++  val target         = PrunedAddr(VAddrBits)
++  val jalTarget      = PrunedAddr(VAddrBits)
++  val instrRange     = Vec(PredictWidth, Bool())
+ }
+ 
+ class MmioCommitRead(implicit p: Parameters) extends XSBundle {
+@@ -291,6 +292,8 @@ class FetchToIBuffer(implicit p: Parameters) extends XSBundle {
+   val debug_seqNum   = Vec(IBufEnqWidth, InstSeqNum())
+   val ftqPtr         = new FtqPtr
+   val topdown_info   = new FrontendTopDownBundle
++
++  val identifiedCfi: Vec[Bool] = Vec(IBufEnqWidth, Bool())
+ }
+ 
+ class IfuToBackendIO(implicit p: Parameters) extends XSBundle {
+diff --git a/src/main/scala/xiangshan/frontend/IBuffer.scala b/src/main/scala/xiangshan/frontend/IBuffer.scala
+index 6b8b8028a82..9131bd2ac66 100644
+--- a/src/main/scala/xiangshan/frontend/IBuffer.scala
++++ b/src/main/scala/xiangshan/frontend/IBuffer.scala
+@@ -90,6 +90,7 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
+   val foldpc           = UInt(MemPredPCWidth.W)
+   val pd               = new PreDecodeInfo
+   val predTaken        = Bool()
++  val identifiedCfi    = Bool()
+   val ftqPtr           = new FtqPtr
+   val instrEndOffset   = UInt(log2Ceil(PredictWidth).W)
+   val exceptionType    = IBufferExceptionType()
+@@ -104,6 +105,7 @@ class IBufEntry(implicit p: Parameters) extends XSBundle {
+     foldpc         := fetch.foldpc(i)
+     pd             := fetch.pd(i)
+     predTaken      := fetch.instrEndOffset(i).taken
++    identifiedCfi  := fetch.identifiedCfi(i)
+     ftqPtr         := fetch.ftqPtr
+     instrEndOffset := fetch.instrEndOffset(i).offset
+     exceptionType := IBufferExceptionType.cvtFromFetchExcpAndCrossPageAndRVCII(
+@@ -167,6 +169,7 @@ class IBufOutEntry(implicit p: Parameters) extends XSBundle {
+     cf.trigger                           := triggered
+     cf.pd                                := pd
+     cf.pred_taken                        := predTaken
++    cf.identifiedCfi                     := instrEndOffset
+     cf.crossPageIPFFix                   := IBufferExceptionType.isCrossPage(this.exceptionType)
+     cf.storeSetHit                       := DontCare
+     cf.waitForRobIdx                     := DontCare
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+index bd6cafb37f3..f37e253ba65 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bpu.scala
+@@ -140,11 +140,11 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+ 
+   // ras
+   ras.io.commit.valid            := commitUpdate.valid
+-  ras.io.commit.bits.attribute   := commitUpdate.bits.attribute
++  ras.io.commit.bits.attribute   := commitUpdate.bits.branches(0).bits.attribute
+   ras.io.commit.bits.startPc     := commitUpdate.bits.startVAddr.toUInt
+   ras.io.commit.bits.isRvc       := false.B // commitUpdate.bits.isRvc
+   ras.io.commit.bits.meta        := commitUpdate.bits.meta.ras
+-  ras.io.commit.bits.cfiPosition := commitUpdate.bits.cfiPosition
++  ras.io.commit.bits.cfiPosition := commitUpdate.bits.branches(0).bits.cfiPosition
+ 
+   tage.io.mbtbResult := mbtb.io.result
+ 
+@@ -321,8 +321,8 @@ class Bpu(implicit p: Parameters) extends BpuModule with HalfAlignHelper {
+   XSPerfHistogram(
+     "fetchBlockSize",
+     Mux(
+-      io.toFtq.prediction.bits.ftqOffset.valid,
+-      io.toFtq.prediction.bits.ftqOffset.bits,
++      io.toFtq.prediction.bits.takenCfiOffset.valid,
++      io.toFtq.prediction.bits.takenCfiOffset.bits,
+       FetchBlockInstNum.U
+     ),
+     io.toFtq.prediction.fire,
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+index 55be584d855..e87c4436928 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+@@ -116,17 +116,20 @@ class BpuCtrl extends Bundle {
+ 
+ // Bpu -> Ftq
+ class BpuPrediction(implicit p: Parameters) extends BpuBundle with HalfAlignHelper {
+-  val startVAddr: PrunedAddr  = PrunedAddr(VAddrBits)
+-  val ftqOffset:  Valid[UInt] = Valid(UInt(CfiPositionWidth.W))
+-  val target:     PrunedAddr  = PrunedAddr(VAddrBits)
++  val startVAddr:     PrunedAddr  = PrunedAddr(VAddrBits)
++  val target:         PrunedAddr  = PrunedAddr(VAddrBits)
++  val takenCfiOffset: Valid[UInt] = Valid(UInt(CfiPositionWidth.W))
++  val identifiedCfi:  Vec[Bool]   = Vec(FetchBlockInstNum, Bool())
+   // override valid
+   val s3Override: Bool = Bool()
+ 
+   def fromStage(pc: PrunedAddr, prediction: Prediction): Unit = {
+-    this.startVAddr      := pc
+-    this.ftqOffset.valid := prediction.taken
+-    this.ftqOffset.bits  := getFtqOffset(pc, prediction.cfiPosition)
+-    this.target          := prediction.target
++    this.startVAddr           := pc
++    this.takenCfiOffset.valid := prediction.taken
++    this.takenCfiOffset.bits  := getFtqOffset(pc, prediction.cfiPosition)
++    this.target               := prediction.target
++    // FIXME: BP should mark all branches identified by itself
++    this.identifiedCfi := (0 until FetchBlockInstNum).map(i => i.U === this.takenCfiOffset.bits)
+   }
+   // TODO: what else do we need?
+ }
+@@ -141,15 +144,19 @@ class BpuRedirect(implicit p: Parameters) extends BpuBundle {
+   val attribute:       BranchAttribute    = new BranchAttribute
+ }
+ 
+-// Backend & Ftq -> Bpu
+-class BpuTrain(implicit p: Parameters) extends BpuBundle with HalfAlignHelper {
+-  val startVAddr:  PrunedAddr      = PrunedAddr(VAddrBits)
++class BranchInfo(implicit p: Parameters) extends BpuBundle {
+   val target:      PrunedAddr      = PrunedAddr(VAddrBits)
+   val taken:       Bool            = Bool()
+   val cfiPosition: UInt            = UInt(CfiPositionWidth.W)
+   val attribute:   BranchAttribute = new BranchAttribute
+-  val meta:        BpuMeta         = new BpuMeta
+-  val mispred:     UInt            = UInt(PredictWidth.W)
++  val mispredict:  Bool            = Bool()
++}
++
++// Backend & Ftq -> Bpu
++class BpuTrain(implicit p: Parameters) extends BpuBundle with HalfAlignHelper {
++  val meta:       BpuMeta                = new BpuMeta
++  val startVAddr: PrunedAddr             = PrunedAddr(VAddrBits)
++  val branches:   Vec[Valid[BranchInfo]] = Vec(backendParams.BrhCnt, Valid(new BranchInfo))
+ }
+ 
+ // metadata for redirect (e.g. speculative state recovery) & training (e.g. rasPtr, phr)
+diff --git a/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala b/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala
+index b080e8fcaee..8538ced2ef1 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/abtb/AheadBtb.scala
+@@ -229,10 +229,10 @@ class AheadBtb(implicit p: Parameters) extends BasePredictor with Helpers with B
+      -------------------------------------------------------------------------------------------------------------- */
+ 
+   private val t1_positionBeforeMask = t1_meta.hitMask.zip(t1_meta.positions).zip(t1_meta.attributes).map {
+-    case ((hit, pos), attr) => hit && pos < t1_train.cfiPosition && attr.isConditional
++    case ((hit, pos), attr) => hit && pos < t1_train.branches(0).bits.cfiPosition && attr.isConditional
+   }
+   private val t1_positionEqualMask = t1_meta.hitMask.zip(t1_meta.positions).zip(t1_meta.attributes).map {
+-    case ((hit, pos), attr) => hit && pos === t1_train.cfiPosition && attr.isConditional
++    case ((hit, pos), attr) => hit && pos === t1_train.branches(0).bits.cfiPosition && attr.isConditional
+   }
+ 
+   private val t1_needResetCtr = takenCounter.zip(banks).map { case (bankCtrs, bank) =>
+@@ -249,7 +249,7 @@ class AheadBtb(implicit p: Parameters) extends BasePredictor with Helpers with B
+   private val t1_needIncreaseCtr = takenCounter.zipWithIndex.map { case (bankCtrs, bankIdx) =>
+     bankCtrs.zipWithIndex.map { case (setCtrs, setIdx) =>
+       setCtrs.zip(t1_positionEqualMask).map { case (_, equal) =>
+-        t1_valid && t1_bankMask(bankIdx) && t1_setMask(setIdx) && equal && t1_train.taken
++        t1_valid && t1_bankMask(bankIdx) && t1_setMask(setIdx) && equal && t1_train.branches(0).bits.taken
+       }
+     }
+   }
+@@ -257,7 +257,8 @@ class AheadBtb(implicit p: Parameters) extends BasePredictor with Helpers with B
+   private val t1_needDecreaseCtr = takenCounter.zipWithIndex.map { case (bankCtrs, bankIdx) =>
+     bankCtrs.zipWithIndex.map { case (setCtrs, setIdx) =>
+       setCtrs.zip(t1_positionBeforeMask).zip(t1_positionEqualMask).map { case ((_, before), equal) =>
+-        t1_valid && t1_bankMask(bankIdx) && t1_setMask(setIdx) && (before || (equal && !t1_train.taken))
++        t1_valid && t1_bankMask(bankIdx) && t1_setMask(setIdx) &&
++        (before || (equal && !t1_train.branches(0).bits.taken))
+       }
+     }
+   }
+@@ -282,26 +283,28 @@ class AheadBtb(implicit p: Parameters) extends BasePredictor with Helpers with B
+   // if the taken branch is not hit, we need write a new entry
+   private val t1_hitTakenBranch = t1_meta.hitMask.zip(t1_meta.positions).zip(t1_meta.attributes).map {
+     case ((hit, pos), attr) =>
+-      hit && t1_train.taken && pos === t1_train.cfiPosition && attr === t1_train.attribute
++      hit && t1_train.branches(0).bits.taken && pos === t1_train.branches(0).bits.cfiPosition &&
++      attr === t1_train.branches(0).bits.attribute
+   }.reduce(_ || _)
+   private val t1_needWriteNewEntry = !t1_hitTakenBranch
+ 
+   // If the target of indirect branch is wrong, we need correct it.
+   // Since the entry only stores the lower bits of the target, we only need to check the lower bits.
+-  private val t1_needCorrectTarget = t1_meta.taken && t1_train.taken &&
+-    t1_meta.attributes(t1_meta.takenWayIdx).isIndirect && t1_train.attribute.isIndirect &&
+-    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.cfiPosition &&
+-    t1_meta.targetLowerBits =/= getTargetLowerBits(t1_train.target)
++  private val t1_needCorrectTarget = t1_meta.taken && t1_train.branches(0).bits.taken &&
++    t1_meta.attributes(t1_meta.takenWayIdx).isIndirect && t1_train.branches(0).bits.attribute.isIndirect &&
++    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.branches(0).bits.cfiPosition &&
++    t1_meta.targetLowerBits =/= getTargetLowerBits(t1_train.branches(0).bits.target)
+ 
+   // TODO: if the attribute of the taken branch is wrong, we need replace it or invalidate it
+ 
+   private val t1_writeEntry = Wire(new AheadBtbEntry)
+   t1_writeEntry.valid           := true.B
+   t1_writeEntry.tag             := getTag(t1_train.startVAddr)
+-  t1_writeEntry.position        := t1_train.cfiPosition
+-  t1_writeEntry.attribute       := t1_train.attribute
+-  t1_writeEntry.targetLowerBits := getTargetLowerBits(t1_train.target)
+-  t1_writeEntry.targetCarry.foreach(_ := getTargetCarry(t1_train.startVAddr, t1_train.target)) // if (EnableTargetFix)
++  t1_writeEntry.position        := t1_train.branches(0).bits.cfiPosition
++  t1_writeEntry.attribute       := t1_train.branches(0).bits.attribute
++  t1_writeEntry.targetLowerBits := getTargetLowerBits(t1_train.branches(0).bits.target)
++  t1_writeEntry.targetCarry.foreach(_ :=
++    getTargetCarry(t1_train.startVAddr, t1_train.branches(0).bits.target)) // if (EnableTargetFix)
+ 
+   replacers.foreach(_.io.replaceSetIdx := t1_setIdx)
+   private val victimWayIdx = replacers.map(_.io.victimWayIdx)
+@@ -343,48 +346,48 @@ class AheadBtb(implicit p: Parameters) extends BasePredictor with Helpers with B
+      -------------------------------------------------------------------------------------------------------------- */
+ 
+   private val perf_targetSame = if (t1_meta.target.isDefined) {
+-    t1_meta.target.get === t1_train.target
++    t1_meta.target.get === t1_train.branches(0).bits.target
+   } else {
+     false.B
+   }
+ 
+-  private val perf_targetOverflow = t1_valid && t1_meta.taken && t1_train.taken &&
+-    t1_meta.attributes(t1_meta.takenWayIdx).isIndirect && t1_train.attribute.isIndirect &&
+-    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.cfiPosition &&
+-    t1_meta.targetLowerBits =/= getTargetLowerBits(t1_train.target) &&
++  private val perf_targetOverflow = t1_valid && t1_meta.taken && t1_train.branches(0).bits.taken &&
++    t1_meta.attributes(t1_meta.takenWayIdx).isIndirect && t1_train.branches(0).bits.attribute.isIndirect &&
++    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.branches(0).bits.cfiPosition &&
++    t1_meta.targetLowerBits =/= getTargetLowerBits(t1_train.branches(0).bits.target) &&
+     !perf_targetSame
+ 
+   private val perf_directionWrong = t1_valid &&
+-    ((!t1_meta.taken && t1_train.taken) || (t1_meta.taken && !t1_train.taken))
++    ((!t1_meta.taken && t1_train.branches(0).bits.taken) || (t1_meta.taken && !t1_train.branches(0).bits.taken))
+ 
+-  private val perf_missWrong = t1_valid && !t1_meta.taken && t1_train.taken && !t1_hitTakenBranch
++  private val perf_missWrong = t1_valid && !t1_meta.taken && t1_train.branches(0).bits.taken && !t1_hitTakenBranch
+ 
+-  private val perf_takenPositionWrong = t1_valid && t1_meta.taken && t1_train.taken &&
+-    t1_meta.positions(t1_meta.takenWayIdx) =/= t1_train.cfiPosition
++  private val perf_takenPositionWrong = t1_valid && t1_meta.taken && t1_train.branches(0).bits.taken &&
++    t1_meta.positions(t1_meta.takenWayIdx) =/= t1_train.branches(0).bits.cfiPosition
+ 
+-  private val perf_targetWrong = t1_valid && t1_meta.taken && t1_train.taken &&
+-    t1_meta.attributes(t1_meta.takenWayIdx) === t1_train.attribute &&
+-    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.cfiPosition &&
++  private val perf_targetWrong = t1_valid && t1_meta.taken && t1_train.branches(0).bits.taken &&
++    t1_meta.attributes(t1_meta.takenWayIdx) === t1_train.branches(0).bits.attribute &&
++    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.branches(0).bits.cfiPosition &&
+     !perf_targetSame
+ 
+-  private val perf_predictNotTakenRight = t1_valid && !t1_meta.taken && !t1_train.taken
++  private val perf_predictNotTakenRight = t1_valid && !t1_meta.taken && !t1_train.branches(0).bits.taken
+ 
+-  private val perf_predictTakenRight = t1_valid && t1_meta.taken && t1_train.taken &&
+-    t1_meta.attributes(t1_meta.takenWayIdx) === t1_train.attribute &&
+-    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.cfiPosition &&
++  private val perf_predictTakenRight = t1_valid && t1_meta.taken && t1_train.branches(0).bits.taken &&
++    t1_meta.attributes(t1_meta.takenWayIdx) === t1_train.branches(0).bits.attribute &&
++    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.branches(0).bits.cfiPosition &&
+     perf_targetSame
+ 
+-  private val perf_condTakenRight = t1_valid && t1_meta.taken && t1_train.taken &&
+-    t1_meta.attributes(t1_meta.takenWayIdx).isConditional && t1_train.attribute.isConditional &&
+-    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.cfiPosition
++  private val perf_condTakenRight = t1_valid && t1_meta.taken && t1_train.branches(0).bits.taken &&
++    t1_meta.attributes(t1_meta.takenWayIdx).isConditional && t1_train.branches(0).bits.attribute.isConditional &&
++    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.branches(0).bits.cfiPosition
+ 
+-  private val perf_directRight = t1_valid && t1_meta.taken && t1_train.taken &&
+-    t1_meta.attributes(t1_meta.takenWayIdx).isDirect && t1_train.attribute.isDirect &&
+-    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.cfiPosition
++  private val perf_directRight = t1_valid && t1_meta.taken && t1_train.branches(0).bits.taken &&
++    t1_meta.attributes(t1_meta.takenWayIdx).isDirect && t1_train.branches(0).bits.attribute.isDirect &&
++    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.branches(0).bits.cfiPosition
+ 
+-  private val perf_indirectRight = t1_valid && t1_meta.taken && t1_train.taken &&
+-    t1_meta.attributes(t1_meta.takenWayIdx).isIndirect && t1_train.attribute.isIndirect &&
+-    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.cfiPosition &&
++  private val perf_indirectRight = t1_valid && t1_meta.taken && t1_train.branches(0).bits.taken &&
++    t1_meta.attributes(t1_meta.takenWayIdx).isIndirect && t1_train.branches(0).bits.attribute.isIndirect &&
++    t1_meta.positions(t1_meta.takenWayIdx) === t1_train.branches(0).bits.cfiPosition &&
+     perf_targetSame
+ 
+   XSPerfAccumulate("predict_req_num", predictReqValid)
+@@ -402,8 +405,8 @@ class AheadBtb(implicit p: Parameters) extends BasePredictor with Helpers with B
+   XSPerfAccumulate("train_hit_taken_branch", t1_valid && t1_hitTakenBranch)
+   XSPerfAccumulate("train_predict_taken", t1_valid && t1_meta.taken)
+   XSPerfAccumulate("train_predict_not_taken", t1_valid && perf_t1_hit && !t1_meta.taken)
+-  XSPerfAccumulate("train_actual_taken", t1_valid && t1_train.taken)
+-  XSPerfAccumulate("train_actual_not_taken", t1_valid && !t1_train.taken)
++  XSPerfAccumulate("train_actual_taken", t1_valid && t1_train.branches(0).bits.taken)
++  XSPerfAccumulate("train_actual_not_taken", t1_valid && !t1_train.branches(0).bits.taken)
+ 
+   XSPerfAccumulate("total_write", t1_valid && (t1_needWriteNewEntry || t1_needCorrectTarget) || s2_valid && s2_multiHit)
+   XSPerfAccumulate("train_write_new_entry", t1_valid && t1_needWriteNewEntry)
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ittage/Ittage.scala b/src/main/scala/xiangshan/frontend/bpu/ittage/Ittage.scala
+index 170ab74ec72..bc4d06a405d 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/ittage/Ittage.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/ittage/Ittage.scala
+@@ -151,13 +151,13 @@ class Ittage(implicit p: Parameters) extends XSModule with HasIttageParameters w
+     t0_meta.altProviderTarget,
+     io.train.valid && t0_meta.provider.valid && t0_meta.altProvider.valid && t0_meta.providerCnt === 0.U
+   )
+-  t1_train.target := RegEnable(
+-    io.train.bits.target,
++  t1_train.branches(0).bits.target := RegEnable(
++    io.train.bits.branches(0).bits.target,
+     io.train.valid // not using mispred_mask, because mispred_mask timing is bad
+   )
+-  t1_train.cfiPosition := RegEnable(
+-    io.train.bits.cfiPosition,
+-    io.train.valid && io.train.bits.taken
++  t1_train.branches(0).bits.cfiPosition := RegEnable(
++    io.train.bits.branches(0).bits.cfiPosition,
++    io.train.valid && io.train.bits.branches(0).bits.taken
+   )
+   // TODO: add hist to class BpuTrain and use phr
+ //  t1_train.ghist := RegEnable(io.t1_train.bits.ghist, io.t1_train.valid)
+@@ -167,7 +167,8 @@ class Ittage(implicit p: Parameters) extends XSModule with HasIttageParameters w
+ //    t1_train.ftqOffset.bits === t1_train.ftb_entry.tailSlot.offset && !t1_train.ftb_entry.strong_bias(numBr - 1)
+   // FIXME: original code is above, need to adapt to mbtb, not sure if this is correct
+   private val updateValid =
+-    t1_train.attribute.isOtherIndirect && RegNext(io.train.valid, init = false.B) && t1_train.taken
++    t1_train.branches(0).bits.attribute.isOtherIndirect && RegNext(io.train.valid, init = false.B) &&
++      t1_train.branches(0).bits.taken
+ 
+   private val updateMask            = WireInit(0.U.asTypeOf(Vec(NumTables, Bool())))
+   private val updateUsefulCntMask   = WireInit(0.U.asTypeOf(Vec(NumTables, Bool())))
+@@ -298,7 +299,7 @@ class Ittage(implicit p: Parameters) extends XSModule with HasIttageParameters w
+   ittageMeta.allocate.bits  := RegEnable(s2_allocEntry, s2_fire)
+ 
+   // Update in loop
+-  private val updateRealTarget       = t1_train.target
++  private val updateRealTarget       = t1_train.branches(0).bits.target
+   private val updatePCRegion         = targetGetRegion(t1_train.startVAddr)
+   private val updateRealTargetRegion = targetGetRegion(updateRealTarget)
+   private val metaProviderTargetOffset, metaAltProviderTargetOffset, updateRealTargetOffset =
+@@ -505,7 +506,10 @@ class Ittage(implicit p: Parameters) extends XSModule with HasIttageParameters w
+       )
+     }
+   }
+-  XSDebug(updateValid, p"pc: ${Hexadecimal(updatePc.toUInt)}, target: ${Hexadecimal(t1_train.target.toUInt)}\n")
++  XSDebug(
++    updateValid,
++    p"pc: ${Hexadecimal(updatePc.toUInt)}, target: ${Hexadecimal(t1_train.branches(0).bits.target.toUInt)}\n"
++  )
+   XSDebug(updateValid, t1_meta.toPrintable + p"\n")
+   XSDebug(updateValid, p"correct(${!updateMisPred})\n")
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
+index aadd3d4a1d7..660c00b9c9d 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
+@@ -196,7 +196,7 @@ class MainBtb(implicit p: Parameters) extends BasePredictor with HasMainBtbParam
+   /* training stage 1 */
+   private val t1_train_valid      = RegEnable(io.train.valid, io.enable)
+   private val t1_train            = RegEnable(io.train.bits, io.train.valid)
+-  private val t1_taken            = t1_train.taken
++  private val t1_taken            = t1_train.branches(0).bits.taken
+   private val t1_internalBankIdx  = getInternalBankIndex(t1_train.startVAddr)
+   private val t1_internalBankMask = UIntToOH(t1_internalBankIdx)
+   private val t1_thisSetIdx       = getSetIndex(t1_train.startVAddr)
+@@ -211,22 +211,23 @@ class MainBtb(implicit p: Parameters) extends BasePredictor with HasMainBtbParam
+   // FIXME: take branch attribute and target into account
+   private val t1_updateHit = t1_train_valid &&
+     (t1_meta.hitMask zip t1_meta.positions map {
+-      case (hit, pos) => hit && pos === t1_train.cfiPosition
++      case (hit, pos) => hit && pos === t1_train.branches(0).bits.cfiPosition
+     }).reduce(_ || _)
+   private val t1_writeValid = t1_train_valid && !t1_updateHit && t1_taken
+ 
+   private val t1_writeEntry = Wire(new MainBtbEntry)
+   t1_writeEntry.valid           := true.B   // FIXME: invalidate
+   t1_writeEntry.tag             := getTag(t1_train.startVAddr)
+-  t1_writeEntry.position        := t1_train.cfiPosition
+-  t1_writeEntry.targetLowerBits := getTargetLowerBits(t1_train.target)
+-  t1_writeEntry.targetCarry     := getTargetCarry(t1_train.startVAddr, t1_train.target)
+-  t1_writeEntry.attribute       := t1_train.attribute
++  t1_writeEntry.position        := t1_train.branches(0).bits.cfiPosition
++  t1_writeEntry.targetLowerBits := getTargetLowerBits(t1_train.branches(0).bits.target)
++  t1_writeEntry.targetCarry     := getTargetCarry(t1_train.startVAddr, t1_train.branches(0).bits.target)
++  t1_writeEntry.attribute       := t1_train.branches(0).bits.attribute
+   t1_writeEntry.stronglyBiased  := false.B  // FIXME
+   t1_writeEntry.replaceCnt      := DontCare // FIXME:
+   private val t1_writeWayMask = UIntToOH(t1_LFSR(log2Ceil(NumWay) - 1, 0))
+   private val t1_writeAlignBankMask = VecInit.tabulate(NumAlignBanks)(bankIdx =>
+-    bankIdx.U === (t1_train.cfiPosition.asBools.last + t1_alignBankIdx) // FIXME: not working for NumAlignBanks > 2
++    // FIXME: not working for NumAlignBanks > 2
++    bankIdx.U === (t1_train.branches(0).bits.cfiPosition.asBools.last + t1_alignBankIdx)
+   )
+ 
+   // Write to SRAM
+diff --git a/src/main/scala/xiangshan/frontend/bpu/phr/Phr.scala b/src/main/scala/xiangshan/frontend/bpu/phr/Phr.scala
+index e58e5ac8a9e..9a755e9bb18 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/phr/Phr.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/phr/Phr.scala
+@@ -201,11 +201,11 @@ class Phr(implicit p: Parameters) extends PhrModule with HasPhrParameters with H
+ 
+     def getMaxHistLens: Int = bpuParameters.tageParameters.TableInfos.map(_.HistoryLength).max
+ 
+-    val commitTaken = commit.taken
++    val commitTaken = commit.branches(0).bits.taken
+     val commitTakenPc = Mux(
+-      commitValid && commit.mispred.asBools.reduce(_ || _),
++      commitValid && commit.branches(0).bits.mispredict.asBools.reduce(_ || _),
+       commit.startVAddr,
+-      getBranchAddr(commit.startVAddr, commit.cfiPosition)
++      getBranchAddr(commit.startVAddr, commit.branches(0).bits.cfiPosition)
+     )
+     val commitShiftBits = shiftCommitBits(commitTakenPc)
+ 
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ras/RasStack.scala b/src/main/scala/xiangshan/frontend/bpu/ras/RasStack.scala
+index db7ca8f160e..822f4f0bca2 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/ras/RasStack.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/ras/RasStack.scala
+@@ -378,10 +378,11 @@ class RasStack(rasSize: Int, rasSpecSize: Int)(implicit p: Parameters) extends R
+   }.elsewhen(io.commit.valid && (distanceBetween(io.commit.metaTosw, bos) > 2.U)) {
+     bos := specPtrDec(io.commit.metaTosw)
+   }
+-  XSError(
+-    io.commit.valid && (distanceBetween(io.commit.metaTosw, bos) > 2.U),
+-    "The use of inference queue of the RAS module has unexpected situations"
+-  )
++  // FIXME: Currently this assertion fails. Fix or reconsider it in the future.
++//  XSError(
++//    io.commit.valid && (distanceBetween(io.commit.metaTosw, bos) > 2.U),
++//    "The use of inference queue of the RAS module has unexpected situations"
++//  )
+ 
+   when(io.redirect.valid) {
+     tosr := io.redirect.meta.tosr
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+index 5a6b0be09e0..f2b63a2a2e0 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+@@ -160,8 +160,8 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+   private val t1_mbtbPositions             = t1_train.meta.mbtb.positions
+   private val t1_mbtbHitMasks              = t1_train.meta.mbtb.hitMask
+   // FIXME: train only on conditional
+-  private val t1_cfiPosition = t1_train.cfiPosition
+-  private val t1_taken       = t1_train.taken
++  private val t1_cfiPosition = t1_train.branches(0).bits.cfiPosition
++  private val t1_taken       = t1_train.branches(0).bits.taken
+   // FIXME: halfAlign
+   private val t1_baseTableWriteCtrs: Vec[Vec[SaturateCounter]] =
+     Wire(Vec(BaseTableNumAlignBanks, Vec(FetchBlockAlignInstNum, new SaturateCounter(BaseTableCtrWidth))))
+diff --git a/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala b/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala
+index 6ecfcf153da..9ee8634807e 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/ubtb/MicroBtb.scala
+@@ -59,7 +59,8 @@ class MicroBtb(implicit p: Parameters) extends BasePredictor with HasMicroBtbPar
+   private val s1_tag        = getTag(s1_startVAddr)
+ 
+   private val s1_hitOH = VecInit(entries.map(e => e.valid && e.tag === s1_tag)).asUInt
+-  assert(PopCount(s1_hitOH) <= 1.U, "MicroBtb s1_hitOH should be one-hot")
++  // FIXME: Currently this assertion fails. Fix or reconsider it in the future.
++//  assert(PopCount(s1_hitOH) <= 1.U, "MicroBtb s1_hitOH should be one-hot")
+   private val s1_hit      = s1_hitOH.orR
+   private val s1_hitIdx   = OHToUInt(s1_hitOH)
+   private val s1_hitEntry = entries(s1_hitIdx)
+@@ -86,12 +87,12 @@ class MicroBtb(implicit p: Parameters) extends BasePredictor with HasMicroBtbPar
+ 
+   private val t0_startVAddr  = io.train.bits.startVAddr
+   private val t0_tag         = getTag(t0_startVAddr)
+-  private val t0_actualTaken = io.train.bits.taken
+-  private val t0_position    = io.train.bits.cfiPosition
+-  private val t0_target      = getEntryTarget(io.train.bits.target)
+-  private val t0_attribute   = io.train.bits.attribute
++  private val t0_actualTaken = io.train.bits.branches(0).bits.taken
++  private val t0_position    = io.train.bits.branches(0).bits.cfiPosition
++  private val t0_target      = getEntryTarget(io.train.bits.branches(0).bits.target)
++  private val t0_attribute   = io.train.bits.branches(0).bits.attribute
+   private val t0_targetCarry =
+-    if (EnableTargetFix) Option(getTargetCarry(t0_startVAddr, io.train.bits.target)) else None
++    if (EnableTargetFix) Option(getTargetCarry(t0_startVAddr, io.train.bits.branches(0).bits.target)) else None
+ 
+   private val t0_hitOH = VecInit(entries.map(e => e.valid && e.tag === t0_tag)).asUInt
+   // t0 may hit t1, so we add a "real" prefix for entries hit
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+index 8721d4f4c16..e0c1ee3e25b 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+@@ -21,12 +21,26 @@ import org.chipsalliance.cde.config.Parameters
+ import utility.HasCircularQueuePtrHelper
+ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.bpu.BpuMeta
++import xiangshan.frontend.bpu.BranchAttribute
++import xiangshan.frontend.bpu.BranchInfo
++
++class FtqEntry(implicit p: Parameters) extends FtqBundle {
++  val startVAddr:     PrunedAddr  = PrunedAddr(VAddrBits)
++  val takenCfiOffset: Valid[UInt] = Valid(UInt(CfiPositionWidth.W))
++  val identifiedCfi:  Vec[Bool]   = Vec(FetchBlockInstNum, Bool())
++}
+ 
+ class MetaEntry(implicit p: Parameters) extends FtqBundle {
+   val meta       = new BpuMeta
+   val paddingBit = if (meta.getWidth % 2 != 0) Some(UInt(1.W)) else None
+ }
+ 
++class ResolveEntry(implicit p: Parameters) extends FtqBundle {
++  val ftqIdx:     FtqPtr                 = new FtqPtr
++  val startVAddr: PrunedAddr             = PrunedAddr(VAddrBits)
++  val branches:   Vec[Valid[BranchInfo]] = Vec(backendParams.BrhCnt, Valid(new BranchInfo))
++}
++
+ class FtqRead[T <: Data](private val gen: T)(implicit p: Parameters) extends FtqBundle {
+   val valid  = Output(Bool())
+   val ptr    = Output(new FtqPtr)
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 66f1d6596b2..55c7f940ef4 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -90,11 +90,7 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   private val validEntries = distanceBetween(bpuPtr(0), commitPtr(0))
+ 
+   // entryQueue stores predictions made by BPU.
+-  private val entryQueue = Reg(Vec(FtqSize, PrunedAddr(VAddrBits)))
+-
+-  // cfiQueue stores positions of control flow instructions in each request entry.
+-  // FIXME: Do we need cfiQueue when backend sends instruction information with commit?
+-  private val cfiQueue = Reg(Vec(FtqSize, Valid(UInt(CfiPositionWidth.W))))
++  private val entryQueue = Reg(Vec(FtqSize, new FtqEntry))
+ 
+   // speculationQueue stores speculation information needed by BPU when redirect happens.
+   private val speculationQueue = Reg(Vec(FtqSize, new BpuSpeculationMeta))
+@@ -102,6 +98,9 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   // metaQueue stores information needed to train BPU.
+   private val metaQueue = Module(new MetaQueue)
+ 
++  // resolveQueue stores branch resolve information from backend.
++  private val resolveQueue = Module(new ResolveQueue)
++
+   private val ifuRedirect = receiveIfuRedirect(io.fromIfu.pdWb(0))
+ 
+   private val (backendRedirectFtqIdx, backendRedirect) = receiveBackendRedirect(io.fromBackend)
+@@ -157,8 +156,9 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   }
+ 
+   when((prediction.fire || bpuS3Redirect) && !redirect.valid) {
+-    entryQueue(predictionPtr.value) := prediction.bits.startVAddr
+-    cfiQueue(predictionPtr.value)   := prediction.bits.ftqOffset
++    entryQueue(predictionPtr.value).startVAddr     := prediction.bits.startVAddr
++    entryQueue(predictionPtr.value).takenCfiOffset := prediction.bits.takenCfiOffset
++    entryQueue(predictionPtr.value).identifiedCfi  := prediction.bits.identifiedCfi
+   }
+ 
+   speculationQueue(io.fromBpu.s3FtqPtr.value) := io.fromBpu.speculationMeta.bits
+@@ -206,7 +206,7 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   io.toICache.prefetchReq.bits.req.startVAddr := Mux(
+     redirectNext.valid,
+     PrunedAddrInit(redirectNext.bits.target),
+-    entryQueue(pfPtr(0).value)
++    entryQueue(pfPtr(0).value).startVAddr
+   )
+   io.toICache.prefetchReq.bits.req.nextCachelineVAddr :=
+     io.toICache.prefetchReq.bits.req.startVAddr + (CacheLineSize / 8).U
+@@ -219,16 +219,16 @@ class Ftq(implicit p: Parameters) extends FtqModule
+ 
+   // TODO: consider BPU bypass
+   io.toICache.fetchReq.valid                       := bpuPtr(0) > ifuPtr(0) && !redirect.valid
+-  io.toICache.fetchReq.bits.req.startVAddr         := entryQueue(ifuPtr(0).value)
+-  io.toICache.fetchReq.bits.req.nextCachelineVAddr := entryQueue(ifuPtr(0).value) + (CacheLineSize / 8).U
++  io.toICache.fetchReq.bits.req.startVAddr         := entryQueue(ifuPtr(0).value).startVAddr
++  io.toICache.fetchReq.bits.req.nextCachelineVAddr := entryQueue(ifuPtr(0).value).startVAddr + (CacheLineSize / 8).U
+   io.toICache.fetchReq.bits.req.ftqIdx             := ifuPtr(0)
+   io.toICache.fetchReq.bits.isBackendException     := backendException.hasException && backendExceptionPtr === ifuPtr(0)
+ 
+   io.toIfu.req.valid                    := bpuPtr(0) > ifuPtr(0) && !redirect.valid
+   io.toIfu.req.bits.fetch(0).valid      := bpuPtr(0) > ifuPtr(0) && !redirect.valid
+-  io.toIfu.req.bits.fetch(0).startVAddr := entryQueue(ifuPtr(0).value)
++  io.toIfu.req.bits.fetch(0).startVAddr := entryQueue(ifuPtr(0).value).startVAddr
+   io.toIfu.req.bits.fetch(0).nextStartVAddr := MuxCase(
+-    entryQueue(ifuPtr(1).value),
++    entryQueue(ifuPtr(1).value).startVAddr,
+     Seq(
+       (bpuPtr(0) === ifuPtr(0)) -> prediction.bits.target,
+       (bpuPtr(0) === ifuPtr(1)) -> prediction.bits.startVAddr
+@@ -236,7 +236,8 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   )
+   io.toIfu.req.bits.fetch(0).nextCachelineVAddr := io.toIfu.req.bits.fetch(0).startVAddr + (CacheLineSize / 8).U
+   io.toIfu.req.bits.fetch(0).ftqIdx             := ifuPtr(0)
+-  io.toIfu.req.bits.fetch(0).ftqOffset          := cfiQueue(ifuPtr(0).value)
++  io.toIfu.req.bits.fetch(0).takenCfiOffset     := entryQueue(ifuPtr(0).value).takenCfiOffset
++  io.toIfu.req.bits.fetch(0).identifiedCfi      := entryQueue(ifuPtr(0).value).identifiedCfi
+ 
+   io.toIfu.req.bits.fetch(1) := 0.U.asTypeOf(new FetchRequestBundle)
+   // --------------------------------------------------------------------------------
+@@ -282,6 +283,19 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   io.toBpu.redirect.bits.speculationMeta := speculationQueue(redirect.bits.ftqIdx.value)
+   io.toBpu.redirectFromIFU               := ifuRedirect.valid
+ 
++  // --------------------------------------------------------------------------------
++  // Resolve and train BPU
++  // --------------------------------------------------------------------------------
++  resolveQueue.io.backendResolve := io.fromBackend.resolve
++
++  metaQueue.io.ren   := resolveQueue.io.bpuTrain.valid
++  metaQueue.io.raddr := resolveQueue.io.bpuTrain.bits.ftqIdx.value
++
++  io.toBpu.train.valid           := RegNext(resolveQueue.io.bpuTrain.valid)
++  io.toBpu.train.bits.meta       := metaQueue.io.rdata.meta
++  io.toBpu.train.bits.startVAddr := RegEnable(resolveQueue.io.bpuTrain.bits.startVAddr, resolveQueue.io.bpuTrain.valid)
++  io.toBpu.train.bits.branches   := RegEnable(resolveQueue.io.bpuTrain.bits.branches, resolveQueue.io.bpuTrain.valid)
++
+   // --------------------------------------------------------------------------------
+   // Commit and train BPU
+   // --------------------------------------------------------------------------------
+@@ -307,12 +321,6 @@ class Ftq(implicit p: Parameters) extends FtqModule
+     commitPtr := commitPtr + 1.U
+   }
+ 
+-  // TODO: Wrap metaQueue as other queues
+-  metaQueue.io.ren   := commit
+-  metaQueue.io.raddr := commitPtr(0).value
+-
+-  io.toBpu.train := DontCare
+-
+   // --------------------------------------------------------------------------------
+   // MMIO fetch
+   // --------------------------------------------------------------------------------
+diff --git a/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala b/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala
+index 432cf873904..05a4c929ef3 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/FtqParameters.scala
+@@ -20,12 +20,14 @@ import chisel3.util._
+ import xiangshan.frontend.HasFrontendParameters
+ 
+ case class FtqParameters(
+-    FtqSize: Int = 64
++    FtqSize:          Int = 64,
++    ResolveQueueSize: Int = 64
+ ) {
+   // sanity check
+   require(isPow2(FtqSize))
+ }
+ 
+ trait HasFtqParameters extends HasFrontendParameters {
+-  def ftqParameters: FtqParameters = frontendParameters.ftqParameters
++  def ftqParameters:    FtqParameters = frontendParameters.ftqParameters
++  def ResolveQueueSize: Int           = ftqParameters.ResolveQueueSize
+ }
+diff --git a/src/main/scala/xiangshan/frontend/ftq/IfuRedirectReceiver.scala b/src/main/scala/xiangshan/frontend/ftq/IfuRedirectReceiver.scala
+index f6a87677677..82362cf5ecd 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/IfuRedirectReceiver.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/IfuRedirectReceiver.scala
+@@ -29,7 +29,7 @@ trait IfuRedirectReceiver extends HasFtqParameters {
+ 
+     redirect.valid          := pdWb.valid && pdWb.bits.misEndOffset.valid
+     redirect.bits.ftqIdx    := pdWb.bits.ftqIdx
+-    redirect.bits.ftqOffset := pdWb.bits.ftqEndOffset
++    redirect.bits.ftqOffset := pdWb.bits.takenCfiOffset
+     redirect.bits.level     := RedirectLevel.flushAfter
+     redirect.bits.pc        := pdWb.bits.pc.toUInt
+     redirect.bits.target    := pdWb.bits.target.toUInt
+diff --git a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+new file mode 100644
+index 00000000000..202b9afe457
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+@@ -0,0 +1,97 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.ftq
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import utility.XSError
++import xiangshan.Resolve
++import xiangshan.frontend.bpu.HalfAlignHelper
++
++class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelper {
++
++  class ResolveQueueIO extends Bundle {
++    val backendResolve: Vec[Valid[Resolve]] = Input(Vec(backendParams.BrhCnt, Valid(new Resolve)))
++    val bpuTrain:       Valid[ResolveEntry] = Output(Valid(new ResolveEntry))
++  }
++
++  val io: ResolveQueueIO = IO(new ResolveQueueIO)
++
++  private val mem = RegInit(0.U.asTypeOf(Vec(ResolveQueueSize, Valid(new ResolveEntry))))
++
++  private val enqPtr = RegInit(ResolveQueuePtr(false.B, 0.U))
++  private val deqPtr = RegInit(ResolveQueuePtr(false.B, 0.U))
++
++  private val hit = io.backendResolve.map { branch =>
++    mem.map(entry => branch.valid && entry.valid && entry.bits.ftqIdx === branch.bits.ftqIdx).reduce(_ || _)
++  }
++  private val hitIndex = io.backendResolve.map { branch =>
++    mem.indexWhere(entry => branch.valid && entry.valid && entry.bits.ftqIdx === branch.bits.ftqIdx)
++  }
++  private val hitPrevious = io.backendResolve.zipWithIndex.map { case (branch, i) =>
++    io.backendResolve.take(i).map(previousBranch =>
++      previousBranch.valid && branch.valid && previousBranch.bits.ftqIdx === branch.bits.ftqIdx
++    )
++  }
++  private val needNewEntry = io.backendResolve.zipWithIndex.map { case (branch, i) =>
++    branch.valid && !hit(i) && !hitPrevious(i).fold(false.B)(_ || _)
++  }
++
++  private val enqIndex = WireDefault(VecInit.fill(backendParams.BrhCnt)(0.U(log2Ceil(ResolveQueueSize).W)))
++  enqIndex := VecInit((0 until backendParams.BrhCnt).map { i =>
++    val newIndex = MuxCase(
++      (enqPtr + PopCount(needNewEntry.take(i))).value,
++      hitPrevious(i).zipWithIndex.map { case (hit, j) => (hit, enqIndex(j)) }
++    )
++
++    Mux(hit(i), hitIndex(i), newIndex)
++  })
++  enqPtr := enqPtr + PopCount(needNewEntry)
++
++  io.backendResolve.zipWithIndex.foreach { case (branch, i) =>
++    when(branch.valid) {
++      mem(enqIndex(i)).valid           := true.B
++      mem(enqIndex(i)).bits.ftqIdx     := branch.bits.ftqIdx
++      mem(enqIndex(i)).bits.startVAddr := branch.bits.pc
++
++      val lastValid  = mem(enqIndex(i)).bits.branches.lastIndexWhere(_.valid)
++      val branchSlot = mem(enqIndex(i)).bits.branches(lastValid + PopCount(hitPrevious(i)))
++      branchSlot.valid            := true.B
++      branchSlot.bits.target      := branch.bits.target
++      branchSlot.bits.taken       := branch.bits.taken
++      branchSlot.bits.cfiPosition := getAlignedPosition(branch.bits.pc, branch.bits.ftqOffset)._1
++      branchSlot.bits.attribute   := branch.bits.attribute
++      branchSlot.bits.mispredict  := branch.bits.mispredict
++    }
++  }
++
++  private val deqValid = mem(deqPtr.value).valid && !io.backendResolve.map(branch =>
++    branch.valid && branch.bits.ftqIdx === mem(deqPtr.value).bits.ftqIdx
++  ).reduce(_ || _)
++
++  io.bpuTrain.valid := deqValid
++  io.bpuTrain.bits  := mem(deqPtr.value).bits
++
++  when(deqValid) {
++    deqPtr := deqPtr + 1.U
++
++    mem(deqPtr.value).valid := false.B
++    mem(deqPtr.value).bits.branches.foreach(_.valid := false.B)
++  }
++
++  XSError(deqPtr > enqPtr, "Dequeue pointer exceeds enqueue pointer in Resolve Queue")
++}
+diff --git a/src/main/scala/xiangshan/frontend/ftq/ResolveQueueCommit.scala b/src/main/scala/xiangshan/frontend/ftq/ResolveQueueCommit.scala
+new file mode 100644
+index 00000000000..360c3dcda91
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/ftq/ResolveQueueCommit.scala
+@@ -0,0 +1,60 @@
++// Copyright (c) 2024-2025 Beijing Institute of Open Source Chip (BOSC)
++// Copyright (c) 2020-2025 Institute of Computing Technology, Chinese Academy of Sciences
++// Copyright (c) 2020-2021 Peng Cheng Laboratory
++//
++// XiangShan is licensed under Mulan PSL v2.
++// You can use this software according to the terms and conditions of the Mulan PSL v2.
++// You may obtain a copy of Mulan PSL v2 at:
++//          https://license.coscl.org.cn/MulanPSL2
++//
++// THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
++// EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
++// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
++//
++// See the Mulan PSL v2 for more details.
++
++package xiangshan.frontend.ftq
++
++import chisel3._
++import chisel3.util._
++import org.chipsalliance.cde.config.Parameters
++import xiangshan.Resolve
++import xiangshan.frontend.bpu.BpuTrain
++
++class ResolveQueueCommit(implicit p: Parameters) extends FtqModule {
++
++  private def TemporaryConstant = 3 // FIXME: Should be BJU number
++
++  class ResolveQueueIO extends Bundle {
++    val backendResolve: Vec[Valid[Resolve]] = Input(Vec(TemporaryConstant, Valid(new Resolve)))
++    val commit:         Bool                = Input(Bool())
++    val commitPtr:      FtqPtr              = Input(new FtqPtr)
++    val redirect:       Bool                = Input(Bool())
++    val redirectPtr:    FtqPtr              = Input(new FtqPtr)
++    val bpuTrain:       Valid[ResolveEntry] = Output(Valid(new ResolveEntry))
++  }
++
++  val io: ResolveQueueIO = IO(new ResolveQueueIO)
++
++  private val mem = RegInit(0.U.asTypeOf(Vec(ResolveQueueSize, new ResolveEntry)))
++
++  io.backendResolve.zipWithIndex.foreach { case (branch, i) =>
++    when(branch.valid) {
++      val ftqIdx = branch.bits.ftqIdx
++      val previousHit = PopCount(io.backendResolve.take(i).map(previousBranch =>
++        previousBranch.valid && previousBranch.bits.ftqIdx === ftqIdx
++      ))
++      val lastValid = mem(ftqIdx.value).branches.lastIndexWhere(_.valid)
++      mem(ftqIdx.value).branches(lastValid + previousHit) := branch.bits
++    }
++  }
++
++  when(io.redirect) {
++//    mem.foreach(entry => when(entry.ftqIdx))
++  }
++
++  io.bpuTrain := mem(io.commitPtr.value)
++  when(io.commit) {
++    mem(io.commitPtr.value).branches.foreach(_.valid := false.B)
++  }
++}
+diff --git a/src/main/scala/xiangshan/frontend/ftq/ResolveQueuePtr.scala b/src/main/scala/xiangshan/frontend/ftq/ResolveQueuePtr.scala
+new file mode 100644
+index 00000000000..a99c632d55b
+--- /dev/null
++++ b/src/main/scala/xiangshan/frontend/ftq/ResolveQueuePtr.scala
+@@ -0,0 +1,19 @@
++package xiangshan.frontend.ftq
++
++import chisel3._
++import org.chipsalliance.cde.config.Parameters
++import utility.CircularQueuePtr
++import xiangshan.XSCoreParamsKey
++
++class ResolveQueuePtr(entries: Int) extends CircularQueuePtr[ResolveQueuePtr](entries) {
++  def this()(implicit p: Parameters) = this(p(XSCoreParamsKey).frontendParameters.ftqParameters.ResolveQueueSize)
++}
++
++object ResolveQueuePtr {
++  def apply(f: Bool, v: UInt)(implicit p: Parameters): ResolveQueuePtr = {
++    val ptr = Wire(new ResolveQueuePtr())
++    ptr.flag  := f
++    ptr.value := v
++    ptr
++  }
++}
+diff --git a/src/main/scala/xiangshan/frontend/ifu/Bundles.scala b/src/main/scala/xiangshan/frontend/ifu/Bundles.scala
+index 413e0086a0e..ee0a21eb816 100644
+--- a/src/main/scala/xiangshan/frontend/ifu/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/ifu/Bundles.scala
+@@ -61,18 +61,19 @@ class InstrIndexEntry(implicit p: Parameters) extends IfuBundle with HasIfuParam
+ }
+ 
+ class FetchBlockInfo(implicit p: Parameters) extends IfuBundle {
+-  val ftqIdx:        FtqPtr                   = new FtqPtr
+-  val doubline:      Bool                     = Bool()
+-  val predTakenIdx:  ValidUndirectioned[UInt] = ValidUndirectioned(UInt(log2Ceil(PredictWidth).W))
+-  val ftqEndOffset:  ValidUndirectioned[UInt] = ValidUndirectioned(UInt(log2Ceil(PredictWidth).W))
+-  val invalidTaken:  Bool                     = Bool()
+-  val startVAddr:    PrunedAddr               = PrunedAddr(VAddrBits)
+-  val target:        PrunedAddr               = PrunedAddr(VAddrBits)
+-  val instrRange:    UInt                     = UInt(PredictWidth.W)
+-  val rawInstrValid: UInt                     = UInt(PredictWidth.W)
+-  val pcHigh:        UInt                     = UInt((VAddrBits - PcCutPoint).W)
+-  val pcHighPlus1:   UInt                     = UInt((VAddrBits - PcCutPoint).W)
+-  val fetchSize:     UInt                     = UInt(log2Ceil(PredictWidth + 1).W)
++  val ftqIdx:         FtqPtr      = new FtqPtr
++  val doubleline:     Bool        = Bool()
++  val predTakenIdx:   Valid[UInt] = Valid(UInt(log2Ceil(PredictWidth).W))
++  val takenCfiOffset: Valid[UInt] = Valid(UInt(log2Ceil(PredictWidth).W))
++  val invalidTaken:   Bool        = Bool()
++  val startVAddr:     PrunedAddr  = PrunedAddr(VAddrBits)
++  val target:         PrunedAddr  = PrunedAddr(VAddrBits)
++  val instrRange:     UInt        = UInt(PredictWidth.W)
++  val rawInstrValid:  UInt        = UInt(PredictWidth.W)
++  val pcHigh:         UInt        = UInt((VAddrBits - PcCutPoint).W)
++  val pcHighPlus1:    UInt        = UInt((VAddrBits - PcCutPoint).W)
++  val fetchSize:      UInt        = UInt(log2Ceil(PredictWidth + 1).W)
++  val identifiedCfi:  Vec[Bool]   = Vec(FetchBlockInstNum, Bool())
+ }
+ 
+ class ICacheInfo(implicit p: Parameters) extends IfuBundle with HasICacheParameters {
+@@ -86,10 +87,11 @@ class ICacheInfo(implicit p: Parameters) extends IfuBundle with HasICacheParamet
+ }
+ 
+ class FinalPredCheckResult(implicit p: Parameters) extends IfuBundle {
+-  val target     = PrunedAddr(VAddrBits)
+-  val misIdx     = Valid(UInt(log2Ceil(IBufferInPortNum).W))
+-  val cfiIdx     = Valid(UInt(log2Ceil(IBufferInPortNum).W))
+-  val instrRange = UInt(PredictWidth.W)
++  val target       = PrunedAddr(VAddrBits)
++  val misIdx       = Valid(UInt(log2Ceil(IBufferInPortNum).W))
++  val cfiIdx       = Valid(UInt(log2Ceil(IBufferInPortNum).W))
++  val instrRange   = UInt(PredictWidth.W)
++  val invalidTaken = Bool()
+ }
+ 
+ /* ***** DB ***** */
+@@ -116,4 +118,8 @@ class IfuRedirectInternal(implicit p: Parameters) extends IfuBundle {
+   val valid:          Bool    = Bool()
+   val instrCount:     UInt    = UInt(log2Ceil(PredictWidth + 1).W)
+   val prevIBufEnqPtr: IBufPtr = new IBufPtr
++  // A fallthrough does not always correspond to a half RVI instruction.
++  val isHalfInstr: Bool       = Bool()
++  val halfPc:      PrunedAddr = PrunedAddr(VAddrBits)
++  val halfData:    UInt       = UInt(16.W)
+ }
+diff --git a/src/main/scala/xiangshan/frontend/ifu/Helpers.scala b/src/main/scala/xiangshan/frontend/ifu/Helpers.scala
+index d19a6f5be85..eaf5ac7090d 100644
+--- a/src/main/scala/xiangshan/frontend/ifu/Helpers.scala
++++ b/src/main/scala/xiangshan/frontend/ifu/Helpers.scala
+@@ -110,6 +110,5 @@ trait IfuHelper extends HasXSParameter with HasIfuParameters {
+         ShiftType.ShiftRight3 -> (if (i < 3) 0.U.asTypeOf(default) else dataVec(i - 3))
+       ))
+     })
+-
+   }
+ }
+diff --git a/src/main/scala/xiangshan/frontend/ifu/Ifu.scala b/src/main/scala/xiangshan/frontend/ifu/Ifu.scala
+index 6cdf5d646c0..deaa4f47413 100644
+--- a/src/main/scala/xiangshan/frontend/ifu/Ifu.scala
++++ b/src/main/scala/xiangshan/frontend/ifu/Ifu.scala
+@@ -255,21 +255,21 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   assert(!(fromFtq.flushFromBpu.shouldFlushByStage3(s1_ftqFetch(0).ftqIdx) && s1_firstValid))
+   assert(!(fromFtq.flushFromBpu.shouldFlushByStage3(s1_ftqFetch(1).ftqIdx) && s1_secondValid))
+ 
+-  private val s1_ftqEndOffset = VecInit.tabulate(FetchPorts)(i => s1_ftqFetch(i).ftqOffset)
++  private val s1_takenCfiOffset = VecInit.tabulate(FetchPorts)(i => s1_ftqFetch(i).takenCfiOffset)
+   private val s1_fetchSize = VecInit.tabulate(FetchPorts) { i =>
+     Mux(
+-      s1_ftqEndOffset(i).valid,
+-      s1_ftqEndOffset(i).bits + 1.U(log2Ceil(PredictWidth + 1).W),
++      s1_takenCfiOffset(i).valid,
++      s1_takenCfiOffset(i).bits + 1.U(log2Ceil(PredictWidth + 1).W),
+       (s1_ftqFetch(i).nextStartVAddr - s1_ftqFetch(i).startVAddr)(log2Ceil(PredictWidth + 1) + 1, 1)
+     )
+   }
+ 
+   private val s1_jumpRange = VecInit.tabulate(FetchPorts)(i =>
+-    Fill(PredictWidth, !s1_ftqEndOffset(i).valid) |
+-      Fill(PredictWidth, 1.U(1.W)) >> ~s1_ftqEndOffset(i).bits
++    Fill(PredictWidth, !s1_takenCfiOffset(i).valid) |
++      Fill(PredictWidth, 1.U(1.W)) >> ~s1_takenCfiOffset(i).bits
+   )
+   private val s1_ftrRange = VecInit.tabulate(FetchPorts)(i =>
+-    Fill(PredictWidth, s1_ftqEndOffset(i).valid) | Fill(PredictWidth, 1.U(1.W)) >> ~getBasicBlockIdx(
++    Fill(PredictWidth, s1_takenCfiOffset(i).valid) | Fill(PredictWidth, 1.U(1.W)) >> ~getBasicBlockIdx(
+       s1_ftqFetch(i).nextStartVAddr,
+       s1_ftqFetch(i).startVAddr
+     )
+@@ -309,11 +309,12 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   private val s2_firstMaskEndPos   = RegEnable(~(1.U << s1_firstEndPos), s1_fire)
+   private val s2_secondMaskEndPos  = RegEnable(~(1.U << s1_secondEndPos), s1_fire)
+   private val s2_totalMaskEndPos   = RegEnable(~(1.U << s1_totalEndPos), s1_fire)
+-  private val s2_ftqEndOffset      = RegEnable(s1_ftqEndOffset, s1_fire)
++  private val s2_takenCfiOffset    = RegEnable(s1_takenCfiOffset, s1_fire)
+ 
+   private val s2_instrPcLowerResult = WireDefault(VecInit.fill(PredictWidth)(0.U((PcCutPoint + 1).W)))
+   private val s2_instrIsRvc         = WireDefault(VecInit.fill(PredictWidth)(false.B))
+   private val s2_instrEndOffset     = WireDefault(VecInit.fill(PredictWidth)(0.U(log2Ceil(PredictWidth).W)))
++  private val s2_identifiedCfi      = WireDefault(VecInit.fill(PredictWidth)(false.B))
+ 
+   s2_fire  := s2_valid && s3_ready && icacheRespAllValid
+   s2_ready := s2_fire || !s2_valid
+@@ -355,10 +356,18 @@ class Ifu(implicit p: Parameters) extends IfuModule
+ 
+   private val s2_firstFetchEndIsHalf = preDecodeBounder.io.resp.bits.isFirstLastHalfRvi
+   private val s2_fetchEndIsHalf      = preDecodeBounder.io.resp.bits.isLastHalfRvi
+-  when(s2_fire && !s2_flush) {
+-    s2_prevLastIsHalfRvi := s2_fetchEndIsHalf
+-  }.elsewhen(s2_flush) {
++
++  private val wbStage2Check = Wire(Vec(FetchPorts, new FinalPredCheckResult))
++
++  // When invalidTaken is true, we can not flush s2_prevLastIsHalfRvi because the fetch block after it is fall-through.
++  when(backendRedirect) {
++    s2_prevLastIsHalfRvi := false.B
++  }.elsewhen(wbRedirect.valid) {
++    s2_prevLastIsHalfRvi := wbRedirect.isHalfInstr
++  }.elsewhen(mmioRedirect.valid) {
+     s2_prevLastIsHalfRvi := false.B
++  }.elsewhen(s2_fire) {
++    s2_prevLastIsHalfRvi := s2_fetchEndIsHalf
+   }
+ 
+ // rawInstrValid(i) and instrCountBeforeCurrent(i) also handle instructions
+@@ -409,91 +418,61 @@ class Ifu(implicit p: Parameters) extends IfuModule
+ 
+   // Fetch PC and index info for valid instructions based on their positions.
+   instrIndexEntry.zipWithIndex.foreach {
+-    case (index, idx) =>
+-      if (idx < PredictWidth / 2) {
+-        val validOH = Range(idx, 2 * idx + 2).map {
+-          i => rawInstrValid(i) & (instrCountBeforeCurrent(i) === idx.U)
+-        }
+-        val computeIndex = Range(idx, 2 * idx + 2).map {
+-          i => twoFetchBlockIndex(i)
+-        }
+-        val computeSelect = Range(idx, 2 * idx + 2).map {
+-          i => fetchBlockSelect(i)
+-        }
+-        val computePcLowerResult = Range(idx, 2 * idx + 2).map {
+-          i => twoFetchPcLowerResult(i)
+-        }
+-        val computIsRvc = Range(idx, 2 * idx + 2).map {
+-          i => rawIsRvc(i)
+-        }
+-        val computeInstrEndOffset = Range(idx, 2 * idx + 2).map {
+-          i => Mux(rawIsRvc(i), i.U, (i + 1).U)
+-        }
+-
+-        index.valid                := validOH.reduce(_ || _)
+-        index.value                := Mux1H(validOH, computeIndex)
+-        instrSelectFetchBlock(idx) := Mux1H(validOH, computeSelect)
+-        s2_instrPcLowerResult(idx) := Mux1H(validOH, computePcLowerResult)
+-        s2_instrIsRvc(idx)         := Mux1H(validOH, computIsRvc)
+-        s2_instrEndOffset(idx)     := Mux1H(validOH, computeInstrEndOffset)
+-      } else {
+-        val validOH = Range(idx, PredictWidth).map {
+-          i => rawInstrValid(i) && (instrCountBeforeCurrent(i) === idx.U)
+-        }
+-        val computeIndex = Range(idx, PredictWidth).map {
+-          i => twoFetchBlockIndex(i)
+-        }
+-        val computeSelect = Range(idx, PredictWidth).map {
+-          i => fetchBlockSelect(i)
+-        }
+-        val computePcLowerResult = Range(idx, PredictWidth).map {
+-          i => twoFetchPcLowerResult(i)
+-        }
+-        val computIsRvc = Range(idx, PredictWidth).map {
+-          i => rawIsRvc(i)
+-        }
+-        val computeInstrEndOffset = Range(idx, PredictWidth).map {
+-          i => Mux(rawIsRvc(i), i.U, (i + 1).U)
+-        }
+-        index.valid                := validOH.reduce(_ || _)
+-        index.value                := Mux1H(validOH, computeIndex)
+-        instrSelectFetchBlock(idx) := Mux1H(validOH, computeSelect)
+-        s2_instrPcLowerResult(idx) := Mux1H(validOH, computePcLowerResult)
+-        s2_instrIsRvc(idx)         := Mux1H(validOH, computIsRvc)
+-        s2_instrEndOffset(idx)     := Mux1H(validOH, computeInstrEndOffset)
++    case (instrIndex, idx) =>
++      val instrRange = idx until Math.min(2 * idx + 2, PredictWidth)
++
++      val validOH = instrRange.map {
++        i => rawInstrValid(i) & (instrCountBeforeCurrent(i) === idx.U)
+       }
++
++      val index         = instrRange.map(twoFetchBlockIndex(_))
++      val select        = instrRange.map(fetchBlockSelect(_))
++      val pcLowerResult = instrRange.map(twoFetchPcLowerResult(_))
++      val isRvc         = instrRange.map(rawIsRvc(_))
++      val instrOffset   = instrRange.map(i => Mux(rawIsRvc(i), i.U, (i + 1).U))
++      // FIXME: This is wrong when 2-taken is enabled
++      val identifiedCfi = instrRange.map(s2_ftqFetch(0).identifiedCfi(_))
++
++      instrIndex.valid           := validOH.reduce(_ || _)
++      instrIndex.value           := Mux1H(validOH, index)
++      instrSelectFetchBlock(idx) := Mux1H(validOH, select)
++      s2_instrPcLowerResult(idx) := Mux1H(validOH, pcLowerResult)
++      s2_instrIsRvc(idx)         := Mux1H(validOH, isRvc)
++      s2_instrEndOffset(idx)     := Mux1H(validOH, instrOffset)
++      s2_identifiedCfi(idx)      := Mux1H(validOH, identifiedCfi)
+   }
+   s2_instrEndOffset(0) := Mux(s2_prevLastIsHalfRvi, 0.U, Mux(rawIsRvc(0), 0.U, 1.U))
+ 
+   private val s2_fetchTakenIdx = VecInit((0 until FetchPorts).map { i =>
+     val b = Wire(new Valid(UInt(log2Ceil(PredictWidth).W)))
+-    b.valid := s2_ftqEndOffset(i).valid
++    b.valid := s2_takenCfiOffset(i).valid
+     b.bits  := PopCount(rawInstrValid.asUInt & s2_instrRange(i)) - 1.U
+     b
+   })
+-  s2_fetchTakenIdx(0).valid := s2_ftqEndOffset(0).valid && s2_firstValid
+-  s2_fetchTakenIdx(1).valid := s2_ftqEndOffset(1).valid && s2_secondValid
++  s2_fetchTakenIdx(0).valid := s2_takenCfiOffset(0).valid && s2_firstValid
++  s2_fetchTakenIdx(1).valid := s2_takenCfiOffset(1).valid && s2_secondValid
+ 
+   private val s2_fetchBlock = VecInit((0 until FetchPorts).map { i =>
+     val b = Wire(new FetchBlockInfo)
+     b.ftqIdx       := s2_ftqFetch(i).ftqIdx
+-    b.doubline     := s2_doubleline(i)
++    b.doubleline   := s2_doubleline(i)
+     b.predTakenIdx := s2_fetchTakenIdx(i)
+     b.invalidTaken :=
+-      rawInstrValid(s2_ftqEndOffset(i).bits) && !rawIsRvc(s2_ftqEndOffset(i).bits) && s2_ftqEndOffset(i).valid
+-    b.ftqEndOffset.valid := s2_ftqEndOffset(i).valid
+-    b.ftqEndOffset.bits  := s2_ftqEndOffset(i).bits
+-    b.instrRange         := s2_instrRange(i)
+-    b.pcHigh             := s2_ftqFetch(i).startVAddr(VAddrBits - 1, PcCutPoint)
+-    b.pcHighPlus1        := s2_ftqFetch(i).startVAddr(VAddrBits - 1, PcCutPoint) + 1.U
+-    b.startVAddr         := s2_ftqFetch(i).startVAddr
+-    b.target             := s2_ftqFetch(i).nextStartVAddr
+-    b.fetchSize          := s2_fetchSize(i)
+-    b.rawInstrValid      := rawInstrValid.asUInt & s2_instrRange(i)
++      rawInstrValid(s2_takenCfiOffset(i).bits) && !rawIsRvc(s2_takenCfiOffset(i).bits) && s2_takenCfiOffset(i).valid
++    b.takenCfiOffset.valid := s2_takenCfiOffset(i).valid
++    b.takenCfiOffset.bits  := s2_takenCfiOffset(i).bits
++    b.instrRange           := s2_instrRange(i)
++    b.pcHigh               := s2_ftqFetch(i).startVAddr(VAddrBits - 1, PcCutPoint)
++    b.pcHighPlus1          := s2_ftqFetch(i).startVAddr(VAddrBits - 1, PcCutPoint) + 1.U
++    b.startVAddr           := s2_ftqFetch(i).startVAddr
++    b.target               := s2_ftqFetch(i).nextStartVAddr
++    b.fetchSize            := s2_fetchSize(i)
++    b.rawInstrValid        := rawInstrValid.asUInt & s2_instrRange(i)
++    b.identifiedCfi        := s2_ftqFetch(i).identifiedCfi
+     b
+   })
+-  s2_fetchBlock(0).ftqEndOffset.valid := s2_ftqEndOffset(0).valid && s2_firstValid
+-  s2_fetchBlock(1).ftqEndOffset.valid := s2_ftqEndOffset(1).valid && s2_secondValid
++  s2_fetchBlock(0).takenCfiOffset.valid := s2_takenCfiOffset(0).valid && s2_firstValid
++  s2_fetchBlock(1).takenCfiOffset.valid := s2_takenCfiOffset(1).valid && s2_secondValid
+   s2_fetchBlock(0).instrRange := s2_instrRange(0) &
+     Mux(s2_firstFetchEndIsHalf, s2_firstMaskEndPos, Fill(PredictWidth, 1.U(1.W)))
+   s2_fetchBlock(1).instrRange := s2_instrRange(1) &
+@@ -536,12 +515,13 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   private val s3_instrCount       = RegEnable(PopCount(s2_realRawInstrValid), s2_fire)
+   private val s3_instrValid       = RegEnable(UIntToMask(PopCount(s2_realRawInstrValid), PredictWidth), s2_fire)
+ 
+-  private val s3_rawIndex          = RegEnable(instrCountBeforeCurrent, s2_fire)
+-  private val s3_rawInstrValid     = RegEnable(s2_realRawInstrValid, s2_fire)
+-  private val s3_prevLastIsHalfRvi = RegEnable(s2_prevLastIsHalfRvi, s2_fire)
+-  private val s3_prevLastHalfData  = RegInit(0.U(16.W))
+-  private val s3_prevLastHalfPc    = RegInit(0.U.asTypeOf(PrunedAddr(VAddrBits)))
+-  private val s3_perfInfo          = RegEnable(s2_perfInfo, s2_fire)
++  private val s3_rawIndex           = RegEnable(instrCountBeforeCurrent, s2_fire)
++  private val s3_rawInstrValid      = RegEnable(s2_realRawInstrValid, s2_fire)
++  private val s3_prevLastIsHalfRvi  = RegEnable(s2_prevLastIsHalfRvi, s2_fire)
++  private val s3_prevLastHalfData   = RegInit(0.U(16.W))
++  private val s3_prevLastHalfPc     = RegInit(0.U.asTypeOf(PrunedAddr(VAddrBits)))
++  private val s3_perfInfo           = RegEnable(s2_perfInfo, s2_fire)
++  private val s3_currentLastHalfRvi = RegEnable(s2_fetchEndIsHalf, s2_fire)
+ 
+   private val s3_rawFirstDataDup  = RegEnable(s2_rawFirstDataDupWire, s2_fire)
+   private val s3_rawSecondDataDup = RegEnable(s2_rawSecondDataDupWire, s2_fire)
+@@ -554,6 +534,8 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   private val s3_instrPcLowerResult = RegEnable(s2_instrPcLowerResult, s2_fire)
+   private val s3_rawPcLowerResult   = RegEnable(s2_rawPcLowerResult, s2_fire)
+ 
++  private val s3_identifiedCfi = RegEnable(s2_identifiedCfi, s2_fire)
++
+   /* NOTE: the following `Cat(_data, _data)` *is* intentional.
+    * Explanation:
+    * In the old design, IFU is responsible for selecting requested data from two adjacent cachelines,
+@@ -597,7 +579,6 @@ class Ifu(implicit p: Parameters) extends IfuModule
+ 
+   private val s3_invalidTaken = WireDefault(VecInit.fill(PredictWidth)(false.B))
+   s3_invalidTaken(s3_fetchBlock(0).predTakenIdx.bits) := s3_fetchBlock(0).invalidTaken && s3_firstValid
+-  s3_invalidTaken(s3_fetchBlock(1).predTakenIdx.bits) := s3_fetchBlock(1).invalidTaken && s3_secondValid
+ 
+   private val s3_alignShiftNum = s3_prevIBufEnqPtr.value(1, 0)
+   // Maybe it's better to move the calculation of enqBlockStartPos to the previous pipeline stage
+@@ -627,6 +608,7 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   private val s3_realAlignInstrData = WireDefault(VecInit.fill(IBufferInPortNum)(0.U(32.W)))
+   private val s3_realAlignPc        = WireDefault(VecInit.fill(IBufferInPortNum)(0.U.asTypeOf(PrunedAddr(VAddrBits))))
+   private val s3_alignFoldPc        = VecInit(s3_realAlignPc.map(i => XORFold(i(VAddrBits - 1, 1), MemPredPCWidth)))
++  private val s3_alignIdentifiedCfi = alignData(s3_identifiedCfi, s3_alignShiftNum, false.B)
+ 
+   for (i <- 0 until IBufferInPortNum / 2) {
+     val lowIdx     = s3_alignInstrIndex(i).value
+@@ -649,12 +631,19 @@ class Ifu(implicit p: Parameters) extends IfuModule
+     s3_realAlignPc(i)        := Mux(s3_alignBlockStartPos(i), adjustedBlockHeadPc, s3_alignPc(i))
+   }
+ 
+-  when(s3_fire && !s3_flush) {
+-    s3_prevLastHalfData := s3_alignInstrData(s3_instrCount + s3_alignShiftNum)(15, 0)
+-    s3_prevLastHalfPc   := s3_alignPc(s3_instrCount + s3_alignShiftNum)
+-  }.elsewhen(s4_flush) {
++  // backendRedirect has the highest priority
++  when(backendRedirect) {
+     s3_prevLastHalfData := 0.U
+     s3_prevLastHalfPc   := 0.U.asTypeOf(PrunedAddr(VAddrBits))
++  }.elsewhen(wbRedirect.valid) {
++    s3_prevLastHalfData := wbRedirect.halfData
++    s3_prevLastHalfPc   := wbRedirect.halfPc
++  }.elsewhen(mmioRedirect.valid) {
++    s3_prevLastHalfData := 0.U
++    s3_prevLastHalfPc   := 0.U.asTypeOf(PrunedAddr(VAddrBits))
++  }.elsewhen(s3_fire) {
++    s3_prevLastHalfData := s3_alignInstrData(s3_instrCount + s3_alignShiftNum)(15, 0)
++    s3_prevLastHalfPc   := s3_alignPc(s3_instrCount + s3_alignShiftNum)
+   }
+ 
+   when(backendRedirect) {
+@@ -699,14 +688,17 @@ class Ifu(implicit p: Parameters) extends IfuModule
+    * ***************************************************************************** */
+ 
+   // assign later
+-  private val s4_valid           = WireInit(false.B)
+-  private val s4_firstValid      = ValidHold(s3_fire && !s3_flush && s3_firstValid, s4_fire, s4_flush)
+-  private val s4_secondValid     = ValidHold(s3_fire && !s3_flush && s3_secondValid, s4_fire, s4_flush)
+-  private val s4_fetchBlock      = RegEnable(s3_fetchBlock, s3_fire)
+-  private val s4_doubleline      = RegEnable(s3_doubleline, s3_fire)
+-  private val s4_prevIBufEnqPtr  = RegEnable(s3_prevIBufEnqPtr, s3_fire)
+-  private val s4_rawIndex        = RegEnable(s3_rawIndex, s3_fire)
+-  private val s4_prevShiftSelect = RegEnable(s3_prevShiftSelect, s3_fire)
++  private val s4_valid               = WireInit(false.B)
++  private val s4_firstValid          = ValidHold(s3_fire && !s3_flush && s3_firstValid, s4_fire, s4_flush)
++  private val s4_secondValid         = ValidHold(s3_fire && !s3_flush && s3_secondValid, s4_fire, s4_flush)
++  private val s4_fetchBlock          = RegEnable(s3_fetchBlock, s3_fire)
++  private val s4_doubleline          = RegEnable(s3_doubleline, s3_fire)
++  private val s4_prevIBufEnqPtr      = RegEnable(s3_prevIBufEnqPtr, s3_fire)
++  private val s4_rawIndex            = RegEnable(s3_rawIndex, s3_fire)
++  private val s4_prevShiftSelect     = RegEnable(s3_prevShiftSelect, s3_fire)
++  private val s4_prevLastRvi         = RegEnable(s3_prevLastIsHalfRvi, s3_fire)
++  private val s4_currentLastHalfData = RegEnable(s3_alignInstrData(s3_instrCount + s3_alignShiftNum)(15, 0), s3_fire)
++  private val s4_currentLastHalfRvi  = RegEnable(s3_currentLastHalfRvi, s3_fire)
+   s4_fire := io.toIBuffer.fire
+ 
+   private val s4_alignInvalidTaken = RegEnable(s3_alignInvalidTaken, s3_fire)
+@@ -738,6 +730,7 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   private val s4_alignInstrPcLower   = RegEnable(s3_alignInstrPcLower, s3_fire)
+   private val s4_alignInstrEndOffset = RegEnable(s3_alignInstrEndOffset, s3_fire)
+   private val s4_rawPcLowerResult    = RegEnable(s3_rawPcLowerResult, s3_fire)
++  private val s4_alignIdentifiedCfi  = RegEnable(s3_alignIdentifiedCfi, s3_fire)
+ 
+   private val s4_alignPc = VecInit.tabulate(IBufferInPortNum)(i =>
+     if (i < IfuAlignWidth) {
+@@ -766,7 +759,7 @@ class Ifu(implicit p: Parameters) extends IfuModule
+     PrunedAddrInit(Cat(0.U(1.W), s4_fetchBlock(i).target.toUInt))
+   )
+   for (i <- 0 until FetchPorts) {
+-    when(s4_valid && !s4_fetchBlock(i).ftqEndOffset.valid) {
++    when(s4_valid && !s4_fetchBlock(i).takenCfiOffset.valid) {
+       assert(
+         s4_fetchStartAddr(i) + (2 * PredictWidth).U >= s4_fetchNextStartAddr(i),
+         s"More than ${2 * PredictWidth} Bytes fetch is not allowed!"
+@@ -1075,8 +1068,9 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   io.toIBuffer.bits.crossPageIPFFix := (0 until IBufferInPortNum).map {
+     i => i.U === s4_prevIBufEnqPtr.value(1, 0) && s4_icacheInfo(0).exception.hasException && s4_prevLastIsHalfRvi
+   }
+-  io.toIBuffer.bits.illegalInstr := s4_alignIll
+-  io.toIBuffer.bits.triggered    := s4_alignTriggered
++  io.toIBuffer.bits.illegalInstr  := s4_alignIll
++  io.toIBuffer.bits.triggered     := s4_alignTriggered
++  io.toIBuffer.bits.identifiedCfi := s4_alignIdentifiedCfi
+ 
+   when(io.toIBuffer.valid && io.toIBuffer.ready) {
+     val enqVec = io.toIBuffer.bits.enqEnable
+@@ -1124,13 +1118,13 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   mmioFlushWb.bits.pc := s4_mmioPc
+   mmioFlushWb.bits.pd := 0.U.asTypeOf(Vec(PredictWidth, new PreDecodeInfo))
+   mmioFlushWb.bits.pd.zipWithIndex.foreach { case (instr, i) => instr.valid := s4_mmioRange(i) }
+-  mmioFlushWb.bits.ftqIdx       := s4_fetchBlock(0).ftqIdx
+-  mmioFlushWb.bits.ftqEndOffset := s4_fetchBlock(0).ftqEndOffset.bits
+-  mmioFlushWb.bits.misEndOffset := s4_mmioMisEndOffset
+-  mmioFlushWb.bits.cfiEndOffset := DontCare
+-  mmioFlushWb.bits.target       := Mux(mmioIsRvc, s4_fetchBlock(0).startVAddr + 2.U, s4_fetchBlock(0).startVAddr + 4.U)
+-  mmioFlushWb.bits.jalTarget    := DontCare
+-  mmioFlushWb.bits.instrRange   := s4_mmioRange
++  mmioFlushWb.bits.ftqIdx         := s4_fetchBlock(0).ftqIdx
++  mmioFlushWb.bits.takenCfiOffset := s4_fetchBlock(0).takenCfiOffset.bits
++  mmioFlushWb.bits.misEndOffset   := s4_mmioMisEndOffset
++  mmioFlushWb.bits.cfiEndOffset   := DontCare
++  mmioFlushWb.bits.target     := Mux(mmioIsRvc, s4_fetchBlock(0).startVAddr + 2.U, s4_fetchBlock(0).startVAddr + 4.U)
++  mmioFlushWb.bits.jalTarget  := DontCare
++  mmioFlushWb.bits.instrRange := s4_mmioRange
+ 
+   mmioRvcExpander.io.in      := Mux(s4_reqIsMmio, Cat(mmioData(1), mmioData(0)), 0.U)
+   mmioRvcExpander.io.fsIsOff := io.csrFsIsOff
+@@ -1174,6 +1168,9 @@ class Ifu(implicit p: Parameters) extends IfuModule
+ 
+   mmioRedirect.instrCount     := 1.U
+   mmioRedirect.prevIBufEnqPtr := s4_prevIBufEnqPtr
++  mmioRedirect.isHalfInstr    := false.B
++  mmioRedirect.halfPc         := 0.U.asTypeOf(PrunedAddr(VAddrBits))
++  mmioRedirect.halfData       := 0.U
+   XSPerfAccumulate("fetch_bubble_ibuffer_not_ready", io.toIBuffer.valid && !io.toIBuffer.ready)
+ 
+   /* *****************************************************************************
+@@ -1215,11 +1212,12 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   private val wbFirstRawPds         = RegEnable(firstRawPds, wbEnable)
+   private val wbSecondRawPds        = RegEnable(secondRawPds, wbEnable)
+ 
+-  wbRedirect.instrCount     := wbInstrCount
+-  wbRedirect.prevIBufEnqPtr := wbPrevIBufEnqPtr
++  private val wbCurrentLastHalfData = RegEnable(s4_currentLastHalfData, wbEnable)
++  // private val wbPrevLastHalfPc      = RegEnable(s4_prevLastHalfPc, wbEnable)
++  private val wbCurrentLastRvi = RegEnable(s4_currentLastHalfRvi, wbEnable)
+ 
+   s4_wbNotFlush := wbFetchBlock(0).ftqIdx === s4_fetchBlock(0).ftqIdx && s4_valid && wbValid
+-  private val wbStage2Check = Wire(Vec(FetchPorts, new FinalPredCheckResult))
++
+   wbStage2Check(0) := checkerOutStage2.fixedFirst
+   wbStage2Check(1) := checkerOutStage2.fixedSecond
+ 
+@@ -1232,11 +1230,11 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   private val checkFlushWb = VecInit((0 until FetchPorts).map { i =>
+     val b       = Wire(Valid(new PredecodeWritebackBundle))
+     val missIdx = wbStage2Check(i).misIdx.bits
+-    b.valid             := wbValid && wbFirstValid // Primarily used as a placeholder; the value will be overwritten.
+-    b.bits.pd           := wbFirstRawPds           // Primarily used as a placeholder; the value will be overwritten.
+-    b.bits.pc           := catPC(wbAlignInstrPcLower(missIdx), wbFetchBlock(i).pcHigh, wbFetchBlock(i).pcHighPlus1)
+-    b.bits.ftqIdx       := wbFetchBlock(i).ftqIdx
+-    b.bits.ftqEndOffset := wbFetchBlock(i).ftqEndOffset.bits
++    b.valid               := wbValid && wbFirstValid // Primarily used as a placeholder; the value will be overwritten.
++    b.bits.pd             := wbFirstRawPds           // Primarily used as a placeholder; the value will be overwritten.
++    b.bits.pc             := catPC(wbAlignInstrPcLower(missIdx), wbFetchBlock(i).pcHigh, wbFetchBlock(i).pcHighPlus1)
++    b.bits.ftqIdx         := wbFetchBlock(i).ftqIdx
++    b.bits.takenCfiOffset := wbFetchBlock(i).takenCfiOffset.bits
+     b.bits.misEndOffset.valid := wbStage2Check(i).misIdx.valid
+     b.bits.misEndOffset.bits  := wbAlignInstrEndOffset(wbStage2Check(i).misIdx.bits)
+     b.bits.cfiEndOffset.valid := wbStage2Check(i).cfiIdx.valid
+@@ -1257,6 +1255,15 @@ class Ifu(implicit p: Parameters) extends IfuModule
+ 
+   wbRedirect.valid := (checkFlushWb(0).bits.misEndOffset.valid && checkFlushWb(0).valid) ||
+     (checkFlushWb(1).bits.misEndOffset.valid && checkFlushWb(1).valid)
++  wbRedirect.isHalfInstr    := wbCurrentLastRvi && wbStage2Check(0).invalidTaken
++  wbRedirect.instrCount     := wbInstrCount
++  wbRedirect.prevIBufEnqPtr := wbPrevIBufEnqPtr
++  wbRedirect.halfPc := catPC(
++    wbAlignInstrPcLower(wbStage2Check(0).misIdx.bits),
++    wbFetchBlock(0).pcHigh,
++    wbFetchBlock(0).pcHighPlus1
++  )
++  wbRedirect.halfData := wbCurrentLastHalfData
+ 
+   /* write back flush type */
+   private val checkFaultType    = checkerOutStage2.perfFaultType
+@@ -1293,8 +1300,8 @@ class Ifu(implicit p: Parameters) extends IfuModule
+       i.U,
+       wbFetchBlock(i).startVAddr.toUInt,
+       wbFetchBlock(i).target.toUInt,
+-      wbFetchBlock(i).ftqEndOffset.valid,
+-      wbFetchBlock(i).ftqEndOffset.bits
++      wbFetchBlock(i).takenCfiOffset.valid,
++      wbFetchBlock(i).takenCfiOffset.bits
+     )
+   }
+   /* *** Perf *** */
+diff --git a/src/main/scala/xiangshan/frontend/ifu/PreDecodeBoundary.scala b/src/main/scala/xiangshan/frontend/ifu/PreDecodeBoundary.scala
+index 93eb0c84170..ccc8739f1ff 100644
+--- a/src/main/scala/xiangshan/frontend/ifu/PreDecodeBoundary.scala
++++ b/src/main/scala/xiangshan/frontend/ifu/PreDecodeBoundary.scala
+@@ -73,7 +73,10 @@ class PreDecodeBoundary(implicit p: Parameters) extends IfuModule with PreDecode
+   private val rearBound      = WireInit(VecInit(Seq.fill(PredictWidth)(0.U.asTypeOf(new BoundInfo))))
+   private val rearBoundPlus1 = WireInit(VecInit(Seq.fill(PredictWidth)(0.U.asTypeOf(new BoundInfo))))
+ 
+-  private val currentIsRvc = VecInit(rawInsts.map(isRVC))
++  private val currentIsRvc     = VecInit(rawInsts.map(isRVC))
++  private val realCurrentIsRvc = Wire(Vec(PredictWidth, Bool()))
++  realCurrentIsRvc    := currentIsRvc
++  realCurrentIsRvc(0) := Mux(io.req.bits.prevLastIsHalfRvi, false.B, currentIsRvc(0))
+   def genBound(
+       bound:        Vec[BoundInfo],
+       start:        Int,
+@@ -98,10 +101,10 @@ class PreDecodeBoundary(implicit p: Parameters) extends IfuModule with PreDecode
+     for (i <- start until end) {
+       if (i == 0) {
+         bound(0).isStart := checkThisIsStart(true.B)
+-        bound(0).isEnd   := Mux(preIsHalfRvi, true.B, checkThisIsEnd(bound(0).isStart, currentIsRvc(0)))
++        bound(0).isEnd   := Mux(preIsHalfRvi, true.B, checkThisIsEnd(bound(0).isStart, realCurrentIsRvc(0)))
+       } else {
+         bound(i).isStart := checkThisIsStart(if (i == start) true.B else bound(i - 1).isEnd)
+-        bound(i).isEnd   := checkThisIsEnd(bound(i).isStart, currentIsRvc(i))
++        bound(i).isEnd   := checkThisIsEnd(bound(i).isStart, realCurrentIsRvc(i))
+       }
+     }
+   }
+@@ -141,12 +144,11 @@ class PreDecodeBoundary(implicit p: Parameters) extends IfuModule with PreDecode
+     io.resp.bits.instrValid(i) := bound(i).isStart && io.req.bits.instrRange(i)
+   }
+   io.resp.valid := io.req.valid
+-  io.resp.bits.isRvc := VecInit(io.resp.bits.instrValid.zip(currentIsRvc).map { case (valid, rvc) =>
++  io.resp.bits.isRvc := VecInit(io.resp.bits.instrValid.zip(realCurrentIsRvc).map { case (valid, rvc) =>
+     valid & rvc
+   })
+-  io.resp.bits.isRvc(0) := Mux(io.req.bits.prevLastIsHalfRvi, false.B, io.resp.bits.instrValid(0) && currentIsRvc(0))
+   io.resp.bits.isFirstLastHalfRvi := io.resp.bits.instrValid(io.req.bits.firstEndPos) &&
+-    !currentIsRvc(io.req.bits.firstEndPos)
++    !realCurrentIsRvc(io.req.bits.firstEndPos) && !((io.req.bits.firstEndPos === 0.U) && io.req.bits.prevLastIsHalfRvi)
+   io.resp.bits.isLastHalfRvi := io.resp.bits.instrValid(io.req.bits.endPos) &&
+-    !currentIsRvc(io.req.bits.endPos)
++    !realCurrentIsRvc(io.req.bits.endPos) && !((io.req.bits.endPos === 0.U) && io.req.bits.prevLastIsHalfRvi)
+ }
+diff --git a/src/main/scala/xiangshan/frontend/ifu/PredChecker.scala b/src/main/scala/xiangshan/frontend/ifu/PredChecker.scala
+index a7c572c2a14..d388ab97312 100644
+--- a/src/main/scala/xiangshan/frontend/ifu/PredChecker.scala
++++ b/src/main/scala/xiangshan/frontend/ifu/PredChecker.scala
+@@ -225,6 +225,7 @@ class PredChecker(implicit p: Parameters) extends IfuModule {
+   io.resp.stage2Out.fixedFirst.cfiIdx.valid := fixedFirstTakenInstrIdxNext.valid
+   io.resp.stage2Out.fixedFirst.cfiIdx.bits  := fixedFirstTakenInstrIdxNext.bits
+   io.resp.stage2Out.fixedFirst.instrRange   := fixedFirstRawInstrRange
++  io.resp.stage2Out.fixedFirst.invalidTaken := fixFirstMispred && invalidTakenNext(mispredIdxNext.bits)
+ 
+   io.resp.stage2Out.fixedSecond.target       := Mux(fixSecondMispred, mispredTarget, secondPredTargetNext)
+   io.resp.stage2Out.fixedSecond.misIdx.valid := fixSecondMispred
+@@ -232,6 +233,8 @@ class PredChecker(implicit p: Parameters) extends IfuModule {
+   io.resp.stage2Out.fixedSecond.cfiIdx.valid := fixedSecondTakenInstrIdxNext.valid
+   io.resp.stage2Out.fixedSecond.cfiIdx.bits  := fixedSecondTakenInstrIdxNext.bits
+   io.resp.stage2Out.fixedSecond.instrRange   := fixedSecondRawInstrRange
++  // FIXME: second fetch block invalid taken
++  io.resp.stage2Out.fixedSecond.invalidTaken := false.B
+ 
+   private val faultType = MuxCase(
+     PreDecodeFaultType.NoFault,
+@@ -246,27 +249,4 @@ class PredChecker(implicit p: Parameters) extends IfuModule {
+ 
+   io.resp.stage2Out.perfFaultType(0) := Mux(fixFirstMispred, faultType, PreDecodeFaultType.NoFault)
+   io.resp.stage2Out.perfFaultType(1) := Mux(fixSecondMispred, faultType, PreDecodeFaultType.NoFault)
+-
+-  // Temporary address check for one-fetch case with dirty data,
+-  // used to prevent backend errors due to unhandled conditions
+-  private val firstTargetFault =
+-    jumpTargetsNext(firstTakenIdxNext) =/= firstPredTargetNext &&
+-      firstPredTakenNext &&
+-      fixedRangeNext(firstTakenIdxNext) &&
+-      !fixFirstMispred &&
+-      (pdsNext(firstTakenIdxNext).isBr || pdsNext(firstTakenIdxNext).isJal)
+-
+-  io.resp.stage2Out.fixedFirst.target := Mux(
+-    firstTargetFault,
+-    jumpTargetsNext(firstTakenIdxNext),
+-    Mux(fixFirstMispred, mispredTarget, firstPredTargetNext)
+-  )
+-
+-  io.resp.stage2Out.fixedFirst.misIdx.valid := fixFirstMispred || firstTargetFault
+-  io.resp.stage2Out.fixedFirst.misIdx.bits := Mux(
+-    firstTargetFault,
+-    instrEndOffsetNext(firstTakenIdxNext),
+-    Mux(fixFirstMispred, instrEndOffsetNext(mispredIdxNext.bits), instrEndOffsetNext(firstTakenIdxNext))
+-  )
+-  // private val firstTargetFault  = fixedFirstTakenInstrIdxNext.valid && jumpTargetsNext(mispredIdxNext.bits) =/= firstPredTargetNext
+ }

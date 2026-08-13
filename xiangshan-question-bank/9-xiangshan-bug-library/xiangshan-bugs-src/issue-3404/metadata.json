@@ -1,0 +1,21 @@
+{
+  "number": 3404,
+  "title": "svpbmt: add simplified support",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3404",
+  "state": "closed",
+  "labels": [],
+  "author": "Maxpicca-Li",
+  "created_at": "2024-08-17T13:44:19Z",
+  "updated_at": "2024-08-26T12:29:39Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3404/commit-log.md"
+  ],
+  "submitted_at": "2024-08-17",
+  "branch": "",
+  "rtl_commit": ""
+}

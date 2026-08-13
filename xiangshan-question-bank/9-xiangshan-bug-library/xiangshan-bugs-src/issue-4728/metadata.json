@@ -1,0 +1,21 @@
+{
+  "number": 4728,
+  "title": "fix(jump, branch): fix wrong pc sext when sv48x4",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4728",
+  "state": "closed",
+  "labels": [],
+  "author": "Tang-Haojin",
+  "created_at": "2025-05-23T11:16:42Z",
+  "updated_at": "2025-05-26T02:24:10Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4728/commit-log.md"
+  ],
+  "submitted_at": "2025-05-23",
+  "branch": "",
+  "rtl_commit": ""
+}

@@ -1,0 +1,12 @@
+  {
+    "time": 8320,
+    "load_unit": 1,
+    "redirect_robIdx": { "flag": 0, "value": 9 },
+    "writeback_robIdx": { "flag": 0, "value": 22 },
+    "toRob_valid": "1",
+    "toIntRf_valid": "1",
+    "backend_rf_port": 7,
+    "backend_rf_wen": "1",
+    "backend_rf_pdest": 20,
+    "cancel": "0"
+  }

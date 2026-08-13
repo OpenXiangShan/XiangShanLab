@@ -1,0 +1,62 @@
+# Commit Log
+- Issue: #4828
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4828
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4828
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4828
+- Changed files: 2
+- Additions: 4
+- Deletions: 4
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/L2TLB.scala`
+- `src/main/scala/xiangshan/cache/mmu/MMUBundle.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/L2TLB.scala b/src/main/scala/xiangshan/cache/mmu/L2TLB.scala
+index c03d060b7fa..0ef1215dd19 100644
+--- a/src/main/scala/xiangshan/cache/mmu/L2TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/L2TLB.scala
+@@ -697,7 +697,7 @@ class L2TLBImp(outer: L2TLB)(implicit p: Parameters) extends PtwModule(outer) wi
+       ptw_resp.ppn_low := pte_in.getPPN()(sectortlbwidth - 1, 0)
+       ptw_resp.level.map(_ := 0.U)
+       ptw_resp.pbmt := pte_in.pbmt
+-      ptw_resp.n.map(_ := pte_in.n)
++      ptw_resp.n.map(_ := pte_in.n === true.B && ptw_resp.ppn(3, 0) === 8.U)
+       ptw_resp.perm.map(_ := pte_in.getPerm())
+       ptw_resp.tag := vpn(vpnLen - 1, sectortlbwidth)
+       // LLPTW will not handle onlyS2 situations
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+index ce42654783f..ba2dbd9735e 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+@@ -778,7 +778,7 @@ class PteBundle(implicit p: Parameters) extends PtwBundle{
+   }
+ 
+   def isNapot(level: UInt): Bool = {
+-    isLeaf() && (n === true.B)
++    isLeaf() && n === true.B && ppn(3, 0) === 8.U && level === 0.U
+   }
+ 
+   def getPerm() = {
+@@ -1132,7 +1132,7 @@ class HptwResp(implicit p: Parameters) extends PtwBundle {
+     this.entry.tag := vpn
+     this.entry.perm.map(_ := resp_pte.getPerm())
+     this.entry.ppn := resp_pte.ppn
+-    this.entry.n.map(_ := resp_pte.n)
++    this.entry.n.map(_ := resp_pte.n === true.B && resp_pte.ppn(3, 0) === 8.U && level === 0.U)
+     this.entry.pbmt := resp_pte.pbmt
+     this.entry.prefetch := DontCare
+     this.entry.asid := DontCare
+@@ -1246,7 +1246,7 @@ class PtwMergeResp(implicit p: Parameters) extends PtwBundle {
+     val ptw_resp = Wire(new PtwMergeEntry(tagLen = sectorvpnLen, hasPerm = true, hasLevel = true, hasNapot = true))
+     ptw_resp.ppn := resp_pte.getPPN()(ptePPNLen - 1, sectortlbwidth)
+     ptw_resp.ppn_low := resp_pte.getPPN()(sectortlbwidth - 1, 0)
+-    ptw_resp.n.map(_ := resp_pte.n)
++    ptw_resp.n.map(_ := resp_pte.n === true.B && ptw_resp.ppn(3, 0) === 8.U && level === 0.U)
+     ptw_resp.pbmt := resp_pte.pbmt
+     ptw_resp.level.map(_ := level)
+     ptw_resp.perm.map(_ := resp_pte.getPerm())
+```

@@ -1,0 +1,30 @@
+{
+  "number": 5739,
+  "title": "`csrr vl` reads stale zero immediately after `vsetvli`",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5739",
+  "state": "closed",
+  "labels": [
+    "module: backend",
+    "type: bug/fixed"
+  ],
+  "author": "KnightGOKU",
+  "created_at": "2026-03-29T16:10:54Z",
+  "updated_at": "2026-04-23T08:55:57Z",
+  "source_files": [
+    "issue-5739/source/vsetvli_read_vl_min.spike.log",
+    "issue-5739/source/vsetvli_read_vl_min.xiangshan.log",
+    "issue-5739/source/bug-report.tar.gz",
+    "issue-5739/source/vsetvli_read_vl_min.zip",
+    "issue-5739/source/program-01.S",
+    "issue-5739/source/program-02.txt",
+    "issue-5739/source/program-03.txt",
+    "issue-5739/source/program-04.S"
+  ],
+  "archive_files": [
+    "issue-5739/source/vsetvli_read_vl_min.spike.log",
+    "issue-5739/source/vsetvli_read_vl_min.xiangshan.log",
+    "issue-5739/source/bug-report.tar.gz",
+    "issue-5739/source/vsetvli_read_vl_min.zip"
+  ],
+  "has_comments": true
+}

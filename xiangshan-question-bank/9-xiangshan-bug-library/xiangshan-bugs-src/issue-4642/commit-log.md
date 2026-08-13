@@ -1,0 +1,35 @@
+# Commit Log
+- Issue: #4642
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4642
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4642
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4642
+- Changed files: 1
+- Additions: 5
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/backend/rob/Rob.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index afaed355798..a9586ade739 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -206,8 +206,11 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   robBanksRaddrThisLine := robBanksRaddrNextLine
+   val bankNumWidth = log2Up(bankNum)
+   val deqPtrWidth = deqPtr.value.getWidth
+-  val robIdxThisLine = VecInit((0 until bankNum).map(i => Cat(deqPtr.value(deqPtrWidth - 1, bankNumWidth), i.U(bankNumWidth.W))))
+-  val robIdxNextLine = VecInit((0 until bankNum).map(i => Cat(deqPtr.value(deqPtrWidth - 1, bankNumWidth) + 1.U, i.U(bankNumWidth.W))))
++  val highDeqPtrThisLine = deqPtr.value(deqPtrWidth - 1, bankNumWidth)
++  val highDeqPtrMax = RobSize.U(deqPtrWidth - 1, bankNumWidth)
++  val highDeqPtrNextLine = Mux(highDeqPtrThisLine === highDeqPtrMax, 0.U, highDeqPtrThisLine + 1.U)
++  val robIdxThisLine = VecInit((0 until bankNum).map(i => Cat(highDeqPtrThisLine, i.U(bankNumWidth.W))))
++  val robIdxNextLine = VecInit((0 until bankNum).map(i => Cat(highDeqPtrNextLine, i.U(bankNumWidth.W))))
+   // robBanks read
+   val robBanksRdataThisLine = VecInit(robBanks.map{ case bank =>
+     Mux1H(robBanksRaddrThisLine, bank)
+```

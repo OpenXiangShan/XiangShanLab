@@ -1,0 +1,32 @@
+{
+  "number": 5910,
+  "title": "Diff-test fails when EX_IAF occurs across 2 physical pages in 0x1000_0000 ~ 0x1fff_ffff, related to #5872",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5910",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "note: need more information",
+    "type: bug/fixed"
+  ],
+  "author": "Jason-Young123",
+  "created_at": "2026-05-07T12:29:18Z",
+  "updated_at": "2026-06-10T02:13:47Z",
+  "submitted_at": "2026-05-07",
+  "source_files": [
+    "issue-5910/source/bug-report-20250507.tar.gz",
+    "issue-5910/source/program-01.S"
+  ],
+  "archive_files": [
+    "issue-5910/source/bug-report-20250507.tar.gz"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "biweekly-en"
+}

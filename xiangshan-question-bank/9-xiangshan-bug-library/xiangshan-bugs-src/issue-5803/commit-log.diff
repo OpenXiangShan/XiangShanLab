@@ -1,0 +1,657 @@
+diff --git a/scripts/top-down/configs.py b/scripts/top-down/configs.py
+index 63d62fe3904..b92926ca2df 100644
+--- a/scripts/top-down/configs.py
++++ b/scripts/top-down/configs.py
+@@ -7,7 +7,7 @@
+ OUT_REF = 'results/results-weighted_ref.csv'
+ 
+ INT_ONLY = False
+-FP_ONLY = True
++FP_ONLY = False
+ 
+ TOTAL_ANALYSE = True
+ BACKEND_ANALYSE = True
+@@ -35,7 +35,6 @@
+     'StoreDispatchPolicyStall': 'MergeDispatchPolicyBandwidth',
+     'OtherDispatchPolicyStall': 'MergeDispatchPolicyBandwidth',
+ 
+-    'BalanceDispatchPolicyStall':     'MergeDispatchPolicyBalance',
+     'BalanceDispatchPolicyStallAlu':  'MergeDispatchPolicyBalance',
+     'BalanceDispatchPolicyStallBrh':  'MergeDispatchPolicyBalance',
+     'BalanceDispatchPolicyStallInt':  'MergeDispatchPolicyBalance',
+@@ -43,6 +42,7 @@
+     'BalanceDispatchPolicyStallVec':  'MergeDispatchPolicyBalance',
+     'BalanceDispatchPolicyStallLoad': 'MergeDispatchPolicyBalance',
+     'BalanceDispatchPolicyStallStore':'MergeDispatchPolicyBalance',
++    'OtherBalanceDispatchPolicyStall':'MergeDispatchPolicyBalance',
+ 
+     'NoStall': 'MergeBase',
+     'commitInstr': 'Insts',
+@@ -81,6 +81,7 @@
+     'DivStall': 'MergeExecStall',
+     'IntNotReadyStall': 'MergeExecStall',
+     'FPNotReadyStall': 'MergeExecStall',
++    'OtherNotReadyStall': 'MergeExecStall',
+ 
+     'RobStall': 'MergeRobStall',
+ 
+@@ -90,7 +91,6 @@
+     'StoreDispatchPolicyStall': 'MergeDispatchPolicy',
+     'OtherDispatchPolicyStall': 'MergeDispatchPolicy',
+ 
+-    'BalanceDispatchPolicyStall':     'MergeDispatchPolicy',
+     'BalanceDispatchPolicyStallAlu':  'MergeDispatchPolicy',
+     'BalanceDispatchPolicyStallBrh':  'MergeDispatchPolicy',
+     'BalanceDispatchPolicyStallInt':  'MergeDispatchPolicy',
+@@ -98,6 +98,7 @@
+     'BalanceDispatchPolicyStallVec':  'MergeDispatchPolicy',
+     'BalanceDispatchPolicyStallLoad': 'MergeDispatchPolicy',
+     'BalanceDispatchPolicyStallStore':'MergeDispatchPolicy',
++    'OtherBalanceDispatchPolicyStall':'MergeDispatchPolicy',
+ 
+     'IQEnqPolicyStallIssued': 'MergeIQpolicyStall',
+     'IQEnqPolicyStall': 'MergeIQpolicyStall',
+@@ -125,8 +126,6 @@
+     'VlFlStall': 'MergeFreelistStall',
+     'MultiFlStall': 'MergeFreelistStall',
+ 
+-    'IntFlStallForBank': 'MergeFreelistStall',
+-    'FpFlStallForBank': 'MergeFreelistStall',
+ 
+     'SpecialInsts': 'MergePrivileged',
+ 
+@@ -145,6 +144,8 @@
+     'LoadMemStall': 'MergeLoadMemStall',
+ 
+     'StoreStall': 'MergeStore',
++    'SqStall': 'MergeSqStall',
++    'LqStall': 'MergeLqStall',
+ 
+ 
+     'AtomicStall': 'MergeAtomicStall',
+@@ -178,10 +179,13 @@
+     'DivStall': 'MergeCore',
+     'IntNotReadyStall': 'MergeCore',
+     'FPNotReadyStall': 'MergeCore',
++    'OtherNotReadyStall': 'MergeCore',
+ 
+     'MemNotReadyStall': 'MergeLoad',
+ 
+     'RobStall': 'MergeCore',
++    'LqStall': 'MergeLoad',
++    'SqStall': 'MergeStore',
+ 
+     'IntFlStall': 'MergeFreelistStall',
+     'FpFlStall': 'MergeFreelistStall',
+@@ -190,16 +194,12 @@
+     'VlFlStall': 'MergeFreelistStall',
+     'MultiFlStall': 'MergeFreelistStall',
+ 
+-    'IntFlStallForBank': 'MergeFreelistStall',
+-    'FpFlStallForBank': 'MergeFreelistStall',
+-
+     'FusionBubble' : 'MergeCore',
+ 
+     'LoadDispatchPolicyStall':  'MergeCore',
+     'StoreDispatchPolicyStall': 'MergeCore',
+     'OtherDispatchPolicyStall': 'MergeCore',
+ 
+-    'BalanceDispatchPolicyStall':     'MergeCore',
+     'BalanceDispatchPolicyStallAlu':  'MergeCore',
+     'BalanceDispatchPolicyStallBrh':  'MergeCore',
+     'BalanceDispatchPolicyStallInt':  'MergeCore',
+@@ -207,6 +207,7 @@
+     'BalanceDispatchPolicyStallVec':  'MergeCore',
+     'BalanceDispatchPolicyStallLoad': 'MergeCore',
+     'BalanceDispatchPolicyStallStore':'MergeCore',
++    'OtherBalanceDispatchPolicyStall':'MergeCore',
+ 
+     'IQEnqPolicyStallIssued': 'MergeCore',
+     'IQEnqPolicyStall': 'MergeCore',
+@@ -328,7 +329,10 @@
+     'IntNotReadyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: IntNotReadyStall,\s+(\d+)',
+     'FPNotReadyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: FPNotReadyStall,\s+(\d+)',
+     'MemNotReadyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: MemNotReadyStall,\s+(\d+)',
++    'OtherNotReadyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: OtherNotReadyStall,\s+(\d+)',
+     'RobStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: RobStall,\s+(\d+)',
++    'LqStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: LqStall,\s+(\d+)',
++    'SqStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: SqStall,\s+(\d+)',
+ 
+     'IntFlStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: IntFlStall,\s+(\d+)',
+     'FpFlStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: FpFlStall,\s+(\d+)',
+@@ -337,16 +341,12 @@
+     'VlFlStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: VlFlStall,\s+(\d+)',
+     'MultiFlStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: MultiFlStall,\s+(\d+)',
+ 
+-    'IntFlStallForBank': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: IntFlStallForBank,\s+(\d+)',
+-    'FpFlStallForBank': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: FpFlStallForBank,\s+(\d+)',
+-
+     'FusionBubble': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: FusionBubble,\s+(\d+)',
+ 
+     'LoadDispatchPolicyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: LoadDispatchPolicyStall,\s+(\d+)',
+     'StoreDispatchPolicyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: StoreDispatchPolicyStall,\s+(\d+)',
+     'OtherDispatchPolicyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: OtherDispatchPolicyStall,\s+(\d+)',
+ 
+-    'BalanceDispatchPolicyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: BalanceDispatchPolicyStall,\s+(\d+)',
+     'BalanceDispatchPolicyStallAlu': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: BalanceDispatchPolicyStallAlu,\s+(\d+)',
+     'BalanceDispatchPolicyStallBrh': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: BalanceDispatchPolicyStallBrh,\s+(\d+)',
+     'BalanceDispatchPolicyStallInt': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: BalanceDispatchPolicyStallInt,\s+(\d+)',
+@@ -354,6 +354,7 @@
+     'BalanceDispatchPolicyStallVec': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: BalanceDispatchPolicyStallVec,\s+(\d+)',
+     'BalanceDispatchPolicyStallLoad': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: BalanceDispatchPolicyStallLoad,\s+(\d+)',
+     'BalanceDispatchPolicyStallStore': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: BalanceDispatchPolicyStallStore,\s+(\d+)',
++    'OtherBalanceDispatchPolicyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: OtherBalanceDispatchPolicyStall,\s+(\d+)',
+ 
+     'IQEnqPolicyStallIssued': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: IQEnqPolicyStallIssued,\s+(\d+)',
+     'IQEnqPolicyStall': fr'{XS_CORE_PREFIX}.backend.*?ctrlBlock\.dispatch: IQEnqPolicyStall,\s+(\d+)',
+diff --git a/src/main/scala/xiangshan/backend/Backend.scala b/src/main/scala/xiangshan/backend/Backend.scala
+index 672b3ad89d4..c86852ac6a7 100644
+--- a/src/main/scala/xiangshan/backend/Backend.scala
++++ b/src/main/scala/xiangshan/backend/Backend.scala
+@@ -515,6 +515,8 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
+   ctrlBlock.io.robio.robHeadLsIssue := issue.flatten.map(deq =>
+     deq.fire && deq.bits.robIdx === ctrlBlock.io.robio.robDeqPtr
+   ).reduce(_ || _)
++  ctrlBlock.io.robio.debugIQDeqRobIdxVec.foreach(_ := intRegion.io.debugIQDeqRobIdxVec.get ++
++    fpRegion.io.debugIQDeqRobIdxVec.get ++ vecRegion.io.debugIQDeqRobIdxVec.get)
+ 
+   // mem io
+   io.mem.robLsqIO <> ctrlBlock.io.robio.lsq
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index a4d5fd06c34..3f7c1319e2b 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -40,6 +40,7 @@ import xiangshan.backend.issue.{FpScheduler, IntScheduler, VecScheduler}
+ import xiangshan.backend.trace._
+ import xiangshan.frontend.bpu.BranchAttribute
+ import xiangshan.Redirect.findOldestRedirect
++import xiangshan.TopDownCounters._
+ 
+ class CtrlToFtqIO(implicit p: Parameters) extends XSBundle {
+   val redirect = Valid(new Redirect)
+@@ -738,12 +739,12 @@ class CtrlBlockImp(
+   dispatch.io.wbPregsV0 := io.toDispatch.wbPregsV0
+   dispatch.io.wbPregsVl := io.toDispatch.wbPregsVl
+   dispatch.io.vlWriteBackInfo := io.toDispatch.vlWriteBackInfo
+-  dispatch.io.robHeadNotReady := rob.io.headNotReady
+   dispatch.io.singleStep := GatedValidRegNext(io.csrCtrl.singlestep)
+   dispatch.io.debugBlockBackward.foreach(_ := rob.io.debugBlockBackward.get)
+   dispatch.io.debugWaitForward.foreach(_ := rob.io.debugWaitForward.get)
+   dispatch.io.debugIQValidNumVec.foreach(_ := io.toDispatch.debugIQValidNumVec.get)
+   dispatch.io.debugIQEnqHasIssuedVec.foreach(_ := io.toDispatch.debugIQEnqHasIssuedVec.get)
++  dispatch.io.debugRobHeadStall.foreach(_ := rob.io.debugRobHeadStall.get)
+   val toIssueBlockUops = Seq(io.toIssueBlock.intUops, io.toIssueBlock.fpUops, io.toIssueBlock.vfUops).flatten
+   println(s"[CtrlBlock] toIssueBlockUops.size = ${toIssueBlockUops.size}")
+   println(s"[CtrlBlock] io.toIssueBlock.intUops.size = ${io.toIssueBlock.intUops.size}")
+@@ -806,6 +807,7 @@ class CtrlBlockImp(
+   rob.io.csr.criticalErrorState := io.robio.csr.criticalErrorState
+   rob.io.debugEnqLsq := io.debugEnqLsq
+   rob.io.debugInstrAddrTransType := io.fromCSR.instrAddrTransType
++  rob.io.debugIQDeqRobIdxVec.foreach(_ := io.robio.debugIQDeqRobIdxVec.get)
+ 
+   io.robio.robDeqPtr := rob.io.robDeqPtr
+ 
+@@ -827,9 +829,30 @@ class CtrlBlockImp(
+   io.toVecExcpMod.ratOldPest := rename.io.ratOldPdest
+ 
+   io.debugTopDown.fromRob := rob.io.debugTopDown.toCore
+-  dispatch.io.debugTopDown.fromRob := rob.io.debugTopDown.toDispatch
+-  dispatch.io.debugTopDown.fromCore := io.debugTopDown.fromCore
+   io.debugRolling := rob.io.debugRolling
++  // mem topdown reason collect
++  val notIssue = !rob.io.debugTopDown.toDispatch.robHeadLsIssue
++  val tlbReplay = io.debugTopDown.fromCore.fromMem.robHeadTlbReplay
++  val tlbMiss = io.debugTopDown.fromCore.fromMem.robHeadTlbMiss
++  val vioReplay = io.debugTopDown.fromCore.fromMem.robHeadLoadVio
++  val mshrReplay = io.debugTopDown.fromCore.fromMem.robHeadLoadMSHR
++  val l1Miss = io.debugTopDown.fromCore.fromMem.robHeadMissInDCache
++  val l2Miss = io.debugTopDown.fromCore.l2MissMatch
++  val l3Miss = io.debugTopDown.fromCore.l3MissMatch
++  val ldReason = Mux(l3Miss, LoadMemStall.id.U,
++    Mux(l2Miss, LoadL3Stall.id.U,
++      Mux(l1Miss, LoadL2Stall.id.U,
++        Mux(notIssue, MemNotReadyStall.id.U,
++          Mux(tlbMiss, LoadTLBStall.id.U,
++            Mux(tlbReplay, LoadTLBStall.id.U,
++              Mux(mshrReplay, LoadMSHRReplayStall.id.U,
++                Mux(vioReplay, LoadVioReplayStall.id.U,
++                  LoadL1Stall.id.U))))))))
++  dispatch.io.debugLoadReason.foreach(_ := ldReason)
++  dispatch.io.debugRobTrueCommit.foreach(_ := rob.io.debugTopDown.toDispatch.robTrueCommit)
++  rename.io.debugLoadReason.foreach(_ := ldReason)
++  rename.io.debugRobHeadFuType.foreach(_ := rob.io.debugRobHeadFuType)
++  rename.io.debugRobHeadStall.foreach(_ := rob.io.debugRobHeadStall.get)
+ 
+   io.perfInfo.ctrlInfo.robFull := GatedValidRegNext(rob.io.robFull)
+   io.perfInfo.ctrlInfo.intdqFull := false.B
+@@ -930,6 +953,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
+   val memHyPcRead = Vec(params.HyuCnt, Flipped(new FtqRead(UInt(VAddrBits.W))))
+ 
+   val csrCtrl = Input(new CustomCSRCtrlIO)
++  val IssueQueueDeqSum  = backendParams.allIssueParams.map(_.numDeq).sum
+   val robio = new Bundle {
+     val csr = new RobCSRIO
+     val exception = ValidIO(new ExceptionInfo)
+@@ -947,6 +971,7 @@ class CtrlBlockIO()(implicit p: Parameters, params: BackendParams) extends XSBun
+       val robidx = Input(new RobPtr)
+       val pc     = Output(UInt(VAddrBits.W))
+     })
++    val debugIQDeqRobIdxVec = Option.when(backendParams.debugEn)(Vec(IssueQueueDeqSum, Flipped(ValidIO(new RobPtr()))))
+   }
+ 
+   val toDecode = new Bundle {
+diff --git a/src/main/scala/xiangshan/backend/Region.scala b/src/main/scala/xiangshan/backend/Region.scala
+index ead2255d927..cd862fd1c88 100644
+--- a/src/main/scala/xiangshan/backend/Region.scala
++++ b/src/main/scala/xiangshan/backend/Region.scala
+@@ -30,6 +30,7 @@ import xiangshan.mem._
+ import utility._
+ import xiangshan.backend.fu.vector.Bundles.{VType, Vstart}
+ import xiangshan.backend.fu.wrapper.{CSRInput, CSRToDecode}
++import xiangshan.backend.rob.RobPtr
+ import xiangshan.backend.issue.EntryBundles.RespType
+ import xiangshan.backend.issue._
+ 
+@@ -776,6 +777,14 @@ class Region(val params: SchdBlockParams)(implicit p: Parameters) extends XSModu
+     issueQueueEnqHasIssuedVec(sta) := Mux(staValidNum(i) > stdValidNum(i), staEnqHasIssuedVec(i), stdEnqHasIssuedVec(i))
+   }
+ 
++  val issueQueueDeqVec = issueQueues.flatMap(_.io.deqDelay)
++  io.debugIQDeqRobIdxVec.foreach(_.zip(issueQueueDeqVec).foreach{ case(sink, source) =>
++    sink.valid := source.valid
++    sink.bits := source.bits.robIdx
++  })
++
++
++
+   if (params.isIntSchd) {
+     val iqNum = issueQueues.size
+     case class FUConfig(filter: UInt => Bool, name: String, paramCheck: IssueBlockParams => Boolean)
+@@ -932,7 +941,9 @@ class RegionIO(val params: SchdBlockParams)(implicit p: Parameters) extends XSBu
+ 
+   // TopDown
+   val uopTopDown = new UopTopDown
++  val iqDeqSum = params.issueBlockParams.map(_.numDeq).sum
+   val debugIQValidNumVec = Option.when(backendParams.debugEn)(Vec(IQNum, Output(UInt(maxIQSize.U.getWidth.W))))
+   val debugIQEnqHasIssuedVec = Option.when(backendParams.debugEn)(Vec(IQNum, Output(Bool())))
++  val debugIQDeqRobIdxVec = Option.when(backendParams.debugEn)(Vec(iqDeqSum, ValidIO(new RobPtr())))
+ }
+ 
+diff --git a/src/main/scala/xiangshan/backend/dispatch/Dispatch.scala b/src/main/scala/xiangshan/backend/dispatch/Dispatch.scala
+index 704018b24eb..b94e06e8ab2 100644
+--- a/src/main/scala/xiangshan/backend/dispatch/Dispatch.scala
++++ b/src/main/scala/xiangshan/backend/dispatch/Dispatch.scala
+@@ -153,15 +153,13 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+     // perf only
+     val robHeadFuType = Input(FuType())
+     val stallReason = Flipped(new StallReasonIO(RenameWidth))
+-    val robHeadNotReady = Input(Bool())
+     val debugBlockBackward = Option.when(backendParams.debugEn)(Input(Bool()))
+     val debugWaitForward   = Option.when(backendParams.debugEn)(Input(Bool()))
+     val debugIQValidNumVec = Option.when(backendParams.debugEn)(Vec(issueQueueNum, Input(UInt(maxIQSize.U.getWidth.W))))
+     val debugIQEnqHasIssuedVec = Option.when(backendParams.debugEn)(Vec(issueQueueNum, Input(Bool())))
+-    val debugTopDown = new Bundle {
+-      val fromRob = Flipped(new RobDispatchTopDownIO)
+-      val fromCore = new CoreDispatchTopDownIO
+-    }
++    val debugRobHeadStall = Option.when(backendParams.debugEn)(Input(Bool()))
++    val debugLoadReason = Option.when(backendParams.debugEn)(Input(UInt(log2Ceil(TopDownCounters.NumStallReasons.id).W)))
++    val debugRobTrueCommit = Option.when(backendParams.debugEn)(Input(UInt(64.W)))
+   })
+   // Deq for std's IQ is not assigned in Dispatch2Iq, so add one more src for it.
+   val issueBlockParams = backendParams.allIssueParams
+@@ -907,24 +905,8 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+   XSPerfAccumulate("stall_cycle_allowDispatch", dispatchBlock && allowDispatch.asUInt.orR)
+   XSPerfAccumulate("stall_cycle_lsqFull", dispatchBlock && lsqCanAccept)
+ 
+-  val notIssue = !io.debugTopDown.fromRob.robHeadLsIssue
+-  val tlbReplay = io.debugTopDown.fromCore.fromMem.robHeadTlbReplay
+-  val tlbMiss = io.debugTopDown.fromCore.fromMem.robHeadTlbMiss
+-  val vioReplay = io.debugTopDown.fromCore.fromMem.robHeadLoadVio
+-  val mshrReplay = io.debugTopDown.fromCore.fromMem.robHeadLoadMSHR
+-  val l1Miss = io.debugTopDown.fromCore.fromMem.robHeadMissInDCache
+-  val l2Miss = io.debugTopDown.fromCore.l2MissMatch
+-  val l3Miss = io.debugTopDown.fromCore.l3MissMatch
+-
+-  val ldReason = Mux(l3Miss, LoadMemStall.id.U,
+-  Mux(l2Miss, LoadL3Stall.id.U,
+-  Mux(l1Miss, LoadL2Stall.id.U,
+-  Mux(notIssue, MemNotReadyStall.id.U,
+-  Mux(tlbMiss, LoadTLBStall.id.U,
+-  Mux(tlbReplay, LoadTLBStall.id.U,
+-  Mux(mshrReplay, LoadMSHRReplayStall.id.U,
+-  Mux(vioReplay, LoadVioReplayStall.id.U,
+-  LoadL1Stall.id.U))))))))
++
++  val ldReason = io.debugLoadReason.getOrElse(0.U)
+ 
+   val fusedVec = (0 until RenameWidth).map{ case i =>
+     if (i == 0 || !backendParams.debugEn) false.B
+@@ -962,7 +944,7 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+   val issueQueueSizeVec = Wire(Vec(issueQueueNum, UInt(maxIQSize.U.getWidth.W)))
+   issueQueueSizeVec := allIssueParams.map{ param =>
+     // Now only when iq has two clear entry, instruction can enq
+-    (param.numEntries - 2).asUInt
++    (param.numEntries - param.numEnq).asUInt
+   }
+ 
+   val fuTypes = fromRename.map(_.bits.fuType)
+@@ -1047,6 +1029,7 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+   val dispatchStall = !(inReadyVec.reduce(_ || _))
+   val dispatchStallReason = Wire(chiselTypeOf(io.stallReason.reason(0)))
+ 
++  val robHeadStall = io.debugRobHeadStall.getOrElse(false.B)
+ 
+   val robHeadFutype = io.robHeadFuType
+ 
+@@ -1055,14 +1038,20 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+   val roblsqStall = robStall ||  lsqStall
+   val lqStall  = lsqEnqCtrl.io.lqStall.getOrElse(false.B)
+   val sqStall  = lsqEnqCtrl.io.sqStall.getOrElse(false.B)
++  val robHeadStallReason = MuxCase(OtherNotReadyStall.id.U, Seq(
++    FuType.isAMO(robHeadFutype)          -> AtomicStall.id.U          ,
++    FuType.isStoreVstore(robHeadFutype)  -> StoreStall.id.U           ,
++    FuType.isLoadVload(robHeadFutype)    -> ldReason                  ,
++    FuType.isDivSqrt(robHeadFutype)      -> DivStall.id.U             ,
++    FuType.isInt(robHeadFutype)          -> IntNotReadyStall.id.U     ,
++    FuType.isFArith(robHeadFutype)       -> FPNotReadyStall.id.U      ,
++  ))
++
+   val roblsqStallReason = MuxCase(BackendOtherCoreStall.id.U, Seq(
+-    (FuType.isAMO(robHeadFutype) && io.robHeadNotReady)                      -> AtomicStall.id.U          ,
+-    ((FuType.isStoreVstore(robHeadFutype) && io.robHeadNotReady) || sqStall) -> StoreStall.id.U           ,
+-    ((FuType.isLoadVload(robHeadFutype) && io.robHeadNotReady) || lqStall)   -> ldReason                  ,
+-    (FuType.isDivSqrt(robHeadFutype) && io.robHeadNotReady)                  -> DivStall.id.U             ,
+-    (FuType.isInt(robHeadFutype) && io.robHeadNotReady)                      -> IntNotReadyStall.id.U     ,
+-    (FuType.isFArith(robHeadFutype) && io.robHeadNotReady)                   -> FPNotReadyStall.id.U      ,
+-    (robStall || lsqStall)                                                   -> RobStall.id.U             ,
++    robHeadStall                         -> robHeadStallReason        ,
++    robStall                             -> RobStall.id.U             ,
++    lqStall                              -> LqStall.id.U              ,
++    sqStall                              -> SqStall.id.U              ,
+   ))
+ 
+   /** BalanceDispatchStall or Bubble: IQ can enq, but fail to dispatch cause stall/bubble
+@@ -1075,7 +1064,7 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+   val issueQueueStall = issueQueueStallVec(0)
+   val issueQueueStallFutype = PriorityMux(issueQueueStallVec, fuTypes)
+   val balanceDispatchStall = PriorityMux(issueQueueStallVec, fromRenameFutypeNotOverIQ)
+-  val balanceDispatchStallReason = MuxCase(BackendOtherCoreStall.id.U, Seq(
++  val balanceDispatchStallReason = MuxCase(OtherBalanceDispatchPolicyStall.id.U, Seq(
+     FuType.isAlu(issueQueueStallFutype)         -> BalanceDispatchPolicyStallAlu.id.U   ,
+     FuType.isBJU(issueQueueStallFutype)         -> BalanceDispatchPolicyStallBrh.id.U   ,
+     FuType.isInt(issueQueueStallFutype)         -> BalanceDispatchPolicyStallInt.id.U   ,
+@@ -1085,9 +1074,10 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+     FuType.isStoreVstore(issueQueueStallFutype) -> BalanceDispatchPolicyStallStore.id.U ,
+   ))
+   val issueQueueStallReason = MuxCase(BackendOtherCoreStall.id.U, Seq(
+-    fromRenameFutypeNotOverIQ(0)                -> balanceDispatchStallReason  ,
++    robHeadStall                                -> robHeadStallReason          ,
+     fromRenameMapIQEnqHasIssuedNotFull(0)       -> IQEnqPolicyStallIssued.id.U ,
+     fromRenameMapIQNotFull(0)                   -> IQEnqPolicyStall.id.U       ,
++    fromRenameFutypeNotOverIQ(0)                -> balanceDispatchStallReason  ,
+     FuType.isAlu(issueQueueStallFutype)         -> IntIQFullStallAlu.id.U      ,
+     FuType.isBJU(issueQueueStallFutype)         -> IntIQFullStallBrh.id.U      ,
+     FuType.isInt(issueQueueStallFutype)         -> IntIQFullStallOther.id.U    ,
+@@ -1101,8 +1091,9 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+   val dispatchlsqStall = dispatchlsqBubbleVec.reduce(_ && _)
+   val dispatchlsqStallFutype = PriorityMux(dispatchlsqBubbleVec , fuTypes)
+   val dispatchlsqStallReason = MuxCase(NoStall.id.U, Seq(
+-    FuType.isLoadVload(dispatchlsqStallFutype)   -> LoadIQFullStall.id.U  ,
+-    FuType.isStoreVstore(dispatchlsqStallFutype) -> StoreIQFullStall.id.U ,
++    robHeadStall                                 -> robHeadStallReason ,
++    FuType.isLoadVload(dispatchlsqStallFutype)   -> LqStall.id.U       ,
++    FuType.isStoreVstore(dispatchlsqStallFutype) -> SqStall.id.U       ,
+   ))
+ 
+   // block backward will not stall whole pipe in current cycle
+@@ -1148,11 +1139,12 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+ 
+   val issueQueueBubble = issueQueueStallVec.reduce(_ || _)
+ 
+-  val issueQueueBubbleReason = MuxCase(BackendOtherCoreStall.id.U, Seq(
+-    balanceDispatchStall                        -> balanceDispatchStallReason  ,
+-    dispatchBandWidthPolicyBubble               -> dispatchBandWidthPolicyBubbleReason ,
++  val issueQueueBubbleReason = MuxCase(OtherBalanceDispatchPolicyStall.id.U, Seq(
++    robHeadStall                                -> robHeadStallReason          ,
+     issueQueueEnqPolicyStallIssued              -> IQEnqPolicyStallIssued.id.U ,
+     issueQueueEnqPolicyStall                    -> IQEnqPolicyStall.id.U       ,
++    balanceDispatchStall                        -> balanceDispatchStallReason  ,
++    dispatchBandWidthPolicyBubble               -> dispatchBandWidthPolicyBubbleReason ,
+     FuType.isAlu(issueQueueStallFutype)         -> IntIQFullStallAlu.id.U      ,
+     FuType.isBJU(issueQueueStallFutype)         -> IntIQFullStallBrh.id.U      ,
+     FuType.isInt(issueQueueStallFutype)         -> IntIQFullStallOther.id.U    ,
+@@ -1162,12 +1154,13 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+     FuType.isStoreVstore(issueQueueStallFutype) -> StoreIQFullStall.id.U       ,
+   ))
+ 
+-  /** Dispatch lsq Bubble : lsq cannot enter */
++  /** Dispatch lsq Bubble : lsq cannot enter caculate by dispatch: allowdispatch*/
+   val dispatchlsqBubble = dispatchlsqBubbleVec.reduce(_ || _)
+   val dispatchlsqBubbleFutype = PriorityMux(dispatchlsqBubbleVec , fuTypes)
+   val dispatchlsqBubbleReason = MuxCase(NoStall.id.U, Seq(
+-    FuType.isLoadVload(dispatchlsqBubbleFutype)   -> LoadIQFullStall.id.U  ,
+-    FuType.isStoreVstore(dispatchlsqBubbleFutype) -> StoreIQFullStall.id.U ,
++    robHeadStall                                  -> robHeadStallReason    ,
++    FuType.isLoadVload(dispatchlsqBubbleFutype)   -> LqStall.id.U  ,
++    FuType.isStoreVstore(dispatchlsqBubbleFutype) -> SqStall.id.U ,
+   ))
+ 
+   /** Special Instruction bubble: wait forward or block backward */
+@@ -1268,7 +1261,7 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents with
+ 
+   TopDownCounters.values.foreach(ctr => XSPerfAccumulate(ctr.toString(), PopCount(stallReason.map(_ === ctr.id.U)), XSPerfLevel.CRITICAL))
+ 
+-  val robTrueCommit = io.debugTopDown.fromRob.robTrueCommit
++  val robTrueCommit = io.debugRobTrueCommit.getOrElse(0.U)
+   TopDownCounters.values.foreach(ctr => XSPerfRolling("td_"+ctr.toString(), PopCount(stallReason.map(_ === ctr.id.U)),
+                                                       robTrueCommit, 1000, clock, reset))
+ 
+diff --git a/src/main/scala/xiangshan/backend/rename/Rename.scala b/src/main/scala/xiangshan/backend/rename/Rename.scala
+index 83b5955f8e5..ffaef41caae 100644
+--- a/src/main/scala/xiangshan/backend/rename/Rename.scala
++++ b/src/main/scala/xiangshan/backend/rename/Rename.scala
+@@ -95,6 +95,9 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     // perf only
+     val debugDispatchAllFire = OptionWrapper(backendParams.debugEn, Input(Bool()))
+     val debugOutValidVec = OptionWrapper(backendParams.debugEn, Vec(RenameWidth, Input(Bool())))
++    val debugRobHeadFuType = Option.when(backendParams.debugEn)(Input(FuType()))
++    val debugRobHeadStall = Option.when(backendParams.debugEn)(Input(Bool()))
++    val debugLoadReason = Option.when(backendParams.debugEn)(Input(UInt(log2Ceil(TopDownCounters.NumStallReasons.id).W)))
+     val stallReason = new Bundle {
+       val in = Flipped(new StallReasonIO(RenameWidth))
+       val out = new StallReasonIO(RenameWidth)
+@@ -925,9 +928,22 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     !vlFreeList.io.canAllocate,
+   )) > 1.U
+ 
+-  renameStallReason := MuxCase(BackendOtherCoreStall.id.U, Seq(
+-    redirectStall -> redirectStallReason,
+-    recStall      -> recStallReason,
++  // TODO make all stall reason option to remove getorElse
++  val robHeadStall = io.debugRobHeadStall.getOrElse(false.B)
++  val robHeadFutype = io.debugRobHeadFuType.getOrElse(0.U)
++  val ldReason = io.debugLoadReason.getOrElse(0.U)
++
++  val robHeadStallReason = MuxCase(OtherNotReadyStall.id.U, Seq(
++    FuType.isAMO(robHeadFutype)          -> AtomicStall.id.U          ,
++    FuType.isStoreVstore(robHeadFutype)  -> StoreStall.id.U           ,
++    FuType.isLoadVload(robHeadFutype)    -> ldReason                  ,
++    FuType.isDivSqrt(robHeadFutype)      -> DivStall.id.U             ,
++    FuType.isInt(robHeadFutype)          -> IntNotReadyStall.id.U     ,
++    FuType.isFArith(robHeadFutype)       -> FPNotReadyStall.id.U      ,
++  ))
++  val freelistStall = intFlStall || fpFlStall || vecFlStall || v0FlStall || vlFlStall
++  val freelistStallReason = MuxCase(BackendOtherCoreStall.id.U, Seq(
++    robHeadStall  -> robHeadStallReason,
+     multiFlStall  -> MultiFlStall.id.U,
+     intFlStall    -> IntFlStall.id.U,
+     fpFlStall     -> FpFlStall.id.U,
+@@ -935,6 +951,11 @@ class Rename(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHe
+     v0FlStall     -> V0FlStall.id.U,
+     vlFlStall     -> VlFlStall.id.U,
+   ))
++  renameStallReason := MuxCase(BackendOtherCoreStall.id.U, Seq(
++    redirectStall -> redirectStallReason,
++    recStall      -> recStallReason,
++    freelistStall -> freelistStallReason,
++  ))
+ 
+   // current pipe bubble
+   /** Attention: Special care is needed if this stage may generate its own bubble in later cases
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index 27311e84e14..3131ea0e3c8 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -89,7 +89,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     val csr = new RobCSRIO
+     val snpt = Input(new SnapshotPort)
+     val robFull = Output(Bool())
+-    val headNotReady = Output(Bool())
+     val cpu_wfi = Output(Bool())
+     val wfi = new Bundle {
+       val wfiReq = Output(Bool())
+@@ -120,10 +119,13 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+       val logicPhyRegMap = Vec(RabCommitWidth, ValidIO(new RegWriteFromRab))
+       val excpInfo = ValidIO(new VecExcpInfo)
+     })
++    val IssueQueueDeqSum  = backendParams.allIssueParams.map(_.numDeq).sum
+     val debug_ls = Flipped(new DebugLSIO)
+     val debugRobHeadFuType = Output(FuType())
+     val debugBlockBackward = Option.when(backendParams.debugEn)(Output(Bool()))
+     val debugWaitForward   = Option.when(backendParams.debugEn)(Output(Bool()))
++    val debugIQDeqRobIdxVec = Option.when(backendParams.debugEn)(Vec(IssueQueueDeqSum, Flipped(ValidIO(new RobPtr()))))
++    val debugRobHeadStall = Option.when(backendParams.debugEn)(Output(Bool()))
+     val debugEnqLsq = Input(new LsqEnqIO)
+     val debugHeadLsIssue = Input(Bool())
+     val lsTopdownInfo = Vec(LduCnt + HyuCnt, Input(new LsTopdownInfo))
+@@ -366,8 +368,10 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   val vxsatDataRead = Wire(Vec(CommitWidth, Bool()))
+   io.robDeqPtr := deqPtr
+ 
++  // topdown
+   io.debugRobHeadFuType := robEntries(deqPtr.value).debug_fuType.getOrElse(0.U.asTypeOf(FuType()))
+ 
++
+   /**
+    * connection of [[rab]]
+    */
+@@ -1258,7 +1262,6 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   }
+   io.csr.perfinfo.retiredInstr := retireCounter
+   io.robFull := !allowEnqueue
+-  io.headNotReady := commit_vDeqGroup(deqPtr.value(bankNumWidth-1, 0)) && !commit_wDeqGroup(deqPtr.value(bankNumWidth-1, 0))
+ 
+   io.toVecExcpMod.logicPhyRegMap := rab.io.toVecExcpMod.logicPhyRegMap
+   io.toVecExcpMod.excpInfo := vecExcpInfo
+@@ -1520,6 +1523,43 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+     }
+   }
+ 
++  // topdown
++  val allIssueParams = backendParams.allIssueParams.filter(_.StdCnt == 0)
++  val allExuParams = allIssueParams.map(_.exuBlockParams).flatten
++  val allFuConfigs = allExuParams.map(_.fuConfigs).flatten.toSet.toSeq
++  val sortedFuConfigs = allFuConfigs.sortBy(_.fuType.id)
++  val sortedFulatency = sortedFuConfigs.map(_.latency.latencyVal.getOrElse(4).asUInt)
++  val bypassLatency = 3.U
++  val writeBackLatency = 1.U
++
++  val candidateVec = Option.when(backendParams.debugEn)(Wire(Vec(RobSize, Vec(io.IssueQueueDeqSum, Bool()))))
++  candidateVec.foreach( _ := VecInit.tabulate(RobSize, io.IssueQueueDeqSum){ (index, i) =>
++    val deq = io.debugIQDeqRobIdxVec.get(i)
++    deq.valid && (deq.bits.value === index.U)
++  })
++  for (i <- 0 until RobSize) {
++    when(robEntries(i).valid){
++      robEntries(i).topdownIssued.foreach(_ := candidateVec.get(i).reduce(_ || _) || robEntries(i).topdownIssued.get)
++    }
++  }
++  if (backendParams.debugEn) {
++    dontTouch(candidateVec.get)
++  }
++
++  for (i <- 0 until RobSize) {
++    when(robEntries(i).valid){
++      val hasWriteBack = robEntries(i).uopNum === 0.U
++      robEntries(i).topdownIssueTime.foreach(_ := Mux(hasWriteBack , 0.U,
++        robEntries(i).topdownIssueTime.get +& robEntries(i).topdownIssued.get) )
++    }
++  }
++
++  io.debugRobHeadStall.foreach{ case stall =>
++    val deqEntry = robEntries(deqPtr.value)
++    val deqEntryNormalLatency = Mux1H(deqEntry.debug_fuType.get, sortedFulatency) +& bypassLatency +& writeBackLatency
++    stall := deqEntry.valid && (robEntries(deqPtr.value).topdownIssueTime.get > deqEntryNormalLatency)
++  }
++
+   //difftest signals
+   val firstValidCommit = (deqPtr + PriorityMux(io.commits.commitValid, VecInit(List.tabulate(CommitWidth)(_.U(log2Up(CommitWidth).W))))).value
+ 
+diff --git a/src/main/scala/xiangshan/backend/rob/RobBundles.scala b/src/main/scala/xiangshan/backend/rob/RobBundles.scala
+index 4f998e88eb7..9134735c66b 100644
+--- a/src/main/scala/xiangshan/backend/rob/RobBundles.scala
++++ b/src/main/scala/xiangshan/backend/rob/RobBundles.scala
+@@ -91,6 +91,9 @@ object RobBundles extends HasCircularQueuePtrHelper {
+     val debug_v0Wen      = OptionWrapper(backendParams.debugEn, Bool() )
+     val debug_commitType = OptionWrapper(backendParams.debugEn, CommitType() )
+     // debug_end
++    // topdown
++    val topdownIssued    = OptionWrapper(backendParams.debugEn, Bool())
++    val topdownIssueTime = OptionWrapper(backendParams.debugEn, UInt(XLEN.W))
+ 
+     def isWritebacked: Bool = !uopNum.orR
+     def isUopWritebacked: Bool = !uopNum.orR
+@@ -167,6 +170,8 @@ object RobBundles extends HasCircularQueuePtrHelper {
+       robEntry.perfDebugInfo.foreach(_ := debug.perfDebugInfo)
+       robEntry.debug_sim_trig.foreach(_ := debug.debug_sim_trig)
+     }
++    robEntry.topdownIssued.foreach(_ := false.B)
++    robEntry.topdownIssueTime.foreach(_ := 0.U)
+   }
+ 
+   def connectCommitEntry(robCommitEntry: RobCommitEntryBundle, robEntry: RobEntryBundle): Unit = {
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+index 41f9221b2ff..e52671006de 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala
+@@ -406,8 +406,8 @@ class LsqEnqCtrl(implicit p: Parameters) extends XSModule
+   // To solve the issue easily, we block enqueue when t3_update, which is RegNext(t2_update).
+   io.enq.canAccept := RegNext(ldCanAccept && sqCanAccept && !t2_update)
+   // for Topdown
+-  io.lqStall.foreach(_ := !ldCanAccept || t2_update)
+-  io.sqStall.foreach(_ := !sqCanAccept || t2_update)
++  io.lqStall.foreach(_ := RegNext(!ldCanAccept || t2_update))
++  io.sqStall.foreach(_ := RegNext(!sqCanAccept || t2_update))
+ 
+   val lqOffset = Wire(Vec(io.enq.resp.length, UInt(lqPtr.value.getWidth.W)))
+   val sqOffset = Wire(Vec(io.enq.resp.length, UInt(sqPtr.value.getWidth.W)))
+diff --git a/src/main/scala/xiangshan/package.scala b/src/main/scala/xiangshan/package.scala
+index 65b8033c1b7..da34a871f31 100644
+--- a/src/main/scala/xiangshan/package.scala
++++ b/src/main/scala/xiangshan/package.scala
+@@ -977,10 +977,13 @@ package object xiangshan {
+     // backend
+     // long inst stall at rob head
+     val DivStall = Value("DivStall") // int div, float div/sqrt
+-    val IntNotReadyStall = Value("IntNotReadyStall") // int-inst at rob head not issue
+-    val FPNotReadyStall = Value("FPNotReadyStall") // fp-inst at rob head not issue
+-    val MemNotReadyStall = Value("MemNotReadyStall") // mem-inst at rob head not issue
++    val IntNotReadyStall = Value("IntNotReadyStall") // int-inst at rob head exec long
++    val FPNotReadyStall = Value("FPNotReadyStall") // fp-inst at rob head exec long
++    val MemNotReadyStall = Value("MemNotReadyStall") // mem-inst at rob head exec long
++    val OtherNotReadyStall = Value("OtherNotReadyStall")
+     val RobStall = Value("RobStall")
++    val LqStall = Value("LqStall")
++    val SqStall = Value("SqStall")
+     // freelist full
+     val IntFlStall = Value("IntFlStall")
+     val FpFlStall = Value("FpFlStall")
+@@ -1004,6 +1007,7 @@ package object xiangshan {
+     val BalanceDispatchPolicyStallVec = Value("BalanceDispatchPolicyStallVec")
+     val BalanceDispatchPolicyStallLoad = Value("BalanceDispatchPolicyStallLoad")
+     val BalanceDispatchPolicyStallStore = Value("BalanceDispatchPolicyStallStore")
++    val OtherBalanceDispatchPolicyStall = Value("OtherBalanceDispatchPolicyStall")
+     val IQEnqPolicyStallIssued = Value("IQEnqPolicyStallIssued")
+     val IQEnqPolicyStall = Value("IQEnqPolicyStall")
+     val IntIQFullStallAlu = Value("IntIQFullStallAlu")

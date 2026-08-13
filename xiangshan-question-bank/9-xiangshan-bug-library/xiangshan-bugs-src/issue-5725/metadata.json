@@ -1,0 +1,33 @@
+{
+  "number": 5725,
+  "title": "Behavior mismatch on RVV testcase (`vsetvl x0, x0, rs2` path)",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5725",
+  "state": "closed",
+  "labels": [
+    "module: backend",
+    "module: tool",
+    "type: bug/fixed"
+  ],
+  "author": "KnightGOKU",
+  "created_at": "2026-03-25T13:45:42Z",
+  "updated_at": "2026-04-03T09:18:24Z",
+  "source_files": [
+    "issue-5725/source/emu.log",
+    "issue-5725/source/emu_nodiff.log",
+    "issue-5725/source/spike.log",
+    "issue-5725/source/bug-report.tar.gz",
+    "issue-5725/source/program.zip",
+    "issue-5725/source/program-01.txt",
+    "issue-5725/source/program-02.txt",
+    "issue-5725/source/program-03.txt",
+    "issue-5725/source/program-04.S"
+  ],
+  "archive_files": [
+    "issue-5725/source/emu.log",
+    "issue-5725/source/emu_nodiff.log",
+    "issue-5725/source/spike.log",
+    "issue-5725/source/bug-report.tar.gz",
+    "issue-5725/source/program.zip"
+  ],
+  "has_comments": true
+}

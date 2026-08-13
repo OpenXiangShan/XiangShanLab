@@ -1,0 +1,19 @@
+{
+  "number": 4949,
+  "title": "Mismatch at pc = 0x0080000c3c between Xiangshan and NEMU",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4949",
+  "state": "closed",
+  "labels": [
+    "type: bug/invalid"
+  ],
+  "author": "timegoer",
+  "created_at": "2025-08-14T07:02:56Z",
+  "updated_at": "2025-08-18T07:57:00Z",
+  "source_files": [
+    "issue-4949/source/countertimer_216.tar.gz"
+  ],
+  "archive_files": [
+    "issue-4949/source/countertimer_216.tar.gz"
+  ],
+  "has_comments": false
+}

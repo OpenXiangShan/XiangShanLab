@@ -1,0 +1,2 @@
+0x800001d0 <psm_oracle_fail_store_side_effect>:
+0x800001d4: XS_EXIT

@@ -1,0 +1,6 @@
+toIntRf_valid                = 1
+toIntRf_bits_isFromLoadUnit  = 1
+toIntRf_bits_pdest           = 0x0f
+toIntRf_bits_data            = 0x0000000011223344
+toRob_bits_debugInfo_vaddr   = 0x800000d0
+toRob_bits_debugInfo_paddr   = 0x800000d0

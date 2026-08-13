@@ -1,0 +1,66 @@
+diff --git a/src/main/scala/xiangshan/backend/CtrlBlock.scala b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+index a7efa8fa253..f17fc49fb9f 100644
+--- a/src/main/scala/xiangshan/backend/CtrlBlock.scala
++++ b/src/main/scala/xiangshan/backend/CtrlBlock.scala
+@@ -191,18 +191,23 @@ class CtrlBlockImp(
+   )
+ 
+   private val exuRedirects: Seq[ValidIO[Redirect]] = io.fromWB.wbData.filter(_.bits.redirect.nonEmpty).map(x => {
++    val hasCSR = x.bits.params.hasCSR
+     val out = Wire(Valid(new Redirect()))
+     out.valid := x.valid && x.bits.redirect.get.valid && x.bits.redirect.get.bits.cfiUpdate.isMisPred && !x.bits.robIdx.needFlush(Seq(s1_s3_redirect, s2_s4_redirect))
+     out.bits := x.bits.redirect.get.bits
+     out.bits.debugIsCtrl := true.B
+     out.bits.debugIsMemVio := false.B
+     // for fix timing, next cycle assgin
+-    out.bits.cfiUpdate.backendIAF := false.B
+-    out.bits.cfiUpdate.backendIPF := false.B
+-    out.bits.cfiUpdate.backendIGPF := false.B
++    if (!hasCSR) {
++      out.bits.cfiUpdate.backendIAF := false.B
++      out.bits.cfiUpdate.backendIPF := false.B
++      out.bits.cfiUpdate.backendIGPF := false.B
++    }
+     out
+   }).toSeq
+   private val oldestOneHot = Redirect.selectOldestRedirect(exuRedirects)
++  private val CSROH = VecInit(io.fromWB.wbData.filter(_.bits.redirect.nonEmpty).map(x => x.bits.params.hasCSR.B))
++  private val oldestExuRedirectIsCSR = oldestOneHot === CSROH
+   private val oldestExuRedirect = Mux1H(oldestOneHot, exuRedirects)
+   private val oldestExuPredecode = Mux1H(oldestOneHot, exuPredecode)
+ 
+@@ -310,6 +315,7 @@ class CtrlBlockImp(
+   redirectGen.io.hartId := io.fromTop.hartId
+   redirectGen.io.oldestExuRedirect.valid := GatedValidRegNext(oldestExuRedirect.valid)
+   redirectGen.io.oldestExuRedirect.bits := RegEnable(oldestExuRedirect.bits, oldestExuRedirect.valid)
++  redirectGen.io.oldestExuRedirectIsCSR := RegEnable(oldestExuRedirectIsCSR, oldestExuRedirect.valid)
+   redirectGen.io.instrAddrTransType := RegNext(io.fromCSR.instrAddrTransType)
+   redirectGen.io.oldestExuOutPredecode.valid := GatedValidRegNext(oldestExuPredecode.valid)
+   redirectGen.io.oldestExuOutPredecode := RegEnable(oldestExuPredecode, oldestExuPredecode.valid)
+diff --git a/src/main/scala/xiangshan/backend/ctrlblock/RedirectGenerator.scala b/src/main/scala/xiangshan/backend/ctrlblock/RedirectGenerator.scala
+index addb100ce48..50da0ec7eff 100644
+--- a/src/main/scala/xiangshan/backend/ctrlblock/RedirectGenerator.scala
++++ b/src/main/scala/xiangshan/backend/ctrlblock/RedirectGenerator.scala
+@@ -15,6 +15,7 @@ class RedirectGenerator(implicit p: Parameters) extends XSModule
+ 
+     val hartId = Input(UInt(8.W))
+     val oldestExuRedirect = Flipped(ValidIO(new Redirect))
++    val oldestExuRedirectIsCSR = Input(Bool())
+     val instrAddrTransType = Input(new AddrTransType)
+     val oldestExuOutPredecode = Input(new PreDecodeInfo) // guarded by exuRedirect.valid
+     val loadReplay = Flipped(ValidIO(new Redirect))
+@@ -33,9 +34,11 @@ class RedirectGenerator(implicit p: Parameters) extends XSModule
+   val oldestExuRedirect = Wire(chiselTypeOf(io.oldestExuRedirect))
+   oldestExuRedirect := io.oldestExuRedirect
+   oldestExuRedirect.bits.fullTarget := Cat(io.oldestExuRedirect.bits.fullTarget.head(XLEN - VAddrBits), io.oldestExuRedirect.bits.cfiUpdate.target)
+-  oldestExuRedirect.bits.cfiUpdate.backendIAF := io.instrAddrTransType.checkAccessFault(oldestExuRedirect.bits.fullTarget)
+-  oldestExuRedirect.bits.cfiUpdate.backendIPF := io.instrAddrTransType.checkPageFault(oldestExuRedirect.bits.fullTarget)
+-  oldestExuRedirect.bits.cfiUpdate.backendIGPF := io.instrAddrTransType.checkGuestPageFault(oldestExuRedirect.bits.fullTarget)
++  when(!io.oldestExuRedirectIsCSR){
++    oldestExuRedirect.bits.cfiUpdate.backendIAF := io.instrAddrTransType.checkAccessFault(oldestExuRedirect.bits.fullTarget)
++    oldestExuRedirect.bits.cfiUpdate.backendIPF := io.instrAddrTransType.checkPageFault(oldestExuRedirect.bits.fullTarget)
++    oldestExuRedirect.bits.cfiUpdate.backendIGPF := io.instrAddrTransType.checkGuestPageFault(oldestExuRedirect.bits.fullTarget)
++  }
+   val allRedirect: Vec[ValidIO[Redirect]] = VecInit(oldestExuRedirect, loadRedirect)
+   val oldestOneHot = Redirect.selectOldestRedirect(allRedirect)
+   val flushAfter = RegInit(0.U.asTypeOf(ValidIO(new Redirect)))

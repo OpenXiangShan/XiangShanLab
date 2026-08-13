@@ -1,0 +1,5 @@
+_freeList_io_validCount = 15
+_freeList_io_canAllocate = [true, false, false]
+
+lane 0 request: ROB 35 / FTQ 5 / offset 7 / paddr 0x10000090 / mmio 1
+lane 1 request: ROB 36 / FTQ 5 / offset 9 / paddr 0x10000098 / mmio 1

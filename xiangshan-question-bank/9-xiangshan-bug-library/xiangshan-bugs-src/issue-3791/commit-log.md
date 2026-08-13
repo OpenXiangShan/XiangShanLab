@@ -1,0 +1,248 @@
+# Commit Log
+- Issue: #3791
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3791
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3791
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3791
+- Changed files: 13
+- Additions: 8
+- Deletions: 34
+
+## Files
+- `src/main/scala/xiangshan/frontend/BPU.scala`
+- `src/main/scala/xiangshan/frontend/Composer.scala`
+- `src/main/scala/xiangshan/frontend/FTB.scala`
+- `src/main/scala/xiangshan/frontend/FauFTB.scala`
+- `src/main/scala/xiangshan/frontend/Frontend.scala`
+- `src/main/scala/xiangshan/frontend/FrontendBundle.scala`
+- `src/main/scala/xiangshan/frontend/IFU.scala`
+- `src/main/scala/xiangshan/frontend/ITTAGE.scala`
+- `src/main/scala/xiangshan/frontend/PreDecode.scala`
+- `src/main/scala/xiangshan/frontend/SC.scala`
+- `src/main/scala/xiangshan/frontend/Tage.scala`
+- `src/main/scala/xiangshan/frontend/WrBypass.scala`
+- `src/main/scala/xiangshan/frontend/newRAS.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/BPU.scala b/src/main/scala/xiangshan/frontend/BPU.scala
+index f7874457b58..080569e4b16 100644
+--- a/src/main/scala/xiangshan/frontend/BPU.scala
++++ b/src/main/scala/xiangshan/frontend/BPU.scala
+@@ -21,9 +21,7 @@ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import scala.math.min
+ import utility._
+-import utils._
+ import xiangshan._
+-import xiangshan.backend.decode.ImmUnion
+ 
+ trait HasBPUConst extends HasXSParameter {
+   val MaxMetaBaseLength = if (!env.FPGAPlatform) 512 else 256 // TODO: Reduce meta length
+@@ -555,9 +553,8 @@ class Predictor(implicit p: Parameters) extends XSModule with HasBPUConst with H
+ 
+   val s1_ghv_wens = (0 until HistoryLength).map(n =>
+     (0 until numBr).map(b =>
+-      s1_ghist_ptr_dup(0).value === (CGHPtr(false.B, n.U) + b.U).value && resp.s1.shouldShiftVec(0)(b) && s1_valid_dup(
+-        0
+-      )
++      s1_ghist_ptr_dup(0).value === (CGHPtr(false.B, n.U) + b.U).value &&
++        resp.s1.shouldShiftVec(0)(b) && s1_valid_dup(0)
+     )
+   )
+   val s1_ghv_wdatas = (0 until HistoryLength).map(n =>
+@@ -666,9 +663,8 @@ class Predictor(implicit p: Parameters) extends XSModule with HasBPUConst with H
+ 
+   val s2_ghv_wens = (0 until HistoryLength).map(n =>
+     (0 until numBr).map(b =>
+-      s2_ghist_ptr_dup(0).value === (CGHPtr(false.B, n.U) + b.U).value && resp.s2.shouldShiftVec(0)(
+-        b
+-      ) && s2_redirect_dup(0)
++      s2_ghist_ptr_dup(0).value === (CGHPtr(false.B, n.U) + b.U).value &&
++        resp.s2.shouldShiftVec(0)(b) && s2_redirect_dup(0)
+     )
+   )
+   val s2_ghv_wdatas = (0 until HistoryLength).map(n =>
+diff --git a/src/main/scala/xiangshan/frontend/Composer.scala b/src/main/scala/xiangshan/frontend/Composer.scala
+index 8a854798464..ed21c0b604c 100644
+--- a/src/main/scala/xiangshan/frontend/Composer.scala
++++ b/src/main/scala/xiangshan/frontend/Composer.scala
+@@ -17,11 +17,8 @@
+ package xiangshan.frontend
+ 
+ import chisel3._
+-import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import utility._
+-import utils._
+-import xiangshan._
+ 
+ class Composer(implicit p: Parameters) extends BasePredictor with HasBPUConst with HasPerfEvents {
+   val (components, resp) = getBPDComponents(io.in.bits.resp_in(0), p)
+diff --git a/src/main/scala/xiangshan/frontend/FTB.scala b/src/main/scala/xiangshan/frontend/FTB.scala
+index c882de60d9e..bfbe108dff5 100644
+--- a/src/main/scala/xiangshan/frontend/FTB.scala
++++ b/src/main/scala/xiangshan/frontend/FTB.scala
+@@ -19,11 +19,8 @@ package xiangshan.frontend
+ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+-import os.copy
+ import scala.{Tuple2 => &}
+-import scala.math.min
+ import utility._
+-import utils._
+ import xiangshan._
+ 
+ trait FTBParams extends HasXSParameter with HasBPUConst {
+diff --git a/src/main/scala/xiangshan/frontend/FauFTB.scala b/src/main/scala/xiangshan/frontend/FauFTB.scala
+index 6ca3dd6e8f8..d0e3dd8bbc4 100644
+--- a/src/main/scala/xiangshan/frontend/FauFTB.scala
++++ b/src/main/scala/xiangshan/frontend/FauFTB.scala
+@@ -21,7 +21,6 @@ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import scala.{Tuple2 => &}
+ import utility._
+-import utils._
+ import xiangshan._
+ 
+ trait FauFTBParams extends HasXSParameter with HasBPUConst {
+diff --git a/src/main/scala/xiangshan/frontend/Frontend.scala b/src/main/scala/xiangshan/frontend/Frontend.scala
+index 941e442283b..c91839cf9f3 100644
+--- a/src/main/scala/xiangshan/frontend/Frontend.scala
++++ b/src/main/scala/xiangshan/frontend/Frontend.scala
+@@ -21,7 +21,6 @@ import freechips.rocketchip.diplomacy.LazyModule
+ import freechips.rocketchip.diplomacy.LazyModuleImp
+ import org.chipsalliance.cde.config.Parameters
+ import utility._
+-import utils._
+ import xiangshan._
+ import xiangshan.backend.fu.PFEvent
+ import xiangshan.backend.fu.PMP
+diff --git a/src/main/scala/xiangshan/frontend/FrontendBundle.scala b/src/main/scala/xiangshan/frontend/FrontendBundle.scala
+index 5c4231aeb43..2810c7991c2 100644
+--- a/src/main/scala/xiangshan/frontend/FrontendBundle.scala
++++ b/src/main/scala/xiangshan/frontend/FrontendBundle.scala
+@@ -18,11 +18,8 @@ package xiangshan.frontend
+ 
+ import chisel3._
+ import chisel3.util._
+-import java.util.ResourceBundle.Control
+ import org.chipsalliance.cde.config.Parameters
+-import scala.math._
+ import utility._
+-import utils._
+ import xiangshan._
+ import xiangshan.backend.fu.PMPRespBundle
+ import xiangshan.cache.mmu.TlbResp
+diff --git a/src/main/scala/xiangshan/frontend/IFU.scala b/src/main/scala/xiangshan/frontend/IFU.scala
+index ea81c57a855..cd76f2efa1f 100644
+--- a/src/main/scala/xiangshan/frontend/IFU.scala
++++ b/src/main/scala/xiangshan/frontend/IFU.scala
+@@ -19,15 +19,11 @@ package xiangshan.frontend
+ 
+ import chisel3._
+ import chisel3.util._
+-import freechips.rocketchip.rocket.RVCDecoder
+ import org.chipsalliance.cde.config.Parameters
+ import utility._
+ import utility.ChiselDB
+-import utils._
+ import xiangshan._
+ import xiangshan.backend.GPAMemEntry
+-import xiangshan.backend.fu.PMPReqBundle
+-import xiangshan.backend.fu.PMPRespBundle
+ import xiangshan.cache.mmu._
+ import xiangshan.frontend.icache._
+ 
+diff --git a/src/main/scala/xiangshan/frontend/ITTAGE.scala b/src/main/scala/xiangshan/frontend/ITTAGE.scala
+index 611c1da29c7..a38e1a9a55f 100644
+--- a/src/main/scala/xiangshan/frontend/ITTAGE.scala
++++ b/src/main/scala/xiangshan/frontend/ITTAGE.scala
+@@ -21,9 +21,7 @@ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import scala.{Tuple2 => &}
+ import scala.math.min
+-import scala.util.matching.Regex
+ import utility._
+-import utils._
+ import xiangshan._
+ 
+ trait ITTageParams extends HasXSParameter with HasBPUParameter {
+diff --git a/src/main/scala/xiangshan/frontend/PreDecode.scala b/src/main/scala/xiangshan/frontend/PreDecode.scala
+index 2600a25d648..c645db22ac0 100644
+--- a/src/main/scala/xiangshan/frontend/PreDecode.scala
++++ b/src/main/scala/xiangshan/frontend/PreDecode.scala
+@@ -17,11 +17,9 @@
+ package xiangshan.frontend
+ 
+ import chisel3._
+-import chisel3.util
+ import chisel3.util._
+ import freechips.rocketchip.rocket.ExpandedInstruction
+ import freechips.rocketchip.rocket.RVCDecoder
+-import java.lang.reflect.Parameter
+ import org.chipsalliance.cde.config.Parameters
+ import utility._
+ import utils._
+diff --git a/src/main/scala/xiangshan/frontend/SC.scala b/src/main/scala/xiangshan/frontend/SC.scala
+index ef5cff3d967..1ba2a109767 100644
+--- a/src/main/scala/xiangshan/frontend/SC.scala
++++ b/src/main/scala/xiangshan/frontend/SC.scala
+@@ -22,7 +22,6 @@ import org.chipsalliance.cde.config.Parameters
+ import scala.{Tuple2 => &}
+ import scala.math.min
+ import utility._
+-import utils._
+ import xiangshan._
+ 
+ trait HasSCParameter extends TageParams {}
+diff --git a/src/main/scala/xiangshan/frontend/Tage.scala b/src/main/scala/xiangshan/frontend/Tage.scala
+index 5397f5a7ef2..0861c85f00e 100644
+--- a/src/main/scala/xiangshan/frontend/Tage.scala
++++ b/src/main/scala/xiangshan/frontend/Tage.scala
+@@ -19,12 +19,9 @@ package xiangshan.frontend
+ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+-import os.followLink
+ import scala.{Tuple2 => &}
+ import scala.math.min
+-import scala.util.matching.Regex
+ import utility._
+-import utils._
+ import xiangshan._
+ 
+ trait TageParams extends HasBPUConst with HasXSParameter {
+diff --git a/src/main/scala/xiangshan/frontend/WrBypass.scala b/src/main/scala/xiangshan/frontend/WrBypass.scala
+index b4d3b916901..c6723bf7db2 100644
+--- a/src/main/scala/xiangshan/frontend/WrBypass.scala
++++ b/src/main/scala/xiangshan/frontend/WrBypass.scala
+@@ -19,9 +19,7 @@ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import utility._
+-import utils._
+ import xiangshan._
+-import xiangshan.cache.mmu.CAMTemplate
+ 
+ class WrBypass[T <: Data](
+     gen:            T,
+diff --git a/src/main/scala/xiangshan/frontend/newRAS.scala b/src/main/scala/xiangshan/frontend/newRAS.scala
+index 91af23a2cda..4d3a0f74fc6 100644
+--- a/src/main/scala/xiangshan/frontend/newRAS.scala
++++ b/src/main/scala/xiangshan/frontend/newRAS.scala
+@@ -548,7 +548,10 @@ class RAS(implicit p: Parameters) extends BasePredictor {
+     }.elsewhen(io.commit_valid && (distanceBetween(io.commit_meta_TOSW, BOS) > 2.U)) {
+       BOS := specPtrDec(io.commit_meta_TOSW)
+     }
+-    XSError(io.commit_valid && (distanceBetween(io.commit_meta_TOSW,BOS) > 2.U), "The use of inference queue of the RAS module has unexpected situations")
++    XSError(
++      io.commit_valid && (distanceBetween(io.commit_meta_TOSW, BOS) > 2.U),
++      "The use of inference queue of the RAS module has unexpected situations"
++    )
+ 
+     when(io.redirect_valid) {
+       TOSR := io.redirect_meta_TOSR
+```

@@ -1,0 +1,19 @@
+{
+  "loadunit_secret_data": {
+    "cycle": 9835,
+    "paddr": "0x80003000",
+    "pc": "0x80001004",
+    "class": ["secret_data"]
+  },
+  "loadunit_probe_secret_line": {
+    "cycle": 9842,
+    "paddr": "0x800051c0",
+    "pc": "0x80001034",
+    "class": ["probe_secret_line"]
+  },
+  "dcache_outer_probe_secret_line": {
+    "cycle": 9843,
+    "addr": "0x800051c0",
+    "class": ["probe_secret_line"]
+  }
+}

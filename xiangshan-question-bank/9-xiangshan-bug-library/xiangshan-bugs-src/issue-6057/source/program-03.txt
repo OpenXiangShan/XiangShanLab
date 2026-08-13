@@ -1,0 +1,3 @@
+0x8000101c: 0x002026f3   csrrs a3, frm, zero   <-- faulting instruction
+0x80001020: 0x607493bb   rolw  t2, s1, t2
+0x80001024: 0xc02cf5d3   fcvt.l.s a1, fs9, dyn <-- value incorrectly written to mtval

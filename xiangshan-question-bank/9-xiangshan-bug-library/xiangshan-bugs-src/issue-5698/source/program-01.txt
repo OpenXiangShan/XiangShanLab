@@ -1,0 +1,5 @@
+/nfs/home/cirunner/ci-runner-xs/xs-runner-node030-20/_work/XiangShan/XiangShan$ cat stderr.log
+Assertion failed at LogUtils.scala:132
+
+emu: /nfs/home/cirunner/ci-runner-xs/xs-builder-node030-3/_work/XiangShan/XiangShan/build/gsim-compile/model/SimTop120.cpp:24985: void SSimTop::subStep118(): Assertion `!(cpu__DOT__l_soc__DOT__socMisc__DOT__xbar__DOT___readys_T_3 & cpu__DOT__l_soc__DOT__core_with_l2__DOT__core__DOT__memBlock__DOT__inner__DOT__lsq__DOT__storeQueue__DOT___T_1267)' failed.
+Aborted (core dumped)

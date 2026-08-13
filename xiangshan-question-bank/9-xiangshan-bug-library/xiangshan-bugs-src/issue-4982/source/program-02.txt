@@ -1,0 +1,68 @@
+emu compiled at Aug 25 2025, 19:57:26
+Using simulated 32768B flash
+Core  0's Commit SHA is: 5adaa47ba5, dirty: 0
+Using simulated 8386560MB RAM
+The image is ./errors/57f10079a3531b72c40b3e62fa31a374
+The reference model is /home/xuyinan/xs2/riscv-isa-sim/difftest/build/riscv64-spike-so
+The first instruction of core 0 has commited. Difftest enabled. 
+
+==============  In the last commit group  ==============
+the first commit instr pc of DUT is 0x0000000080000000
+the first commit instr pc of REF is 0x0000000080000000
+
+============== Commit Group Trace (Core 0) ==============
+commit group [00]: pc 0010000000 cmtcnt 1
+commit group [01]: pc 0010000004 cmtcnt 1
+commit group [02]: pc 0010000008 cmtcnt 1
+commit group [03]: pc 0080000000 cmtcnt 1 <--
+
+============== Commit Instr Trace ==============
+[00] commit pc 0000000010000000 inst 0010029b wen 1 dst 05 data 0000000000000001 idx 000 addiw   t0, zero, 1
+[01] commit pc 0000000010000004 inst 01f29293 wen 1 dst 05 data 0000000080000000 idx 001 slli    t0, t0, 31
+[02] commit pc 0000000010000008 inst 00028067 wen 0 dst 00 data 0000000000000000 idx 002 jr      t0
+[03] commit pc 0000000080000000 inst 7c2c1373 wen 1 dst 06 data 186f0b080b0b0b0f idx 003 csrrw   t1, unknown_7c2, s8 <--
+
+==============  REF Regs  ==============
+zero: 0x0000000000000000   ra: 0x0000000000000000   sp: 0x0000000000000000   gp: 0x0000000000000000 
+  tp: 0x0000000000000000   t0: 0x0000000080000000   t1: 0x0000000000000000   t2: 0x0000000000000000 
+  s0: 0x0000000000000000   s1: 0x0000000000000000   a0: 0x0000000000000000   a1: 0x0000000000000000 
+  a2: 0x0000000000000000   a3: 0x0000000000000000   a4: 0x0000000000000000   a5: 0x0000000000000000 
+  a6: 0x0000000000000000   a7: 0x0000000000000000   s2: 0x0000000000000000   s3: 0x0000000000000000 
+  s4: 0x0000000000000000   s5: 0x0000000000000000   s6: 0x0000000000000000   s7: 0x0000000000000000 
+  s8: 0x0000000000000000   s9: 0x0000000000000000  s10: 0x0000000000000000  s11: 0x0000000000000000 
+  t3: 0x0000000000000000   t4: 0x0000000000000000   t5: 0x0000000000000000   t6: 0x0000000000000000 
+ ft0: 0x83720928b14f7ede  ft1: 0x06e02a1b9ad95e1a  ft2: 0x0c6d91c161353d9d  ft3: 0x05bc7aba82c679d0 
+ ft4: 0x2ab3fcde459dae4f  ft5: 0x7c68394e98cce9fb  ft6: 0x932424c2e84bdbda  ft7: 0x851107f32494b32d 
+ fs0: 0x68bbeb876e327430  fs1: 0x8b6dac8280448a62  fa0: 0xf72ac676c6eaf24e  fa1: 0x2ff97251189f6b2b 
+ fa2: 0xdcc4e347dc327d80  fa3: 0xeddb1a97ae3dc698  fa4: 0xbe1f6612f6c63f99  fa5: 0x7d886c5e19c30c8c 
+ fa6: 0x7be5468818d23360  fa7: 0xde5b10ac25491097  fs2: 0xadf066e1bb240882  fs3: 0x6345eddcff7b5cca 
+ fs4: 0xbac25b1fa93eccaa  fs5: 0x5e827755d5e29523  fs6: 0xb6fd9c38870fcc27  fs7: 0xb2cded3c50a4037e 
+ fs8: 0xdc05d41ba91a6f1c  fs9: 0xe88ee5eef3674f19 fs10: 0x0000000000000000 fs11: 0xb1b119ca0bbd1a9b 
+ ft8: 0xdc536ea7ee9bb03d  ft9: 0x8e0844084359ba56 ft10: 0xeab2f59456a27122 ft11: 0x847591c49bc71b70 
+pc: 0x0000000000000000 mstatus: 0x0000040a00001800 mcause: 0x0000000000000002 mepc: 0x0000000080000000
+                       sstatus: 0x0000000200000000 scause: 0x0000000000000000 sepc: 0x0000000000000000
+satp: 0x0000000000000000
+mip: 0x0000000000000000 mie: 0x0000000000000000 mscratch: 0xb31f54078bf0a73c sscratch: 0xb31f54078bf0a73c
+mideleg: 0x0000000000001444 medeleg: 0x0000000000000000
+mtval: 0x000000007c2c1373 stval: 0x0000000000000000 mtvec: 0x0000000000000000 stvec: 0x0000000000000000
+privilege mode:3
+ 0: cfg:0x00 addr:0x0000000000000000 |  1: cfg:0x00 addr:0x0000000000000000
+ 2: cfg:0x00 addr:0x0000000000000000 |  3: cfg:0x00 addr:0x0000000000000000
+ 4: cfg:0x00 addr:0x0000000000000000 |  5: cfg:0x00 addr:0x0000000000000000
+ 6: cfg:0x00 addr:0x0000000000000000 |  7: cfg:0x00 addr:0x0000000000000000
+ 8: cfg:0x00 addr:0x0000000000000000 |  9: cfg:0x00 addr:0x0000000000000000
+10: cfg:0x00 addr:0x0000000000000000 | 11: cfg:0x00 addr:0x0000000000000000
+12: cfg:0x00 addr:0x0000000000000000 | 13: cfg:0x00 addr:0x0000000000000000
+14: cfg:0x00 addr:0x0000000000000000 | 15: cfg:0x00 addr:0x0000000000000000
+privilegeMode: 3
+     t1 different at pc = 0x0080000000, right= 0x0000000000000000, wrong = 0x186f0b080b0b0b0f
+mstatus different at pc = 0x0080000000, right= 0x0000040a00001800, wrong = 0x0000000a00000000
+   mepc different at pc = 0x0080000000, right= 0x0000000080000000, wrong = 0x0000000000000000
+  mtval different at pc = 0x0080000000, right= 0x000000007c2c1373, wrong = 0x0000000000000000
+ mcause different at pc = 0x0080000000, right= 0x0000000000000002, wrong = 0x0000000000000000
+Core 0: [31mABORT at pc = 0xfffeb4daa5c54916
+[0m[35mCore-0 instrCnt = 4, cycleCnt = 4,147, IPC = 0.000965
+[0mSimMemory: img_size 0, req_all 80, req_in_range 0
+[34mSeed=0 Guest cycle spent: 4,151 (this will be different from cycleCnt if emu loads a snapshot)
+[0m[34mHost time spent: 1,691ms
+[0m

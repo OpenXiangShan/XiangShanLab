@@ -1,0 +1,4 @@
+Assertion failed at MainPipe.sv:3409 / LogUtils.scala:133
+L1DCache failed too many SCs in a row, resv set addr always match
+Core 0: ABORT at pc = 0x80001df4
+Core-0 instrCnt = 3,617, cycleCnt = 33,694

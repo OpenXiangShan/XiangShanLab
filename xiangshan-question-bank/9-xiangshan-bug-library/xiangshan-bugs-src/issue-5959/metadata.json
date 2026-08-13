@@ -1,0 +1,29 @@
+{
+  "number": 5959,
+  "title": "fix(Ifu,InstrUncache): do not mark incomplete if is RVC or has exception",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5959",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "topic: functionality"
+  ],
+  "author": "ngc7331",
+  "created_at": "2026-05-14T06:25:02Z",
+  "updated_at": "2026-05-20T04:20:18Z",
+  "submitted_at": "2026-05-14",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5959/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend",
+    "uncategorized"
+  ],
+  "bug_category_source": "biweekly-en"
+}

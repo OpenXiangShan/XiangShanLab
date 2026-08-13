@@ -1,0 +1,21 @@
+{
+  "number": 3364,
+  "title": "IssueQueue: only trans valid but not issued entry for fix ldCancel timing",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3364",
+  "state": "closed",
+  "labels": [],
+  "author": "xiaofeibao-xjtu",
+  "created_at": "2024-08-09T01:54:40Z",
+  "updated_at": "2024-08-09T07:56:16Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3364/commit-log.md"
+  ],
+  "submitted_at": "2024-08-09",
+  "branch": "",
+  "rtl_commit": ""
+}

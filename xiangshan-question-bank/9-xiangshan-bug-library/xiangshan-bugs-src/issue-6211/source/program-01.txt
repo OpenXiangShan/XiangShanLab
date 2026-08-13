@@ -1,0 +1,2 @@
+mepc different  right = 0x0000000040000ffe, wrong = 0x0000000040001000
+mtval different right = 0x0000000040001000, wrong = 0x0000000040001002

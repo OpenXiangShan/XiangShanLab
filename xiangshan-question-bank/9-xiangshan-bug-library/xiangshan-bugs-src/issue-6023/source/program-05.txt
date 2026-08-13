@@ -1,0 +1,10 @@
+[*] PoC: tinst store bit 5 missing for G-stage faults
+[*] hgatp = 0x8000000000080008
+[*] vsatp = 0x8000000000080004
+[*] Entering VS-mode...
+[*] Back in M-mode after exception
+[*] mcause = 0x17 (NEMU EX_SGPF=0x17)
+[*] mtinst = 0x3000          <-- should be 0x3020
+[*] Store guest-page fault confirmed
+[*] BUG CONFIRMED: mtinst = 0x3000, bit 5 CLEAR
+HIT BAD TRAP at pc = 0x80000340

@@ -1,0 +1,21 @@
+{
+  "number": 4948,
+  "title": "Mismatch at pc = 0x0080000344 between Xiangshan and NEMU",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4948",
+  "state": "closed",
+  "labels": [
+    "type: bug/invalid"
+  ],
+  "author": "timegoer",
+  "created_at": "2025-08-14T04:00:34Z",
+  "updated_at": "2025-08-18T07:56:59Z",
+  "source_files": [
+    "issue-4948/source/countertimer_32.txt",
+    "issue-4948/source/countertimer_32.tar.gz"
+  ],
+  "archive_files": [
+    "issue-4948/source/countertimer_32.txt",
+    "issue-4948/source/countertimer_32.tar.gz"
+  ],
+  "has_comments": false
+}

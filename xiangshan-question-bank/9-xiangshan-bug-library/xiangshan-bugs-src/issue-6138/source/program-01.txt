@@ -1,0 +1,8 @@
+{
+  "guest_threshold_recovers_secret_bit": 1,
+  "secret_dependent_attacker_probe_redirect": 1,
+  "secret_dependent_mcycle_delta": 1,
+  "secret_dependent_wrongpath_training": 1,
+  "secret_recovery_confirmed": 1,
+  "security_primitive_confirmed": 1
+}

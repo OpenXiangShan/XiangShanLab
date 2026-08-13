@@ -1,0 +1,44 @@
+# Commit Log
+- Issue: #4817
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4817
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4817
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4817
+- Changed files: 2
+- Additions: 2
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/VirtualSupervisorLevel.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+index 9c77d6f460b..868ce07cc35 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+@@ -539,7 +539,7 @@ class MstatusModule(implicit override val p: Parameters) extends CSRModule("MSta
+     reg.FS := ContextStatus.Dirty
+   }
+ 
+-  when (robCommit.vsDirty || writeVCSR) {
++  when (robCommit.vsDirty || writeVCSR || robCommit.vstart.valid && robCommit.vstart.bits =/= 0.U) {
+     assert(reg.VS =/= ContextStatus.Off, "The [m|s]status.VS should not be Off when set dirty, please check decode")
+     reg.VS := ContextStatus.Dirty
+   }
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/VirtualSupervisorLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/VirtualSupervisorLevel.scala
+index 7f49cd07896..fed5e980992 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/VirtualSupervisorLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/VirtualSupervisorLevel.scala
+@@ -33,7 +33,7 @@ trait VirtualSupervisorLevel { self: NewCSR with SupervisorLevel with Hypervisor
+         reg.FS := ContextStatus.Dirty
+       }
+ 
+-      when ((robCommit.vsDirty || writeVCSR) && isVirtMode) {
++      when ((robCommit.vsDirty || writeVCSR || robCommit.vstart.valid && robCommit.vstart.bits =/= 0.U) && isVirtMode) {
+         assert(reg.VS =/= ContextStatus.Off, "The vsstatus.VS should not be Off when set dirty, please check decode")
+         reg.VS := ContextStatus.Dirty
+       }
+```

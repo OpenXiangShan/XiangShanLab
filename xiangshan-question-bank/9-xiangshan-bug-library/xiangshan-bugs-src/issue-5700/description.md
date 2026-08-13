@@ -1,0 +1,3 @@
+This pr fixes #5695 for v3. According to RISC-V spec: Non-idempotent regions might not support misaligned accesses. Misaligned accesses to such regions should raise access-fault exceptions, indicating that software should not emulate the misaligned access using multiple smaller accesses, which could cause unexpected side effects.
+
+Therefore, unalign accesses to MMIO region should raise an af exception instead of a misalign exception. This commit fixes this issue. Unalign access to NC region still raises misalign exception for its idempotent memory attribute. Besides it should be noted that store has the same bug, which will be fixed in the subsequent StoreUnit refactoring.

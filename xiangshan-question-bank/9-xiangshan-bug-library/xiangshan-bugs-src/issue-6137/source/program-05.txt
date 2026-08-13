@@ -1,0 +1,9 @@
+disabled_abtb_prediction_fire       = 32
+disabled_abtb_pc_mismatch           = 24
+disabled_abtb_with_icache_activity  = 24
+icache_fetch_req_fire               = 378
+icache_resp_valid                   = 322
+icache_hit_resp                     = 322
+loadunit_secret_data                = 2
+loadunit_probe_secret_line          = 2
+dcache_outer_probe_secret_line      = 2

@@ -1,0 +1,111 @@
+# Commit Log
+- Issue: #4066
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4066
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4066
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4066
+- Changed files: 3
+- Additions: 24
+- Deletions: 4
+
+## Files
+- `src/main/scala/xiangshan/backend/decode/DecodeUnit.scala`
+- `src/main/scala/xiangshan/backend/decode/UopInfoGen.scala`
+- `src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index 719e3a23e43..54415f33532 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -923,7 +923,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   ))
+ 
+   private val isLs = FuType.isLoadStore(decodedInst.fuType)
+-  private val isVls = FuType.isVls(decodedInst.fuType)
++  private val isVls = inst.isVecStore || inst.isVecLoad
+   private val isStore = FuType.isStore(decodedInst.fuType)
+   private val isAMO = FuType.isAMO(decodedInst.fuType)
+   private val isVStore = FuType.isVStore(decodedInst.fuType)
+@@ -1068,6 +1068,10 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   decodedInst.srcType(4) := Mux(!isFpToVecInst, SrcType.vp, SrcType.DC) // vconfig
+ 
+   val uopInfoGen = Module(new UopInfoGen)
++  uopInfoGen.io.in.preInfo.isVecArith := inst.isVecArith
++  uopInfoGen.io.in.preInfo.isVecMem := inst.isVecStore || inst.isVecLoad
++  uopInfoGen.io.in.preInfo.isAmoCAS := inst.isAMOCAS
++
+   uopInfoGen.io.in.preInfo.typeOfSplit := decodedInst.uopSplitType
+   uopInfoGen.io.in.preInfo.vsew := decodedInst.vpu.vsew
+   uopInfoGen.io.in.preInfo.vlmul := decodedInst.vpu.vlmul
+diff --git a/src/main/scala/xiangshan/backend/decode/UopInfoGen.scala b/src/main/scala/xiangshan/backend/decode/UopInfoGen.scala
+index 6dc28380d67..aa1dc5de11d 100644
+--- a/src/main/scala/xiangshan/backend/decode/UopInfoGen.scala
++++ b/src/main/scala/xiangshan/backend/decode/UopInfoGen.scala
+@@ -245,7 +245,7 @@ class UopInfoGen (implicit p: Parameters) extends XSModule {
+   val numOfWB = Mux(UopSplitType.isAMOCAS(typeOfSplit), numOfUop >> 1, numOfUop)
+ 
+   // vector instruction's uop UopSplitType are not SCA_SIM, and when the number of uop is 1, we can regard it as a simple instruction
+-  isComplex := typeOfSplit =/= UopSplitType.SCA_SIM
++  isComplex := io.in.preInfo.isVecArith || io.in.preInfo.isVecMem || io.in.preInfo.isAmoCAS
+   io.out.uopInfo.numOfUop := numOfUop
+   io.out.uopInfo.numOfWB := numOfWB
+   io.out.uopInfo.lmul := lmul
+@@ -263,6 +263,9 @@ class UopInfoGenIO(implicit p: Parameters) extends XSBundle {
+ }
+ 
+ class PreInfo(implicit p: Parameters) extends XSBundle {
++  val isVecArith = Bool() // is vector arith or config instr
++  val isVecMem = Bool()
++  val isAmoCAS = Bool()
+   val typeOfSplit = UopSplitType()
+   val vsew = VSew()          //2 bit
+   val vlmul = VLmul()
+diff --git a/src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala b/src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala
+index 61b2bece3b3..c553020a47a 100644
+--- a/src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala
++++ b/src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala
+@@ -1,6 +1,7 @@
+ package xiangshan.backend.decode.isa.bitfield
+ 
+ import chisel3._
++import chisel3.util.BitPat
+ 
+ abstract class RiscvInst(bitWidth: Int) extends Bundle {
+   val inst: UInt = UInt(bitWidth.W)
+@@ -16,6 +17,12 @@ class Riscv32BitInst extends RiscvInst(32) {
+   def FUNCT7    : UInt  = inst(31, 25)
+   def OPCODE5Bit: UInt  = inst( 6,  2)
+   def OPCODE7Bit: UInt  = inst( 6,  0)
++
++  // Not handle illegal instr in this function
++  def isAMOCAS = {
++    this.OPCODE5Bit === xiangshan.backend.decode.isa.bitfield.OPCODE5Bit.AMO &&
++      this.FUNCT7 === BitPat("b00101??")
++  }
+ }
+ 
+ trait BitFieldsI { this: Riscv32BitInst =>
+@@ -74,11 +81,17 @@ trait BitFieldsVec { this: Riscv32BitInst =>
+   }
+ 
+   def isVecStore = {
+-    this.OPCODE === "b0100111".U && (this.WIDTH === 0.U || this.WIDTH(2) === 1.B)
++    this.OPCODE5Bit === xiangshan.backend.decode.isa.bitfield.OPCODE5Bit.STORE_FP &&
++      (this.WIDTH === 0.U || this.WIDTH(2) === 1.B)
+   }
+ 
+   def isVecLoad = {
+-    this.OPCODE === "b0000111".U && (this.WIDTH === 0.U || this.WIDTH(2) === 1.B)
++    this.OPCODE5Bit === xiangshan.backend.decode.isa.bitfield.OPCODE5Bit.LOAD_FP &&
++      (this.WIDTH === 0.U || this.WIDTH(2) === 1.B)
++  }
++
++  def isVecArith = {
++    this.OPCODE5Bit === xiangshan.backend.decode.isa.bitfield.OPCODE5Bit.OP_V
+   }
+ 
+   def isOPIVV = {
+```

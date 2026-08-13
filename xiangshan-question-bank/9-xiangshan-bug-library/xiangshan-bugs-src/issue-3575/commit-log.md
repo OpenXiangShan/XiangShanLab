@@ -1,0 +1,30 @@
+# Commit Log
+- Issue: #3575
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3575
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3575
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3575
+- Changed files: 1
+- Additions: 3
+- Deletions: 0
+
+## Files
+- `src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+index e4da70f3f42..282a507d7c3 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala
+@@ -308,6 +308,9 @@ class PTW()(implicit p: Parameters) extends XSModule with HasPtwConst with HasPe
+     hptw_resp.gpf := io.hptw.resp.bits.h_resp.gpf || g_perm_fail
+     when(!(g_perm_fail || io.hptw.resp.bits.h_resp.gpf || io.hptw.resp.bits.h_resp.gaf)) {
+       s_pmp_check := false.B
++    }.otherwise {
++      mem_addr_update := true.B
++      last_s2xlate := false.B
+     }
+   }
+```

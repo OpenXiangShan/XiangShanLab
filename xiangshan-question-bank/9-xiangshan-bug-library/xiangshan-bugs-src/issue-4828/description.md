@@ -1,0 +1,1 @@
+In the previous code, as long as PTE.n was set to 1, we treated the page size as 64 KB. However, according to the specification, a page should only be considered 64 KB in size when the lower 4 bits of the PPN equal `'b1000`; otherwise, it should still be treated as a 4KB page.

@@ -1,0 +1,25 @@
+{
+  "number": 5279,
+  "title": "Mismatch in vector store commit behavior under misaligned base address",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5279",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: tool"
+  ],
+  "author": "youzi27",
+  "created_at": "2025-11-29T08:23:48Z",
+  "updated_at": "2025-12-01T08:18:18Z",
+  "source_files": [
+    "issue-5279/source/seeds_1810_.zip",
+    "issue-5279/source/seeds_1810_2.zip",
+    "issue-5279/source/program-01.txt",
+    "issue-5279/source/program-02.txt",
+    "issue-5279/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-5279/source/seeds_1810_.zip",
+    "issue-5279/source/seeds_1810_2.zip"
+  ],
+  "has_comments": true
+}

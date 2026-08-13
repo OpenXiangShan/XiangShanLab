@@ -1,0 +1,12 @@
+reset
+poke io_req_valid 1
+poke io_mem_grant_bits_opcode 4
+step
+step
+poke io_mem_acquire_ready 1
+step
+poke io_mem_grant_valid 1
+poke io_mem_grant_bits_opcode 1
+step
+poke io_mem_grant_bits_size 6
+step

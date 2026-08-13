@@ -1,0 +1,21 @@
+{
+  "number": 4571,
+  "title": "fix(xtopi): fix xtopi generation conditions",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4571",
+  "state": "closed",
+  "labels": [],
+  "author": "sinceforYy",
+  "created_at": "2025-04-16T07:43:23Z",
+  "updated_at": "2025-08-25T06:44:27Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4571/commit-log.md"
+  ],
+  "submitted_at": "2025-04-16",
+  "branch": "",
+  "rtl_commit": ""
+}

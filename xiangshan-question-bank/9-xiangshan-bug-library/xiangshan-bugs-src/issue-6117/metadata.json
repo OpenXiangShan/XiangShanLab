@@ -1,0 +1,27 @@
+{
+  "number": 6117,
+  "title": "perf(Sbuffer): set in.req.ready to true if req can be merged",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/6117",
+  "state": "closed",
+  "labels": [
+    "module: memory"
+  ],
+  "author": "jlong299",
+  "created_at": "2026-06-22T02:53:21Z",
+  "updated_at": "2026-06-23T03:25:03Z",
+  "submitted_at": "2026-06-22",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6117/commit-log.md"
+  ],
+  "bug_categories": [
+    "mem/cache"
+  ],
+  "bug_category_source": "biweekly-en"
+}

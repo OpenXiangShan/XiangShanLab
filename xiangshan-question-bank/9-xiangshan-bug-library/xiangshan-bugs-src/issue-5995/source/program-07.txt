@@ -1,0 +1,2 @@
+mcause different ... right = 0x0, wrong = 0x5
+mtval different ... right = 0x0, wrong = 0x80002000

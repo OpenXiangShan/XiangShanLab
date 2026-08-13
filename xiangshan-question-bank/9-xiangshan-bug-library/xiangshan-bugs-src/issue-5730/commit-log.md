@@ -1,0 +1,147 @@
+# Commit Log
+- Issue: #5730
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5730
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5730
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5730
+- Changed files: 4
+- Additions: 14
+- Deletions: 13
+
+## Files
+- `src/main/scala/xiangshan/backend/Region.scala`
+- `src/main/scala/xiangshan/backend/exu/ExuBlock.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/Region.scala b/src/main/scala/xiangshan/backend/Region.scala
+index bda6676e742..f8c040314de 100644
+--- a/src/main/scala/xiangshan/backend/Region.scala
++++ b/src/main/scala/xiangshan/backend/Region.scala
+@@ -381,9 +381,6 @@ class Region(val params: SchdBlockParams)(implicit p: Parameters) extends XSModu
+   }
+   io.wbFuBusyTableWriteOut := wbFuBusyTableWrite
+   val criticalErrors = exuBlock.getCriticalErrors
+-  for (((name, error), _) <- criticalErrors.zipWithIndex) {
+-    XSError(error, s"critical error: $name \n")
+-  }
+   generateCriticalErrors()
+   if (params.isIntSchd) {
+     io.toFrontendBJUResolve.get := exuBlock.io.toFrontendBJUResolve.get
+diff --git a/src/main/scala/xiangshan/backend/exu/ExuBlock.scala b/src/main/scala/xiangshan/backend/exu/ExuBlock.scala
+index 14a06b2dace..fa4be306e26 100644
+--- a/src/main/scala/xiangshan/backend/exu/ExuBlock.scala
++++ b/src/main/scala/xiangshan/backend/exu/ExuBlock.scala
+@@ -94,9 +94,6 @@ class ExuBlock(implicit p: Parameters, params: SchdBlockParams) extends XSModule
+     XSPerfAccumulate(s"brh_fire_${i}_cnt", PopCount(brhFireSeq) === i.U)
+   }
+   val criticalErrors = exus.filter(_.exuParams.needCriticalErrors).flatMap(exu => exu.getCriticalErrors)
+-  for (((name, error), _) <- criticalErrors.zipWithIndex) {
+-    XSError(error, s"critical error: $name \n")
+-  }
+   generateCriticalErrors()
+ }
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
+index 2ff1bf3d3d9..36528441ba6 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryDEvent.scala
+@@ -30,6 +30,7 @@ class TrapEntryDEventInput(implicit override val p: Parameters) extends TrapEntr
+   val hasSingleStep                = Input(Bool())
+   val breakPoint                   = Input(Bool())
+   val criticalErrorStateEnterDebug = Input(Bool())
++  val holdDpc                      = Input(Bool())
+ }
+ 
+ class TrapEntryDEventModule(implicit val p: Parameters) extends Module with CSREventBase with DebugMMIO {
+@@ -79,7 +80,7 @@ class TrapEntryDEventModule(implicit val p: Parameters) extends Module with CSRE
+   out := DontCare
+   // output
+   out.dcsr.valid              := valid
+-  out.dpc.valid               := valid
++  out.dpc.valid               := valid && !in.holdDpc
+   // !debugMode trap || debugMode hasExp
+   out.targetPc.valid          := RegNext(valid || hasExceptionInDmode)
+   out.debugMode.valid         := valid
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 1a7e9788aa8..04db271227b 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -274,7 +274,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val debugMode = RegInit(false.B)
+   private val nextV = WireInit(VirtMode(0), VirtMode.Off)
+   V := nextV
+-  // dcsr stopcount 
++  // dcsr stopcount
+   val debugModeStopCountNext = debugMode && dcsr.regOut.STOPCOUNT
+   val debugModeStopTimeNext  = debugMode && dcsr.regOut.STOPTIME
+   val debugModeStopCount = RegNext(debugModeStopCountNext)
+@@ -282,6 +282,11 @@ class NewCSR(implicit val p: Parameters) extends Module
+ 
+   val criticalErrorStateInCSR = Wire(Bool())
+   val criticalErrorState = RegEnable(true.B, false.B, io.fromTop.criticalErrorState || criticalErrorStateInCSR)
++  // When cetrig is 1, resuming from DebugMode following an entry due to a critical
++  // error will result in an immediate re-entry into Debug Mode due to the critical error.
++  // Ensure that dpc remains unchanged when criticalErrorState causes a re-entry into dmode,
++  // since the PC fetched from pcmem for updating dpc is random in this case.
++  val holdDpc = RegEnable(criticalErrorState && dcsr.regOut.CETRIG, false.B, dretEvent.valid)
+ 
+   private val privState = Wire(new PrivState)
+   privState.PRVM := PRVM
+@@ -929,7 +934,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val addrInPerfCnt = (wenLegal || ren) && (
+     (addr >= CSRs.mcycle.U) && (addr <= CSRs.mhpmcounter31.U) ||
+     (addr >= CSRs.cycle.U) && (addr <= CSRs.hpmcounter31.U)
+-  ) || 
++  ) ||
+   ren && (
+     (addr === CSRs.vstopi.U) || (addr === CSRs.vstopei.U) ||
+     (addr === CSRs.stopi.U) || (addr === CSRs.stopei.U) ||
+@@ -1130,7 +1135,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   nonDebugTrapTargetPc.raiseIPF  := io.status.instrAddrTransType.checkPageFault(delayedPcFromXtvec)
+   nonDebugTrapTargetPc.raiseIAF  := io.status.instrAddrTransType.checkAccessFault(delayedPcFromXtvec)
+   nonDebugTrapTargetPc.raiseIGPF := io.status.instrAddrTransType.checkGuestPageFault(delayedPcFromXtvec)
+-  
++
+   private val trapTargetUpdate = RegNext(nonDebugTrapEventValid || trapEntryDEvent.valid, false.B)
+   io.trapTargetPc.valid := trapTargetUpdate
+   io.trapTargetPc.bits := DataHoldBypass(
+@@ -1204,6 +1209,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   trapEntryDEvent.in.hasDebugEbreakException      := debugMod.io.out.hasDebugEbreakException
+   trapEntryDEvent.in.breakPoint                   := debugMod.io.out.breakPoint
+   trapEntryDEvent.in.criticalErrorStateEnterDebug := debugMod.io.out.criticalErrorStateEnterDebug
++  trapEntryDEvent.in.holdDpc                      := holdDpc
+ 
+   for(idx <- 0 until TriggerNum) {
+     val tdata1Pre = Wire(new Tdata1Bundle)
+@@ -1261,7 +1267,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+     Seq(mtval.rdata,       stval.rdata,        vstval.rdata)
+   )
+   io.status.traceCSR.mstatus  := mstatus.regOut.asUInt
+-  
++
+   /**
+    * perf_begin
+    * perf number: 29 (frontend 8, ctrlblock 8, memblock 8, huancun 5)
+@@ -1282,7 +1288,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val countingEn        = RegInit(0.U.asTypeOf(Vec(perfCntNum, Bool())))
+   val ofFromPerfCntVec  = Wire(Vec(perfCntNum, Bool()))
+   val lcofiReqVec       = Wire(Vec(perfCntNum, Bool()))
+-  
++
+   for(i <- 0 until perfCntNum) {
+     mhpmcounters(i) match {
+       case m: HasPerfCounterBundle =>
+@@ -1297,7 +1303,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+         m.ofFromPerfCnt := ofFromPerfCntVec(i)
+       case _ =>
+     }
+-    
++
+     val mhpmevent = Wire(new MhpmeventBundle)
+     mhpmevent := mhpmevents(i).rdata
+     lcofiReqVec(i) := ofFromPerfCntVec(i) && !mhpmevent.OF.asBool
+```

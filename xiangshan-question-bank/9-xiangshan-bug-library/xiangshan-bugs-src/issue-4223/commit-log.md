@@ -1,0 +1,58 @@
+# Commit Log
+- Issue: #4223
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4223
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4223
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4223
+- Changed files: 3
+- Additions: 3
+- Deletions: 3
+
+## Files
+- `src/main/scala/xiangshan/frontend/ITTAGE.scala`
+- `src/main/scala/xiangshan/frontend/Tage.scala`
+- `src/main/scala/xiangshan/frontend/icache/ICache.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/ITTAGE.scala b/src/main/scala/xiangshan/frontend/ITTAGE.scala
+index 8165ae52bf4..21df544823d 100644
+--- a/src/main/scala/xiangshan/frontend/ITTAGE.scala
++++ b/src/main/scala/xiangshan/frontend/ITTAGE.scala
+@@ -499,7 +499,7 @@ class ITTage(implicit p: Parameters) extends BaseITTage {
+   )
+   update.full_target := RegEnable(
+     io.update.bits.full_target,
+-    io.update.valid && (u_meta.provider.valid || io.update.bits.mispred_mask(numBr))
++    io.update.valid // not using mispred_mask, because mispred_mask timing is bad
+   )
+   update.cfi_idx.bits := RegEnable(io.update.bits.cfi_idx.bits, io.update.valid && io.update.bits.cfi_idx.valid)
+   update.ghist        := RegEnable(io.update.bits.ghist, io.update.valid) // TODO: CGE
+diff --git a/src/main/scala/xiangshan/frontend/Tage.scala b/src/main/scala/xiangshan/frontend/Tage.scala
+index bd5b0920279..c9b4c64519c 100644
+--- a/src/main/scala/xiangshan/frontend/Tage.scala
++++ b/src/main/scala/xiangshan/frontend/Tage.scala
+@@ -698,7 +698,7 @@ class Tage(implicit p: Parameters) extends BaseTage {
+     updateMeta.altUsed(i) := RegEnable(u_meta.altUsed(i), u_valids_for_cge(i))
+     updateMeta.allocates(i) := RegEnable(
+       u_meta.allocates(i),
+-      io.update.valid && io.update.bits.mispred_mask(i)
++      io.update.valid // not using mispred_mask, because mispred_mask timing is bad
+     )
+   }
+   if (EnableSC) {
+diff --git a/src/main/scala/xiangshan/frontend/icache/ICache.scala b/src/main/scala/xiangshan/frontend/icache/ICache.scala
+index 2153f1de05d..dc0b3f7664b 100644
+--- a/src/main/scala/xiangshan/frontend/icache/ICache.scala
++++ b/src/main/scala/xiangshan/frontend/icache/ICache.scala
+@@ -431,7 +431,7 @@ class ICacheDataArray(implicit p: Parameters) extends ICacheArray with HasICache
+         shouldReset = true,
+         holdRead = true,
+         singlePort = true,
+-        withClockGate = true
++        withClockGate = false // enable signal timing is bad, no gating here
+       ))
+ 
+       // read
+```

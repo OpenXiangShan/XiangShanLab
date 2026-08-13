@@ -1,0 +1,5 @@
+[XiangShan standalone --no-diff]
+log: /tmp/case12_split_20260325_205202/emu_nodiff.log
+
+1632:[PERF ] ... exception_num, 0
+34479:Core 0: HIT GOOD TRAP at pc = 0x8000008c

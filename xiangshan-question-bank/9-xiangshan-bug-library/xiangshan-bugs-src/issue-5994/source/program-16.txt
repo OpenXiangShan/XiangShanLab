@@ -1,0 +1,7 @@
+valid     = 1
+pc        = 0x80000040
+target    = 0x80000042
+isRVC     = 0
+ftqOffset = 0
+isMisPred = 1
+taken     = 0

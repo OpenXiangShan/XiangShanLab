@@ -1,0 +1,8 @@
+emu \
+  --max-cycles=17000 \
+  -b 7000 \
+  -e 15000 \
+  --dump-wave-full \
+  --wave-path=poc_7000_15000.vcd \
+  -i poc.bin \
+  > poc_7000_15000.run.log 2>&1

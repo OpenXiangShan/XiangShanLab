@@ -1,0 +1,97 @@
+# Commit Log
+- Issue: #5060
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5060
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5060
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5060
+- Changed files: 2
+- Additions: 31
+- Deletions: 4
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala`
+- `src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala b/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala
+index f74b88786bc..ccb134a118f 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/mbtb/Helpers.scala
+@@ -16,13 +16,19 @@
+ package xiangshan.frontend.bpu.mbtb
+ 
+ import chisel3._
++import chisel3.util.MuxLookup
++import chisel3.util.isPow2
++import chisel3.util.log2Ceil
+ import chisel3.util.log2Up
+ import xiangshan.HasXSParameter
+ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.bpu.CommonHelper
++import xiangshan.frontend.bpu.CrossPageHelper
++import xiangshan.frontend.bpu.HalfAlignHelper
+ import xiangshan.frontend.bpu.TargetFixHelper
+ 
+-trait Helpers extends HasMainBtbParameters with HasXSParameter with TargetFixHelper with CommonHelper {
++trait Helpers extends HasMainBtbParameters
++    with HasXSParameter with TargetFixHelper with CommonHelper with HalfAlignHelper with CrossPageHelper {
+   def getSetIndex(pc: PrunedAddr): UInt =
+     pc(SetIdxLen + InternalBankIdxLen + FetchBlockSizeWidth - 1, InternalBankIdxLen + FetchBlockSizeWidth)
+ 
+@@ -69,4 +75,17 @@ trait Helpers extends HasMainBtbParameters with HasXSParameter with TargetFixHel
+     }
+     (isMultiHit, isHigherAlignBank, multiHitWayIdx, multiHitMask)
+   }
++
++  // TODO: remove it
++  def vecRotateRight[T <: Data](vec: Vec[T], idx: UInt): Vec[T] = {
++    require(isPow2(vec.length))
++    require(idx.getWidth == log2Ceil(vec.length))
++    val len = vec.length
++    // generate all possible results of rotation
++    val rotations = (0 until len).map { i =>
++      val rotatedIndices = (0 until len).map(j => (j + i) % len)
++      i.U -> VecInit(rotatedIndices.map(idx => vec(idx)))
++    }
++    MuxLookup(idx, vec)(rotations)
++  }
+ }
+diff --git a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
+index ab0c08a4a7d..f3c1e50e4ee 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/mbtb/MainBtb.scala
+@@ -146,6 +146,13 @@ class MainBtb(implicit p: Parameters) extends BasePredictor with HasMainBtbParam
+     })
+   ).flatten)
+ 
++  private val s1_alignBankCrossPageMask = (0 until NumAlignBanks).map { i =>
++    val currentAlignStartVAddr = getAlignedAddr(s1_startVAddr + (i * FetchBlockAlignSize).U)
++    isCrossPage(s1_startVAddr, currentAlignStartVAddr)
++  }
++  private val s1_rotatedAlignBankCrossPageMask = vecRotateRight(VecInit(s1_alignBankCrossPageMask), s1_alignBankIdx)
++  private val s1_crossPageMask                 = VecInit(s1_rotatedAlignBankCrossPageMask.flatMap(Seq.fill(NumWay)(_)))
++
+   require(s1_alignBankIdx.getWidth == log2Ceil(NumAlignBanks))
+ 
+   /* predict stage 2
+@@ -162,13 +169,14 @@ class MainBtb(implicit p: Parameters) extends BasePredictor with HasMainBtbParam
+   private val s2_rawBtbEntries    = RegEnable(s1_rawBtbEntries, s1_fire)
+   private val s2_tag              = RegEnable(s1_tag, s1_fire)
+   private val s2_posHighesBits    = RegEnable(s1_posHighestBits, s1_fire)
++  private val s2_crossPageMask    = RegEnable(s1_crossPageMask, s1_fire)
+   private val s2_positions = s2_rawBtbEntries zip s2_posHighesBits map { case (entry, h) =>
+     Cat(h, entry.position) // Add higher bits before using
+   }
+   private val s2_rawHitMask = s2_rawBtbEntries.map(entry => entry.valid && entry.tag === s2_tag)
+-  private val s2_hitMask = s2_rawHitMask.zip(s2_positions).map {
+-    case (hit, position) =>
+-      hit && position > s2_startVAddr(FetchBlockSizeWidth - 1, 1)
++  private val s2_hitMask = s2_rawHitMask.zip(s2_positions).zip(s2_crossPageMask).map {
++    case ((hit, position), isCrossPage) =>
++      hit && position > s2_startVAddr(FetchBlockSizeWidth - 1, 1) && !isCrossPage
+   }
+   private val s2_targets =
+     s2_rawBtbEntries.map(e =>
+```

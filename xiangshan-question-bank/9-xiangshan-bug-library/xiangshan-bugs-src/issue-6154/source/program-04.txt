@@ -1,0 +1,5 @@
+security_vulnerability_proven = true
+rf_power_sidechannel_leak_observed = true
+rf_hw_template_attack_success = true
+rf_bitline_exact_recovery_success = true
+software_timing_leak_proven = false

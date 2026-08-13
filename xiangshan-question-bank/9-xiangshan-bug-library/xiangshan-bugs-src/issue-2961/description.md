@@ -1,0 +1,109 @@
+#### Before start
+- [x] (Select what you have done like this)
+- [x] I have read the [RISC-V ISA Manual](https://github.com/riscv/riscv-isa-manual) and this is not a RISC-V ISA question.
+- [x] I have read the [XiangShan Documents](https://xiangshan-doc.readthedocs.io/zh_CN/latest).
+- [x] I have searched the previous issues and did not find anything relevant.
+- [x] I have reviewed the commit messages from the relevant commit history.
+
+#### Describe the bug
+
+both `make emu` and `make verilog` failed with `NUM_CORES>=3`.
+
+At least I have tested NUM_CORES=3 and NUM_CORES=4.
+
+#### Screenshots
+
+```console
+[warn] There were 111 warning(s) during hardware elaboration.
+        at freechips.rocketchip.diplomacy.LazyModuleImpLike.instantiate(LazyModule.scala:309)
+        at freechips.rocketchip.diplomacy.LazyModuleImpLike.instantiate$(LazyModule.scala:306)
+        at freechips.rocketchip.diplomacy.LazyRawModuleImp.instantiate(LazyModule.scala:405)
+        at freechips.rocketchip.diplomacy.LazyRawModuleImp.$anonfun$x$23$2(LazyModule.scala:418)
+        at chisel3.withClockAndReset$.apply(MultiClock.scala:35)
+        at chisel3.withClockAndReset$.apply(MultiClock.scala:18)
+        at freechips.rocketchip.diplomacy.LazyRawModuleImp.$anonfun$x$23$1(LazyModule.scala:418)
+        at chisel3.internal.plugin.package$.autoNameRecursivelyProduct(package.scala:48)
+        at freechips.rocketchip.diplomacy.LazyRawModuleImp.<init>(LazyModule.scala:417)
+        at top.XSTop$XSTopImp.<init>(Top.scala:142)
+        at top.XSTop.$anonfun$module$1(Top.scala:263)
+        at chisel3.internal.plugin.package$.autoNameRecursively(package.scala:33)
+        at top.XSTop.module$lzycompute(Top.scala:263)
+        at top.XSTop.module(Top.scala:263)
+        at top.SimTop.$anonfun$soc$2(SimTop.scala:32)
+        at chisel3.Module$.evaluate(Module.scala:88)
+        at chisel3.Module$.do_apply(Module.scala:35)
+        at top.SimTop.$anonfun$soc$1(SimTop.scala:32)
+        at chisel3.internal.plugin.package$.autoNameRecursively(package.scala:33)
+        at top.SimTop.<init>(SimTop.scala:32)
+        at top.SimTop$.$anonfun$new$22(SimTop.scala:110)
+        at freechips.rocketchip.diplomacy.package$.DisableMonitors(package.scala:228)
+        at top.SimTop$.$anonfun$new$21(SimTop.scala:110)
+        at chisel3.Module$.evaluate(Module.scala:88)
+        at chisel3.Module$.do_apply(Module.scala:35)
+        at chisel3.stage.phases.Elaborate.$anonfun$transform$2(Elaborate.scala:48)
+        at chisel3.internal.Builder$.$anonfun$buildImpl$1(Builder.scala:1023)
+        at scala.util.DynamicVariable.withValue(DynamicVariable.scala:59)
+        at chisel3.internal.Builder$.buildImpl(Builder.scala:1017)
+        at chisel3.internal.Builder$.$anonfun$build$1(Builder.scala:1008)
+        at logger.Logger$.$anonfun$makeScope$4(Logger.scala:148)
+        at scala.util.DynamicVariable.withValue(DynamicVariable.scala:59)
+        at logger.Logger$.makeScope(Logger.scala:146)
+        at logger.Logger$.makeScope(Logger.scala:133)
+        at chisel3.internal.Builder$.build(Builder.scala:1008)
+        at chisel3.stage.phases.Elaborate.$anonfun$transform$1(Elaborate.scala:48)
+        at scala.collection.immutable.List.flatMap(List.scala:293)
+        at scala.collection.immutable.List.flatMap(List.scala:79)
+        at chisel3.stage.phases.Elaborate.transform(Elaborate.scala:32)
+        at chisel3.stage.phases.Elaborate.transform(Elaborate.scala:22)
+        at firrtl.options.DependencyManager.$anonfun$transform$5(DependencyManager.scala:280)
+        at firrtl.Utils$.time(Utils.scala:53)
+        at firrtl.options.DependencyManager.$anonfun$transform$3(DependencyManager.scala:280)
+        at scala.collection.LinearSeqOps.foldLeft(LinearSeq.scala:183)
+        at scala.collection.LinearSeqOps.foldLeft$(LinearSeq.scala:179)
+        at scala.collection.immutable.List.foldLeft(List.scala:79)
+        at firrtl.options.DependencyManager.transform(DependencyManager.scala:269)
+        at firrtl.options.DependencyManager.transform$(DependencyManager.scala:255)
+        at firrtl.options.PhaseManager.transform(DependencyManager.scala:443)
+        at top.XiangShanStage.run(XiangShanStage.scala:68)
+        at firrtl.options.Stage$$anon$1.transform(Stage.scala:42)
+        at firrtl.options.Stage$$anon$1.transform(Stage.scala:42)
+        at firrtl.options.Stage.$anonfun$transform$3(Stage.scala:45)
+        at scala.collection.LinearSeqOps.foldLeft(LinearSeq.scala:183)
+        at scala.collection.LinearSeqOps.foldLeft$(LinearSeq.scala:179)
+        at scala.collection.immutable.List.foldLeft(List.scala:79)
+        at firrtl.options.Stage.$anonfun$transform$2(Stage.scala:45)
+        at logger.Logger$.$anonfun$makeScope$4(Logger.scala:148)
+        at scala.util.DynamicVariable.withValue(DynamicVariable.scala:59)
+        at logger.Logger$.makeScope(Logger.scala:146)
+        at logger.Logger$.makeScope(Logger.scala:125)
+        at firrtl.options.Stage.transform(Stage.scala:45)
+        at firrtl.options.Stage.execute(Stage.scala:56)
+        at top.Generator$.execute(Generator.scala:34)
+        at top.SimTop$.delayedEndpoint$top$SimTop$1(SimTop.scala:111)
+        at top.SimTop$delayedInit$body.apply(SimTop.scala:97)
+        at scala.Function0.apply$mcV$sp(Function0.scala:42)
+        at scala.Function0.apply$mcV$sp$(Function0.scala:42)
+        at scala.runtime.AbstractFunction0.apply$mcV$sp(AbstractFunction0.scala:17)
+        at scala.App.$anonfun$main$1(App.scala:98)
+        at scala.App.$anonfun$main$1$adapted(App.scala:98)
+        at scala.collection.IterableOnceOps.foreach(IterableOnce.scala:575)
+        at scala.collection.IterableOnceOps.foreach$(IterableOnce.scala:573)
+        at scala.collection.AbstractIterable.foreach(Iterable.scala:933)
+        at scala.App.main(App.scala:98)
+        at scala.App.main$(App.scala:96)
+        at top.SimTop$.main(SimTop.scala:97)
+        at top.SimTop.main(SimTop.scala)
+1 targets failed
+xiangshan[chisel].test.runMain subprocess failed
+make: *** [Makefile:152: build/rtl/SimTop.v] Error 1
+```
+
+#### To Reproduce
+
+```bash
+ make emu NUM_CORES=4 MFC=1 -j `nproc`
+```
+
+#### Environment (please complete the following information):
+ - XiangShan branch: master
+ - XiangShan commit id: c686adcd0720335a9afac9cfab172217603b2121

@@ -1,0 +1,5 @@
+when( A && !p_hit_fast) {
+  need_gpa_wire := true.B
+}
+
+refill = B && !need_gpa_wire

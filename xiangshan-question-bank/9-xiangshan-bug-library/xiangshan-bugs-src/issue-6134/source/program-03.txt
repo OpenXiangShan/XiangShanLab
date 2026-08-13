@@ -1,0 +1,3 @@
+cycle            = 8752
+tl_d_data        = 0x0000006f00000063
+delta_tl_to_grant = 34 cycles

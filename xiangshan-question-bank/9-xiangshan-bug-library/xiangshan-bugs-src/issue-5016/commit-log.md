@@ -1,0 +1,57 @@
+# Commit Log
+- Issue: #5016
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5016
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5016
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5016
+- Changed files: 2
+- Additions: 11
+- Deletions: 6
+
+## Files
+- `src/main/scala/xiangshan/frontend/Bundles.scala`
+- `src/main/scala/xiangshan/frontend/ftq/Ftq.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/Bundles.scala b/src/main/scala/xiangshan/frontend/Bundles.scala
+index eb9942ab578..6c17016e9ee 100644
+--- a/src/main/scala/xiangshan/frontend/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/Bundles.scala
+@@ -226,6 +226,14 @@ object ExceptionType {
+   def apply(hasAf: Bool): ExceptionType =
+     apply(hasPf = false.B, hasGpf = false.B, hasAf = hasAf)
+ 
++  // raise pf/gpf/af according to backend redirect request (tlb pre-check)
++  def fromBackend(redirect: Redirect): ExceptionType =
++    apply(
++      hasPf = redirect.backendIPF,
++      hasGpf = redirect.backendIGPF,
++      hasAf = redirect.backendIAF
++    )
++
+   // raise pf/gpf/af according to itlb response
+   def fromTlbResp(resp: TlbResp, useDup: Int = 0): ExceptionType = {
+     require(useDup >= 0 && useDup < resp.excp.length)
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index 20e8da3a1f1..b13cbdebc39 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -116,12 +116,9 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   private val backendException    = RegInit(ExceptionType.None)
+   private val backendExceptionPtr = RegInit(FtqPtr(false.B, 0.U))
+   when(backendRedirect.valid) {
+-    backendException := ExceptionType(
+-      hasPf = backendRedirect.bits.backendIPF,
+-      hasGpf = backendRedirect.bits.backendIGPF,
+-      hasAf = backendRedirect.bits.backendIAF
+-    )
+-    when(backendException.hasException) {
++    val exception = ExceptionType.fromBackend(backendRedirect.bits)
++    when(exception.hasException) {
++      backendException    := exception
+       backendExceptionPtr := ifuWbPtr(0)
+     }
+   }.elsewhen(ifuWbPtr(0) =/= backendExceptionPtr) {
+```

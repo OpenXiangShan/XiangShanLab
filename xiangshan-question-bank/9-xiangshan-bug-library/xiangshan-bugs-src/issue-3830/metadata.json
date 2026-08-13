@@ -1,0 +1,19 @@
+{
+  "number": 3830,
+  "title": "[Bug Report] Load access fault and store_address_misaligned cause processor to deadlock",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/3830",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported"
+  ],
+  "author": "chenhychen",
+  "created_at": "2024-11-04T02:13:28Z",
+  "updated_at": "2024-11-05T22:34:31Z",
+  "source_files": [
+    "issue-3830/source/xs_bug.zip"
+  ],
+  "archive_files": [
+    "issue-3830/source/xs_bug.zip"
+  ],
+  "has_comments": true
+}

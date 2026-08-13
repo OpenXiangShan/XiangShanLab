@@ -1,0 +1,7 @@
+   emu \
+  -C12000 \
+  -b 8000 -e 9000 \
+  -i./poc.bin \
+  --no-diff \
+  --dump-wave \
+  --wave-path=./cbnez_redirect_fulltrace_8000_9000.vcd

@@ -1,0 +1,6 @@
+rf_bitline_exact_recovery_success = true
+same_microarchitectural_context = true
+all_events_are_redirect_killed = true
+all_events_drive_rf_write = true
+held_out_attack_traces = true
+exact_values_match = true

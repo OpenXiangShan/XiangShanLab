@@ -1,0 +1,7 @@
+emu \
+  -C 12000 -b 7000 -e 12000 \
+  -i pbmt_ifu_poc.bin \
+  --no-diff \
+  --dump-wave \
+  --wave-path=validation_pbmt_ifu_8div_7000_12000.vcd \
+  > validation_run_8div_7000_12000.log 2>&1

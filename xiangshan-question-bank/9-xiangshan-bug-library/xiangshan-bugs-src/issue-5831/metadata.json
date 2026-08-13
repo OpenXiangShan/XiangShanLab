@@ -1,0 +1,27 @@
+{
+  "number": 5831,
+  "title": "[BUG] `vlse32.v` corrupts packed 32-bit element data under SEW=64, LMUL=8 mixed-EEW execution",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5831",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: unknown"
+  ],
+  "author": "jimmymtest",
+  "created_at": "2026-04-20T08:11:57Z",
+  "updated_at": "2026-04-21T04:56:21Z",
+  "source_files": [
+    "issue-5831/source/diff.log",
+    "issue-5831/source/bug-report.tar.gz",
+    "issue-5831/source/program-01.S",
+    "issue-5831/source/program-02.txt",
+    "issue-5831/source/program-03.txt",
+    "issue-5831/source/program-04.S",
+    "issue-5831/source/program-05.txt"
+  ],
+  "archive_files": [
+    "issue-5831/source/diff.log",
+    "issue-5831/source/bug-report.tar.gz"
+  ],
+  "has_comments": true
+}

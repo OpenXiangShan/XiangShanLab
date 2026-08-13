@@ -1,0 +1,28 @@
+{
+  "number": 5840,
+  "title": "[BUG] `vzext.vf8` can compute the wrong zero-extended result for an active destination element.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/5840",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: unknown"
+  ],
+  "author": "jimmymtest",
+  "created_at": "2026-04-22T06:22:30Z",
+  "updated_at": "2026-04-27T07:27:47Z",
+  "source_files": [
+    "issue-5840/source/diff.log",
+    "issue-5840/source/bug-report.tar.gz",
+    "issue-5840/source/program-01.S",
+    "issue-5840/source/program-02.S",
+    "issue-5840/source/program-03.txt",
+    "issue-5840/source/program-04.txt",
+    "issue-5840/source/program-05.txt",
+    "issue-5840/source/program-06.txt"
+  ],
+  "archive_files": [
+    "issue-5840/source/diff.log",
+    "issue-5840/source/bug-report.tar.gz"
+  ],
+  "has_comments": true
+}

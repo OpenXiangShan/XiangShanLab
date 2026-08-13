@@ -1,0 +1,2 @@
+python3 ./summarize_ittage_e2e_verdict.py \
+  --json-out ittage_e2e_timing_verdict.json

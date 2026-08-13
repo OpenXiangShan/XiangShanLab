@@ -1,0 +1,4 @@
+In riscv-privileged, it is load or store in G-stage which support VS-stage, such as to get the non-leaf pte of VS-stage
+
+> For G-stage address translation, all memory accesses (including those made to access data structures for VS-stage address
+translation) are considered to be user-level accesses, as though executed in U-mode. Access type permissions—readable, writable, or executable—are checked during G-stage translation the same as for VS-stage translation. For a memory access made to support VS-stage address translation (such as to read/write a VS-level page table), permissions and the need to set A and/or D bits at the G-stage level are checked as though for an implicit load or store, not for the original access type. However, any exception is always reported for the original access type (instruction, load, or store/AMO).

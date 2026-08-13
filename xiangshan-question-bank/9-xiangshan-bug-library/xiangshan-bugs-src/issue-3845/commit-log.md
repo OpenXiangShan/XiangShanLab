@@ -1,0 +1,69 @@
+# Commit Log
+- Issue: #3845
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3845
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3845
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3845
+- Changed files: 2
+- Additions: 15
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/backend/decode/DecodeUnit.scala`
+- `src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index 3309614fae7..b78d882a266 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -864,6 +864,10 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   private val isCboInval = CBO_INVAL === io.enq.ctrlFlow.instr
+   private val isCboZero  = CBO_ZERO  === io.enq.ctrlFlow.instr
+ 
++  // Note that rnum of aes64ks1i must be in the range 0x0..0xA. The values 0xB..0xF are reserved.
++  private val isAes64ks1iIllegal =
++    FuType.FuTypeOrR(decodedInst.fuType, FuType.bku) && (decodedInst.fuOpType === BKUOpType.aes64ks1i) && inst.isRnumIllegal
++
+   private val exceptionII =
+     decodedInst.selImm === SelImm.INVALID_INSTR ||
+     vecException.io.illegalInst ||
+@@ -885,7 +889,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+     (decodedInst.needFrm.vectorNeedFrm || FuType.isVectorNeedFrm(decodedInst.fuType)) && io.fromCSR.illegalInst.frm ||
+     io.fromCSR.illegalInst.cboZ       && isCboZero ||
+     io.fromCSR.illegalInst.cboCF      && (isCboClean || isCboFlush) ||
+-    io.fromCSR.illegalInst.cboI       && isCboInval
++    io.fromCSR.illegalInst.cboI       && isCboInval ||
++    isAes64ks1iIllegal
+ 
+   private val exceptionVI =
+     io.fromCSR.virtualInst.sfenceVMA  && FuType.FuTypeOrR(decodedInst.fuType, FuType.fence) && decodedInst.fuOpType === FenceOpType.sfence ||
+diff --git a/src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala b/src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala
+index 735bbf9e785..61b2bece3b3 100644
+--- a/src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala
++++ b/src/main/scala/xiangshan/backend/decode/isa/bitfield/RiscvInst.scala
+@@ -117,12 +117,21 @@ trait BitFieldsVec { this: Riscv32BitInst =>
+   }
+ }
+ 
++trait BitFieldsRVK { this: Riscv32BitInst =>
++  def RNUM          : UInt = inst(23, 20)
++
++  def isRnumIllegal = {
++    this.RNUM > 0xA.U
++  }
++}
++
+ class XSInstBitFields extends Riscv32BitInst
+   with BitFieldsI
+   with BitFieldsS
+   with BitFieldsCSR
+   with BitFieldsFp
+   with BitFieldsVec
++  with BitFieldsRVK
+ 
+ class InstVType extends Bundle {
+   val reserved = UInt(3.W)
+```

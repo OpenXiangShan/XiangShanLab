@@ -1,0 +1,1 @@
+./build/emu -i crosspage_sd_alias.elf --max-cycles=3500 --no-diff

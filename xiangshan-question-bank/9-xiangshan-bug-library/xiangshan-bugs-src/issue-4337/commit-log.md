@@ -1,0 +1,38 @@
+# Commit Log
+- Issue: #4337
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4337
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4337
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4337
+- Changed files: 1
+- Additions: 2
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+index 91652f15265..2e0c2aa5075 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala
+@@ -569,14 +569,14 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
+     // when we release this block,
+     // we invalidate this reservation set
+     lrsc_count := 0.U
+-  }.elsewhen (lrsc_valid) {
++  }.elsewhen (lrsc_count > 0.U) {
+     lrsc_count := lrsc_count - 1.U
+   }
+ 
+ 
+   io.lrsc_locked_block.valid := lrsc_valid
+   io.lrsc_locked_block.bits  := lrsc_addr
+-  io.block_lr := GatedValidRegNext(lrsc_valid)
++  io.block_lr := GatedValidRegNext(lrsc_count > 0.U)
+ 
+   // When we update update_resv_set, block all probe req in the next cycle
+   // It should give Probe reservation set addr compare an independent cycle,
+```

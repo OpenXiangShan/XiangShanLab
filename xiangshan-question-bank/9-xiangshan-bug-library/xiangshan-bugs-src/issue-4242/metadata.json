@@ -1,0 +1,16 @@
+{
+  "number": 4242,
+  "title": "Possible bug in statistical corrector",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/4242",
+  "state": "closed",
+  "labels": [
+    "good first issue",
+    "type: bug/fixed"
+  ],
+  "author": "castleberrysam",
+  "created_at": "2025-02-02T07:30:42Z",
+  "updated_at": "2025-09-05T07:48:48Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true
+}

@@ -1,0 +1,2 @@
+if redirect invalidates an FTQ slot, same-cycle delayed BPU metadata must not
+update metadata arrays for that invalidated slot

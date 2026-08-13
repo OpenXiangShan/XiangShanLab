@@ -1,0 +1,12 @@
+diff --git a/src/main/scala/xiangshan/backend/datapath/VldMergeUnit.scala b/src/main/scala/xiangshan/backend/datapath/VldMergeUnit.scala
+index 8146b6447d3..91a1f3821ad 100644
+--- a/src/main/scala/xiangshan/backend/datapath/VldMergeUnit.scala
++++ b/src/main/scala/xiangshan/backend/datapath/VldMergeUnit.scala
+@@ -47,6 +47,7 @@ class VldMergeUnit(val params: ExeUnitParams)(implicit p: Parameters) extends XS
+   io.writebackAfterMerge.bits.toVecRf.foreach(_.valid := wbReg.bits.toVecRf.map(_.valid).getOrElse(false.B))
+   io.writebackAfterMerge.bits.toV0Rf.foreach(_.valid := wbReg.bits.toV0Rf.map(_.valid).getOrElse(false.B))
+   io.writebackAfterMerge.bits.toVecRf.foreach(_.bits := vdAfterMerge)
++  io.writebackAfterMerge.bits.toV0Rf.foreach(_.bits  := vdAfterMerge)
+ }
+ 
+ class VldMergeUnitIO(param: ExeUnitParams)(implicit p: Parameters) extends XSBundle {

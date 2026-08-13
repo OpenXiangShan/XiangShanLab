@@ -1,0 +1,4 @@
+pc    = 0x8000013c
+inst  = 0x0025200f
+cause = 7
+mtval = 0x80002000

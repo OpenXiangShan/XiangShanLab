@@ -1,0 +1,33 @@
+{
+  "number": 6134,
+  "title": "`PBMT-IO` instruction fetch skips `IFU` uncache last-commit serialization",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6134",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "type: bug/fixed"
+  ],
+  "author": "YzhDDDing",
+  "created_at": "2026-06-25T08:28:49Z",
+  "updated_at": "2026-06-29T07:20:12Z",
+  "source_files": [
+    "issue-6134/source/xiangshan-pbmt-io-ifu-uncache-poc.zip",
+    "issue-6134/source/program-01.txt",
+    "issue-6134/source/program-02.txt",
+    "issue-6134/source/program-03.txt",
+    "issue-6134/source/program-04.txt",
+    "issue-6134/source/program-05.txt",
+    "issue-6134/source/program-06.txt",
+    "issue-6134/source/program-07.txt",
+    "issue-6134/source/program-08.txt",
+    "issue-6134/source/program-09.txt",
+    "issue-6134/source/program-10.scala",
+    "issue-6134/source/program-11.scala",
+    "issue-6134/source/program-12.scala",
+    "issue-6134/source/program-13.scala"
+  ],
+  "archive_files": [
+    "issue-6134/source/xiangshan-pbmt-io-ifu-uncache-poc.zip"
+  ],
+  "has_comments": true
+}

@@ -1,0 +1,5 @@
+predicate_result = reproduced
+expected_load_data = 0x11223344
+target store nuke = time 16798, paddr 0x8000108c, mask 0xf000, matchType 1, rob [0,149]
+target load wb    = time 16798, paddr 0x80001090, data 0x00000000, rob [0,150]
+rollbacks         = []

@@ -1,0 +1,2 @@
+PMA19: cfg=0x0b  addr=0x0000000004000000   <- first PMA region at 64MB (R=1,W=1,X=0,I=1)
+PMA20: cfg=0x0f  addr=0x0000000008000000

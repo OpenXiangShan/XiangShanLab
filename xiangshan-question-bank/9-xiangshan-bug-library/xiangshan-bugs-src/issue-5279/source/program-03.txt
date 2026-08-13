@@ -1,0 +1,2 @@
+li t0, 0x000000008f94dc2b # misaligned address
+vse32.v v9, (t0)

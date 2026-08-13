@@ -1,0 +1,130 @@
+diff --git a/coupledL2 b/coupledL2
+index 084df8f7b31..4ded0896c13 160000
+--- a/coupledL2
++++ b/coupledL2
+@@ -1 +1 @@
+-Subproject commit 084df8f7b31fe6bfa0b94ff91c482d75e1eb696a
++Subproject commit 4ded0896c13dd0039f95d46d58ae1d137c107f18
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+index ab78a9716f8..3b1d0f30bac 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala
+@@ -70,9 +70,15 @@ class DataBufferEntry (implicit p: Parameters)  extends DCacheBundle {
+ }
+ 
+ class StoreExceptionBuffer(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelper {
++  // The 1st StorePipelineWidth ports: sta exception generated at s1, except for af
++  // The 2nd StorePipelineWidth ports: sta af generated at s2
++  // The following VecStorePipelineWidth ports: vector st exception
++  // The last port: non-data error generated in SoC
++  val enqPortNum = StorePipelineWidth * 2 + VecStorePipelineWidth + 1
++
+   val io = IO(new Bundle() {
+     val redirect = Flipped(ValidIO(new Redirect))
+-    val storeAddrIn = Vec(StorePipelineWidth * 2 + VecStorePipelineWidth, Flipped(ValidIO(new LsPipelineBundle())))
++    val storeAddrIn = Vec(enqPortNum, Flipped(ValidIO(new LsPipelineBundle())))
+     val flushFrmMaBuf = Input(Bool())
+     val exceptionAddr = new ExceptionAddrIO
+   })
+@@ -88,14 +94,14 @@ class StoreExceptionBuffer(implicit p: Parameters) extends XSModule with HasCirc
+   ))
+ 
+   // S2: delay 1 cycle
+-  val s2_req = (0 until StorePipelineWidth * 2 + VecStorePipelineWidth).map(i =>
++  val s2_req = (0 until enqPortNum).map(i =>
+     RegEnable(s1_req(i), s1_valid(i)))
+-  val s2_valid = (0 until StorePipelineWidth * 2 + VecStorePipelineWidth).map(i =>
++  val s2_valid = (0 until enqPortNum).map(i =>
+     RegNext(s1_valid(i)) && !s2_req(i).uop.robIdx.needFlush(io.redirect)
+   )
+ 
+-  val s2_enqueue = Wire(Vec(StorePipelineWidth * 2 + VecStorePipelineWidth, Bool()))
+-  for (w <- 0 until StorePipelineWidth * 2 + VecStorePipelineWidth) {
++  val s2_enqueue = Wire(Vec(enqPortNum, Bool()))
++  for (w <- 0 until enqPortNum) {
+     s2_enqueue(w) := s2_valid(w)
+   }
+ 
+@@ -774,6 +780,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+   val s_idle :: s_req :: s_resp :: s_wb :: s_wait :: Nil = Enum(5)
+   val uncacheState = RegInit(s_idle)
+   val uncacheUop = Reg(new DynInst)
++  val uncacheVAddr = Reg(UInt(VAddrBits.W))
+   val cboFlushedSb = RegInit(false.B)
+   switch(uncacheState) {
+     is(s_idle) {
+@@ -797,7 +804,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+         uncacheState := s_wb
+ 
+         when (io.uncache.resp.bits.nderr) {
+-          uop(deqPtr).exceptionVec(storeAccessFault) := true.B
++          uncacheUop.exceptionVec(storeAccessFault) := true.B
+         }
+       }
+     }
+@@ -886,6 +893,11 @@ class StoreQueue(implicit p: Parameters) extends XSModule
+     allocated(deqPtr) := false.B
+   }
+ 
++  exceptionBuffer.io.storeAddrIn.last.valid := io.mmioStout.fire
++  exceptionBuffer.io.storeAddrIn.last.bits := DontCare
++  exceptionBuffer.io.storeAddrIn.last.bits.vaddr := vaddrModule.io.rdata.head
++  exceptionBuffer.io.storeAddrIn.last.bits.uop := uncacheUop
++
+   // (4) or vector store:
+   // TODO: implement it!
+   io.vecmmioStout := DontCare
+diff --git a/src/test/scala/top/SimMMIO.scala b/src/test/scala/top/SimMMIO.scala
+index 138835ccb96..6ee317b7f39 100644
+--- a/src/test/scala/top/SimMMIO.scala
++++ b/src/test/scala/top/SimMMIO.scala
+@@ -22,11 +22,34 @@ import device._
+ import freechips.rocketchip.amba.axi4.{AXI4EdgeParameters, AXI4MasterNode, AXI4Xbar}
+ import freechips.rocketchip.diplomacy.{AddressSet, InModuleBody, LazyModule, LazyModuleImp}
+ import difftest._
++import utility.AXI4Error
+ 
+ class SimMMIO(edge: AXI4EdgeParameters)(implicit p: config.Parameters) extends LazyModule {
+ 
+   val node = AXI4MasterNode(List(edge.master))
+ 
++  val onChipPeripheralRange = AddressSet(0x38000000L, 0x07ffffffL)
++  // val uartRange = AddressSet(0x40600000, 0x3f) // ?
++  val flashRange = AddressSet(0x10000000L, 0xfffffff)
++  val sdRange = AddressSet(0x40002000L, 0xfff)
++  val intrGenRange = AddressSet(0x40070000L, 0x0000ffffL)
++
++  def subtract(x: AddressSet, y: Seq[AddressSet]): Seq[AddressSet] = {
++    if (y.length == 0) { Seq(x) }
++    else if (y.length == 1) { x.subtract(y.head) }
++    else {
++      x.subtract(y.head).flatMap(remain => subtract(remain, y.tail))
++    }
++  }
++
++  val illegalRange = subtract(AddressSet(0x0, 0x7fffffff), Seq(
++    onChipPeripheralRange,
++    AddressSet(0x40600000L, 0xf), // UART
++    flashRange,
++    sdRange,
++    intrGenRange
++  ))
++
+   val flash = LazyModule(new AXI4Flash(Seq(AddressSet(0x10000000L, 0xfffffff))))
+   val uart = LazyModule(new AXI4UART(Seq(AddressSet(0x40600000L, 0xf))))
+   // val vga = LazyModule(new AXI4VGA(
+@@ -36,6 +59,7 @@ class SimMMIO(edge: AXI4EdgeParameters)(implicit p: config.Parameters) extends L
+   // ))
+   val sd = LazyModule(new AXI4DummySD(Seq(AddressSet(0x40002000L, 0xfff))))
+   val intrGen = LazyModule(new AXI4IntrGenerator(Seq(AddressSet(0x40070000L, 0x0000ffffL))))
++  val error = LazyModule(new AXI4Error(illegalRange))
+ 
+   val axiBus = AXI4Xbar()
+ 
+@@ -44,6 +68,7 @@ class SimMMIO(edge: AXI4EdgeParameters)(implicit p: config.Parameters) extends L
+   flash.node := axiBus
+   sd.node := axiBus
+   intrGen.node := axiBus
++  error.node := axiBus
+ 
+   axiBus := node

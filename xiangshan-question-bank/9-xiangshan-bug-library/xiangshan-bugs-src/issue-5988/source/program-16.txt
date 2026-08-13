@@ -1,0 +1,6 @@
+victim warm A1..A4
+attacker warm B1..B4
+victim touch A1
+attacker touch B1..B4
+victim allocate A5
+victim probe A1

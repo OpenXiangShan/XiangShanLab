@@ -1,0 +1,14 @@
+diff --git a/src/main/scala/xiangshan/frontend/ITTAGE.scala b/src/main/scala/xiangshan/frontend/ITTAGE.scala
+index 6340178f70f..8852f629e7e 100644
+--- a/src/main/scala/xiangshan/frontend/ITTAGE.scala
++++ b/src/main/scala/xiangshan/frontend/ITTAGE.scala
+@@ -541,7 +541,8 @@ class ITTage(implicit p: Parameters) extends BaseITTage {
+       updateMask(provider)   := true.B
+       updateUMask(provider)  := true.B
+ 
+-      updateU(provider) := Mux(!updateMeta.altDiffers, updateMeta.providerU, !updateMisPred)
++      updateU(provider) := Mux(!updateMeta.altDiffers, updateMeta.providerU,
++                                updateMeta.providerTarget === updateRealTarget)
+       updateCorrect(provider)  := updateMeta.providerTarget === updateRealTarget
+       updateTarget(provider) := updateRealTarget
+       updateOldTarget(provider) := updateMeta.providerTarget

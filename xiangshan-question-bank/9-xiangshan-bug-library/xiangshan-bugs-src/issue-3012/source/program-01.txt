@@ -1,0 +1,16 @@
+➜  XiangShan git:(master) ✗ build/emu  -i../simple-sw-workbench/start.bin  2>/dev/null
+emu compiled at May 27 2024, 16:58:55
+Using simulated 32768B flash
+Using simulated 8192MB RAM
+The image is ../simple-sw-workbench/start.bin
+The reference model is /mnt/data/xs/xs-env/NEMU/build/riscv64-nemu-interpreter-so
+The first instruction of core 0 has commited. Difftest enabled. 
+...
+privilegeMode: 3
+Mismatch for store commits 
+  REF commits addr 0x90001150, data 0x0, mask 0xf
+  DUT commits addr 0x90001050, data 0x0, mask 0xf
+Core 0: ABORT at pc = 0x8002005c
+Core-0 instrCnt = 433, cycleCnt = 9,275, IPC = 0.046685
+Seed=0 Guest cycle spent: 9,278 (this will be different from cycleCnt if emu loads a snapshot)
+Host time spent: 2,236ms

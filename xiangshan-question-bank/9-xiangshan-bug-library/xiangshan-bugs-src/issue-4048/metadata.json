@@ -1,0 +1,21 @@
+{
+  "number": 4048,
+  "title": "fix(RAS): bos pointer needs to be updated when the instruction is committed",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4048",
+  "state": "closed",
+  "labels": [],
+  "author": "my-mayfly",
+  "created_at": "2024-12-15T14:23:12Z",
+  "updated_at": "2025-05-08T07:51:56Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4048/commit-log.md"
+  ],
+  "submitted_at": "2024-12-15",
+  "branch": "",
+  "rtl_commit": ""
+}

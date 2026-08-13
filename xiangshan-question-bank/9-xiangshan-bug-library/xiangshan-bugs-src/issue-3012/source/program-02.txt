@@ -1,0 +1,8 @@
+cd XiangShan
+git checkout f6458cc14f9e1c7ac8082fde150b988dd2defe04
+make emu MFC=1 EMU_THREADS=16 NUM_CORES=1 -j 32
+git clone https://github.com/cyyself/simple-sw-workbench.git -b xs-misaligned-bug-poc
+pushd simple-sw-workbench
+make CROSS_COMPILE=riscv64-unknown-linux-gnu-
+popd
+build/emu  -i./simple-sw-workbench/start.bin  2>/dev/null

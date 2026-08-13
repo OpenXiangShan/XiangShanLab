@@ -1,0 +1,65 @@
+# Commit Log
+- Issue: #4907
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/4907
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #4907
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/4907
+- Changed files: 2
+- Additions: 6
+- Deletions: 5
+
+## Files
+- `src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala`
+- `src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+index 349be64ecc8..8403cdc8d88 100644
+--- a/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
++++ b/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala
+@@ -19,9 +19,7 @@ package xiangshan.cache
+ import chisel3._
+ import chisel3.experimental.ExtModule
+ import chisel3.util._
+-import coupledL2.VaddrField
+-import coupledL2.IsKeywordField
+-import coupledL2.IsKeywordKey
++import coupledL2.{IsKeywordKey, IsKeywordField, MemBackTypeMMField, MemPageTypeNCField, VaddrField}
+ import freechips.rocketchip.diplomacy._
+ import freechips.rocketchip.tilelink._
+ import freechips.rocketchip.util.BundleFieldBase
+@@ -931,6 +929,8 @@ class DCache()(implicit p: Parameters) extends LazyModule with HasDCacheParamete
+     PrefetchField(),
+     ReqSourceField(),
+     VaddrField(VAddrBits - blockOffBits),
++    MemBackTypeMMField(),
++    MemPageTypeNCField(),
+   //  IsKeywordField()
+   ) ++ cacheParams.aliasBitsOpt.map(AliasField)
+   val echoFields: Seq[BundleFieldBase] = Seq(
+diff --git a/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala b/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
+index c0834fe092f..fd6bc2f643e 100644
+--- a/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
++++ b/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala
+@@ -26,8 +26,7 @@ package xiangshan.cache
+ import chisel3._
+ import chisel3.util._
+ import chisel3.experimental.dataview._
+-import coupledL2.VaddrKey
+-import coupledL2.IsKeywordKey
++import coupledL2.{IsKeywordKey, MemBackTypeMM, MemBackTypeMMField, MemPageTypeNC, MemPageTypeNCField, VaddrKey}
+ import difftest._
+ import freechips.rocketchip.tilelink.ClientStates._
+ import freechips.rocketchip.tilelink.MemoryOpCategories._
+@@ -855,6 +854,8 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
+       io.mem_acquire.bits.user.lift(ReqSourceKey).foreach(_ := MemReqSource.L1DataPrefetch.id.U)
+     }
+   }
++  io.mem_acquire.bits.user.lift(MemBackTypeMM).foreach(_ := true.B)
++  io.mem_acquire.bits.user.lift(MemPageTypeNC).foreach(_ := false.B)
+   require(nSets <= 256)
+ 
+   // io.mem_grant.ready := !w_grantlast && s_acquire
+```

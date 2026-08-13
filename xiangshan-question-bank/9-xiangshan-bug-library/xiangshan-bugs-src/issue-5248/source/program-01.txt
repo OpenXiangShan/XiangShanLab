@@ -1,0 +1,13 @@
+  li x13, 0x0
+  li x16, 0x969b
+  csrrw x13, hvictl, x16
+  li x16, 0x7fffffff
+  li x18, 0xac04
+  csrrc x16, hvictl, x18
+  li x20, 0x15
+  li x19, 0xdb48
+  csrrs x20, hvictl, x19
+  li x16, 0x0
+  csrrwi x16, hvictl, 23
+  li x13, 0x0
+  csrrci x13, time, 0

@@ -1,0 +1,29 @@
+# Commit Log
+- Issue: #5086
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/5086
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #5086
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/5086
+- Changed files: 1
+- Additions: 1
+- Deletions: 1
+
+## Files
+- `src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+index c3cc20e3bd7..9ca64dc8588 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/tage/Tage.scala
+@@ -281,7 +281,7 @@ class Tage(implicit p: Parameters) extends BasePredictor with HasTageParameters
+   private val t2_hasProvider = t2_mispredictBranchHitTableMask.reduce(_ || _)
+ 
+   // only allocate new entry to tables with longer history
+-  private val t2_providerIdxOH = PriorityEncoderOH(t2_mispredictBranchHitTableMask.reverse).asUInt
++  private val t2_providerIdxOH = PriorityEncoderOH(t2_mispredictBranchHitTableMask.reverse).reverse.asUInt
+ 
+   private val t2_longerHistoryTableMask = (~((t2_providerIdxOH - 1.U) | t2_providerIdxOH)).asUInt
+```

@@ -1,0 +1,70 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+index 81b933f726f..0c6597d7335 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+@@ -84,12 +84,10 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+   private val tvalFillInst     = isIllegalInst
+ 
+   private val tval = Mux1H(Seq(
+-    (tvalFillPc                     ) -> trapPC,
+-    (tvalFillPcPlus2                ) -> (trapPC + 2.U),
+-    (tvalFillMemVaddr && !memIsVirt ) -> trapMemVA,
+-    (tvalFillMemVaddr &&  memIsVirt ) -> trapMemVA,
+-    (isLSGuestExcp                  ) -> trapMemVA,
+-    (tvalFillInst                   ) -> trapInst,
++    (tvalFillPc                        ) -> trapPC,
++    (tvalFillPcPlus2                   ) -> (trapPC + 2.U),
++    (tvalFillMemVaddr || isLSGuestExcp ) -> trapMemVA,
++    (tvalFillInst                      ) -> trapInst,
+   ))
+ 
+   private val tval2 = Mux1H(Seq(
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+index 5ce1bc5b37f..328d8752580 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+@@ -82,12 +82,10 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   private val tvalFillInst     = isIllegalInst
+ 
+   private val tval = Mux1H(Seq(
+-    (tvalFillPc                     ) -> trapPC,
+-    (tvalFillPcPlus2                ) -> (trapPC + 2.U),
+-    (tvalFillMemVaddr && !memIsVirt ) -> trapMemVA,
+-    (tvalFillMemVaddr &&  memIsVirt ) -> trapMemVA,
+-    (isLSGuestExcp                  ) -> trapMemVA,
+-    (tvalFillInst                   ) -> trapInst,
++    (tvalFillPc                        ) -> trapPC,
++    (tvalFillPcPlus2                   ) -> (trapPC + 2.U),
++    (tvalFillMemVaddr || isLSGuestExcp ) -> trapMemVA,
++    (tvalFillInst                      ) -> trapInst,
+   ))
+ 
+   private val tval2 = Mux1H(Seq(
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+index d93720bd41f..8b72a740351 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+@@ -85,18 +85,17 @@ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSR
+   // We fill pc here
+   private val tvalFillPc       = isFetchExcp && !fetchCrossPage || isFetchBkpt
+   private val tvalFillPcPlus2  = isFetchExcp && fetchCrossPage
+-  private val tvalFillMemVaddr = isMemExcp
++  private val tvalFillMemVaddr = isMemExcp || isMemBkpt
+   private val tvalFillGVA      =
+     (isFetchExcp || isFetchBkpt) && fetchIsVirt ||
+     (isMemExcp || isMemBkpt) && memIsVirt
+   private val tvalFillInst     = isIllegalInst
+ 
+   private val tval = Mux1H(Seq(
+-    (tvalFillPc                     ) -> trapPC,
+-    (tvalFillPcPlus2                ) -> (trapPC + 2.U),
+-    (tvalFillMemVaddr && !memIsVirt ) -> trapMemVA,
+-    (tvalFillMemVaddr &&  memIsVirt ) -> trapMemVA,
+-    (tvalFillInst                   ) -> trapInst,
++    tvalFillPc       -> trapPC,
++    tvalFillPcPlus2  -> (trapPC + 2.U),
++    tvalFillMemVaddr -> trapMemVA,
++    tvalFillInst     -> trapInst,
+   ))
+ 
+   private val instrAddrTransType = AddrTransType(

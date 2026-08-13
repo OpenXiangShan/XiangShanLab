@@ -1,0 +1,272 @@
+# Commit Log
+- Issue: #6058
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6058
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6058
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6058
+- Changed files: 6
+- Additions: 48
+- Deletions: 29
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/SatpFlushMod.scala`
+- `src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+index 8ac5ad65354..cf9f0185878 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryHSEvent.scala
+@@ -50,7 +50,9 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+     in.trapPc,
+   )
+ 
+-  private val trapPCGPA = genTrapVA(
++  private val trapPCGPA = in.trapPcGPA
++
++  private val trapPCGPAFromSatpFlush = genTrapVA(
+     iMode,
+     oldSatp,
+     oldVsatp,
+@@ -77,7 +79,6 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+   private val isFetchMalAddr = in.isFetchMalAddr
+   private val isFetchMalAddrExcp = isException && isFetchMalAddr
+   private val satpFlushFirstFetchFault = in.satpFlushFirstFetchFault
+-  private val satpFlushFirstFetchFaultExcp = isException && satpFlushFirstFetchFault
+   private val isIllegalInst  = isException && (ExceptionNO.EX_II.U === highPrioTrapNO || ExceptionNO.EX_VI.U === highPrioTrapNO)
+ 
+   private val isLSGuestExcp    = isException && ExceptionNO.getLSGuestPageFault.map(_.U === highPrioTrapNO).reduce(_ || _)
+@@ -107,6 +108,13 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+     (isLSGuestExcp                                         ) -> trapMemGPA,
+   ))
+ 
++  private val tval2FromSatpFlush = Mux1H(Seq(
++    (isFetchGuestExcp && isFetchMalAddr                    ) -> in.fetchMalTval,
++    (isFetchGuestExcp && !isFetchMalAddr && !fetchCrossPage) -> trapPCGPAFromSatpFlush,
++    (isFetchGuestExcp && !isFetchMalAddr && fetchCrossPage ) -> (trapPCGPAFromSatpFlush + 2.U),
++    (isLSGuestExcp                                         ) -> trapMemGPA,
++  ))
++
+   private val instrAddrTransType = AddrTransType(
+     bare = satp.MODE === SatpMode.Bare,
+     sv39 = satp.MODE === SatpMode.Sv39,
+@@ -141,8 +149,8 @@ class TrapEntryHSEventModule(implicit val p: Parameters) extends Module with CSR
+   out.sepc.bits.epc             := Mux(satpFlushFirstFetchFault, trapPC(63, 1), Mux(isFetchMalAddr, in.fetchMalTval(63, 1), trapPC(63, 1)))
+   out.scause.bits.Interrupt     := isInterrupt
+   out.scause.bits.ExceptionCode := highPrioTrapNO
+-  out.stval.bits.ALL            := Mux(satpFlushFirstFetchFaultExcp, tval, Mux(isFetchMalAddrExcp, in.fetchMalTval, tval))
+-  out.htval.bits.ALL            := tval2 >> 2
++  out.stval.bits.ALL            := Mux(satpFlushFirstFetchFault, tval, Mux(isFetchMalAddrExcp, in.fetchMalTval, tval))
++  out.htval.bits.ALL            := Mux(satpFlushFirstFetchFault, tval2FromSatpFlush >> 2, tval2 >> 2)
+   out.htinst.bits.ALL           := Mux(isFetchGuestExcp && in.trapIsForVSnonLeafPTE || isLSGuestExcp && in.memExceptionIsForVSnonLeafPTE, 0x3000.U, 0.U)
+   out.targetPc.bits.pc          := in.pcFromXtvec
+   out.targetPc.bits.raiseIPF    := instrAddrTransType.checkPageFault(in.pcFromXtvec)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+index 9bd2a33151f..cd7a4a130bb 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryMEvent.scala
+@@ -48,7 +48,9 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+     in.trapPc,
+   )
+ 
+-  private val trapPCGPA = genTrapVA(
++  private val trapPCGPA = in.trapPcGPA
++
++  private val trapPCGPAFromSatpFlush = genTrapVA(
+     iMode,
+     oldSatp,
+     oldVsatp,
+@@ -75,7 +77,6 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   private val isFetchMalAddr = in.isFetchMalAddr
+   private val isFetchMalAddrExcp = isException && isFetchMalAddr
+   private val satpFlushFirstFetchFault = in.satpFlushFirstFetchFault
+-  private val satpFlushFirstFetchFaultExcp = isException && satpFlushFirstFetchFault
+   private val isIllegalInst  = isException && (ExceptionNO.EX_II.U === highPrioTrapNO || ExceptionNO.EX_VI.U === highPrioTrapNO)
+ 
+   private val isLSGuestExcp    = isException && ExceptionNO.getLSGuestPageFault.map(_.U === highPrioTrapNO).reduce(_ || _)
+@@ -105,6 +106,13 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+     (isLSGuestExcp                                         ) -> trapMemGPA,
+   ))
+ 
++  private val tval2FromSatpFlush = Mux1H(Seq(
++    (isFetchGuestExcp && isFetchMalAddr                    ) -> in.fetchMalTval,
++    (isFetchGuestExcp && !isFetchMalAddr && !fetchCrossPage) -> trapPCGPAFromSatpFlush,
++    (isFetchGuestExcp && !isFetchMalAddr && fetchCrossPage ) -> (trapPCGPAFromSatpFlush + 2.U),
++    (isLSGuestExcp                                         ) -> trapMemGPA,
++  ))
++
+   private val precause = Cat(isInterrupt, highPrioTrapNO)
+ 
+   out := DontCare
+@@ -128,8 +136,8 @@ class TrapEntryMEventModule(implicit val p: Parameters) extends Module with CSRE
+   out.mepc.bits.epc             := Mux(satpFlushFirstFetchFault, trapPC(63, 1), Mux(isFetchMalAddr, in.fetchMalTval(63, 1), trapPC(63, 1)))
+   out.mcause.bits.Interrupt     := isInterrupt && !isDTExcp
+   out.mcause.bits.ExceptionCode := Mux(isDTExcp, ExceptionNO.EX_DT.U, highPrioTrapNO)
+-  out.mtval.bits.ALL            := Mux(satpFlushFirstFetchFaultExcp, tval, Mux(isFetchMalAddrExcp, in.fetchMalTval, tval))
+-  out.mtval2.bits.ALL           := Mux(isDTExcp, precause, tval2 >> 2)
++  out.mtval.bits.ALL            := Mux(satpFlushFirstFetchFault, tval, Mux(isFetchMalAddrExcp, in.fetchMalTval, tval))
++  out.mtval2.bits.ALL           := Mux(isDTExcp, precause, Mux(satpFlushFirstFetchFault, tval2FromSatpFlush >> 2,tval2 >> 2))
+   out.mtinst.bits.ALL           := Mux(isFetchGuestExcp && in.trapIsForVSnonLeafPTE || isLSGuestExcp && in.memExceptionIsForVSnonLeafPTE, 0x3000.U, 0.U)
+   out.targetPc.bits.pc          := in.pcFromXtvec
+   out.targetPc.bits.raiseIPF    := false.B
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+index de77aabf1e4..af6cdce6d91 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/TrapEntryVSEvent.scala
+@@ -83,7 +83,6 @@ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSR
+   private val isFetchMalAddr = in.isFetchMalAddr
+   private val isFetchMalAddrExcp = isException && isFetchMalAddr
+   private val satpFlushFirstFetchFault = in.satpFlushFirstFetchFault
+-  private val satpFlushFirstFetchFaultExcp = isException && satpFlushFirstFetchFault
+   private val isIllegalInst  = isException && (EX_II.U === highPrioTrapNO || EX_VI.U === highPrioTrapNO)
+ 
+   // Software breakpoint exceptions are permitted to write either 0 or the pc to xtval
+@@ -131,7 +130,7 @@ class TrapEntryVSEventModule(implicit val p: Parameters) extends Module with CSR
+   out.vsepc.bits.epc             := Mux(satpFlushFirstFetchFault, trapPC(63, 1), Mux(isFetchMalAddr, in.fetchMalTval(63, 1), trapPC(63, 1)))
+   out.vscause.bits.Interrupt     := isInterrupt
+   out.vscause.bits.ExceptionCode := Mux(virtualInterruptIsHvictlInject && isInterrupt, hvictlIID, highPrioTrapNO)
+-  out.vstval.bits.ALL            := Mux(satpFlushFirstFetchFaultExcp, tval, Mux(isFetchMalAddrExcp, in.fetchMalTval, tval))
++  out.vstval.bits.ALL            := Mux(satpFlushFirstFetchFault, tval, Mux(isFetchMalAddrExcp, in.fetchMalTval, tval))
+   out.targetPc.bits.pc           := in.pcFromXtvec
+   out.targetPc.bits.raiseIPF     := instrAddrTransType.checkPageFault(in.pcFromXtvec)
+   out.targetPc.bits.raiseIAF     := instrAddrTransType.checkAccessFault(in.pcFromXtvec)
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 63a59b8883f..c8452d42324 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -168,8 +168,8 @@ class NewCSR(implicit val p: Parameters) extends Module
+       val privState = new PrivState
+       val interrupt = Bool()
+       val wfiEvent = Bool()
+-      val satp  = new SatpInfo
+-      val vsatp = new SatpInfo
++      val satp  = ValidIO(UInt(SatpMode.getWidth.W))
++      val vsatp = ValidIO(UInt(SatpMode.getWidth.W))
+       // fp
+       val fpState = new Bundle {
+         val off = Bool()
+@@ -234,6 +234,7 @@ class NewCSR(implicit val p: Parameters) extends Module
+ 
+     val oldPrivSate = Input(new PrivState)
+     val oldSatpMode = Input(UInt(SatpMode.getWidth.W))
++    val oldVsatpMode = Input(UInt(SatpMode.getWidth.W))
+ 
+     val distributedWenLegal = Output(Bool())
+   })
+@@ -274,7 +275,8 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val trapIsSatpFlushFirstFetchFault = io.fromRob.trap.bits.satpFlushFirstFetchFault
+ 
+   val oldPrivState = io.oldPrivSate
+-  val oldSatpMode = io.oldSatpMode
++  val oldSatpMode  = io.oldSatpMode
++  val oldVsatpMode = io.oldVsatpMode
+ 
+   // debug_intrrupt
+   val debugIntrEnable = RegInit(true.B) // debug interrupt will be handle only when debugIntrEnable
+@@ -836,8 +838,8 @@ class NewCSR(implicit val p: Parameters) extends Module
+         in.satp  := satp.regOut
+         in.vsatp := vsatp.regOut
+         in.hgatp := hgatp.regOut
+-        in.oldSatp := Mux(trapIsSatpFlushFirstFetchFault, Mux(oldPrivState.V.asBool, satp.regOut, Cat(oldSatpMode, 0.U((XLEN-SatpMode.getWidth).W)).asTypeOf(in.oldSatp)), satp.regOut)
+-        in.oldVsatp := Mux(trapIsSatpFlushFirstFetchFault, Mux(oldPrivState.V.asBool, Cat(oldSatpMode, 0.U((XLEN-SatpMode.getWidth).W)).asTypeOf(in.oldVsatp), vsatp.regOut), vsatp.regOut)
++        in.oldSatp := Mux(trapIsSatpFlushFirstFetchFault, Cat(oldSatpMode, 0.U((XLEN-SatpMode.getWidth).W)).asTypeOf(in.oldSatp), satp.regOut)
++        in.oldVsatp := Mux(trapIsSatpFlushFirstFetchFault, Cat(oldVsatpMode, 0.U((XLEN-SatpMode.getWidth).W)).asTypeOf(in.oldVsatp), vsatp.regOut)
+         if (HasBitmapCheck) {
+           in.mbmc := mbmc.get.regOut
+         } else {
+@@ -1155,10 +1157,10 @@ class NewCSR(implicit val p: Parameters) extends Module
+                         (vstopi.regOut.IID.asUInt =/= 0.U)
+   io.status.debugMode := debugMode
+   io.status.singleStepFlag := !debugMode && dcsr.regOut.STEP
+-  io.status.satp.wen   := satp.w.wen
+-  io.status.satp.mode  := satp.regOut.MODE.asUInt
+-  io.status.vsatp.wen  := vsatp.w.wen
+-  io.status.vsatp.mode := vsatp.regOut.MODE.asUInt
++  io.status.satp.valid  := satp.w.wen
++  io.status.satp.bits   := satp.regOut.MODE.asUInt
++  io.status.vsatp.valid := vsatp.w.wen
++  io.status.vsatp.bits  := vsatp.regOut.MODE.asUInt
+ 
+   /**
+    * debug_begin
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/SatpFlushMod.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/SatpFlushMod.scala
+index 826c3540348..c5f56988fd4 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/SatpFlushMod.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/SatpFlushMod.scala
+@@ -16,6 +16,7 @@ class SatpFlushMod(implicit p: Parameters) extends XSModule with HasCircularQueu
+ 
+   private val oldPrivState = Reg(new PrivState)
+   private val oldSatpMode  = Reg(UInt(SatpMode.getWidth.W))
++  private val oldVsatpMode = Reg(UInt(SatpMode.getWidth.W))
+ 
+   private val privState = in.privState
+ 
+@@ -28,14 +29,13 @@ class SatpFlushMod(implicit p: Parameters) extends XSModule with HasCircularQueu
+ 
+   when(wen) {
+     oldPrivState := privState
+-    oldSatpMode  := Mux1H(Seq(
+-      satpWen  -> satpMode,
+-      vsatpWen -> vsatpMode,
+-    ))
++    oldSatpMode  := satpMode
++    oldVsatpMode := vsatpMode
+   }
+ 
+   out.oldPrivState := oldPrivState
+-  out.oldSatpMode := oldSatpMode
++  out.oldSatpMode  := oldSatpMode
++  out.oldVsatpMode := oldVsatpMode
+ }
+ 
+ object SatpFlushMod {
+@@ -48,5 +48,6 @@ object SatpFlushMod {
+   class Out(implicit p: Parameters) extends XSBundle with HasXSParameter {
+     val oldPrivState = new PrivState
+     val oldSatpMode = UInt(SatpMode.getWidth.W)
++    val oldVsatpMode = UInt(SatpMode.getWidth.W)
+   }
+ }
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+index c1866e0c1b6..42f0b7572ae 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
+@@ -121,6 +121,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   csrMod.io.fetchMalTval := trapTvalMod.io.tval
+   csrMod.io.oldPrivSate := satpFlushMod.out.oldPrivState
+   csrMod.io.oldSatpMode := satpFlushMod.out.oldSatpMode
++  csrMod.io.oldVsatpMode := satpFlushMod.out.oldVsatpMode
+   csrMod.io.fromMem.excpVA  := csrIn.memExceptionVAddr
+   csrMod.io.fromMem.excpGPA := csrIn.memExceptionGPAddr
+   csrMod.io.fromMem.excpIsForVSnonLeafPTE := csrIn.memExceptionIsForVSnonLeafPTE
+@@ -208,10 +209,10 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   trapTvalMod.io.fromCtrlBlock.flush := io.flush
+   trapTvalMod.io.fromCtrlBlock.robDeqPtr := io.csrio.get.robDeqPtr
+ 
+-  satpFlushMod.in.satp.valid  := csrMod.io.status.satp.wen
+-  satpFlushMod.in.vsatp.valid := csrMod.io.status.vsatp.wen
+-  satpFlushMod.in.satp.bits   := csrMod.io.status.satp.mode
+-  satpFlushMod.in.vsatp.bits  := csrMod.io.status.vsatp.mode
++  satpFlushMod.in.satp.valid  := csrMod.io.status.satp.valid
++  satpFlushMod.in.satp.bits   := csrMod.io.status.satp.bits
++  satpFlushMod.in.vsatp.valid := csrMod.io.status.vsatp.valid
++  satpFlushMod.in.vsatp.bits  := csrMod.io.status.vsatp.bits
+   satpFlushMod.in.privState   := csrMod.io.status.privState
+ 
+   val imsic = Module(new aia.IMSIC_WRAP(soc.IMSICParams))
+@@ -309,7 +310,7 @@ class CSR(cfg: FuConfig)(implicit p: Parameters) extends FuncUnit(cfg)
+   io.out.valid := csrModOutValid
+   io.out.bits.ctrl.exceptionVec.get := exceptionVec
+   io.out.bits.ctrl.flushPipe.get := flushPipe
+-  io.out.bits.ctrl.satpFlushPipe.get := csrMod.io.status.satp.wen || csrMod.io.status.vsatp.wen
++  io.out.bits.ctrl.satpFlushPipe.get := csrMod.io.status.satp.valid || csrMod.io.status.vsatp.valid
+   io.out.bits.res.data := csrMod.io.out.bits.rData
+ 
+   /** initialize NewCSR's io_out_ready from wrapper's io */
+```

@@ -1,0 +1,8 @@
+source cycle:
+  free slots = 1
+  lane 0 canAllocate = true   -> ROB35 accepted
+  lane 1 canAllocate = false  -> ROB36 rejected
+
+rollback two cycles later:
+  io_rollback_valid = 1
+  io_rollback_bits.robIdx = ROB35

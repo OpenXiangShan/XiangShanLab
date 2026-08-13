@@ -1,0 +1,1 @@
+./build.minimal/emu -i 70ea8d559283afbf --diff ready-to-run/riscv64-nemu-interpreter-so

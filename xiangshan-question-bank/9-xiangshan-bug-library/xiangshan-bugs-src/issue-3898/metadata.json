@@ -1,0 +1,21 @@
+{
+  "number": 3898,
+  "title": "fix(dret): fix update of privstate in dretevent",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3898",
+  "state": "closed",
+  "labels": [],
+  "author": "wissygh",
+  "created_at": "2024-11-19T11:02:34Z",
+  "updated_at": "2024-11-20T10:49:33Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3898/commit-log.md"
+  ],
+  "submitted_at": "2024-11-19",
+  "branch": "",
+  "rtl_commit": ""
+}

@@ -1,0 +1,99 @@
+# Commit Log
+- Issue: #6223
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6223
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6223
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6223
+- Changed files: 5
+- Additions: 8
+- Deletions: 13
+
+## Files
+- `difftest`
+- `ready-to-run`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+- `src/main/scala/xiangshan/mem/lsqueue/VirtualStoreQueue.scala`
+
+## Diff
+```diff
+diff --git a/difftest b/difftest
+index 286dcfce0d3..bde1d572ab7 160000
+--- a/difftest
++++ b/difftest
+@@ -1 +1 @@
+-Subproject commit 286dcfce0d3db8caf78ba5622cacc0927925d461
++Subproject commit bde1d572ab7aeae3524a39e84ce7bbda676a1639
+diff --git a/ready-to-run b/ready-to-run
+index 955e6e2a5b5..e131ac5ffa1 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit 955e6e2a5b5a51426d000597710cd632aeba2f52
++Subproject commit e131ac5ffa12e71756b992b5b867aff981a6dcba
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+index 55480f22ee4..1620aca7cfc 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+@@ -483,11 +483,9 @@ trait MachineLevel { self: NewCSR =>
+     with TrapEntryMNEventSinkBundle
+     with MNretEventSinkBundle{
+     // NMIE write 0 with no effect
+-    // as opensbi not support smrnmi, we init nmie with 1,and allow software to set nmie close for testing
+-    // Attension, when set nmie to zero ,do not cause double trap when nmi interrupt has triggered
+-//    when(!wdata.NMIE.asBool) {
+-//      reg.NMIE := reg.NMIE
+-//    }
++    when(wen && !wdata.NMIE.asBool) {
++      reg.NMIE := reg.NMIE
++    }
+   }).setAddr(CSRs.mnstatus)
+   val mnscratch = Module(new CSRModule("Mnscratch", new ScratchBundle("Scratch register for resumable NMI handlers.")))
+     .setAddr(CSRs.mnscratch)
+@@ -596,7 +594,7 @@ class MstatusBundle extends CSRBundle {
+   val MBE  = CSRROField     (37).withReset(0.U).withDescription("M-mode endianness selector.")
+   val GVA  = CSRRWField     (38).withReset(0.U).withDescription("Indicates that trap information was derived from a guest virtual address.")
+   val MPV  = VirtMode       (39).withReset(0.U).withDescription("Saved virtualization mode from before trap entry to M-mode.")
+-  val MDT  = CSRRWField     (42).withReset(mdtInit.U).withDescription("M-mode disable-trap bit used by the Smdbltrp extension.")
++  val MDT  = CSRRWField     (42).withReset(1.U).withDescription("M-mode disable-trap bit used by the Smdbltrp extension.")
+   val SD   = CSRROField     (63,
+     (_, _) => FS === ContextStatus.Dirty || VS === ContextStatus.Dirty
+   ).withDescription("Dirty summary bit for the floating-point or vector context.")
+@@ -668,8 +666,7 @@ class MstatusModule(implicit override val p: Parameters) extends CSRModule("MSta
+ }
+ 
+ class MnstatusBundle extends CSRBundle {
+-  // OpenSBI does not support Smrnmi yet, so NMIE resets enabled for bring-up.
+-  val NMIE   = CSRRWField  (3).withReset(1.U).withDescription("Enable non-maskable interrupt handling.")
++  val NMIE   = CSRRWField  (3).withReset(0.U).withDescription("Enable non-maskable interrupt handling.")
+   val MNPV   = VirtMode    (7).withReset(0.U).withDescription("Saved virtualization mode for resumable NMI handling.")
+   val MNPELP = RO          (9).withReset(0.U).withDescription("Saved landing-pad state for resumable NMI handling.")
+   val MNPP   = PrivMode    (12, 11).withReset(PrivMode.U).withDescription("Saved privilege level for resumable NMI handling.")
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 5eeadd88435..72bf9870db6 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -69,8 +69,6 @@ object CSRConfig {
+ 
+   final val PPNLength = 44
+   final val PPNLengthMpt = 44
+-  // TODO: as current test not support clean mdt , we set mstatus->mdt = 0 to allow exception in m-mode
+-  final val mdtInit = 0
+ 
+   final val csrindSelectWidth = 12
+ 
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/VirtualStoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/VirtualStoreQueue.scala
+index 903cadfbb50..0bac7e316a3 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/VirtualStoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/VirtualStoreQueue.scala
+@@ -399,7 +399,7 @@ class VirtualStoreQueue[PhysicalQueuePtrType <: MultiFlagCircularQueuePtr[Physic
+   io.toPhysicalQueue.redirectPtr.valid := toPhysicalQueueRedirectValid
+   io.toPhysicalQueue.redirectPtr.bits := toPhysicalQueueRedirectPtr
+ 
+-  io.toPhysicalQueue.headRobIdx := RegEnable(dataEntries(deqPtrVec.head.value).robIdx, preCommitMoveValid)
++  io.toPhysicalQueue.headRobIdx := RegEnable(dataEntries(preCommitPtr.value).robIdx, preCommitMoveValid)
+ 
+   val sqRecoverStall = state =/= WalkState.idle || RegNext(redirectReg.valid) || DelayN(redirectReg.valid, 2)
+   io.sqRecoverStall := sqRecoverStall
+```

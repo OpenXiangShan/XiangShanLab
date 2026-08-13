@@ -1,0 +1,42 @@
+# Commit Log
+- Issue: #3944
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3944
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3944
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3944
+- Changed files: 1
+- Additions: 5
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/frontend/IFU.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/frontend/IFU.scala b/src/main/scala/xiangshan/frontend/IFU.scala
+index 7175703af79..d68cf9fbd24 100644
+--- a/src/main/scala/xiangshan/frontend/IFU.scala
++++ b/src/main/scala/xiangshan/frontend/IFU.scala
+@@ -716,7 +716,8 @@ class NewIFU(implicit p: Parameters) extends XSModule
+   switch(mmio_state) {
+     is(m_idle) {
+       when(f3_req_is_mmio) {
+-        mmio_state := m_waitLastCmt
++        // in idempotent spaces, we can send request directly (i.e. can do speculative fetch)
++        mmio_state := Mux(f3_itlb_pbmt === Pbmt.nc, m_sendReq, m_waitLastCmt)
+       }
+     }
+ 
+@@ -796,7 +797,9 @@ class NewIFU(implicit p: Parameters) extends XSModule
+     }
+ 
+     is(m_waitCommit) {
+-      mmio_state := Mux(mmio_commit, m_commited, m_waitCommit)
++      // in idempotent spaces, we can skip waiting for commit (i.e. can do speculative fetch)
++      // but we do not skip m_waitCommit state, as other signals (e.g. f3_mmio_can_go relies on this)
++      mmio_state := Mux(mmio_commit || f3_itlb_pbmt === Pbmt.nc, m_commited, m_waitCommit)
+     }
+ 
+     // normal mmio instruction
+```

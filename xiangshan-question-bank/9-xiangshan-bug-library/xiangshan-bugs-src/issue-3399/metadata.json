@@ -1,0 +1,21 @@
+{
+  "number": 3399,
+  "title": "Vfalu: fix fflagsRedMask use outVecCtrl",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/3399",
+  "state": "closed",
+  "labels": [],
+  "author": "lewislzh",
+  "created_at": "2024-08-16T07:19:40Z",
+  "updated_at": "2024-08-19T01:55:21Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-3399/commit-log.md"
+  ],
+  "submitted_at": "2024-08-16",
+  "branch": "",
+  "rtl_commit": ""
+}

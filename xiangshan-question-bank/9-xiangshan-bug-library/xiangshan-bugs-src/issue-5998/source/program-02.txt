@@ -1,0 +1,3 @@
+bytes 16..19: from the younger sd 12(t0) = 0x11223344
+bytes 20..23: from the older sw 20(t0)  = 0xaabbccdd
+expected a0  = 0xaabbccdd11223344

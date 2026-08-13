@@ -1,0 +1,4 @@
+      val bareAddr = ZeroExt(addr(PAddrWidth - 1, 0), XLEN)   // Bare : zero-extend
+      val sv39Addr = SignExt(addr.take(39), XLEN)             // Sv39 : sign-extend
+      val sv48Addr = SignExt(addr.take(48), XLEN)             // Sv48 : sign-extend
+      trapAddr = Mux1H(Seq(isBare -> bareAddr, isSv39 -> sv39Addr, isSv48 -> sv48Addr, ...))

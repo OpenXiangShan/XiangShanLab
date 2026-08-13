@@ -1,0 +1,2 @@
+Assertion failed at Bpu.scala:556
+Seed=0 Guest cycle spent: 9824

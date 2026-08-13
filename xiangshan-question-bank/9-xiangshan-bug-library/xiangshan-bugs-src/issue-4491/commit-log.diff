@@ -1,0 +1,98 @@
+diff --git a/src/main/resources/config/Default.yml b/src/main/resources/config/Default.yml
+index 6ac5dd4d5ea..6dc50a0b4d4 100644
+--- a/src/main/resources/config/Default.yml
++++ b/src/main/resources/config/Default.yml
+@@ -23,6 +23,8 @@ L3CacheConfig: { size: 16 MB, ways: 16, inclusive: false, banks: 4 }
+ 
+ DebugModuleBaseAddr: 0x38020000
+ 
++WFIResume: true
++
+ SeperateDM: false
+ 
+ SeperateTLBus: false
+diff --git a/src/main/scala/top/ArgParser.scala b/src/main/scala/top/ArgParser.scala
+index bd70531e718..eb6db36cd2d 100644
+--- a/src/main/scala/top/ArgParser.scala
++++ b/src/main/scala/top/ArgParser.scala
+@@ -205,6 +205,10 @@ object ArgParser {
+           nextOption(config.alter((site, here, up) => {
+             case SoCParamsKey => up(SoCParamsKey).copy(SeperateDM = true)
+           }), tail)
++        case "--wfi-resume" :: value :: tail =>
++          nextOption(config.alter((site, here, up) => {
++            case XSTileKey => up(XSTileKey).map(_.copy(wfiResume = value.toBoolean))
++          }), tail)
+         case "--yaml-config" :: yamlFile :: tail =>
+           nextOption(YamlParser.parseYaml(config, yamlFile), tail)
+         case option :: tail =>
+diff --git a/src/main/scala/top/YamlParser.scala b/src/main/scala/top/YamlParser.scala
+index fd68814dd5b..1b7927384d4 100644
+--- a/src/main/scala/top/YamlParser.scala
++++ b/src/main/scala/top/YamlParser.scala
+@@ -22,9 +22,10 @@ import io.circe.generic.extras.auto._
+ import org.chipsalliance.cde.config.Parameters
+ import system.SoCParamsKey
+ import xiangshan.backend.fu.{MemoryRange, PMAConfigEntry}
++import xiangshan.XSTileKey
+ import freechips.rocketchip.devices.debug.DebugModuleKey
+-import freechips.rocketchip.util.AsyncQueueParams
+ import freechips.rocketchip.diplomacy.AddressSet
++import freechips.rocketchip.util.AsyncQueueParams
+ 
+ case class YamlConfig(
+   PmemRanges: Option[List[MemoryRange]],
+@@ -33,6 +34,7 @@ case class YamlConfig(
+   L2CacheConfig: Option[L2CacheConfig],
+   L3CacheConfig: Option[L3CacheConfig],
+   DebugModuleBaseAddr: Option[BigInt],
++  WFIResume: Option[Boolean],
+   SeperateDM: Option[Boolean],
+   SeperateTLBus: Option[Boolean],
+   SeperateTLBusRanges: Option[List[AddressSet]]
+@@ -75,6 +77,11 @@ object YamlParser {
+         case DebugModuleKey => up(DebugModuleKey).map(_.copy(baseAddress = addr))
+       })
+     }
++    yamlConfig.WFIResume.foreach { enable =>
++      newConfig = newConfig.alter((site, here, up) => {
++        case XSTileKey => up(XSTileKey).map(_.copy(wfiResume = enable))
++      })
++    }
+     yamlConfig.SeperateDM.foreach { enable =>
+       newConfig = newConfig.alter((site, here, up) => {
+         case SoCParamsKey => up(SoCParamsKey).copy(SeperateDM = enable)
+diff --git a/src/main/scala/xiangshan/Parameters.scala b/src/main/scala/xiangshan/Parameters.scala
+index 40b33dfcec1..ee92e532844 100644
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -356,6 +356,7 @@ case class XSCoreParameters
+   softPTW: Boolean = false, // dpi-c l2tlb debug only
+   softPTWDelay: Int = 1,
+   hasMbist: Boolean = false,
++  wfiResume: Boolean = true,
+   hasSramCtl: Boolean = false,
+ ){
+   def ISABase = "rv64i"
+@@ -908,6 +909,8 @@ trait HasXSParameter {
+   def IlastsizeWidth         = coreParams.traceParams.IlastsizeWidth
+ 
+   def hasMbist               = coreParams.hasMbist
++
++  def wfiResume              = coreParams.wfiResume
+   def hasSramCtl             = coreParams.hasSramCtl
+   def hasSramTest            = hasMbist || hasSramCtl
+ }
+diff --git a/src/main/scala/xiangshan/backend/rob/Rob.scala b/src/main/scala/xiangshan/backend/rob/Rob.scala
+index e8c9e56cbb4..fe83cb3bdcd 100644
+--- a/src/main/scala/xiangshan/backend/rob/Rob.scala
++++ b/src/main/scala/xiangshan/backend/rob/Rob.scala
+@@ -400,7 +400,7 @@ class RobImp(override val wrapper: Rob)(implicit p: Parameters, params: BackendP
+   }.elsewhen(!hasWFI && RegNext(hasWFI)) {
+     wfi_cycles := 0.U
+   }
+-  val wfi_timeout = wfi_cycles.andR
++  val wfi_timeout = if (wfiResume) wfi_cycles.andR else false.B
+   when(RegNext(RegNext(io.csr.wfiEvent)) || io.flushOut.valid || wfi_timeout) {
+     hasWFI := false.B
+   }

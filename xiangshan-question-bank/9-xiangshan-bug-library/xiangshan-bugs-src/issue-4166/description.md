@@ -1,0 +1,1 @@
+Along the same lines, when hstatus.VGEIN is not the number of an implemented guest external interrupt, attempts from M-mode or HS-mode to access CSR vstopei raise an illegal instruction exception, and attempts from VS-mode to access stopei raise a virtual instruction exception.

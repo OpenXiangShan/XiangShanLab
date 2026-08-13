@@ -1,0 +1,75 @@
+# Commit Log
+- Issue: #3294
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3294
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3294
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3294
+- Changed files: 5
+- Additions: 8
+- Deletions: 3
+
+## Files
+- `difftest`
+- `ready-to-run`
+- `src/main/scala/xiangshan/backend/decode/DecodeUnit.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala`
+
+## Diff
+```diff
+diff --git a/difftest b/difftest
+index 503f829ea89..4ef36ddfeca 160000
+--- a/difftest
++++ b/difftest
+@@ -1 +1 @@
+-Subproject commit 503f829ea8990551e7e5ba5f35b6428b90a18f1e
++Subproject commit 4ef36ddfeca324a7ba5ba5688741a5d6bf1fae59
+diff --git a/ready-to-run b/ready-to-run
+index 04473890413..053ad1499b6 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit 044738904131b1983a1b4f9bba6fcc31db8620f6
++Subproject commit 053ad1499b615ac67f45388248f3209c130fc5dc
+diff --git a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+index af02a61e92d..6d60d47af69 100644
+--- a/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
++++ b/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala
+@@ -737,6 +737,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
+   val fpDecoder = Module(new FPDecoder)
+   fpDecoder.io.instr := ctrl_flow.instr
+   decodedInst.fpu := fpDecoder.io.fpCtrl
++  decodedInst.fpu.wflags := fpDecoder.io.fpCtrl.wflags || decodedInst.wfflags
+ 
+   decodedInst.connectStaticInst(io.enq.ctrlFlow)
+ 
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+index cd7d0164419..a9079d2bd8f 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/MachineLevel.scala
+@@ -473,7 +473,7 @@ class MstatusModule(implicit override val p: Parameters) extends CSRModule("MSta
+ class MisaBundle extends CSRBundle {
+   // Todo: reset with ISA string
+   val A = RO( 0).withReset(1.U) // Atomic extension
+-  val B = RO( 1).withReset(0.U) // Reserved
++  val B = RO( 1).withReset(1.U) // B extension
+   val C = RO( 2).withReset(1.U) // Compressed extension
+   val D = RO( 3).withReset(1.U) // Double-precision floating-point extension
+   val E = RO( 4).withReset(0.U) // RV32E/64E base ISA
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+index 91050bdda19..36544c84460 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -1145,6 +1145,10 @@ class NewCSR(implicit val p: Parameters) extends Module
+     diffVecCSRState.vtype := vtype.rdata.asUInt
+     diffVecCSRState.vlenb := vlenb.rdata.asUInt
+ 
++    val diffFpCSRState = DifftestModule(new DiffFpCSRState)
++    diffFpCSRState.coreid := hartId
++    diffFpCSRState.fcsr := fcsr.rdata.asUInt
++
+     val diffHCSRState = DifftestModule(new DiffHCSRState)
+     diffHCSRState.coreid      := hartId
+     diffHCSRState.virtMode    := privState.V.asBool
+```

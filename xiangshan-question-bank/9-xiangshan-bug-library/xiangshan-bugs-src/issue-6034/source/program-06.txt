@@ -1,0 +1,2 @@
+mstatus FS=Initial, VS=Dirty
+mstatus low status bits = 0x2600

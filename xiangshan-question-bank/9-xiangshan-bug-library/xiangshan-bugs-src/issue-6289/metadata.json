@@ -1,0 +1,23 @@
+{
+  "number": 6289,
+  "title": "AMO deadlocks after `vse32.v` store access fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6289",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "lhb-sec",
+  "created_at": "2026-07-27T12:56:30Z",
+  "updated_at": "2026-07-28T02:15:40Z",
+  "source_files": [
+    "issue-6289/source/emulator.log",
+    "issue-6289/source/seeds.zip",
+    "issue-6289/source/program-01.txt"
+  ],
+  "archive_files": [
+    "issue-6289/source/emulator.log",
+    "issue-6289/source/seeds.zip"
+  ],
+  "has_comments": true
+}

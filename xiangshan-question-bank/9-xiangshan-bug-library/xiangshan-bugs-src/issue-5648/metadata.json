@@ -1,0 +1,28 @@
+{
+  "number": 5648,
+  "title": "timing(sc): fix the timing of sc in train ",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/5648",
+  "state": "closed",
+  "labels": [
+    "module: frontend",
+    "topic: functionality"
+  ],
+  "author": "sleep-zzz",
+  "created_at": "2026-03-04T10:45:17Z",
+  "updated_at": "2026-03-09T08:43:35Z",
+  "submitted_at": "2026-03-04",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-5648/commit-log.md"
+  ],
+  "bug_categories": [
+    "frontend"
+  ],
+  "bug_category_source": "biweekly-en"
+}

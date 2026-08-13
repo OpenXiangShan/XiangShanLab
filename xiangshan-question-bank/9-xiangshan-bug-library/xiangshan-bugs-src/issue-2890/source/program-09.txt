@@ -1,0 +1,17 @@
+FROM ubuntu:23.04
+RUN apt-get update && apt-get install -y build-essential clang libclang-dev llvm-dev cmake libspdlog-dev vim git curl wget time default-jre default-jdk
+
+RUN git clone --recursive https://github.com/OpenXiangShan/xs-env
+WORKDIR /xs-env
+
+RUN sed 's/apt\S* install/\0 -y/g;s/source /. /g;s/sudo //g' -i ./*.sh
+RUN . ./env.sh && sed 's/\/master/\/master/g;s/$/; cd \/xs-env/g' -i ./update-submodule.sh && ./update-submodule.sh
+RUN . ./env.sh && ./setup-tools.sh
+RUN . ./env.sh && . ./install-verilator.sh
+RUN . ./env.sh && sed 's/^git submodule.*$//g;s/env.*$//g' -i ./setup.sh && . ./setup.sh
+RUN . ./env.sh && make -C XiangShan init
+RUN . ./env.sh && cd DRAMsim3 && mkdir build && cd build && cmake -D COSIM=1 .. && make -j 8
+
+RUN . ./env.sh && make -C XiangShan emu CONFIG=MinimalConfig WITH_DRAMSIM3=1 MFC=1 -j 8
+#RUN . ./env.sh && make -C XiangShan emu CONFIG=DefaultConfig WITH_DRAMSIM3=1 MFC=1 -j 8
+RUN . ./env.sh && sed 's/unknown-//g;s/rv64gc/rv64gcv/g' -i $AM_HOME/am/arch/isa/riscv64.mk

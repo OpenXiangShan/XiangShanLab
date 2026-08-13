@@ -1,0 +1,86 @@
+# Commit Log
+- Issue: #3424
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/3424
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #3424
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/3424
+- Changed files: 2
+- Additions: 7
+- Deletions: 17
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/PMA.scala`
+- `src/main/scala/xiangshan/cache/mmu/MMUBundle.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/PMA.scala b/src/main/scala/xiangshan/backend/fu/PMA.scala
+index d5154bb98dd..9dd77f4c08c 100644
+--- a/src/main/scala/xiangshan/backend/fu/PMA.scala
++++ b/src/main/scala/xiangshan/backend/fu/PMA.scala
+@@ -117,7 +117,7 @@ trait PMAMethod extends PMAConst {
+       MemMap('h00_3A00_1000", "h00_3BFF_FFFF",   "h0", "Reserved",    ""),
+       MemMap("h00_3C00_0000", "h00_3FFF_FFFF",   "h0", "PLIC",        "RW"),
+       MemMap("h00_4000_0000", "h00_7FFF_FFFF",   "h0", "PCIe",        "RW"),
+-      MemMap("h00_8000_0000", "h0F_FFFF_FFFF",   "h0", "DDR",         "RWXIDSA"),
++      MemMap("h00_8000_0000", " MAX_ADDRESS ",   "h0", "DDR",         "RWXIDSA"),
+     )
+    */
+ 
+@@ -153,7 +153,7 @@ trait PMAMethod extends PMAConst {
+       mask_list.append(genMask(addr, a))
+     }
+ 
+-    addPMA(0x0L, range = 0x1000000000L, c = true, atomic = true, a = 3, x = true, w = true, r = true)
++    addPMA(0x0L, range = 0x1000000000000L, c = true, atomic = true, a = 3, x = true, w = true, r = true)
+     addPMA(0x0L, range = 0x80000000L, a = 3, w = true, r = true)
+     addPMA(0x3C000000L, a = 1)
+     addPMA(0x3A001000L, a = 1, w = true, r = true)
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+index 643ccd89a20..11efb0b714f 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+@@ -384,7 +384,7 @@ object Pbmt {
+   def io:   UInt = "b10".U  // Non-cacheable, non-idempotent, strongly-ordered (I/O ordering), I/O
+   def rsvd: UInt = "b11".U  // Reserved for future standard use
+   def width: Int = 2
+-  
++
+   def apply() = UInt(2.W)
+   def isUncache(a: UInt) = a===nc || a===io
+ }
+@@ -687,7 +687,7 @@ class PteBundle(implicit p: Parameters) extends PtwBundle{
+   def isLeaf() = {
+     (perm.r || perm.x || perm.w) && perm.v
+   }
+-  
++
+   def isNext() = {
+     !(perm.r || perm.x || perm.w) && perm.v
+   }
+@@ -718,20 +718,10 @@ class PteBundle(implicit p: Parameters) extends PtwBundle{
+     gpf
+   }
+ 
+-  // paddr of Xiangshan is 36 bits but ppn of sv39 is 44 bits
++  // ppn of Xiangshan is 48 - 12 bits but ppn of sv48 is 44 bits
+   // access fault will be raised when ppn >> ppnLen is not zero
+-  def isAf(mode: UInt = Sv39): Bool = {
+-    val af = WireInit(false.B)
+-    if (EnableSv48) {
+-      when (mode === Sv39) {
+-        af := !(ppn_high === 0.U && ppn(ppnLen - 1, vpnnLen * 3) === 0.U)
+-      } .otherwise {
+-        af := !(ppn_high === 0.U)
+-      }
+-    } else {
+-      af := !(ppn_high === 0.U)
+-    }
+-    af
++  def isAf(): Bool = {
++    !(ppn_high === 0.U)
+   }
+ 
+   def isStage1Gpf() = {
+```

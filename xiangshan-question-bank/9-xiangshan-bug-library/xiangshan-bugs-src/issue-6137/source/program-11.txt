@@ -1,0 +1,14 @@
+gdb -q --batch \
+  -ex 'set pagination off' \
+  -ex 'set print thread-events off' \
+  -ex 'break common_enable_assert()' \
+  -ex 'run' \
+  -ex 'finish' \
+  -ex 'set *((int*)&assert_count) = -1' \
+  -ex 'continue' \
+  --args emu \
+    -i poc_abtb_dcache_gadget.bin \
+    --no-diff \
+    -C 10200 -b 9700 -e 10100 \
+    --dump-wave-full \
+    --wave-path=poc_abtb_dcache_gadget_9700_10100.vcd

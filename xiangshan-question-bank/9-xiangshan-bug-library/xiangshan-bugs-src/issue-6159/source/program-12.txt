@@ -1,0 +1,9 @@
+cd xiangshan-utage-abtb-disabled-read-writebuffer-attachment
+
+EMU=/path/to/XiangShan/build/emu \
+DIFF=/path/to/XiangShan/ready-to-run/riscv64-nemu-interpreter-so \
+PREFIX=validation_utage_abtb_disabled_read \
+CYCLES=9000 \
+WAVE_BEGIN=7800 \
+WAVE_END=9000 \
+./run_poc.sh

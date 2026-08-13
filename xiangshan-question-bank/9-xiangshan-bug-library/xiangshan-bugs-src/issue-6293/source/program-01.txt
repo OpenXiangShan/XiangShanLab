@@ -1,0 +1,4 @@
+   mode different: right(NEMU)=3(M), wrong(DUT)=0(U)
+ mcause different: right=5(LoadAF), wrong=2(Illegal)
+  mtval different: right=0x4eb9b459, wrong=0xff484a77
+   mepc different: right=0x800012a4, wrong=0x8000129c

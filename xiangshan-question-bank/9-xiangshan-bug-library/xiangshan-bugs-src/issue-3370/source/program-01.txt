@@ -1,0 +1,4 @@
+reformat.%:
+	sed -i 's!project\.includePaths.*!project.includePaths = ["glob:**/src/main/scala/xiangshan/$(subst .,/,$*)/**.scala"]!g' .scalafmt.conf
+	mill xiangshan.reformat
+	sed -i 's!project\.includePaths.*!project.includePaths = ["glob:**/src/main/scala/xiangshan/**.scala"]!g' .scalafmt.conf

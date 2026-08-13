@@ -1,0 +1,15 @@
+riscv64-unknown-elf-gcc \
+  -march=rv64gc -mabi=lp64d -mcmodel=medany \
+  -nostdlib -nostartfiles \
+  -T linker.ld \
+  -o poc_abtb_dcache_gadget.elf \
+  poc_abtb_dcache_gadget.S
+
+riscv64-unknown-elf-objcopy \
+  -O binary \
+  poc_abtb_dcache_gadget.elf \
+  poc_abtb_dcache_gadget.bin
+
+riscv64-unknown-elf-objdump \
+  -dr poc_abtb_dcache_gadget.elf \
+  > poc_abtb_dcache_gadget.objdump

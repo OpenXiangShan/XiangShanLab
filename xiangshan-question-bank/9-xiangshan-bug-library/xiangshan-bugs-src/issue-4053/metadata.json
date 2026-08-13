@@ -1,0 +1,21 @@
+{
+  "number": 4053,
+  "title": "fix(MemBlock): fix misaligned exception and remove redundant reg from `SQ`",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/4053",
+  "state": "closed",
+  "labels": [],
+  "author": "Anzooooo",
+  "created_at": "2024-12-16T08:41:53Z",
+  "updated_at": "2024-12-16T16:15:58Z",
+  "source_files": [],
+  "archive_files": [],
+  "has_comments": true,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-4053/commit-log.md"
+  ],
+  "submitted_at": "2024-12-16",
+  "branch": "",
+  "rtl_commit": ""
+}
