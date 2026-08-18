@@ -1,0 +1,304 @@
+初级
+VL3
+2-bit 饱和分支预测器
+CPU
+初级
+VL3
+LRU 替换算法
+CPU
+初级
+VL3
+PLRU 替换算法
+CPU
+初级
+VL3
+前导零检测
+CPU
+初级
+VL3
+LFSR（线性反馈移位寄存器）
+CPU
+初级
+VL3
+Booth2/4/8/2n 算法实现
+CPU/xPU
+初级
+VL3
+4/8/16 个部分积 Wallace-tree 实现
+CPU/xPU
+初级
+VL3
+Cache  直接映射/全相联/组相联实现
+CPU/xPU
+初级
+VL3
+Cache Write throughput/write back 实现
+CPU/xPU
+初级
+VL3
+乘加器
+CPU/xPU
+初级
+VL3
+简易计算器
+CPU/xPU
+初级
+VL3
+矩阵转置
+CPU/xPU
+初级
+VL3
+矩阵乘法器实现
+CPU/xPU
+初级
+VL3
+Age Martrix 算法实现
+CPU
+初级
+VL3
+Hash 算法实现
+CPU/xPU
+初级
+VL3
+冒泡排序
+CPU/xPU
+初级
+VL3
+最小公倍数
+CPU/xPU
+中级
+VL4
+G-share 分支预测器实现
+CPU-BPU
+中级
+VL4
+Bi-mode 分支预测器实现
+CPU-BPU
+中级
+VL4
+Branch Target Buffer 实现
+CPU-BPU
+中级
+VL4
+Stride 预取器实现
+CPU-Prefetch
+中级
+VL4
+MSHR 算法实现
+CPU-Mem
+中级
+VL4
+SSID 算法实现
+CPU-Mem
+中级
+VL4
+TLB 实现
+CPU-Mem
+中级
+VL4
+Rename Table 实现
+CPU-OoO
+中级
+VL4
+Freelist 实现
+CPU-OoO
+中级
+VL4
+Tomsulo 算法实现
+CPU-OoO
+中级
+VL4
+Scoreboard 算法实现
+CPU-OoO
+中级
+VL4
+Near-Round 浮点加法器实现
+CPU/xPU
+中级
+VL4
+浮点转整数算法实现
+CPU/xPU
+中级
+VL4
+整数转浮点算法实现
+CPU/xPU
+中级
+VL4
+流水线乘法器
+CPU/xPU
+中级
+VL4
+矩阵乘加器实现
+CPU/xPU
+中级
+VL4
+FFT 算法实现
+CPU/xPU
+中级
+VL4
+NTT 算法实现
+CPU/xPU
+中级
+VL4
+Page Table Walk 实现 
+CPU-Mem
+中级
+VL4
+MSI/MESI/MESIF/MOESI 协议实现
+CPU-Mem
+中级
+VL4
+Directory-Based 一致性协议实现
+CPU-Mem
+中级
+VL4
+LMUL = 1/2/4/8 Compress 指令的加速实现
+CPU-Exe
+中级
+VL4
+LMUL = 1/2/4/8 Scatter 指令的加速实现
+CPU-Exe
+中级
+VL4
+
+LMUL = 1/2/4/8 Gather 指令的加速实现
+CPU-Exe
+1
+高级
+VL5
+TAGE 分支预测器实现
+CPU-BPU
+2
+高级
+VL5
+VIPT 实现两级Cache
+CPU-Mem
+3
+高级
+VL5
+VIVT 实现两级Cache
+CPU-Mem
+4
+高级
+VL5
+Page Cache 实现
+CPU-Mem
+5
+高级
+VL5
+两级Page Cache 实现
+CPU-Mem
+6
+高级
+VL5
+Trace Cache 实现
+CPU-Mem
+7
+高级
+VL5
+
+为三个执行单元（整数、浮点、访存）设计
+分布式Issue Queue
+CPU-OoO
+8
+高级
+VL5
+
+为三个执行单元（整数、浮点、访存）设计
+集中式Issue Queue
+CPU-OoO
+9
+高级
+VL5
+PRF 多bank 设计
+CPU-OoO
+10
+高级
+VL5
+Load Queue + Load Pipeline
+CPU-Mem
+11
+高级
+VL5
+Store Queue + Store Pipeline + Store Buffer
+CPU-Mem
+12
+高级
+VL5
+Load/Store Queue + Load/Store Pipeline 复用 
+CPU-Mem
+13
+高级
+VL5
+Load/store Misalign Buffer 
+CPU-Mem
+14
+高级
+VL5
+SRT2/4 除法器算法实现
+CPU/xPU
+15
+高级
+VL5
+SRT2/4 开方器算法实现
+CPU/xPU
+16
+高级
+VL5
+SRT2/4 复用除法开方器实现
+CPU/xPU
+17
+高级
+VL5
+随机数生成器
+CPU/xPU
+18
+高级
+VL5
+RSA 算法实现
+CPU/xPU
+19
+高级
+VL5
+AES 算法实现
+CPU/xPU
+20
+高级
+VL5
+SHA 算法实现
+CPU/xPU
+21
+高级
+VL5
+SM 算法实现
+CPU/xPU
+22
+高级
+VL5
+Last-Value Predictor (LVP) 访存值预测算法实现
+CPU-Predictor
+23
+高级
+VL5
+2-level LVP/Stride 访存值预测算法实现
+CPU-Predictor
+24
+高级
+VL5
+gDiff（全局步幅）访存值预测算法实现
+CPU-Predictor
+25
+高级
+VL5
+Path-based Stride (PS)访存值预测算法实现
+CPU-Predictor
+26
+高级
+VL5
+D-FSM 访存值预测算法实现
+CPU-Predictor
+27
+高级
+VL5
+ML-based (ANN/SVM/RF) 值预测算法实现
+CPU-Predictor
