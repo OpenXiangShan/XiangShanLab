@@ -1,3 +1,4 @@
+<!--
 # 0. Cache-SinkA：昆明湖 V2 缓存请求入口的源码分析
 
 > 本文的结论以用户指定的本地源码为证据，而不是以设计文档或已有课程章节替代源码。分析对象是 `KunminghuV2Config` 的有效配置：它启用 CHI，因此本文的主对象是 `coupledL2/tl2chi/SinkA`；`huancun/SinkA` 作为同名、但在该默认配置下不 elaboration 的替代 TL-L3 路径单列对照。文中的 `fire` 一律指 `valid && ready`。
@@ -387,18 +388,18 @@ SinkA 有 A、预取和 CMO 相关性能计数代码，见 [SinkA.scala:225](/ho
 
 ```mermaid
 flowchart LR
-  L1["L1/DCache: inner TileLink A"] --> IB["Slice inBuf.a"]
-  IB --> SA["coupledL2 tl2chi SinkA"]
-  PF["L2 prefetch"] --> SA
-  SA --> RB["RequestBuffer: flow/queue/merge"]
-  RB --> RA["RequestArb: C > B > A"]
-  RA --> DIR["Directory read"]
-  RA --> MP["MainPipe S2-S5"]
-  MP -->|"hit/direct response"| GB["GrantBuffer / inner TL D"]
-  MP -->|"miss/upgrade/alias/CMO"| MC["MSHRCtl"]
-  MC --> MSHR["MSHR"]
-  MSHR --> CHI["TXREQ/TXRSP/TXDAT -> CHI"]
-  MMIO["MMIOBridge"] --> CHI
+  L1["L1/DCache: inner TileLink A"] --&gt; IB["Slice inBuf.a"]
+  IB --&gt; SA["coupledL2 tl2chi SinkA"]
+  PF["L2 prefetch"] --&gt; SA
+  SA --&gt; RB["RequestBuffer: flow/queue/merge"]
+  RB --&gt; RA["RequestArb: C > B > A"]
+  RA --&gt; DIR["Directory read"]
+  RA --&gt; MP["MainPipe S2-S5"]
+  MP --&gt;|"hit/direct response"| GB["GrantBuffer / inner TL D"]
+  MP --&gt;|"miss/upgrade/alias/CMO"| MC["MSHRCtl"]
+  MC --&gt; MSHR["MSHR"]
+  MSHR --&gt; CHI["TXREQ/TXRSP/TXDAT -> CHI"]
+  MMIO["MMIOBridge"] --&gt; CHI
 ```
 
 ### 17.2. 请求优先级与反压时序
@@ -443,14 +444,14 @@ flowchart LR
 
 ```mermaid
 stateDiagram-v2
-  [*] --> sIDLE
-  sIDLE --> sCMOREQ: l2Flush && !mshrValid
-  sCMOREQ --> sWAITLINE: task.fire
-  sWAITLINE --> sCMOREQ: cmoLineDone && next line && !mshrValid && !snpBlockcmo
-  sWAITLINE --> sWAITMSHR: cmoLineDone && (mshrValid || snpBlockcmo)
-  sWAITMSHR --> sCMOREQ: !mshrValid && !snpBlockcmo
-  sWAITLINE --> sDONE: cmoLineDone && final set/way
-  sDONE --> sIDLE: !l2Flush
+  [*] --&gt; sIDLE
+  sIDLE --&gt; sCMOREQ: l2Flush && !mshrValid
+  sCMOREQ --&gt; sWAITLINE: task.fire
+  sWAITLINE --&gt; sCMOREQ: cmoLineDone && next line && !mshrValid && !snpBlockcmo
+  sWAITLINE --&gt; sWAITMSHR: cmoLineDone && (mshrValid || snpBlockcmo)
+  sWAITMSHR --&gt; sCMOREQ: !mshrValid && !snpBlockcmo
+  sWAITLINE --&gt; sDONE: cmoLineDone && final set/way
+  sDONE --&gt; sIDLE: !l2Flush
 ```
 
 此状态图只在 `enableL2Flush` 打开时存在，不能作为默认配置波形的预期。
@@ -521,3 +522,381 @@ stateDiagram-v2
 | Difftest 复现 | 用端到端 ISA 结果配合 TL/CHI 波形定位 | 寻找不存在的 SinkA 专属 compare 点 |
 
 上述检查应至少覆盖“请求接受、队列占用、仲裁、MSHR 分配、最终响应”五个阶段；只截取 SinkA 单点波形无法证明一条 cache transaction 的正确完成。
+-->
+
+# Cache-SinkA: Source Analysis of the Kunminghu V2 Cache-Request Ingress
+
+> The conclusions in this article are based on the supplied local source tree, not substituted from the Design Doc or another course chapter. The active configuration is `KunminghuV2Config`: it enables CHI, so the primary subject is `coupledL2/tl2chi/SinkA`. `huancun/SinkA` is analyzed separately as a same-named alternative TileLink-L3 path that is not elaborated by the default configuration. Throughout this article, `fire` means `valid && ready`.
+
+## 1. Scope, Baseline, and Reading Method
+
+### 1.1 Source Baseline
+
+| Item | Fixed baseline | Purpose |
+| --- | --- | --- |
+| XiangShan main repository | `kunminghu-v2 @ e12436c7cba86b195deec24981976d78bc263661` | Configuration, `L2Top`, MemBlock, and top-level connections. |
+| CoupledL2 submodule | `fb5469838c8902b6cb33992c0a30ee3d446e4453` | The active KMHv2 L2 SinkA/CHI implementation. |
+| HuanCun submodule | `65ef077373ecf398b4cecdea06b65ef9b8d79044` | Same-named SinkA in the non-CHI alternative L3. |
+| Reference documentation | `XiangShan-Design-Doc/docs/zh/cache/l2cache/upstream/SinkA.md` and `CoupledL2.md` | Used only to formulate questions for verification, not as implementation evidence. |
+
+The main worktree already contains unrelated `difftest` modifications and untracked `src/main/resources/aia/` files; this article does not alter them. The checked CoupledL2 and HuanCun submodules were clean. Existing course material in [15_XSCache.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md:1) identifies V3 sources, so its line numbers and conclusions are not used as V2 evidence here.
+
+### 1.2 Selecting the Active Module
+
+`KunminghuV2Config` combines `L2CacheConfig` with `WithCHI`. [`Configs.scala:481`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:481) `L2Top` constructs `TL2CHICoupledL2` when `EnableCHI` is true and `TL2TLCoupledL2` otherwise. [`L2Top.scala:111`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:111) The same configuration leaves `L3CacheParamsOpt` empty and selects OpenLLC parameters. [`Configs.scala:333`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:333)
+
+Two facts must therefore remain separate:
+
+1. `coupledL2/tl2chi/SinkA` is the run-time request ingress for this configuration.
+2. `huancun/SinkA` is an optional non-CHI implementation on a `TL2TLCoupledL2 -> L3` path. It is useful because its handling of data-bearing Put requests is fundamentally different, but it is not the next level on the current CHI path.
+
+### 1.3 Reading Boundary
+
+SinkA is read within the complete request path: `TL A -> SinkA -> queue/arbitration -> Directory/MainPipe -> MSHR -> CHI or TL response`. It is not described as a TLB, PMP, exception producer, or MMIO classifier; evidence for those roles lies elsewhere. A cross-module guarantee absent from SinkA-local code is explicitly left unproven here.
+
+## 2. Key Source-Evidence Index
+
+### 2.1 CoupledL2 Primary Path
+
+| Evidence | Direct observation | Role in this analysis |
+| --- | --- | --- |
+| [coupledL2/SinkA.scala:30](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:30) | IO comprises inner `TLBundleA` input and `TaskBundle` output, with optional prefetch and CMO-all connections. | Defines the ingress boundary. |
+| [coupledL2/SinkA.scala:37](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:37) | `PutFullData` and `PutPartialData` are asserted forbidden. | CoupledL2 SinkA is not a Put-data buffer. |
+| [coupledL2/SinkA.scala:54](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:54) | An A message becomes a `TaskBundle` carrying tag/set/off, opcode, param, source, and user fields. | Connects ingress semantics to downstream task fields. |
+| [tl2chi/Slice.scala:93](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:93) | `SinkA -> RequestBuffer -> RequestArb -> MainPipe` is explicit. | Establishes the effective main chain. |
+| [RequestBuffer.scala:71](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:71) | The four-entry RequestBuffer can bypass, enqueue, merge, or deduplicate. | SinkA's output is not unconditionally a bypass path. |
+| [RequestArb.scala:132](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:132) | A/B/C admission blocking and priority are centralized here. | Explains why B/C can preempt A. |
+| [tl2chi/MainPipe.scala:142](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:142) | S2/S3 receive tasks, read the directory, and decide MSHR allocation. | Connects ingress tasks to hit/miss handling. |
+| [tl2chi/MSHRCtl.scala:94](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHRCtl.scala:94) | MSHR fullness and reserved entries backpressure A. | Explains early resource blocking. |
+
+### 2.2 HuanCun Comparison Path
+
+| Evidence | Direct observation | Difference from CoupledL2 |
+| --- | --- | --- |
+| [huancun/SinkA.scala:28](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:28) | Besides A input, it exposes MSHR allocation and two PutBuffer pop interfaces. | It does receive data-bearing requests. |
+| [huancun/SinkA.scala:45](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:45) | `edgeIn.count` supplies `first/last/count`. | SinkA locally manages multi-beat Puts. |
+| [huancun/SinkA.scala:87](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:87) | First-beat ready depends on allocation ready and PutBuffer space. | Not the single task-ready relationship of CoupledL2. |
+| [huancun/Slice.scala:127](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:127) | `sinkA.alloc` reaches an MSHR through RequestBuffer and MSHRAlloc. | HuanCun first allocates an MSHR request. |
+| [huancun/MSHRAlloc.scala:57](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/MSHRAlloc.scala:57) | At most one allocation occurs per cycle under C > B > A priority. | Higher-priority coherence traffic can also suppress A. |
+
+## 3. From Cache Principles to Current Code
+
+| Cache principle | Corresponding implementation | Observable source fact |
+| --- | --- | --- |
+| Decoupled backpressure | `a.valid/a.ready`, then `task.valid/task.ready` | CoupledL2 arbitrates A and prefetch into one task port. [`SinkA.scala:132`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:132) |
+| Non-blocking access | RequestBuffer, MainPipe, and multiple MSHRs overlap requests | RequestBuffer models same-address, same-set/way, and MSHR conflicts instead of behaving as a FIFO. [`RequestBuffer.scala:105`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:105) |
+| Directory access | RequestArb issues `dirRead`; MainPipe consumes its result | Slice connects directory read and arbitration. [`tl2chi/Slice.scala:84`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:84) |
+| Coherence priority | C/B must not be indefinitely blocked by ordinary A | RequestArb uses fixed C, B, A priority. [`RequestArb.scala:145`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:145) |
+| Multi-beat write data | A first beat obtains resources; later beats fill one row | Only HuanCun SinkA has `putBuffer/beatVals`. [`huancun/SinkA.scala:48`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:48) |
+| MMIO/cacheable split | MMIO uses a dedicated bridge rather than Slice SinkA | `MMIOBridge` declares an `UNCACHED` manager. [`MMIOBridge.scala:51`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MMIOBridge.scala:51) |
+
+The statement that every cache has a PutBuffer is false for the current CoupledL2 SinkA, whose interface rejects Puts. The reverse statement that every SinkA is only a metadata adapter is false for HuanCun SinkA, which stores multi-beat data. The distinction follows from current upstream/downstream protocol choices, not the module name.
+
+## 4. Design Intent Versus Active Hardware
+
+### 4.1 Verified Active Behavior
+
+The active SinkA in standard KMHv2 is `coupledL2.tl2chi.SinkA`. It receives cache-side inner TL A, converts it to `TaskBundle`, passes it through RequestBuffer/RequestArb, and lets MainPipe use directory results to choose a direct response or MSHR path. The CHI top level arbitrates Slice TX requests with MMIO-bridge requests. [`TL2CHICoupledL2.scala:132`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:132)
+
+### 4.2 CMO-all Exists in Source but Is Not Active by Default
+
+CoupledL2 SinkA contains a five-state `sIDLE/sCMOREQ/sWAITLINE/sWAITMSHR/sDONE` machine. [`SinkA.scala:41`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:41) However, its IO, registers, and transitions are inside the `cacheParams.enableL2Flush` `Option`. `L2CacheConfig` defaults `enableFlush` to false, and `KunminghuV2Config` does not override it. [`Configs.scala:278`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:278) [`Configs.scala:481`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:481)
+
+The logic and its validation method are still documented below, but it is not claimed to be an elaborated interface in the default KMHv2 configuration.
+
+### 4.3 HuanCun Status
+
+HuanCun SinkA is complete code, not pseudocode, but it is not the next component on this configuration's request path. It is a comparison showing how the responsibility of a same-named module changes when switching to a non-CHI/L3 configuration; it must not be used to explain current CoupledL2 Put behavior.
+
+## 5. Parameters, Capacity, and Address Geometry
+
+### 5.1 Default KMHv2 CoupledL2 Geometry
+
+`KunminghuV2Config` selects a 1 MiB, four-bank L2. [`Configs.scala:481`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:481) `L2CacheConfig` defaults to eight ways and computes sets per bank as `capacity / banks / ways / 64`. [`Configs.scala:278`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:278) The values below are configuration-derived, not hard-coded constants in SinkA.
+
+| Item | Value | Derivation or source |
+| --- | ---: | --- |
+| Total capacity | 1 MiB | L2 parameters in `KunminghuV2Config` |
+| Banks | 4 | Therefore `bankBits = 2` |
+| Ways per bank | 8 | `L2CacheConfig` default |
+| Line/block | 64 B | Parameter default `blockBytes`. [`L2Param.scala:65`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/L2Param.scala:65) |
+| Sets per bank | 512 | `1 MiB / 4 / 8 / 64 B` |
+| `offsetBits` | 6 | `log2(64)` |
+| `setBits` | 9 | `log2(512)` |
+| MSHRs | 16 | `L2Param` default and `cacheParams.mshrs`. [`L2Param.scala:113`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/L2Param.scala:113) |
+| RequestBuffer | 4 entries | [`RequestBuffer.scala:71`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:71) |
+
+The manager-side `beatBytes` of `TL2CHICoupledL2` is 32. [`TL2CHICoupledL2.scala:43`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:43) With a 64 B block, the parameter relationship is two 32 B beats per block. It does not prove that every TL A message is assembled as two beats inside SinkA.
+
+### 5.2 HuanCun Parameters Are Not Current Default Instance Values
+
+HuanCun defaults to `ways = 4`, `sets = 128`, `blockBytes = 64`, `mshrs = 14`, and 32-byte D-channel beats. [`HCCacheParameters.scala:83`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/HCCacheParameters.scala:83) A concrete HuanCun instance can override them, so these type defaults are not presented as active CHI-KMHv2 L3 values.
+
+## 6. Module Boundaries, Interfaces, and Responsibility
+
+### 6.1 CoupledL2 SinkA Interface
+
+| Port | Direction | Driver or consumer | Fields/handshake | Responsibility |
+| --- | --- | --- | --- | --- |
+| `io.a` | Input, `Flipped(Decoupled[TLBundleA])` | Slice `inBuf.a` drives it; SinkA consumes it | `valid/ready`, A address/opcode/param/source/user | Admits cacheable TL A. |
+| `io.prefetchReq` | Optional input | Prefetcher | `PrefetchReq` | Merges with CPU A into the single task output. |
+| `io.task` | Output, `Decoupled[TaskBundle]` | RequestBuffer | `valid/ready` | Emits a normalized internal request. |
+| `io.cmoAll*` | Optional input/output | Slice/MainPipe/MSHR control | flush, MSHR valid, line done, Snoop block | Coordinates whole-L2 flush only when `enableL2Flush` is enabled. |
+
+The Slice wiring is explicit: `sinkA.io.a <> inBuf.a(io.in.a)` at [tl2chi/Slice.scala:196](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:196), and `sinkA.io.task <> reqBuf.io.in` at [tl2chi/Slice.scala:107](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:107).
+
+### 6.2 HuanCun SinkA Interface
+
+| Port | Direction | Purpose | Key condition |
+| --- | --- | --- | --- |
+| `a` | TL A input | Receives Get, Acquire, Put, and related A requests | A first beat must obtain allocation permission. |
+| `alloc` | `MSHRRequest` output | Delivers first-beat metadata to RequestBuffer/MSHRAlloc | `a.valid && first && !noSpace` |
+| `task` | Input | Nominal MSHR return-task port | Current code holds `ready := false`. |
+| `d_pb_pop/a_pb_pop` | Input | SourceD/SourceA requests a PutBuffer beat | `ready` only when the selected `beatVals` bit is valid. |
+| `d_pb_data/a_pb_data` | Output | Returns saved Put data to two consumers | Output is registered after pop fire. |
+
+`task.ready := false.B` is at [huancun/SinkA.scala:41](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:41). Slice connects it to arbitration, but the current MSHR makes tasks of this type invalid. It is an unreachable legacy interface, not a normal data path.
+
+### 6.3 Who, Why, How, From, and To
+
+| Question | CoupledL2 answer |
+| --- | --- |
+| Who initiates it? | Upstream L1/DCache clients use inner TileLink A; Slice passes `io.in.a` to SinkA. |
+| Why have SinkA? | It reduces a protocol message to `TaskBundle`, preventing RequestBuffer, Directory, and MSHR from understanding every TL A port detail. |
+| How is it transferred? | `parseAddress` splits the address; opcode/param/source/user fields are copied; A and prefetch form one Decoupled task by priority. |
+| Where does it end? | A hit may return through MainPipe/GrantBuffer on inner D. A lower-level transaction allocates an MSHR and leaves through CHI TX. SinkA does not create the final response. |
+
+## 7. Why the Ingress Is Layered This Way
+
+`fromTLAtoTaskBundle` splits `TLBundleA` into tag/set/off and retains user fields including alias, vaddr, request source, and keyword. [`SinkA.scala:54`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:54) This is not address translation: it slices the already-present A `address` according to L2 geometry.
+
+RequestBuffer is not an ordinary FIFO. It checks same-address MSHR conflicts, same-set available ways, and MainPipe blocks; it can merge a normal A with a late prefetch or discard a duplicate prefetch. [`RequestBuffer.scala:105`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:105) [`RequestBuffer.scala:153`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:153) This prevents a second request from bypassing an unfinished line transaction.
+
+The local C > B > A priority of RequestArb is not a mechanical restatement of global TileLink channel priority. It protects high-dependency Release/Probe transactions from ordinary requests. The tradeoff is deliberate: sustained B/C traffic can delay A.
+
+## 8. Dynamic Request Paths
+
+### 8.1 Ordinary CoupledL2 A Request
+
+1. The upstream holds `io.in.a.valid` until `SinkA.a.ready` allows an A fire.
+2. SinkA constructs `TaskBundle` combinationally in that cycle; it has no private ordinary-A request RAM.
+3. RequestBuffer either flows the task through or allocates an entry. If a resource or conflict condition fails, Decoupled backpressure holds A upstream.
+4. RequestArb selects A in S1 and initiates a directory read only when no higher-priority C/B task or block condition wins.
+5. MainPipe consumes the task and directory result in S2/S3 to decide hit, permission upgrade, miss, alias, or CMO behavior and whether an MSHR is needed.
+6. No-MSHR responses return through MainPipe/GrantBuffer on inner D; lower-level coherence work allocates an MSHR, which issues and waits through CHI.
+
+### 8.2 Simultaneous A and Prefetch
+
+`SinkA.scala:132` implements:
+
+```scala
+task.valid := (a.valid && !cmoAllBlock) || prefetchReq.valid || cmoAllValid
+a.ready := task.ready && !cmoAllBlock
+prefetchReq.ready := task.ready && !a.valid
+```
+
+Therefore any valid A forces prefetch `ready` low; A has strict priority. An A held valid because downstream is not ready continues to suppress prefetch. This is normal backpressure semantics, not per-cycle polling.
+
+### 8.3 Conditional CMO-all Path
+
+With `enableL2Flush` explicitly enabled, SinkA leaves `sIDLE` for `sCMOREQ` on `l2Flush && !mshrValid`, waits after task fire for the current line, scans way/set on line completion, waits in `sWAITMSHR` if MSHRs or Snoop blocking remain, and reaches `sDONE` before waiting for flush deassertion. [`SinkA.scala:187`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:187) Slice returns `cmoLineDone`, all-MSHR-valid, and Snoop-block state to SinkA. [`tl2chi/Slice.scala:217`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:217)
+
+### 8.4 HuanCun Data-Bearing Put Path
+
+For a first data-bearing beat, HuanCun selects an empty `bufIdx` and latches it in `insertIdxReg`. Each fire stores data, mask, and corrupt into `putBuffer` and sets the matching `beatVals` bit. [`huancun/SinkA.scala:56`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:56) The first beat simultaneously emits an `alloc` `MSHRRequest`; later beats do not allocate again and instead fill the same row.
+
+## 9. Address, Bank, Cache Line, and Cross-Boundary Limits
+
+`parseAddress` shifts by `offsetBits + bankBits` for the set, shifts the set by `setBits` for the tag, and uses low `offsetBits` as off. [`CoupledL2.scala:186`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:186) `restoreAddress` puts bank bits back between tag/set and off. [`CoupledL2.scala:197`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:197)
+
+For the default four-bank, 64-B-line, 512-set-per-bank geometry, the local relation is:
+
+```text
+high tag | set = address[16:8] | bank field = address[7:6] | off = address[5:0]
+```
+
+This is only the local `parseAddress/restoreAddress` relation. It does not prove the final Diplomacy BankBinder/hash routing, nor does it fix total tag width without the elaborated address width.
+
+SinkA has no TLB entries, PTEs, page-size comparator, or vaddr-to-paddr translation state. It may copy `VaddrKey` from TL user fields, but derives tag/set/off from A `address`. [`SinkA.scala:79`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:79) Page boundary, privilege, PBMT/PMA, and physical-address formation must be proven upstream. Likewise, SinkA neither assembles arbitrary cross-line accesses nor decides MMIO: cacheable A reaches Slice SinkA, while `UNCACHED` traffic uses MMIOBridge.
+
+## 10. Core Algorithms and Arbitration
+
+| Mechanism | Code-level behavior | Consequence |
+| --- | --- | --- |
+| CoupledL2 input selection | A wins over prefetch whenever `a.valid` is true. | Prefetch waits while a real A is presented. |
+| RequestBuffer outcomes | Flow-through, allocation, demand merge into prefetch MSHR, or duplicate-prefetch drop. | Full does not imply unconditional rejection. |
+| RequestArb priority | C > B > A at the local ingress. | A may wait behind coherence traffic. |
+| MSHR reservation | A stops one entry before B stops. | The final MSHR remains available for B. |
+| HuanCun MSHRAlloc | At most one allocation per cycle, with C > B > A and directory/conflict checks. | A allocation can be delayed even after SinkA accepts the first beat. |
+
+## 11. State, Queues, and Lifetime
+
+### 11.1 CoupledL2 SinkA Itself
+
+Under default `enableL2Flush = false`, CoupledL2 SinkA has no private ordinary-A request RAM. When downstream is not ready, Decoupled semantics require the upstream to hold the request; RequestBuffer performs the actual temporary storage. If CMO-all is enabled, SinkA additionally owns set/way registers and the five-state FSM. [`SinkA.scala:41`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:41)
+
+### 11.2 CoupledL2 RequestBuffer Entry Lifetime
+
+| Stateful field | Set when | Cleared or updated when | Meaning |
+| --- | --- | --- | --- |
+| `valid` | Allocation succeeds | Entry is chosen and the real dequeue fires | Entry occupancy. |
+| `rdy` | Computed after enqueue | Recomputed after preceding entry or MSHR release | Eligibility for RequestArb. |
+| `waitMP` | MainPipe/same-set stages must clear | Shifted or cleared as the pipeline advances | Prevents unsafe overlap. |
+| `waitMS` | An MSHR must finish first | `willFree` feedback | Prevents conflict with unfinished transaction. |
+| `task` | Allocation writes it | A merge can update request attributes | Stored internal request. |
+
+Definitions and updates are at [`RequestBuffer.scala:71`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:71), [`RequestBuffer.scala:205`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:205), and [`RequestBuffer.scala:251`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:251).
+
+### 11.3 HuanCun PutBuffer Lifetime
+
+| Stage | Trigger | State change |
+| --- | --- | --- |
+| Idle | All `beatVals(row)` are zero | `bufVals(row)` is zero and `PriorityEncoder` can select it. |
+| First-beat allocation | `a.fire && first && hasData` | Latches row index, stores data/mask/corrupt, and sets the beat valid bit. |
+| Later-beat fill | `a.fire && !first && hasData` | Uses `insertIdxReg` to fill the next count in the same row. |
+| SourceA/SourceD consumption | Matching pop fire | Reads the requested beat; last pop clears all row valid bits. |
+| Leak warning | Row 0 remains valid for 800 cycles | An assertion only, not automatic release. |
+
+SinkA has no explicit local arbitration that prevents `a_pb_pop` and `d_pb_pop` from consuming the same `bufIdx` concurrently. [`huancun/SinkA.scala:118`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:118) MSHR scheduling must ensure safe exclusivity; this is a cross-module assumption requiring waveform or assertion evidence.
+
+## 12. Pipeline, Latency, and Throughput
+
+| Stage | Main module | Key behavior | Possible stop point |
+| --- | --- | --- | --- |
+| Ingress | SinkA | Selects A/prefetch and converts fields | `task.ready`, CMO block. |
+| Buffer | RequestBuffer | Bypass, enqueue, merge, or deduplicate | Full, same-address/set conflict, MainPipe/way pressure. |
+| S1 | RequestArb | Arbitrates C/B/A and starts directory read | B/C valid, block A, directory reset. |
+| S2 | RequestArb -> MainPipe | Registers task and manages directory timing | S2 ready, MCP2 stall. |
+| S3 | MainPipe | Uses directory result; chooses hit/miss/permission/alias and MSHR allocation | MSHR allocation, replacement, data-port conditions. |
+| S4/S5 | MainPipe | Returns data, writes metadata, forms SourceD/CHI output | Output ready, SRAM, GrantBuffer. |
+
+Actual task registers are visible at [`MainPipe.scala:142`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:142) and later task/output registers at [`MainPipe.scala:744`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:744). An ingress fire therefore cannot mean a final response one cycle later.
+
+With no conflicts, downstream ready, and usable directory/data ports, SinkA can accept one A per cycle. That is ingress acceptance rate, not miss-completion rate. Sustainable miss acceptance also depends on four RequestBuffer entries, A-available MSHRs, same-set way pressure, CHI credits and responses, and B/C priority. Measure A fire, RequestBuffer occupancy, RequestArb A fire, MSHR allocation, and final D/CHI fire separately.
+
+For HuanCun data-bearing requests, the first beat has conditional ready, while later beats set `a.ready := true.B`. [`huancun/SinkA.scala:87`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:87) This favors finishing an accepted transaction, but verification must ensure the upstream sends later beats only after the first beat fires.
+
+## 13. Control Signals, Conflicts, and Priority
+
+| CoupledL2 condition | Direct effect | Result |
+| --- | --- | --- |
+| A and prefetch valid together | `prefetchReq.ready` | Prefetch does not fire; A enters first. |
+| `cmoAllBlock` | `a.ready` and task valid | Ordinary A is blocked during CMO-all scan. |
+| RequestBuffer full without flow/merge/dup | `io.in.ready` | A backpressure. |
+| Same-address MSHR conflict | RequestBuffer eligibility/flow | New A waits for the active transaction. |
+| No usable same-set way | RequestBuffer flow/allocation decision | Avoids unsafe way/replacement overlap. |
+| B/C valid or `block_A` | RequestArb A ready | A cannot enter the directory pipeline. |
+| A MSHR threshold reached | `blockA_s1` | Reserves an entry for B. |
+
+| HuanCun condition | Direct effect | Result |
+| --- | --- | --- |
+| `hasData && full` | `noSpace` | Only a data-bearing A first beat is backpressured. |
+| `first && !io.alloc.ready` | `a.ready` | A new multi-beat transaction cannot start. |
+| Non-inclusive `ProbeHelper.full` | `sinkA.alloc` path | Probe resources prevent A allocation. |
+| C/B allocation request present | MSHRAlloc A ready | A does not obtain an MSHR. |
+| Same block-granularity set conflict | MSHRAlloc A ready | A waits for the conflicting transaction. |
+
+## 14. Data Path and Cross-Boundary Code
+
+MemBlock builds DCache, Uncache, PTW, and buffer nodes before SinkA sees TileLink A. [`MemBlock.scala:261`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:261) SinkA converts cacheable traffic after those connections; it does not own original LoadQueue, StoreQueue, TLB, or cache-operation execution semantics.
+
+When MainPipe decides an MSHR is necessary, MSHRCtl aggregates MSHR requests; Slice connects MSHR/MainPipe paths to TXREQ/TXRSP/TXDAT. [`tl2chi/Slice.scala:130`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:130) The top level arbitrates Slice TXREQ and MMIO requests into LinkMonitor/CHI. [`TL2CHICoupledL2.scala:132`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:132) [`TL2CHICoupledL2.scala:267`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:267)
+
+Incoming CHI Snoops do not enter SinkA. The top level distributes RXSNP by Slice ID, [`TL2CHICoupledL2.scala:158`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:158) and Slice feeds RXSNP/SinkB. Its contention with A appears later as RequestArb B > A priority.
+
+In a non-CHI build, `L2Top.memory_port` can connect to L3, and `Top` instantiates HuanCun only when `L3CacheParamsOpt` is present. [`L2Top.scala:130`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:130) [`Top.scala:111`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Top.scala:111) HuanCun builds a Slice per bank and connects node in/out. [`HuanCun.scala:361`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/HuanCun.scala:361) This is why both SinkA implementations exist but must not be chained in a default CHI trace.
+
+## 15. Exceptions, Errors, Debug, Privilege, and Difftest
+
+SinkA copies A `corrupt` into its internal task. [`SinkA.scala:72`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:72) MainPipe reads directory/meta error in S3 and maps tag/data errors to `denied/corrupt` on MSHR-allocation tasks. [`MainPipe.scala:221`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:221) [`MainPipe.scala:295`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:295) Thus SinkA is not an ECC checker. HuanCun PutBuffer preserves `corrupt` per beat but does not decide architectural exception meaning. [`huancun/SinkA.scala:59`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:59)
+
+MMIOBridge reads `MemBackTypeMM` and `MemPageTypeNC` user keys and emits non-cacheable CHI attributes. [`MMIOBridge.scala:118`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MMIOBridge.scala:118) [`MMIOBridge.scala:255`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MMIOBridge.scala:255) That is source evidence for separation from cache SinkA. SinkA has no CSR port, privilege input, or exception output, so page permission, PMP, and SvPBMT must be analyzed at their originating and routing modules.
+
+No direct `Difftest` instances or wires were found in `coupledL2/SinkA.scala`, `tl2chi/Slice.scala`, or `huancun/SinkA.scala`. SinkA converts microarchitectural interfaces rather than committing ISA-visible state. Use assertions, performance counters, TileLink/CHI waveforms, and end-to-end load/store tests; use a full-system Difftest failure as a reproduction entry, not as evidence of a SinkA-specific compare point.
+
+## 16. CSR, Configuration Switches, and Run-Time Control
+
+`EnableCHI` chooses which L2/L3 structure is elaborated; `enableL2Flush` decides whether CMO-all IO/FSM exists; and `cacheParams` determines bank, set, way, and MSHR geometry. These are Scala elaboration/configuration parameters, not cycle-by-cycle CSRs read by SinkA.
+
+When flush is enabled, `l2Flush`, MSHR validity, Snoop block, and `cmoLineDone` form a run-time control loop across Slice, SinkA, and MainPipe. The default configuration does not contain that Option hardware, so the presence of CMO source code is not proof of a currently software-driven CSR feature.
+
+SinkA includes A, prefetch, and CMO-related performance counters. [`SinkA.scala:225`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:225) They help locate ingress activity but are neither CSR configuration interfaces nor proof of completion.
+
+## 17. Diagrams and Timing
+
+### 17.1 Default KMHv2 Data Flow
+
+```mermaid
+flowchart LR
+  L1["L1/DCache: inner TileLink A"] --> IB["Slice inBuf.a"]
+  IB --> SA["coupledL2 tl2chi SinkA"]
+  PF["L2 prefetch"] --> SA
+  SA --> RB["RequestBuffer: flow/queue/merge"]
+  RB --> RA["RequestArb: C > B > A"]
+  RA --> DIR["Directory read"]
+  RA --> MP["MainPipe S2-S5"]
+  MP -->|hit/direct response| GB["GrantBuffer / inner TL D"]
+  MP -->|miss/upgrade/alias/CMO| MC["MSHRCtl"]
+  MC --> MSHR["MSHR"]
+  MSHR --> CHI["TXREQ/TXRSP/TXDAT to CHI"]
+  MMIO["MMIOBridge"] --> CHI
+```
+
+The retained WaveDrom source shows A and prefetch timing: when both are valid, only A can fire; prefetch can fire only after A validity clears. The HuanCun waveform shows that a first beat cannot start without allocation ready, while later beats are accepted after a first-beat fire. Neither drawing claims a fixed line beat count outside the configured parameters.
+
+The retained state diagram is conditional: it exists only when `enableL2Flush` is enabled and cannot be an expected waveform for the default configuration.
+
+## 18. Design-Doc Traceability and Difference Handling
+
+| Intent to check from Design Doc | Local source evidence | Assessment |
+| --- | --- | --- |
+| SinkA receives A and prefetch and creates an internal request | [`SinkA.scala:54`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:54), [`SinkA.scala:94`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:94) | Verified, but A is restricted to non-Put types. |
+| A is prioritized over prefetch | [`SinkA.scala:132`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:132) | Verified as strict valid priority. |
+| Request travels through RequestBuffer, directory, and main pipeline | [`tl2chi/Slice.scala:93`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:93), [`MainPipe.scala:142`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:142) | Verified. |
+| Miss, permission, and coherence work are handled by MSHR | [`MainPipe.scala:232`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:232), [`MSHRCtl.scala:131`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHRCtl.scala:131) | Verified. |
+| SinkA scans a whole-L2 flush | [`SinkA.scala:187`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:187) | Code exists, but default configuration does not elaborate it. |
+
+The Design Doc can identify concepts such as SinkA, request buffer, directory, and MSHR, but this article independently verifies details in the supplied V2 checkout. Whether HuanCun is active, whether Put can enter CoupledL2 SinkA, and whether CMO is enabled by default cannot be safely inferred from high-level prose. Any intent without a local-source link is a hypothesis, not a conclusion.
+
+## 19. Reproducible Test Scenarios
+
+| Scenario | Suggested drive | Observe | Expected evidence |
+| --- | --- | --- | --- |
+| Ordinary Get/Acquire | One cacheable A, held valid until fire | `sinkA.io.a`, `sinkA.io.task`, RequestBuffer in/out | Fired task preserves opcode/source and sliced address. |
+| A versus prefetch | Assert A and prefetch valid together | `a.ready`, `prefetchReq.ready`, `task.bits` | A fires first; prefetch does not fire while A remains valid. |
+| Full RequestBuffer | Create four distinct requests unable to issue | `buffer.valid`, `io.in.ready`, `doFlow` | A fifth request backpressures unless flow/merge/dup applies. |
+| Same-address conflict | Hold a miss in an MSHR, then send same tag/set A | MSHR status, conflict mask, entry `waitMS` | Later request does not bypass the unfinished transaction. |
+| B/C preempt A | Present B/C and A together | `sink[A/B/C].valid/ready`, `chnl_task_s1` | C precedes B, B precedes A. |
+| A MSHR reservation | Fill near capacity, then send A and B | `a_mshrFull`, `blockA_s1` | A blocks first, leaving B admission room. |
+| CMO-all, non-default | Enable `enableL2Flush`, assert flush | state, set/way, `cmoLineDone`, `snpBlockcmo` | Scan waits correctly for MSHR/Snoop conditions. |
+| HuanCun PutBuffer | Send multi-beat Put under a non-CHI configuration | `first/last/count`, `insertIdxReg`, `beatVals`, pop | First beat allocates, later beats share the row, last pop clears it. |
+| HuanCun double pop | Point A/D pops to the same `bufIdx` | Both pop valid/ready/fire signals | Verify MSHR-enforced exclusion; SinkA alone does not prove it. |
+
+Use `(source, tag, set, off, opcode)` to trace an ordinary A, not PC alone. Add `mshrId` for the MSHR path and `bufIdx` plus beat `count` for HuanCun Put, so that consumption can be tied to the row allocated by the first beat.
+
+## 20. Conclusion
+
+1. In default `KunminghuV2Config`, the active cache-unit SinkA is `coupledL2/tl2chi/SinkA`, not HuanCun SinkA.
+2. Its core role is to convert cacheable inner TL A and optional prefetch into `TaskBundle`, then use Decoupled backpressure toward RequestBuffer. It does not store Put data and explicitly rejects TileLink Puts.
+3. Progress is jointly controlled by A-over-prefetch selection in SinkA, conflict/capacity handling in RequestBuffer, and C > B > A plus MSHR-reservation policy in RequestArb.
+4. Address handling here is L2 tag/set/off splitting, not translation. Pages, privilege, exceptions, and MMIO decisions require evidence from upstream or bridge paths.
+5. HuanCun SinkA's PutBuffer, multi-beat control, and first-beat allocation demonstrate different responsibilities in an alternate TL-L3 configuration and must not be mixed into default CHI timing.
+
+## 21. Verification Notes
+
+| Checkpoint | Required property | Common misreading |
+| --- | --- | --- |
+| A/prefetch priority | A held valid prevents prefetch fire even when task later becomes ready. | Observing only `task.valid` without both ready/fire pairs. |
+| A handshake | Only `a.fire` means SinkA accepted the request. | Treating `a.valid` as entry into L2. |
+| RequestBuffer full | Ready exceptions must include flow, `mergeA`, and `dup`. | Treating `full` as unconditional backpressure. |
+| Same address/set | A later request cannot bypass active MSHR or unsafe way state. | Assuming different source implies safe parallelism. |
+| C/B preemption | Record B/C valid and `blockA_s1` along with A stall. | Attributing every A stall to MSHR fullness. |
+| MSHR reservation | Near full capacity, B retains admission while A may block. | Treating A-available MSHRs as total MSHR count. |
+| Default CMO | Default KMHv2 waveforms lack CMO-all state and IO. | Assuming elaboration because the FSM appears in source. |
+| MMIO | MMIO uses MMIOBridge rather than Slice SinkA. | Treating `UNCACHED` access as a cache miss. |
+| HuanCun Put | Later beats are meaningful only after a first-beat fire. | Ignoring the protocol precondition because later-beat ready is high. |
+| HuanCun pop | Same-`bufIdx` A/D pop exclusion requires cross-module proof. | Assuming SinkA's two ports arbitrate internally. |
+| Error propagation | Follow `corrupt/denied` from directory and CHI back to D. | Treating SinkA field copy as completed error handling. |
+| Difftest reproduction | Use end-to-end ISA results with TL/CHI waveform evidence. | Looking for a nonexistent SinkA-specific compare point. |
+
+These checks should cover request acceptance, queue occupancy, arbitration, MSHR allocation, and final response. A waveform restricted to SinkA alone cannot prove complete correctness of a cache transaction.

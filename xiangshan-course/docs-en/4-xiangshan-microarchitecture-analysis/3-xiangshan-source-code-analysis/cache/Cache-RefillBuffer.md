@@ -1,3 +1,4 @@
+<!--
 # 香山昆明湖 V2：Cache RefillBuffer 源码分析
 
 > 本文以本地 `kunminghu-v2` 源码为行为依据，分析缓存回填数据在 **HuanCun** 与 **CoupledL2** 中实际采用的两套不同存储。它们都被称为 refill buffer，但不是同一个 Chisel 类、没有直接硬件连线，也不能共用同一套生命周期描述。
@@ -69,15 +70,15 @@ val w_beatSel = PriorityMux(wens, io.w.map(_.bits.beatMask))
 
 ```mermaid
 flowchart LR
-  CFG["KunminghuV2Config\nEnableCHI = true"] --> L2CHI["TL2CHICoupledL2"]
-  L2CHI --> CHIRN["CHI RN"]
-  CHIRN --> OLLC["OpenLLC"]
-  L2CHI --> CBUF["coupledL2.MSHRBuffer\nrefillBuf"]
+  CFG["KunminghuV2Config\nEnableCHI = true"] --&gt; L2CHI["TL2CHICoupledL2"]
+  L2CHI --&gt; CHIRN["CHI RN"]
+  CHIRN --&gt; OLLC["OpenLLC"]
+  L2CHI --&gt; CBUF["coupledL2.MSHRBuffer\nrefillBuf"]
 
-  NCHI["非 CHI 配置"] --> L2TL["TL2TLCoupledL2"]
-  L2TL --> TLNET["TileLink L2-to-L3"]
-  TLNET --> HC["HuanCun Slice"]
-  HC --> HBUF["huancun.RefillBuffer"]
+  NCHI["非 CHI 配置"] --&gt; L2TL["TL2TLCoupledL2"]
+  L2TL --&gt; TLNET["TileLink L2-to-L3"]
+  TLNET --&gt; HC["HuanCun Slice"]
+  HC --&gt; HBUF["huancun.RefillBuffer"]
 ```
 
 ### 1.3 术语对照
@@ -129,14 +130,14 @@ Design Doc 被用作术语索引，未复制其叙述。每个会影响本文结
 
 ```mermaid
 flowchart LR
-  OD["外侧 TileLink D"] -->|"io.d.valid/data"| SD["SinkD"]
-  SD -->|"bypass_write: valid, beat, data"| RB["huancun.RefillBuffer"]
-  RB -->|"ready, id"| SD
-  SD -->|"SinkDResp.bufIdx"| MSHR["noninclusive MSHR"]
-  MSHR -->|"SourceDReq: useBypass, bufIdx"| SOD["SourceD"]
-  SOD -->|"bypass_read: valid, id, beat, last"| RB
-  RB -->|"ready, buffer_data"| SOD
-  SOD -->|"inner TL D GrantData/AccessAckData"| ID["内侧缓存客户端"]
+  OD["外侧 TileLink D"] --&gt;|"io.d.valid/data"| SD["SinkD"]
+  SD --&gt;|"bypass_write: valid, beat, data"| RB["huancun.RefillBuffer"]
+  RB --&gt;|"ready, id"| SD
+  SD --&gt;|"SinkDResp.bufIdx"| MSHR["noninclusive MSHR"]
+  MSHR --&gt;|"SourceDReq: useBypass, bufIdx"| SOD["SourceD"]
+  SOD --&gt;|"bypass_read: valid, id, beat, last"| RB
+  RB --&gt;|"ready, buffer_data"| SOD
+  SOD --&gt;|"inner TL D GrantData/AccessAckData"| ID["内侧缓存客户端"]
   SOD -. "sourceD_r_hazard" .-> SD
 ```
 
@@ -194,14 +195,14 @@ HuanCun 参数由 `HCCacheParameters` 提供；`beatSize`、`mshrsAll`、`bufBlo
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Empty: reset 或读端完成 last
-  Empty --> Filling: w_fire && beat == 0
-  Filling --> Filling: w_fire && 新 beat
-  Filling --> Readable: 至少一个目标 beat valid
-  Readable --> Readable: r_fire && !r.last
-  Readable --> Filling: 后续 w_fire
-  Filling --> Empty: r_fire && r.last
-  Readable --> Empty: r_fire && r.last
+  [*] --&gt; Empty: reset 或读端完成 last
+  Empty --&gt; Filling: w_fire && beat == 0
+  Filling --&gt; Filling: w_fire && 新 beat
+  Filling --&gt; Readable: 至少一个目标 beat valid
+  Readable --&gt; Readable: r_fire && !r.last
+  Readable --&gt; Filling: 后续 w_fire
+  Filling --&gt; Empty: r_fire && r.last
+  Readable --&gt; Empty: r_fire && r.last
 ```
 
 这个图也暴露出两个协议责任：
@@ -223,12 +224,12 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-  FULL["validMask.andR"] --> WREADY["w.ready: 首 beat 低"]
-  WREADY --> BPR["SinkD.bypass_ready 低"]
-  BPR --> DREADY["SinkD.io.d.ready 可能低"]
-  DREADY --> OUTER["外侧 D 发送方保持 valid/data"]
-  RLAST["SourceD r_fire && last"] --> CLEAR["valids(id) 全清"]
-  CLEAR --> FULL
+  FULL["validMask.andR"] --&gt; WREADY["w.ready: 首 beat 低"]
+  WREADY --&gt; BPR["SinkD.bypass_ready 低"]
+  BPR --&gt; DREADY["SinkD.io.d.ready 可能低"]
+  DREADY --&gt; OUTER["外侧 D 发送方保持 valid/data"]
+  RLAST["SourceD r_fire && last"] --&gt; CLEAR["valids(id) 全清"]
+  CLEAR --&gt; FULL
 ```
 
 当 `cache && inner_grant` 同时为真时，`SinkD` 必须同时满足旁路 buffer 与 BankedStore 的写入条件；因此 RefillBuffer 满能阻塞本来还需写入 DataStorage 的回填。[SinkD.scala](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkD.scala:57) 这是一种有意识的同步写入约束，不是 RefillBuffer 做了 cache replacement。
@@ -364,11 +365,11 @@ CoupledL2 的 `MSHRBuffer` 用 `Reg(Vec(mshrsAll, Vec(beatSize, UInt(...))))` �
 
 ```mermaid
 flowchart LR
-  RXDAT["CHI RXDAT"] -->|"w(0): txnID, data, beatMask"| RB2["coupledL2.MSHRBuffer\nrefillBuf"]
-  SC["SinkC"] -->|"w(1): nested data"| RB2
-  RA["RequestArb"] -->|"r: mshrId"| RB2
-  RB2 -->|"resp.data"| MP["MainPipe s3"]
-  MP --> DS["DataStorage / 上行响应"]
+  RXDAT["CHI RXDAT"] --&gt;|"w(0): txnID, data, beatMask"| RB2["coupledL2.MSHRBuffer\nrefillBuf"]
+  SC["SinkC"] --&gt;|"w(1): nested data"| RB2
+  RA["RequestArb"] --&gt;|"r: mshrId"| RB2
+  RB2 --&gt;|"resp.data"| MP["MainPipe s3"]
+  MP --&gt; DS["DataStorage / 上行响应"]
 ```
 
 `RequestArb` 只在一个 MSHR task 需要回填数据时使 `refillBufRead_s2.valid` 为真：上行 GrantData/AccessAckData 一类任务需读取，replacement 的 release/refill 数据路径也会读取；ID 即 `task_s2.bits.mshrId`。[RequestArb.scala](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:219)
@@ -456,3 +457,244 @@ Refill storage 所在层已是物理 cache/一致性数据路径。下面的表�
 - HuanCun C/B 高优先级 SourceD task 持续到来时，ABC 任务是否具备有界前进保证。
 - HuanCun `r.last` 与任务 size/offset 在全部支持的请求类型中的精确对应，以及 entry 清空是否可能早于其它需要的 beat。
 - flush/CMO/redirect、PMP/PMA/PBMT/MMIO、TL error 到架构 trap/commit 的完整路径。这些在本页分析的 cache buffer IO 中没有直接实现，必须沿 MSHR、LSU、L1 和 ROB 继续追踪。
+-->
+
+# XiangShan Kunminghu V2: Cache RefillBuffer Source Analysis
+
+> This page treats the user-supplied Kunminghu V2 checkout as the sole source of implementation facts. The Design Doc is used only to compare terminology and intent; every behavioral conclusion is traced back to Chisel source.
+
+## 1. Scope, Baseline, and Main Conclusion
+
+### 1.1 Source baseline
+
+| Item | Baseline | Purpose on this page |
+| --- | --- | --- |
+| XiangShan top level | `kunminghu-v2` at `e12436c7cba86b195deec24981976d78bc263661` | Configuration, top-level wiring, and L2 selection |
+| `coupledL2` submodule | `fb5469838c8902b6cb33992c0ee3d446e4453` | Refill-data storage for the default CHI Kunminghu V2 L2 |
+| `huancun` submodule | `65ef077373ecf398b4cecdea06b65ef9b8d79044` | The implementation that actually defines `class RefillBuffer` |
+| Design Doc | `kunminghu-v2` at `58d9e2ad11f044cb6f8887d9687d9e110696d1aa` | Terminology and design-intent cross-check only |
+
+### 1.1.1 Key evidence and short code path
+
+| Topic | Evidence | Established fact |
+| --- | --- | --- |
+| Default configuration | [Configs.scala:477](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:477>), [L2Top.scala:130](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:130>) | Kunminghu V2 enables CHI and selects CHI CoupledL2. |
+| HuanCun instance | [Slice.scala:80](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:80>) | The HuanCun `RefillBuffer` sits between `SinkD` and `SourceD` in a slice. |
+| HuanCun lifetime | [RefillBuffer.scala:34](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RefillBuffer.scala:34>), [RefillBuffer.scala:51](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RefillBuffer.scala:51>) | Validity is per beat; consuming the last beat clears the whole entry. |
+| CoupledL2 counterpart | [tl2chi/Slice.scala:53](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:53>), [MSHRBuffer.scala:49](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/MSHRBuffer.scala:49>) | CHI CoupledL2 uses an `MSHRBuffer` named `refillBuf`, not the HuanCun class. |
+
+### 1.2 Keep the default configuration and the source object separate
+
+The default `KunminghuV2Config` instantiates CHI CoupledL2. Therefore, its live refill-data storage is the per-slice `coupledL2.MSHRBuffer` held in the local variable `refillBuf`. `huancun.RefillBuffer` is a useful non-CHI comparison, but it is not the storage object instantiated by that default CHI path.
+
+```mermaid
+flowchart LR
+  OD[Outer TileLink D] --> SD[HuanCun SinkD]
+  SD --> HRB[huancun.RefillBuffer]
+  HRB --> SoD[HuanCun SourceD]
+  RX[CHI RXDAT] --> MB[coupledL2 MSHRBuffer: refillBuf]
+  SC[CoupledL2 SinkC] --> MB
+  MB --> MP[RequestArb / MainPipe]
+```
+
+### 1.3 Terminology cross-reference
+
+| Name | Owner of an entry | Write/read organization | Validity and release | Active in default KmhV2 CHI configuration |
+| --- | --- | --- | --- | --- |
+| `huancun.RefillBuffer` | Dynamically allocates from `mshrs / 2` slots | `SinkD` writes by beat; `SourceD` reads by beat | Per-beat valid; last read clears an entire entry | No |
+| `coupledL2.MSHRBuffer` (`refillBuf`) | One slot is fixed to one MSHR ID | Multi-`ValidIO` writes with `beatMask`; one read port | No buffer-local valid/free/clear state | Yes |
+
+## 2. Mapping Theory and the Design Doc to the Active Source
+
+### 2.1 Course-concept mapping
+
+| Concept | Code-level manifestation | Constraint on the conclusion |
+| --- | --- | --- |
+| Structural hazard from finite resources | HuanCun uses `validMask` to find a free slot and backpressures a new first beat when full; CoupledL2 capacity is controlled by MSHR control rather than the buffer itself. | Storage bits and available MSHR credits are distinct resources. |
+| Multi-cycle pipeline and bypass | HuanCun `SinkD` can deposit outer D data into the buffer so `SourceD` need not wait for BankedStore. | This shortens an outer-grant-to-inner-grant data path, not the complete miss latency. |
+| Valid/ready backpressure | `SourceD` waits for the requested beat; a full HuanCun buffer propagates pressure to `SinkD.io.d.ready`. | Latency depends on handshakes and arbitration, not on one fixed cycle count. |
+
+### 2.2 Design Doc traceability matrix
+
+| ID | Atomic Design Doc intent | Current source relationship | Status |
+| --- | --- | --- | --- |
+| D1 | CoupledL2 has a unit described as a refill buffer. | The current implementation uses `MSHRBuffer`; its Slice local name remains `refillBuf`. | Verified terminology/version difference |
+| D2 | CHI `RXDAT` imports refill data. | `RXDAT` uses `txnID`, creates `beatMask` from `first/last`, and drives `refillBuf.io.w(0)`. | Verified |
+| D3 | Arbitration can select refill data before DataStorage receives it. | `RequestArb` generates `refillBufRead_s2` for upstream GrantData or replacement-release work. | Verified |
+| D4 | SinkC nested data can influence refill flow. | Both Slice variants connect `SinkC` to the second `refillBuf` write port. | Partly verified: same-ID, same-cycle priority needs waveform evidence |
+| D5 | CoupledL2 and HuanCun refill buffers are interchangeable. | Their class, interface, ownership, and lifetime differ. | Not equivalent |
+
+## 3. HuanCun `RefillBuffer`: Contract and Connections
+
+### 3.1 Who / why / how / from / to
+
+| Question | Source-grounded answer |
+| --- | --- |
+| Who owns it? | Each HuanCun `Slice` instantiates one buffer; `SinkD` produces writes and `SourceD` consumes reads. [Slice.scala:70](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:70>) |
+| Why does it exist? | It bypasses refill data so an outer grant can reach an inner grant without first being stored in SRAM. [RefillBuffer.scala:24](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RefillBuffer.scala:24>) |
+| How does it work? | `(buffer-id, beat)` indexes a `Mem`; each beat has an independent valid bit. |
+| Where does data come from? | Outer TileLink D responses enter through `SinkD.bypass_write`; beat number comes from `edge.count(io.d)`. |
+| Where does it go? | The MSHR retains `SinkDResp.bufIdx`; `SourceDReq.bufIdx` then drives `bypass_read`, and the inner D channel emits the response. |
+
+### 3.2 Parameters, indexing, and storage
+
+| Quantity | Source expression | Typical `HCCacheParameters` derivation | Meaning |
+| --- | --- | --- | --- |
+| Beats per line | `blockBytes / beatBytes` | `64 / 32 = 2` | `Vec` depth per entry |
+| Total MSHRs | `mshrs + 2` | `14 + 2 = 16` | Determines `bufIdxBits` including B/C MSHR semantics |
+| Buffer entries | `mshrs / 2` | `7` | First dimension of `Mem` and valid vector |
+| Buffer-ID width | `log2Ceil(mshrsAll)` | `4` | ID carried on read/write interfaces |
+| Write beat | `edge.count(io.d).beat` | Transfer-dependent | Beat written by `SinkD` |
+| Read beat | `startBeat(off) | counter` | Offset-dependent | Beat read by `SourceD` |
+
+### 3.3 Custom read/write interfaces and handshakes
+
+| Port | Producer to consumer | Exact ready condition | Result of `fire` |
+| --- | --- | --- | --- |
+| `w` | `SinkD -> RefillBuffer` | On the first beat, registered non-full status; on later beats, always true | Assert target beat was invalid, store data, and set its valid bit. |
+| `w.id` | `RefillBuffer -> SinkD/MSHR` | Not a Decoupled handshake | First beat exposes registered `freeIdx`; later beats retain the first successful ID. |
+| `r` | `SourceD -> RefillBuffer` | Exactly `valids(id)(beat)` | Returns that beat; `r.fire && r.last` clears every valid bit in the entry. |
+
+## 4. HuanCun `RefillBuffer`: Storage Algorithm and Implicit Lifetime
+
+### 4.1 Lookup, update, release, and replacement
+
+| Operation | Rule | State effect |
+| --- | --- | --- |
+| Lookup/read | Directly read `buffer(id)(beat)`; `ready := valids(id)(beat)`. | None |
+| First-beat safety check | A valid read of beat 0 asserts that the beat is ready. | Assertion failure is not retry recovery. |
+| Free-slot selection | OR each entry's beat-valid bits into `validMask`, then use `PriorityEncoder(~validMask)`. | Candidate ID is registered for the first write. |
+| Write | The target beat must have been invalid; write `DSData` and set that bit. | One valid bit changes from 0 to 1. |
+| Release | `r.fire && r.last` clears all valid bits for that ID. | The entry becomes free. |
+| Replacement/eviction | No tag, way, address comparison, LRU, or victim selector exists. | None; full state causes backpressure. |
+| Reset/flush | `RegInit(valids)` resets valids. There is no module-local flush, redirect, or cancel input. | Old array bits may remain physically present but are invalid and unreadable. |
+
+### 4.2 Allocation, full state, and backpressure
+
+Only the first beat needs a fresh free entry. When all entries have at least one valid beat, the first-beat write path deasserts ready; later beats of an already allocated transaction continue with the captured ID. This is deliberate allocation discipline, not cache replacement. The pressure can travel through `SinkD.io.d.ready` to the outer TileLink D producer.
+
+```mermaid
+flowchart LR
+  D[outer D beat] --> WD[SinkD bypass_write]
+  WD -->|first beat and free entry| A[allocate freeIdx]
+  WD -->|later beat| E[reuse registered ID]
+  A --> V[set per-beat valid]
+  E --> V
+  V --> R[SourceD bypass_read]
+  R -->|last fire| F[clear all valid bits of entry]
+```
+
+### 4.3 MSHR ownership, bypass eligibility, and ID propagation
+
+The entry ID is neither a cache address nor a replacement way. `SinkD` returns it to the MSHR in `SinkDResp.bufIdx`; later SourceD tasks transport the same ID in `SourceDReq.bufIdx`. A beat becomes bypass-eligible only after its corresponding valid bit is set. The analysis must therefore preserve the ID and beat identity instead of assuming that a matching address alone proves availability.
+
+### 4.4 SourceD read stage and request arbitration
+
+`SourceD` requests one beat at a time. It can only advance when the buffer returns `ready` for the requested `(id, beat)`. Its surrounding source-D arbitration determines which queued C/B/ABC task gains service; the buffer does not implement fairness or an independent queue.
+
+### 4.5 Same-address read/write, errors, and absent recovery ports
+
+No defined forwarding contract proves that a simultaneous read and write of the same `(id, beat)` is safe. Legal scheduling must avoid relying on such behavior. The buffer itself exposes neither a flush nor an exception-recovery state machine, so cancellation, CMO/redirect behavior, and architectural error handling must be traced through MSHR, cache control, and higher layers.
+
+## 5. HuanCun Dynamic Timing, Throughput, and Scenarios
+
+### 5.1 Normal dynamic path
+
+1. An outer TileLink D beat arrives at `SinkD`.
+2. The first beat receives a free `bufIdx` if the buffer is not full; subsequent beats use the retained ID.
+3. `w.fire` stores the beat and raises its valid bit.
+4. The MSHR records `bufIdx` and creates a SourceD task when it can respond inward.
+5. `SourceD` presents `(id, beat)` to `bypass_read` and waits for `r.ready`.
+6. Each returned beat is emitted on the inner D channel; handshake on the last requested beat clears the whole entry.
+
+The waveforms in the Chinese source above are protocol illustrations derived from the code, not sampled FST waveforms.
+
+### 5.2 Latency and throughput boundaries
+
+| Path | Start and end | Fixed latency? | Principal variables |
+| --- | --- | --- | --- |
+| HuanCun buffer write | `SinkD.io.d.valid` to `w.fire` for one beat | No | First-beat availability, buffer-full state, BankedStore write path, and same-address hazards |
+| HuanCun bypass read | SourceD request to inner-D emission | No | Requested-beat validity, SourceD arbitration, and downstream ready |
+| CoupledL2 refill-buffer write | `RXDAT`/`SinkC` valid to `MSHRBuffer` write | No | MSHR ID, beat mask, simultaneous-writer selection, and MSHR control |
+| CoupledL2 refill-buffer read | `refillBufRead_s2` to MainPipe-visible data | Pipeline-aligned, not a global cache latency | `RegEnable` read timing and task validity |
+
+### 5.3 Scenario matrix
+
+| Scenario | Expected local behavior | Important limit |
+| --- | --- | --- |
+| Empty buffer, first refill beat | Allocates the lowest-numbered free entry and accepts the beat. | The first-beat `ready` is registered, so it is not a purely combinational admission test. |
+| Partial multi-beat refill | Writes each beat under the retained ID; SourceD can read only valid beats. | Do not treat arrival of one beat as availability of the full line. |
+| Full buffer | Blocks a new first beat and propagates backpressure. | Existing transactions must retain their captured ID; no replacement occurs. |
+| Last beat consumed | Clears all valid bits of the entry. | A same-cycle new allocation observes pre-edge occupancy; the entry becomes selectable next cycle. |
+| C/B tasks continually win SourceD arbitration | High-priority work may delay ABC work. | Bounded forward progress needs an arbiter-level proof. |
+
+## 6. Corresponding Default-CHI CoupledL2 Implementation: `MSHRBuffer`
+
+### 6.1 Storage contract and fundamental difference from HuanCun
+
+`MSHRBuffer` is a register array indexed by MSHR ID. It does not allocate an anonymous free slot, own a valid vector, or free itself on a last-beat read. MSHR lifecycle control supplies those semantics externally. Its `beatMask` describes which beats a writer supplies, while HuanCun `RefillBuffer` tracks valid bits internally per beat.
+
+### 6.2 The two active CHI and TileLink write paths
+
+`RXDAT` writes `refillBuf.io.w(0)` using `txnID` and a mask derived from `first/last`. `SinkC` connects to the other write port for nested data. Both active Slice variants make this connection. The shared storage alone does not prove automatic merge semantics when writers target the same MSHR ID in the same cycle.
+
+### 6.3 Capacity, write conflicts, and snoop constraints
+
+Capacity corresponds to active MSHR ownership, not a buffer-local free list. The write path uses a priority selection mechanism, so same-cycle same-ID writes must be checked explicitly for overlapping and non-overlapping masks. While refill data has not reached DataStorage, CHI snoop handling uses MSHR blocking information such as `reqBlockSnpMask`; coherence correctness therefore spans RXSNP, the MSHR controller, and the refill store.
+
+## 7. Exceptions, Difftest, and Architectural Visibility
+
+### 7.1 This module is not an instruction-retirement boundary
+
+Neither implementation commits instructions or creates a ROB exception. They carry cache transaction data. Any statement about a precise architectural trap requires a trace beyond the buffer through MSHR, L1/LSU, and retirement logic.
+
+### 7.2 Local denied/corrupt evidence
+
+HuanCun `SinkD` and CHI `RXDAT` carry local response/error fields. The local evidence establishes how those fields enter cache-control paths; it does not by itself prove final architectural handling of an error response.
+
+### 7.3 Difftest boundary
+
+Difftest is useful for an end-to-end architectural outcome, but it is not a direct visibility mechanism for per-beat buffer validity. Combine Difftest with transaction-level scoreboards and waveform checks when validating these buffers.
+
+## 8. Cross-boundary Code Reading
+
+| Boundary | Producer | Consumer | Evidence-based interpretation |
+| --- | --- | --- | --- |
+| HuanCun outer response | `SinkD` | `RefillBuffer.w` | Outer D data enters one beat at a time and can be buffered for bypass. |
+| HuanCun inner response | `RefillBuffer.r` | `SourceD` | A requested beat is readable only after its valid bit is set. |
+| CHI refill arrival | `RXDAT` | `MSHRBuffer.w(0)` | `txnID` selects MSHR-indexed storage. |
+| Nested upstream data | `SinkC` | `MSHRBuffer.w(1)` | A second write source shares the refill store. |
+| Main pipeline consumption | `RequestArb` / `MSHRBuffer.r` | `MainPipe` | Read selection is task-controlled and pipeline-aligned. |
+
+## 9. Verification Points Requiring Special Attention
+
+| Verification ID | Invariant or risk | Targeted stimulus | Expected observation |
+| --- | --- | --- | --- |
+| `F_RESET_IDLE` | Every HuanCun beat-valid bit is zero after reset. | Read random IDs/beats immediately after reset, then begin a legal refill. | `r.ready=0` before allocation and valid data only after write. |
+| `F_FIRST_REQUEST` | Beat 0 must be available when requested. | Read beat 0 before and after its first write. | The pre-write access triggers the source assertion; post-write access returns data. |
+| `RESOURCE_CONTENTION` | A full buffer blocks only a new first beat and never reuses an occupied entry. | Occupy each entry, then issue a new `SinkD` first beat. | `w.ready`/`SinkD.io.d.ready` go low until a last read releases an entry. |
+| `PB_BACKPRESSURE_AMPLIFICATION` | A held outer D valid must be stable and must not double-write. | Hold buffer or BankedStore ready low. | Payload holds; each beat writes exactly once after release. |
+| `C_SAME_ENTRY_RW` | Same `(id, beat)` read/write cannot depend on unspecified forwarding. | Create boundary-adjacent read and write tasks. | Legal scheduling avoids simultaneous hit and write; an illegal condition is exposed. |
+| `PB_LAST_RELEASE_ALLOC` | Last-read release cannot make the entry eligible too early. | Fire `r.last` and a new first-beat write in the same cycle while full. | Allocation sees the old mask; reuse starts next cycle. |
+| `P_STARVE_OLD_LOW_NEW_HIGH` | Persistent C/B priority must not silently starve ABC work. | Hold ABC valid while injecting C/B traffic. | Measure eventual service or document unbounded wait. |
+| `F_REQ_AND_FLUSH` | No local flush/redirect input implies no assumed automatic cleanup. | Observe activity during upstream cache control or redirect. | Upstream logic must prevent stale-ID consumption. |
+| `C_MULTI_WRITE_SAME_ENTRY` | Two CoupledL2 writers must not silently lose required beats. | Make RXDAT and SinkC target one MSHR ID with overlapping/non-overlapping masks. | Check actual `PriorityMux` result and downstream data. |
+| `C_READ_WRITE_MSHRBUF` | Simultaneous MSHRBuffer read/write has no documented forwarding contract. | Align `refillBufRead_s2` with a writer for one ID. | Verify MSHR scheduling prevents incorrect consumption. |
+| `CHI_SNP_REFILL` | A snoop to a line still refilling must be constrained. | Send a same-address snoop after RXDAT first beat but before DataStorage write. | `reqBlockSnpMask` and RXSNP behavior match the coherence model. |
+| `E_DENIED_DATA` | Error responses must not be interpreted as normal GrantData. | Inject errors on HuanCun SinkD and CHI RXDAT. | Local error wires and later architectural traces agree. |
+
+## 10. Summary and Open Questions
+
+### Confirmed
+
+- In default `kunminghu-v2@e12436c7` CHI configuration, the active CoupledL2 refill-data storage is `MSHRBuffer`, not `huancun.RefillBuffer`.
+- HuanCun `RefillBuffer` is a per-beat bypass from `SinkD` to `SourceD`, dynamically allocating `mshrs / 2` entries and freeing an entry on a successful last-beat read.
+- CoupledL2 `MSHRBuffer` maps storage directly to MSHR IDs. MSHR control owns capacity and release, and two writes to the same ID are not merged by a buffer-local protocol.
+- Buffer-full behavior, SourceD priority, MSHR task selection, and refill-versus-snoop constraints are separate throughput and correctness boundaries.
+
+### Still requires waveform, generated RTL, or upstream analysis
+
+- The winning writer and system-level safety of a same-cycle, same-ID CoupledL2 `PriorityMux` conflict.
+- Whether a sustained sequence of high-priority HuanCun C/B SourceD tasks permits bounded ABC progress.
+- The complete correspondence between `r.last`, request size/offset, and all supported request types.
+- The end-to-end paths for flush/CMO/redirect, PMP/PMA/PBMT/MMIO, and TileLink errors to architectural trap and retirement.

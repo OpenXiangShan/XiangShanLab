@@ -1,3 +1,4 @@
+<!--
 # 9. Execute Unit
 
 在前面的章节里，我们看到了指令如何被派发、如何在发射队列中等待、如何通过旁路网络获取操作数。现在，终于到了指令真正"干活"的地方——执行单元。
@@ -100,14 +101,14 @@ val AluCfg = FuConfig(
   immType = Set(Imm_I(), Imm_J(), Imm_U(), Imm_LUI32()),
   // latency 默认 CertainLatency(0)
 )
- 
+
 val MulCfg = FuConfig(
   name = "mul", fuType = FuType.mul,
   srcData = Seq(Seq(IntData(), IntData())),
   piped = true, writeIntRf = true,
   latency = CertainLatency(2),      // ← 注意：是 2 拍，不是 1 拍
 )
- 
+
 val DivCfg = FuConfig(
   name = "div", fuType = FuType.div,
   srcData = Seq(Seq(IntData(), IntData())),
@@ -115,14 +116,14 @@ val DivCfg = FuConfig(
   latency = UncertainLatency(),
   hasInputBuffer = (true, 4, true),  // 有 4 项输入缓冲
 )
- 
+
 val BkuCfg = FuConfig(
   name = "bku", fuType = FuType.bku,
   srcData = Seq(Seq(IntData(), IntData())),
   piped = true, writeIntRf = true,
   latency = CertainLatency(2),       // ← 注意：是 2 拍，不是 0 拍
 )
- 
+
 val I2fCfg = FuConfig(
   name = "i2f", FuType.i2f,
   srcData = Seq(Seq(IntData())),
@@ -130,21 +131,21 @@ val I2fCfg = FuConfig(
   latency = CertainLatency(2, extraValue = 1),  // ← 含额外延迟
   needSrcFrm = true,
 )
- 
+
 val JmpCfg = FuConfig(
   name = "jmp", fuType = FuType.jmp,
   srcData = Seq(Seq(IntData())),
   piped = true,
   immType = Set(Imm_I(), Imm_J(), Imm_U()),
 )
- 
+
 val BrhCfg = FuConfig(
   name = "brh", fuType = FuType.brh,
   srcData = Seq(Seq(IntData(), IntData())),
   piped = true,
   immType = Set(Imm_B()),
 )
- 
+
 val CsrCfg = FuConfig(
   name = "csr", fuType = FuType.csr,
   srcData = Seq(Seq(IntData())),
@@ -199,7 +200,7 @@ val FcmpCfg = FuConfig(
   writeFflags = true,
   latency = CertainLatency(0, extraValue = 3),  // ← base=0 但有 extraValue=3
 )
- 
+
 // FuConfig.scala
 val F2vCfg = FuConfig(
   name = "f2v", FuType.f2v,
@@ -212,7 +213,7 @@ val F2vCfg = FuConfig(
   latency = CertainLatency(0, extraValue = 3),
   destDataBits = 128, srcDataBits = Some(64),
 )
- 
+
 // FuConfig.scala
 val I2vCfg = FuConfig(
   name = "i2v", FuType.i2v,
@@ -275,7 +276,7 @@ val VialuCfg = FuConfig(
   needSrcVxrm = true, vlWakeUp = true, maskWakeUp = true,
   readVl = true, destDataBits = 128,
 )
- 
+
 val VimacCfg = FuConfig(
   name = "vimac", fuType = FuType.vimac,
   srcData = Seq(Seq(VecData(), VecData(), VecData(), V0Data())),
@@ -285,7 +286,7 @@ val VimacCfg = FuConfig(
   needSrcVxrm = true, vlWakeUp = true, maskWakeUp = true,
   readVl = true, destDataBits = 128,
 )
- 
+
 val VidivCfg = FuConfig(
   name = "vidiv", fuType = FuType.vidiv,
   srcData = Seq(Seq(VecData(), VecData(), VecData(), V0Data())),
@@ -295,7 +296,7 @@ val VidivCfg = FuConfig(
   vlWakeUp = true, maskWakeUp = true,
   destDataBits = 128,
 )
- 
+
 val VipuCfg = FuConfig(
   name = "vipu", fuType = FuType.vipu,
   srcData = Seq(Seq(VecData(), VecData(), VecData(), V0Data())),
@@ -305,7 +306,7 @@ val VipuCfg = FuConfig(
   vlWakeUp = true, maskWakeUp = true,
   destDataBits = 128,
 )
- 
+
 val VmoveCfg = FuConfig(
   name = "vmove", fuType = FuType.vmove,
   srcData = Seq(Seq(VecData(), VecData(), VecData(), V0Data())),
@@ -327,14 +328,14 @@ val VSetRvfWvfCfg = FuConfig(  // vsetvli: 读向量源，写 VL + VTYPE + 整�
   piped = true, writeVlRf = true, writeVType = true, writeIntRf = true,
   latency = CertainLatency(0), readVl = true, readOldVtype = true,
 )
- 
+
 val VSetRiWvfCfg = FuConfig(   // vsetivli: 读整数源，写 VL + VTYPE
   name = "vsetriwvf", fuType = FuType.vsetiwf,
   srcData = Seq(Seq(IntData(), IntData())),
   piped = true, writeVlRf = true, writeVType = true,
   latency = CertainLatency(0),
 )
- 
+
 val VSetRiWiCfg = FuConfig(    // vsetvli 写整数: 写整数 RF
   name = "vsetriwi", fuType = FuType.vsetiwi,
   srcData = Seq(Seq(IntData(), IntData())),
@@ -451,7 +452,7 @@ val VfaluCfg = FuConfig(
   needSrcFrm = true, vlWakeUp = true, maskWakeUp = true,
   readVl = true, destDataBits = 128,
 )
- 
+
 val VfmaCfg = FuConfig(
   name = "vfma", fuType = FuType.vfma,
   srcData = Seq(Seq(VecData(), VecData(), VecData(), V0Data())),
@@ -462,7 +463,7 @@ val VfmaCfg = FuConfig(
   needSrcFrm = true, vlWakeUp = true, maskWakeUp = true,
   readVl = true, destDataBits = 128,
 )
- 
+
 val VfdivCfg = FuConfig(
   name = "vfdiv", fuType = FuType.vfdiv,
   srcData = Seq(Seq(VecData(), VecData(), VecData(), V0Data())),
@@ -473,7 +474,7 @@ val VfdivCfg = FuConfig(
   needSrcFrm = true, vlWakeUp = true, maskWakeUp = true,
   readVl = true, destDataBits = 128,
 )
- 
+
 val VfcvtCfg = FuConfig(
   name = "vfcvt", fuType = FuType.vfcvt,
   srcData = Seq(Seq(VecData(), VecData(), VecData(), V0Data())),
@@ -536,7 +537,7 @@ val VlduCfg = FuConfig(
   vlWakeUp = true, maskWakeUp = true,
   destDataBits = 128, readVl = true,
 )
- 
+
 val VstuCfg = FuConfig(
   name = "vstu", fuType = FuType.vstu,
   srcData = Seq(Seq(VecData(), VecData(), VecData(), V0Data())),
@@ -546,7 +547,7 @@ val VstuCfg = FuConfig(
   vlWakeUp = true, maskWakeUp = true,
   destDataBits = 128, readVl = true,
 )
- 
+
 val VseglduCfg = FuConfig(
   name = "vsegldu", fuType = FuType.vsegldu,
   piped = false,
@@ -556,7 +557,7 @@ val VseglduCfg = FuConfig(
   vlWakeUp = true, maskWakeUp = true,
   destDataBits = 128, readVl = true,
 )
- 
+
 val VsegstuCfg = FuConfig(
   name = "vsegstu", fuType = FuType.vsegstu,
   piped = false,
@@ -610,7 +611,7 @@ val JmpCfg = FuConfig(
   immType = Set(Imm_I(), Imm_J(), Imm_U()),
   // latency 默认 CertainLatency(0)
 )
- 
+
 val BrhCfg = FuConfig(
   name = "brh", fuType = FuType.brh,
   srcData = Seq(Seq(IntData(), IntData())),
@@ -685,7 +686,7 @@ val CsrCfg = FuConfig(
   exceptionOut = Seq(illegalInstr, virtualInstr, breakPoint, ecallU, ecallS, ecallVS, ecallM),
   flushPipe = true,                 // ← 需要冲刷流水线
 )
- 
+
 val FenceCfg = FuConfig(
   name = "fence", fuType = FuType.fence,
   srcData = Seq(Seq(IntData(), IntData())),
@@ -767,13 +768,13 @@ def needUncertainWakeupFuConfigs = Seq(
 // CertainLatency(0)    → Forward（当拍前递）
 // CertainLatency(n)    → Bypass / IQ Wakeup（确定延迟唤醒）
 // UncertainLatency()   → Uncertain Wakeup（不确定延迟，需等待实际写回）
- 
+
 // FuType.scala — 不确定延迟的功能单元
 def isUncertain(fuType: UInt): Bool = FuTypeOrR(fuType, csr, div, fDivSqrt, vidiv, vfdiv)
- 
+
 // FuConfig.scala — 需要不确定唤醒的配置
 def needUncertainWakeupFuConfigs = Seq(CsrCfg, DivCfg, FdivCfg, VfdivCfg, VidivCfg)
- 
+
 // FuConfig.scala — 0 延迟功能单元
 def is0latency(fuType: UInt): Bool = {
   val fuTypes = FuConfig.allConfigs.filter(_.latency == CertainLatency(0)).map(_.fuType)
@@ -819,10 +820,10 @@ def is0latency(fuType: UInt): Bool = {
 ```scala
 // FuType.scala# — 需要浮点舍入模式的功能单元
 val vectorNeedFrm = Seq(vfalu, vfma, vfdiv, vfcvt)  // 向量浮点需要 FRM
- 
+
 // 会阻塞后续指令的功能单元
 val blockBackCompress = Seq(brh, jmp)  // 分支/跳转阻塞后续发射
- 
+
 //  需要 OG2 流水级的功能单元
 def needOg2: Boolean = isVecArith || fuType == FuType.vsetfwf || isVecMem
 ```
@@ -844,5 +845,299 @@ def needOg2: Boolean = isVecArith || fuType == FuType.vsetfwf || isVecMem
 核心原则：执行单元的多样性决定了后端数据通路的复杂性——不同的延迟需要不同的唤醒机制（Forward→Bypass→Bypass2→IQ Wakeup→Uncertain Wakeup），不同的写回目标需要不同的旁路通道，不同的特殊行为（重定向、flushPipe、blockBackward、ldCancel）需要不同的流水线控制。理解执行单元的特征，就是理解整个后端设计的关键。
 
 
-> 更新: 2026-07-01 17:35:11  
+> 更新: 2026-07-01 17:35:11
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/nwksndztdhde83p9>
+-->
+
+# 9. Execute Unit
+
+Previous chapters showed how instructions are dispatched, wait in issue queues, and obtain operands through the bypass network. The execution unit is where an instruction finally performs its operation.
+
+:::info
+**After this chapter, you will be able to:**
+
+* Understand the layout and division of labor among XiangShan's eight execution-unit classes.
+* Relate each class to its supported operations, latency, and writeback destinations.
+* Distinguish scalar and vector execution units.
+* Understand the special handling of control-flow and CSR instructions.
+
+:::
+
+***
+
+## 9.1 Position: What Does an Execution Unit Do?
+
+An execution unit is a workshop in the processor. Some workshops perform fast ALU operations, some multiply, some divide, some process vectors, and others interact with the outside world through memory access or CSR operations. An execution unit can contain one or more functional units (FUs), just as a workshop can contain several machines.
+
+***
+
+## 9.2 Overview of the Eight Execution-Unit Classes
+
+`FuConfig.scala` defines every FU and its properties:
+
+```scala
+case class FuConfig(
+  name: String,
+  fuType: FuType.OHType,
+  fuGen: (Parameters, FuConfig) => FuncUnit,
+  srcData: Seq[Seq[DataConfig]],
+  piped: Boolean,
+  maybeBlock: Boolean = false,
+  writeIntRf: Boolean = false,
+  writeFpRf: Boolean = false,
+  writeVecRf: Boolean = false,
+  writeV0Rf: Boolean = false,
+  writeVlRf: Boolean = false,
+  latency: HasFuLatency = CertainLatency(0),
+  exceptionOut: Seq[Int] = Seq(),
+  flushPipe: Boolean = false,
+)
+```
+
+* **`latency`**: `CertainLatency(n)` is a fixed latency; `UncertainLatency()` is used when the latency depends on runtime state, such as a divider.
+* **`piped`**: a pipelined FU accepts a new instruction every cycle; a non-pipelined FU is exclusive while it executes.
+* **`maybeBlock`**: the FU may occupy the execution path and block other instructions.
+* **`writeXxxRf`**: the writeback register-file type. One FU may write more than one register file.
+
+| **Scheduling domain** | **Functional units** | **Writeback target** | **Typical latency** |
+| --- | --- | --- | --- |
+| Int | `alu`, `mul`, `div`, `bku`, `jmp`, `brh`, `csr`, `fence`, `i2f`, `mou` | Integer RF; FP RF for `i2f` | 0 to tens of cycles |
+| FP | `falu`, `fmac`, `fDivSqrt`, `fcvt`, `fcmp`, `f2i`, `f2v` | FP RF; integer RF for `f2i` | 2 to tens of cycles |
+| VF/Mem | Vector arithmetic, vector memory, `ldu`, `stu`, `std` | Vector RF, V0 RF, VL RF, or integer RF for `ldu` | 0 to tens of cycles |
+
+:::warning
+You do not need to memorize every FU name. The important distinction is scalar versus vector data, integer versus floating-point versus memory operations, and the special control-flow and CSR units.
+
+:::
+
+***
+
+## 9.3 Scalar Integer
+
+Scalar integer units perform the most common operations: add, subtract, bitwise logic, and shifts. They are fast, numerous, and simple.
+
+### 9.3.1 Functional-Unit Overview
+
+| **FU** | **Function** | **Latency** | **Writeback** |
+| --- | --- | --- | --- |
+| ALU | Add, subtract, AND, OR, XOR, shifts | `CertainLatency(0)` | Integer RF |
+| MUL | Integer multiplication | `CertainLatency(2)` | Integer RF |
+| DIV | Integer division | `UncertainLatency()` | Integer RF |
+| BKU | CLZ, CTZ, CPOP, and other bit operations | `CertainLatency(2)` | Integer RF |
+| I2F | Integer-to-floating-point conversion | `CertainLatency(2, extraValue=1)` | FP RF |
+| JMP | JAL, JALR, AUIPC | `CertainLatency(0)` | Integer RF and redirect |
+
+The configurations make the timing behavior explicit:
+
+```scala
+val AluCfg = FuConfig(name = "alu", fuType = FuType.alu,
+  piped = true, writeIntRf = true)
+val MulCfg = FuConfig(name = "mul", fuType = FuType.mul,
+  piped = true, writeIntRf = true, latency = CertainLatency(2))
+val DivCfg = FuConfig(name = "div", fuType = FuType.div,
+  piped = false, writeIntRf = true, latency = UncertainLatency(),
+  hasInputBuffer = (true, 4, true))
+```
+
+ALU is combinational inside the FU and uses the Forward path. MUL and BKU have two-cycle latency and use Bypass/IQ wakeup. DIV is non-pipelined and has a four-entry input buffer; its runtime latency is reported through uncertain wakeup. I2F crosses into the floating-point RF and consumes the floating-point rounding-mode signal. JMP, BRH, and CSR can redirect control flow.
+
+### 9.3.2 Key Characteristics
+
+The key scalar-integer characteristics are the zero-latency ALU path, two-cycle MUL/BKU paths, non-pipelined uncertain-latency DIV, cross-domain I2F writeback, and redirect-capable JMP/BRH/CSR units described above.
+
+***
+
+## 9.4 Scalar Floating Point
+
+| **FU** | **Function** | **Latency** | **Writeback** |
+| --- | --- | --- | --- |
+| FALU | Floating-point add/subtract, classification, move | `CertainLatency(1)` | FP RF |
+| FMAC | FMA | `CertainLatency(3)` | FP RF |
+| FDivSqrt | Floating-point divide and square root | `UncertainLatency()` | FP RF |
+| FCVT | Floating-point format conversion | Certain latency | FP RF |
+| FCMP | Floating-point compare | `CertainLatency(0, extraValue=3)` | **Integer RF** |
+| F2I | Floating-point-to-integer conversion | Certain latency | Integer RF |
+| F2V | Move floating-point data to vector unit | `CertainLatency(0, extraValue=3)` | FP, vector, and V0 RF |
+| I2V | Move integer data to vector unit | `CertainLatency(0, extraValue=3)` | FP, vector, and V0 RF |
+
+FMAC, FDivSqrt, and I2F need FPU control, including the rounding mode:
+
+```scala
+def needFPUCtrl: Boolean = {
+  import FuType._
+  Seq(fmac, fDivSqrt, i2f).contains(fuType)
+}
+```
+
+FDivSqrt is non-pipelined and uncertain-latency. FCMP writes a Boolean result to the integer RF. F2V and I2V are bridge units that can write three register files, and F2V supports both one-source and two-source configurations.
+
+***
+
+## 9.5 Vector Integer and Floating-Point Units
+
+| **FU** | **Function** | **Writeback** |
+| --- | --- | --- |
+| VIALUF | Vector integer ALU | Vector RF / V0 RF |
+| VIMAC | Vector integer multiply-add | Vector RF |
+| VIDIV | Vector integer division | Vector RF |
+| VPU/VIPU | Vector permutation | Vector RF; VIPU may write integer RF |
+| VPPU | Population count and related operations | Vector RF |
+| VFALU | Vector floating-point ALU | Vector RF, V0 RF, and sometimes FP RF |
+| VFMA | Vector floating-point multiply-add | Vector RF and V0 RF |
+| VFDIV | Vector floating-point division | Vector RF and V0 RF |
+| VFCVT | Vector floating-point conversion | Vector RF and V0 RF |
+| VMOVE | Vector register movement | Several register files |
+| VSETFWF | Vector configuration | Vector RF / VL RF |
+
+Almost all vector units write V0 because mask results are architectural state. VIPU is the vector arithmetic unit that can write the integer RF, and VMOVE can write integer, FP, vector, and V0 RFs. VIDIV is non-pipelined and uncertain-latency. Vector arithmetic goes through an additional OG2 stage and therefore uses the Bypass2 path.
+
+***
+
+## 9.6 Scalar Memory
+
+| **FU** | **Function** | **Writeback** |
+| --- | --- | --- |
+| LDU | Scalar Load | Integer or FP RF |
+| STU | Scalar Store address | None; writes memory |
+| MOU | Memory-order operations such as FENCE | None |
+| VLDU | Vector Load | Vector RF |
+| VSTU | Vector Store | None |
+| STD | Store-data movement | None |
+
+Important details are that LDU can write either integer or FP RF depending on the loaded type, and Store is split into address (STA) and data (STD) operations that share `FuType.stu`. STD accepts either integer or floating-point source data. MOU writes a `FakeIntRf` placeholder used for pipeline synchronization. `LDU`, `STA`, and `MOU` are non-pipelined and use uncertain latency; `STD` is the exception, with `piped = true` and `CertainLatency(0)`.
+
+***
+
+## 9.7 Vector Floating Point
+
+### 9.7.1 Functional-Unit Overview
+
+| **FU** | **Function** | **Latency** | **Writeback** | **Pipelined** |
+| --- | --- | --- | --- | --- |
+| VFALU | Vector FP add/subtract and compare | `CertainLatency(1)` | Vector, V0, FP RF, and `fflags` | Yes |
+| VFMA | Vector FMA | `CertainLatency(3)` | Vector, V0 RF, and `fflags` | Yes |
+| VFDIV | Vector divide and square root | `UncertainLatency()` | Vector, V0 RF, and `fflags` | No |
+| VFCVT | Vector FP conversion | `CertainLatency(2)` | Vector, V0 RF, and `fflags` | Yes |
+
+All vector FP units write V0 and `fflags`, require the shared rounding-mode signal (`needSrcFrm=true`), and use OG2 plus Bypass2. VFDIV is non-pipelined with uncertain latency; VFCVT takes two cycles rather than one.
+
+### 9.7.2 Key Characteristics
+
+Vector floating-point units share the rounding-mode and `fflags` paths; VFDIV is the non-pipelined uncertain-latency exception, while VFCVT has a fixed two-cycle latency.
+
+***
+
+## 9.8 Vector Memory
+
+### 9.8.1 Functional-Unit Overview
+
+| **FU** | **Function** | **Latency** | **Writeback** |
+| --- | --- | --- | --- |
+| VLDU | Vector Load | At least three cycles on a cache hit | Vector RF, V0 RF, VL RF |
+| VSTU | Vector Store | At least three cycles | None |
+| VSEGLDU | Vector segment Load | At least three cycles | Vector RF, V0 RF, VL RF |
+| VSEGSTU | Vector segment Store | At least three cycles | None |
+
+Vector-memory FUs are non-pipelined and uncertain-latency because cache state, element count, and replay determine completion. They support `vlWakeUp` and `maskWakeUp`, report `hasLoadError=true`, and may split one instruction into multiple flows. Segment instructions are restricted to port 0 because they consume the most resources.
+
+### 9.8.2 Key Characteristics
+
+Vector-memory latency depends on cache state, element count, and replay, so these units use uncertain wakeup and may split one instruction into multiple flows.
+
+***
+
+## 9.9 Control Flow: Branches and Jumps
+
+### 9.9.1 Functional-Unit Overview
+
+| **FU** | **Function** | **Latency** | **Special output** |
+| --- | --- | --- | --- |
+| JMP | JAL, JALR, AUIPC | 0 in the FU | Redirect target |
+| BRH | BEQ, BNE, BLT, and related branches | 0 in the FU | Taken/not-taken redirect |
+
+JMP and BRH can redirect the frontend and therefore block younger instructions (`blockBackward`) until the control-flow decision is resolved. JMP also updates the return-address stack (RAS). A misprediction flush is expensive, so these units use the fastest Forward path.
+
+### 9.9.2 Key Characteristics
+
+JMP and BRH resolve control flow early, issue redirects, and use `blockBackward` to protect the frontend from younger speculative work.
+
+***
+
+## 9.10 CSR and Control Registers
+
+### 9.10.1 Functional-Unit Overview
+
+| **FU** | **Function** | **Latency** | **Special output** | **Pipelined** |
+| --- | --- | --- | --- | --- |
+| CSR | Read/write CSRs | `UncertainLatency()` | Redirect, exception, and `flushPipe` | No |
+| FENCE | Memory fence | `UncertainLatency()` | `flushPipe` | No |
+
+CSR and FENCE are exclusive, non-pipelined units. CSR may raise illegal-instruction, virtual-instruction, breakpoint, and ECALL exceptions, and belongs to the uncertain-wakeup set. CSR implementations are organized by privilege domain: `MachineLevel`, `SupervisorLevel`, `VirtualSupervisorLevel`, `Hypervisor`, `Debug`, and PMA/PMP modules.
+
+### 9.10.2 Key Characteristics
+
+CSR and FENCE are non-pipelined, uncertain-latency units that can flush the pipeline; CSR additionally reports privilege and instruction exceptions.
+
+### 9.10.3 CSR Categories
+
+The CSR implementation is divided by privilege and protection function, including machine, supervisor, virtual-supervisor, hypervisor, debug, and PMA/PMP categories.
+
+***
+
+## 9.11 Execution Latency and Wakeup
+
+### Detailed Latency by Functional Unit
+
+The data path can be viewed as:
+
+```plain
+OG0 issue → OG1 register read and bypass selection → OG2 (vector only)
+          → functional-unit execution → writeback and dependent-instruction wakeup
+```
+
+* **OG0**: the issue queue selects and emits an instruction.
+* **OG1**: register files are read and the BypassNetwork selects operands.
+* **OG2**: an extra stage for vector execution.
+* **Execution**: the FU computes the result.
+* **Writeback**: the result reaches the register file and dependent instructions are woken.
+
+| **FU** | **Latency class** | **Effective latency** | **Wakeup path** | **Writeback** |
+| --- | --- | --- | --- | --- |
+| ALU | `CertainLatency(0)` | 0 FU cycles | Forward | Integer RF |
+| BKU/MUL | `CertainLatency(2)` | 2 cycles | Bypass / IQ wakeup | Integer RF |
+| DIV | Uncertain | Tens of cycles | Uncertain wakeup | Integer RF |
+| I2F | `CertainLatency(2, extraValue=1)` | 2+ cycles | Bypass / IQ wakeup | FP RF |
+| JMP/BRH | `CertainLatency(0)` | 0 FU cycles | Forward + redirect | Integer RF or redirect |
+| FALU | `CertainLatency(1)` | 1 cycle | Bypass | FP RF |
+| FMAC | `CertainLatency(3)` | 3 cycles | IQ wakeup | FP RF |
+| FDivSqrt | Uncertain | Tens of cycles | Uncertain wakeup | FP RF |
+| FCMP | `CertainLatency(0, extraValue=3)` | 0+3 cycles | Bypass | Integer RF |
+| LDU | `UncertainLatency(3)` | 3+ cycles | Uncertain wakeup + `ldCancel` | Integer/FP RF |
+| VIALUF/VFALU | Certain | FU latency + OG2 | Bypass2 | Vector/V0 (and FP for VFALU) |
+| VIMAC/VFMA | Certain | FU latency + OG2 | Bypass2 + IQ wakeup | Vector/V0 RF |
+| VIDIV/VFDIV | Uncertain | Runtime-dependent | Uncertain wakeup | Vector/V0 RF |
+
+| **Wakeup type** | **Use** | **Mechanism** |
+| --- | --- | --- |
+| Forward | Zero-latency ALU/JMP/BRH | Same-cycle FU output is forwarded |
+| Bypass | Fixed-latency scalar units | Registered `RegNext`/`RegEnable` data is forwarded |
+| Bypass2 | Vector units with OG2 | A second registered bypass stage |
+| IQ Wakeup | Multi-cycle fixed-latency units | `MultiWakeupQueue` delays wakeup |
+| Uncertain Wakeup | DIV, FDivSqrt, LDU, CSR, VFDIV, VIDIV | Wait for the actual writeback event |
+
+***
+
+## 9.12 Summary
+
+* **Scalar integer**: ALU is zero-latency inside the FU; MUL and BKU take two cycles; DIV is uncertain-latency. They use Forward/Bypass or uncertain wakeup as appropriate.
+* **Scalar floating point**: FALU and FMAC are the main fixed-latency units; FDivSqrt is uncertain. FCMP writes integer RF, and FMAC/FDivSqrt/I2F need FRM.
+* **Scalar memory**: LDU has uncertain latency (three-cycle base), Store is split into STA and STD, and `ldCancel` drives backend wakeup cancellation.
+* **Vector arithmetic**: One instruction handles multiple elements, usually writes V0, adds OG2, and uses Bypass2. VIPU can write integer RF and VMOVE can write four RF domains.
+* **Vector memory**: The most complex path; one instruction can become several flows. VLDU writes vector, V0, and VL RFs; segment operations are limited to port 0 and all vector-memory FUs are non-pipelined.
+* **Control flow**: JMP/BRH are fast but can redirect and block younger instructions; JMP also operates the RAS.
+* **CSR/FENCE**: They access processor state, have uncertain latency, can redirect or raise exceptions, and request `flushPipe`.
+
+The diversity of execution units drives the complexity of the backend data path: different latencies require Forward, Bypass, Bypass2, IQ wakeup, or uncertain wakeup; different destinations require different bypass channels; and redirects, flushes, blocking, and load cancellation require distinct control logic.
+
+> Updated: 2026-07-01 17:35:11
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/nwksndztdhde83p9>

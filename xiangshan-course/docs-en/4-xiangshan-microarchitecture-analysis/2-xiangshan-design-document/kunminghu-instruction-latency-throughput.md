@@ -1,6 +1,7 @@
+<!--
 # Kunminghu Instruction Latency Throughput
 
-> 分析对象：OpenXiangShan `kunminghu-v2`，commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`。  
+> 分析对象：OpenXiangShan `kunminghu-v2`，commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`。
 > 本文只统计译码后进入后端执行的指令类别，重点修正 latency 口径：`FuConfig.latency = CertainLatency(0)` 不是“从发射到写回 0 cycle”。
 
 ## 1. 统计口径
@@ -25,7 +26,7 @@
 
 ### 2.1 issue s0 到 Exu input 是一拍
 
-`DataPath.scala` 在 issue 输入侧明确标注 `IQ(s0) --[Ctrl]--> s1Reg`。当 `s0.fire` 且未 flush/cancel 时，`s1_valid := true.B`，同时 `s1_data.fromIssueBundle(s0.bits)` 捕获 issue payload；随后 `s1Reg --[Ctrl]--> exu(s1)` 把 `s1_toExuValid/Data` 接到 `toExu.valid/bits`。
+`DataPath.scala` 在 issue 输入侧明确标注 `IQ(s0) --[Ctrl]--&gt; s1Reg`。当 `s0.fire` 且未 flush/cancel 时，`s1_valid := true.B`，同时 `s1_data.fromIssueBundle(s0.bits)` 捕获 issue payload；随后 `s1Reg --[Ctrl]--&gt; exu(s1)` 把 `s1_toExuValid/Data` 接到 `toExu.valid/bits`。
 
 证据：
 
@@ -337,3 +338,216 @@ variable:      必须继续展开具体 FU/mem/cache/CSR/divider 状态机
 ```
 
 这能避免再次把 ALU/JMP/BRH 的 FU 内部 0-cycle 误写成 “指令发射到写回 0-cycle”。
+-->
+
+# Kunminghu Instruction Latency and Throughput
+
+> Target: OpenXiangShan `kunminghu-v2`, commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`.
+> This note covers instruction classes that enter backend execution after decode. It corrects the latency interpretation: `FuConfig.latency = CertainLatency(0)` is not “zero cycles from issue to writeback”.
+
+## 1. Measurement Definitions
+
+Latency is separated into four layers so that different events are not conflated:
+
+| Definition | Start | End | Use |
+| --- | --- | --- | --- |
+| FU-internal latency | FU input valid/fire enters the FU | FU output valid | Corresponds to `FuConfig.latency` and the wrapper pipeline; ALU/JMP/BRH can be zero |
+| issue -> bypass | Issue-queue `s0.fire` | Exu output reaches a bypass source selected by `readForward`/`readBypass` | Earliest time a dependent instruction can obtain the producer result |
+| issue -> RegCache | Issue-queue `s0.fire` | `RegCache` is updated and available to `readRegCache` | Time until the result reaches the RegCache copy; normally one cycle after bypass |
+| issue -> physical RF | Issue-queue `s0.fire` | `Regfile.mem` is written | Time until the result reaches the physical register file; normally one cycle after bypass |
+
+The important corrections are:
+
+* `Alu.scala` drives `io.out.valid := io.in.valid`, so the ALU FU itself is combinational. `DataPath` still places issue s0 before the s1 register-read/Exu-input stage, so issue-to-bypass is at least one cycle.
+* `BypassNetwork` uses `GatedValidRegNext` for RegCache write enable and `bypassDataVec` for data, so RegCache update is normally one cycle after bypass visibility.
+* `DataPath` registers the PRF write enable with `RegNext`, so physical-RF write is normally one cycle after writeback/bypass.
+* A dependent instruction does not need to wait for the PRF write. It can select `readForward`, `readBypass`, or `readBypass2` in the bypass network.
+
+## 2. Source Evidence
+
+### 2.1 Issue s0 to Exu input takes one cycle
+
+`DataPath.scala` labels the path `IQ(s0) --[Ctrl]--&gt; s1Reg`. When `s0.fire` occurs without flush/cancel, `s1_valid` is asserted and `s1_data.fromIssueBundle(s0.bits)` captures the issue payload. `s1_toExuValid/Data` then drive `toExu.valid/bits`.
+
+```scala
+when (s0.fire && !s1_flush && !s0_ldCancel) {
+  s1_valid := true.B
+}.otherwise {
+  s1_valid := false.B
+}
+when (s0.valid) {
+  s1_data.fromIssueBundle(s0.bits)
+}
+s0.ready := notBlock && !s0_cancel
+
+toExu(i)(j).valid := s1_toExuValid(i)(j)
+s1_toExuReady(i)(j) := toExu(i)(j).ready
+sinkData := s1_toExuData(i)(j)
+```
+
+### 2.2 The ALU FU is zero-latency, but the complete path is not
+
+The ALU wrapper proves only FU-input-to-FU-output latency:
+
+```scala
+io.out.valid := io.in.valid
+io.in.ready := io.out.ready
+```
+
+Therefore the useful end-to-end values are:
+
+* FU-internal latency: 0 cycles.
+* Issue fire -> bypass/forward: 1 cycle.
+* Issue fire -> RegCache: 2 cycles when `needWriteRegCache` is enabled.
+* Issue fire -> PRF write: 2 cycles.
+
+### 2.3 Three bypass read paths
+
+`BypassNetwork` receives `valid/pdest/data` from every Exu and forms:
+
+* `forwardDataVec`: current-cycle Exu output, selected by `readForward`.
+* `bypassDataVec`: a `RegEnable` copy of the previous Exu output, selected by `readBypass`.
+* `bypass2DataVec`: an additional `RegNext` stage for selected vector/memory producers, selected by `readBypass2`.
+
+```scala
+private val forwardDataVec = VecInit(fromExus.map(x => ZeroExt(x.bits.data, RegDataMaxWidth)))
+private val bypassDataVec = VecInit(fromExus.map(x => ZeroExt(RegEnable(x.bits.data, x.valid), RegDataMaxWidth)))
+src := Mux1H(Seq(
+  readForward -> Mux1H(..., forwardDataVec),
+  readBypass  -> Mux1H(..., bypassDataVec),
+  readBypass2 -> Mux1H(..., bypass2DataVec),
+  ...
+))
+```
+
+RegCache is updated from the registered bypass copy rather than from the PRF:
+
+```scala
+private val bypassIntWenVec = VecInit(forwardIntWenVec.map(x => GatedValidRegNext(x)))
+private val bypassRCDataVec = VecInit(fromExus.zip(bypassDataVec)
+  .filter(_._1.bits.params.needWriteRegCache).map(_._2))
+```
+
+### 2.4 RegCache is one cycle after bypass
+
+`bypassDataVec` registers Exu output data and `bypassIntWenVec` registers the write enable. Consequently, a RegCache update is not completed in the Exu-output cycle; it is formed on the following cycle.
+
+### 2.5 PRF write is one cycle after writeback/bypass
+
+`DataPath` captures PRF addresses and data with `RegEnable` and registers `wen` with `RegNext`. `Regfile` writes `mem(i)` when a write port matches the address:
+
+```scala
+intRfWaddr := io.fromIntWb.map(x => RegEnable(x.addr, x.wen)).toSeq
+intRfWdata := io.fromIntWb.map(x => RegEnable(x.data, x.wen)).toSeq
+intRfWen := RegNext(VecInit(io.fromIntWb.map(_.wen).toSeq))
+
+when(wenOH.asUInt.orR) {
+  if (i == 0) mem_0 := wData else mem(i) := wData
+}
+```
+
+### 2.6 Vector arithmetic and selected vector memory add OG2
+
+`Og2ForVector` registers selected VF arithmetic and vector-memory inputs into `s2_toExuValid/Data` before they reach the Exu. These paths therefore have one more stage after issue s1.
+
+## 3. Fixed-Latency Formulas
+
+Under the best-case assumptions of no flush, replay, backpressure, or writeback-arbitration delay:
+
+```text
+Scalar/non-OG2:
+  issue -> bypass   = 1 (DataPath s1) + FU_internal_latency
+  issue -> RegCache = issue -> bypass + 1 (RegCache GatedValidRegNext), if needWriteRegCache
+  issue -> PRF      = issue -> bypass + 1 (DataPath PRF wen RegNext)
+
+Vector/OG2:
+  issue -> bypass   = 2 (DataPath s1 + Og2) + FU_internal_latency
+```
+
+## 4. Instruction-Class Latency and Throughput
+
+The following table uses the source markers and resource counts in the Kunminghu-v2 configuration. “Variable” means that the FU configuration alone cannot determine a cycle count.
+
+| Instruction class | Decode/FU marker | FU latency | issue -> bypass | issue -> RegCache | issue -> PRF | Peak throughput / II |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Integer ALU | `FuType.alu`, `AluCfg` | 0 | 1 | 2 if enabled | 2 | Up to 4/cycle, II=1 |
+| JAL/JALR | `FuType.jmp`, `JmpCfg` | 0 | 1 | 2 if enabled | 2 | Up to 3/cycle, II=1 |
+| Conditional branch | `FuType.brh`, `BrhCfg` | 0 | 1 | Usually none | Usually no PRF write | Up to 3/cycle, II=1 |
+| Integer multiply | `FuType.mul`, `MulCfg` | 2 | 3 | 4 if enabled | 4 | Up to 2/cycle, II=1 if accepted |
+| Bit operations/BKU | `FuType.bku`, `BkuCfg` | 2 | 3 | 4 if enabled | 4 | Up to 2/cycle, II=1 if accepted |
+| Integer divide | `FuType.div`, `DivCfg` | Variable | Variable | Variable | Variable | One non-pipelined BJU3; divider busy and input buffer limit throughput |
+| CSR | `FuType.csr`, `CsrCfg` | Variable | Variable | Variable | Variable | One BJU3; serialized and may flush |
+| Fence | `FuType.fence`, `FenceCfg` | Variable | Usually no ordinary result | Usually none | Usually none | One BJU3; memory/order/flush dependent |
+| I2F | `FuType.i2f`, `I2fCfg` | 2 | 3 | 4 if enabled | 4 | One BJU2, II=1 if unblocked |
+| I2V/F2V | `FuType.i2v/f2v` | 0 | 1 | 2 if enabled | 2 | I2V on BJU2, F2V on FEX0, II=1 |
+| FP ALU | `FuType.falu`, `FaluCfg` | 1 | 2 | 3 if enabled | 3 | Up to 3/cycle, II=1 |
+| FP FMA/MAC | `FuType.fmac`, `FmacCfg` | 3 | 4 | 5 if enabled | 5 | Up to 3/cycle, II=1 |
+| FP convert | `FuType.fcvt`, `FcvtCfg` | 2 | 3 | 4 if enabled | 4 | One FEX0, II=1 |
+| FP divide/sqrt | `FuType.fDivSqrt`, `FdivCfg` | Variable | Variable | Variable | Variable | Two non-pipelined instances; iteration-limited |
+| Vector integer ALU | `FuType.vialuF`, `VialuCfg` | 1 | 3 | 4 if enabled | 4 | Up to 2/cycle, II=1 per uop/128-bit result |
+| Vector integer MAC | `FuType.vimac`, `VimacCfg` | 2 | 4 | 5 if enabled | 5 | One VFEX0, II=1 |
+| Vector permute/pack | `FuType.vppu/vipu` | 2 | 4 | 5 if enabled | 5 | One VPPU and one VIPU |
+| Vector FP ALU | `FuType.vfalu`, `VfaluCfg` | 1 | 3 | 4 if enabled | 4 | Up to 2/cycle, II=1 |
+| Vector FP FMA | `FuType.vfma`, `VfmaCfg` | 3 | 5 | 6 if enabled | 6 | Up to 2/cycle, II=1 |
+| Vector FP convert | `FuType.vfcvt`, `VfcvtCfg` | 2 | 4 | 5 if enabled | 5 | One VFEX1, II=1 |
+| Vector divide | `FuType.vidiv/vfdiv` | Variable | Variable | Variable | Variable | VFEX4; non-pipelined and iteration-limited |
+| Load | `FuType.ldu`, `LduCfg` | Variable | Variable | Variable | Variable | Three load pipelines; TLB, cache, LSQ, replay, and MSHR limited |
+| Store address | `FuType.sta`, `StaCfg` | Variable | No ordinary `rd` bypass | Usually none | Usually none | Two STA pipelines; SQ/order limited |
+| Store data | `FuType.std`, `StdCfg` | Data-path dependent | None | None | None | Two STD pipelines; SQ/merge/drain limited |
+| AMO/LR/SC | `FuType.mou/moud` | Variable | Variable | Variable | Variable | STA/STD, cache/coherence, and ordering limited |
+| Vector load/store/segment | `FuType.vldu/vstu/vsegldu/vsegstu` | Variable | Variable | Variable | Variable | Two VLSU pipelines; segment split and replay limited |
+
+## 5. Resource Throughput Summary
+
+| Resource | Quantity/width | Peak | Degradation sources |
+| --- | ---: | --- | --- |
+| Decode/Rename | DecodeWidth=6, RenameWidth=6 | Up to 6 instructions/cycle into the backend front stages | Decode split, rename resources, redirects, IBuffer state |
+| Commit | CommitWidth=8, RobCommitWidth=8 | Up to 8 instructions/cycle | Older incomplete entry, exception/redirect, ROB-head block |
+| Integer ALU | 4 | Up to 4/cycle | Issue block, source ports, IntWB ports, dependencies |
+| BJU | 3 plus special BJU3 | Up to 3 branch/jump per cycle; CSR/Div/Fence use BJU3 | Redirect, serialization, divider busy |
+| MUL/BKU | 2 | Up to 2/cycle | ALU0/1 conflicts, IntWB, backpressure |
+| FP FALU/FMAC | Up to 3 each | Up to 3/cycle | FP issue block, FP/Int WB conflicts, pipeline backpressure |
+| FP divider | 2 | Variable | Divider busy and input/output backpressure |
+| Vector arithmetic | 5 VFEX, VFEX4 is divide | Typically 1-2/cycle by FU type | OG2, VF/V0/VL ports, uops, writeback ports |
+| Load pipelines | 3 | Up to 3/cycle issued to load pipes | TLB miss, DCache miss/bank conflict, replay, MSHR full |
+| Store address/data | STA 2 + STD 2 | Two addresses and two data operations/cycle | SQ full, Store-to-Load violation, drain/order |
+| Vector memory | 2 VLSU | Up to 2/cycle issued; writeback also limited by `VecMemInstWbWidth=1` | VLSQ, segment split, TLB/cache, replay, merge buffer |
+
+## 6. ALU Timing Example
+
+| Cycle | Event | Meaning |
+| --- | --- | --- |
+| N | Issue-queue `s0.fire` | DataPath captures the issue payload for the s1 register-read/Exu-input stage |
+| N+1 | `toExu.valid`; ALU drives `io.out.valid := io.in.valid` | ALU result reaches the Exu output/bypass source; a dependent instruction can select `readForward` |
+| N+1 | Writeback bundle can be formed | If arbitration grants the output, `fromIntWb.wen` reaches DataPath |
+| N+2 | RegCache update | `GatedValidRegNext` enables the RegCache write, with data from `bypassDataVec` |
+| N+2 | PRF write | DataPath's registered `wen` updates `Regfile.mem` |
+
+## 7. Meaning of Bypass Latency for Scheduling
+
+The scheduler/scoreboard should use producer latency close to “issue -> bypass/wakeup visible”, while architectural-state and register-file consistency analysis should use “issue -> PRF write”. RegCache is a bypass-data copy that reduces pressure on later integer source reads; it is not the PRF itself.
+
+## 8. Variable-Latency Classes
+
+| Class | Runtime sources of variation |
+| --- | --- |
+| Div/FDiv/VDiv | Iteration count, input buffer, non-pipelined busy state, output backpressure |
+| CSR/Fence | Privilege checks, CSR side effects, `flushPipe`, serialization, exception/redirect |
+| Load/vector Load | DTLB/PTW, DCache hit/miss, MSHR, bank conflict, replay, uncache/MMIO, exception |
+| Store/vector Store | SQ/VLSQ, split address/data, commit permission, Store buffer, drain, ordering |
+| AMO/LR/SC | Atomic sequence, cache/coherence, retry/replay, ordering restrictions |
+| Vector segment/memory | Uop split, merge buffer, element/segment count, VLSQ, cache/TLB/replay |
+
+## 9. Usage Guidance
+
+To build a per-instruction RISC-V table, first classify each instruction using the decode table's `FuType/FuConfig`, then apply the formulas above:
+
+```text
+fixed non-OG2: issue_to_bypass = 1 + fu_latency
+fixed OG2:     issue_to_bypass = 2 + fu_latency
+RegCache write: issue_to_regcache = issue_to_bypass + 1, if needWriteRegCache
+PRF write:      issue_to_prf = issue_to_bypass + 1
+variable:       expand the relevant FU/memory/cache/CSR/divider state machine
+```
+
+This prevents the common mistake of reporting ALU/JMP/BRH's zero-cycle FU latency as zero cycles from instruction issue to writeback.

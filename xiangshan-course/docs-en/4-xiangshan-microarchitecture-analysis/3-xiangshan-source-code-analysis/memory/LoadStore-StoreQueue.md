@@ -1,3 +1,4 @@
+<!--
 # Kunminghu V2 StoreQueue（SQ）代码细粒度分析
 
 ## 1. 范围、基线与结论
@@ -67,16 +68,16 @@
 
 ~~~mermaid
 flowchart LR
-  Dispatch[Dispatch / LsqEnqCtrl] -->|DynInst, needAlloc, sqIdx| SQ[StoreQueue]
-  STA[StoreUnit] -->|storeMaskIn, storeAddrIn, storeAddrInRe| SQ
-  STD[STD data path] -->|storeDataIn| SQ
-  ROB[RobLsqIO] -->|pendingPtr, scommit, commit| SQ
-  Redirect[brqRedirect] -->|needFlush| SQ
-  LoadPipe[LoadUnit x3] -->|PipeLoadForwardQueryIO| SQ
-  SQ -->|forward data/mask/invalid| LoadPipe
-  SQ -->|DataBufferEntry Decoupled x2| SBuffer[Sbuffer]
-  SQ -->|uncache req/resp| UArb[LSQ uncache arbiter]
-  SBuffer -->|M_XWR req/response| DCache[DCache MainPipe]
+  Dispatch[Dispatch / LsqEnqCtrl] --&gt;|DynInst, needAlloc, sqIdx| SQ[StoreQueue]
+  STA[StoreUnit] --&gt;|storeMaskIn, storeAddrIn, storeAddrInRe| SQ
+  STD[STD data path] --&gt;|storeDataIn| SQ
+  ROB[RobLsqIO] --&gt;|pendingPtr, scommit, commit| SQ
+  Redirect[brqRedirect] --&gt;|needFlush| SQ
+  LoadPipe[LoadUnit x3] --&gt;|PipeLoadForwardQueryIO| SQ
+  SQ --&gt;|forward data/mask/invalid| LoadPipe
+  SQ --&gt;|DataBufferEntry Decoupled x2| SBuffer[Sbuffer]
+  SQ --&gt;|uncache req/resp| UArb[LSQ uncache arbiter]
+  SBuffer --&gt;|M_XWR req/response| DCache[DCache MainPipe]
 ~~~
 
 有效接线见 [LSQWrapper.scala:186](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:186)-[LSQWrapper.scala:209](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:186) 和 [MemBlock.scala:1520](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1520)-[MemBlock.scala:1529](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1520)。
@@ -85,22 +86,22 @@ flowchart LR
 
 ~~~mermaid
 flowchart LR
-  A[Dispatch alloc SQ] --> B[STD data write]
-  A --> C[STA s0 VA and mask]
-  C --> D[STA s1 TLB response]
-  D --> E[SQ addrvalid and address array]
-  D --> F[STA s2 PMP/PMA/MMIO]
-  F --> G[SQ replenish and waitStoreS2 clear]
-  B --> H[datavalid]
-  E --> I[allvalid]
-  G --> J[ROB commit prefix]
-  H --> I
-  I --> J
-  J --> K[DataBuffer]
-  K --> L[Sbuffer fire]
-  L --> M[SQ completed and deq]
-  L --> N[Sbuffer merge and DCache write]
-  J --> O[NC/MMIO/CMO FSM]
+  A[Dispatch alloc SQ] --&gt; B[STD data write]
+  A --&gt; C[STA s0 VA and mask]
+  C --&gt; D[STA s1 TLB response]
+  D --&gt; E[SQ addrvalid and address array]
+  D --&gt; F[STA s2 PMP/PMA/MMIO]
+  F --&gt; G[SQ replenish and waitStoreS2 clear]
+  B --&gt; H[datavalid]
+  E --&gt; I[allvalid]
+  G --&gt; J[ROB commit prefix]
+  H --&gt; I
+  I --&gt; J
+  J --&gt; K[DataBuffer]
+  K --&gt; L[Sbuffer fire]
+  L --&gt; M[SQ completed and deq]
+  L --&gt; N[Sbuffer merge and DCache write]
+  J --&gt; O[NC/MMIO/CMO FSM]
 ~~~
 
 ## 4. 参数、容量与索引
@@ -177,23 +178,23 @@ VA/mask 证据：[StoreUnit.scala:141](/home/yanyusong/xs-memory-env/XiangShan/s
 
 ~~~mermaid
 stateDiagram-v2
-  [*] --> Free
-  Free --> Allocated: dispatch range hits
-  Allocated --> AddrReady: storeAddrIn updateAddrValid
-  Allocated --> DataReady: storeDataIn delayed valid
-  AddrReady --> Ready: data valid
-  DataReady --> Ready: addr valid
-  Ready --> Committed: ROB prefix authorization
-  Committed --> ToSbuffer: cached DataBuffer and SBuffer fire
-  Committed --> NCWait: NC request/ack/response
-  Committed --> MMIOWait: pending reaches ROB head
-  ToSbuffer --> Completed
-  NCWait --> Completed: ncDeqTrigger
-  MMIOWait --> Completed: mmioStout fire
-  Completed --> Free: contiguous deq prefix
-  Allocated --> Free: redirect before commit
-  AddrReady --> Free: redirect before commit
-  DataReady --> Free: redirect before commit
+  [*] --&gt; Free
+  Free --&gt; Allocated: dispatch range hits
+  Allocated --&gt; AddrReady: storeAddrIn updateAddrValid
+  Allocated --&gt; DataReady: storeDataIn delayed valid
+  AddrReady --&gt; Ready: data valid
+  DataReady --&gt; Ready: addr valid
+  Ready --&gt; Committed: ROB prefix authorization
+  Committed --&gt; ToSbuffer: cached DataBuffer and SBuffer fire
+  Committed --&gt; NCWait: NC request/ack/response
+  Committed --&gt; MMIOWait: pending reaches ROB head
+  ToSbuffer --&gt; Completed
+  NCWait --&gt; Completed: ncDeqTrigger
+  MMIOWait --&gt; Completed: mmioStout fire
+  Completed --&gt; Free: contiguous deq prefix
+  Allocated --&gt; Free: redirect before commit
+  AddrReady --&gt; Free: redirect before commit
+  DataReady --&gt; Free: redirect before commit
 ~~~
 
 这是 status bit 形成的隐式 FSM；代码没有为普通 cached store 另设 Enum。最关键的不变量是 committed 与 completed 分离。
@@ -511,3 +512,257 @@ io.enq.req 是 ValidIO 而不是 Decoupled；图中的 alloc.accept 是本文定
 4. 具体配置下的固定周期或最终 IPC；受 issue、TLB、SBuffer merge、DCache、uncache、ROB、redirect 共同影响。
 
 所有有效实现结论均针对 kunminghu-v2 @ e12436c7cba86b195deec24981976d78bc263661。 
+<!-- END ORIGINAL CHINESE -->
+
+# Kunminghu V2 StoreQueue (SQ): Fine-Grained Source-Code Analysis
+
+## 1. Scope, Baseline, and Conclusion
+
+| Item | Baseline for This Analysis |
+| --- | --- |
+| Skill | `analyze-xiangshan-kunminghu` in the current directory |
+| User-specified source | `/home/yanyusong/xs-memory-env/XiangShan` |
+| Upstream repository | [OpenXiangShan/XiangShan](https://github.com/OpenXiangShan/XiangShan.git) |
+| Branch / commit | `kunminghu-v2 @ e12436c7cba86b195deec24981976d78bc263661` |
+| Principal source | `StoreQueue.scala`, `StoreQueueData.scala`, `LSQWrapper.scala`, `StoreUnit.scala`, `MemBlock.scala`, and `Sbuffer.scala` |
+| Design Doc baseline | Not consulted: no local `XiangShan-Design-Doc` checkout exists, so design-doc or textbook claims are not stated as current RTL behavior. |
+| Course material | Local [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md) is terminology background only; it pins a different source commit. |
+| Weekly synchronization | The skill ran it and reported `skip: last sync 2.66 days ago < 7 days`. |
+| Source worktree | Pre-existing `difftest` modifications and untracked `src/main/resources/aia/` content were left untouched. |
+
+**Conclusion:** StoreQueue is not a FIFO that immediately writes DCache during store execution. At dispatch it allocates circular SQ entries for scalar-store or vector-store flows; it independently collects STA address, STD data, and mask; it serves store-to-load forwarding queries; and only after the ROB commit boundary hands ordinary cacheable stores to SBuffer. NC, MMIO, and CMO use dedicated state machines. `completed` means that the item successfully entered SBuffer or the applicable special path. It does **not** mean that DCache has completed its cache-line write.
+
+This distinction is essential. The StoreUnit S0 DCache request is a tag/meta probe rather than a real write [StoreUnit.scala:236](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:236). Real cacheable data follows `StoreQueue -> DataBuffer -> Sbuffer -> DCache MainPipe`. SQ marks `completed` at SBuffer fire; SBuffer subsequently selects a line, sends `M_XWR`, and waits for DCache response.
+
+### 1.1 Key Source Evidence
+
+| Topic | Effective source | What it establishes |
+| --- | --- | --- |
+| Top-level assembly | [MemBlock.scala:615](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:615), [LSQWrapper.scala:142](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:142) | MemBlock instantiates LsqWrapper/Sbuffer; LsqWrapper instantiates StoreQueue. |
+| SQ interface | [StoreQueue.scala:151](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:151), [StoreQueue.scala:156](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:156) | Address, data, mask, ROB, forwarding, SBuffer, uncache, CMO, and exception interfaces. |
+| Parameters | [Parameters.scala:167](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:167), [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214) | SQ=56, write banks=8, StorePipelineWidth=2, LoadPipelineWidth=3, EnsbufferWidth=2. |
+| Allocation | [StoreQueue.scala:360](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:360), [LSQWrapper.scala:155](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:155) | Coupled LQ/SQ admission and allocation by `numLsElem` range. |
+| Write paths | [StoreQueue.scala:507](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:507), [StoreQueue.scala:594](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:594) | Address and data are written independently; `datavalid` is delayed one cycle. |
+| Forwarding | [StoreQueue.scala:650](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:650), [StoreQueueData.scala:220](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueueData.scala:220) | Circular age range, address CAM, byte-granular forwarding, and invalid reasons. |
+| Commit / exit | [StoreQueue.scala:1131](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1131), [StoreQueue.scala:1330](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1330) | `committed` differs from `completed`; SBuffer fire makes the entry complete. |
+| Special paths | [StoreQueue.scala:824](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:824), [StoreQueue.scala:925](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:925) | Separate MMIO and NC FSMs. |
+| SBuffer/DCache tail | [MemBlock.scala:1520](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1520), [Sbuffer.scala:607](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:607) | SBuffer subsequently merges lines, issues DCache requests, and handles responses. |
+| Redirect | [StoreQueue.scala:1482](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1482) | Cancels uncommitted entries and restores enqueue pointer after two cycles. |
+
+### 1.2 Design-Document Traceability
+
+| ID | Design Doc position | Assertion | Relationship to current source | Status |
+| --- | --- | --- | --- | --- |
+| D0 | Local Design Doc unavailable | No independently checkable SQ assertion | Effective wiring is traced directly from Scala/Chisel | Not consulted; intent does not replace implementation |
+
+## 2. Mapping Theory to Code
+
+| Theoretical concept | Current code entity | Concrete signals/state | Specialization in this implementation |
+| --- | --- | --- | --- |
+| Speculative store | StoreQueue entry | `allocated`, `addrvalid`, `datavalid`, `committed` | Address/data may arrive before commit, but an uncommitted entry can be removed by redirect. |
+| Store-load RAW | `PipeLoadForwardQueryIO` and SQ CAM | `forwardMask`, `forwardData`, `dataInvalid`, `addrInvalid` | Not a single ready bit: it forwards bytewise and distinguishes missing data, missing address, and VA/PA mismatch. |
+| Precise commit | `cmtPtrExt` and ROB boundary | `pendingPtr`, `commitVec`, `committed` | Address/data arrive out of order; side effects enter later paths only through a contiguous committable prefix. |
+| Finite-resource conflict | SQ/SBuffer/bank/uncache | `canAccept`, `ready`, bank, `force_write` | SQ capacity, array write ports, and downstream SBuffer can limit throughput. |
+| Circular queue | `SqPtr` | flag, value, `distanceBetween` | Depth is 56, not a power of two; wrap flips the flag, so value alone is insufficient. |
+| Cache-line merge | `Sbuffer` | `ptag/vtag`, `state_valid/state_inflight` | SQ delivers committed payloads; SBuffer owns line merge and DCache drain. |
+
+## 3. Effective Wiring: Who / Why / How / From / To
+
+| Object | Who | Why | How | From | To |
+| --- | --- | --- | --- | --- | --- |
+| `LsqWrapper.storeQueue` | LsqWrapper | Presents LQ/SQ as one dispatch resource boundary | ANDs both `canAccept` signals and cross-fills `lqIdx/sqIdx` | `enqLsq`, dispatched uops | LoadQueue, StoreQueue, upstream dispatch |
+| StoreQueue | Memory subsystem | Retains speculative stores, forwards to loads, and releases side effects in order | State vectors, address/data arrays, pointers, MMIO/NC FSMs | STA, STD, ROB, redirect, load queries | SBuffer, uncache, LoadQueue, exception-address output |
+| StoreUnit | STA pipeline | Forms VA/mask and performs TLB/PMP/PMA/MMIO classification | S0 address, S1 TLB, S2 permission/classification, S3 writeback | Issue, vector, misalignment inputs | SQ `storeAddrIn/storeAddrInRe`, DCache probe, misalignment buffer |
+| `SQAddrModule` | StoreQueue | Allows DataBuffer address reads and load address CAM | Registered reads, multiwrite ports, line/subline/mask match | STA address | DataBuffer and forwarding candidate mask |
+| `SQDataModule` | StoreQueue | Retains data and per-byte valid bits for forwarding | 16 `SQData8Module` instances and eight write banks | STD data, STA mask | DataBuffer and load forwarding |
+| `DatamoduleResultBuffer` | StoreQueue | Decouples synchronous reads from SBuffer readiness while preserving prefix order | `EnsbufferWidth`-entry FIFO, prefix valid/ready | `DataBufferEntry` | SBuffer input |
+| `StoreExceptionBuffer` | StoreQueue | Merges multiple store-exception sources into oldest exception address | Recursive `selectOldest` by `robIdx/uopIdx` | STA S1/S2, vector, MMIO | LSQ/ROB `exceptionAddr` |
+| Sbuffer | MemBlock | Merges committed stores and produces real DCache writes | ptag merge/allocation and S0/S1/response drain | SQ Decoupled output | DCache `lsu.store.req` |
+
+### 3.1 Actual Interface Diagram
+
+```mermaid
+flowchart LR
+  Dispatch[Dispatch / LsqEnqCtrl] -->|DynInst, needAlloc, sqIdx| SQ[StoreQueue]
+  STA[StoreUnit] -->|storeMaskIn, storeAddrIn, storeAddrInRe| SQ
+  STD[STD data path] -->|storeDataIn| SQ
+  ROB[RobLsqIO] -->|pendingPtr, scommit, commit| SQ
+  Redirect[brqRedirect] -->|needFlush| SQ
+  LoadPipe[LoadUnit x3] -->|PipeLoadForwardQueryIO| SQ
+  SQ -->|forward data/mask/invalid| LoadPipe
+  SQ -->|DataBufferEntry Decoupled x2| SBuffer[Sbuffer]
+  SQ -->|uncache request/response| UArb[LSQ uncache arbiter]
+  SBuffer -->|M_XWR request/response| DCache[DCache MainPipe]
+```
+
+See [LSQWrapper.scala:186](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:186) through [LSQWrapper.scala:209](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:209) and [MemBlock.scala:1520](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1520) through [MemBlock.scala:1529](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1529) for effective connections.
+
+### 3.2 Store Data/Control Stages
+
+```text
+Dispatch allocates SQ -> STD writes data -> STA S0 forms VA/mask ->
+STA S1 obtains TLB result and writes address/addrvalid -> STA S2 classifies
+PMP/PMA/MMIO and clears waitStoreS2 -> data plus address become allvalid ->
+ROB commits contiguous prefix -> DataBuffer -> Sbuffer fire ->
+SQ completed/dequeue; alternatively NC/MMIO/CMO FSM.
+```
+
+## 4. Parameters, Capacity, and Indexing
+
+| Parameter | Default / expression | Impact |
+| --- | --- | --- |
+| `StoreQueueSize` | 56 | Entry vector, CAM width, SqPtr range |
+| `StoreQueueNWriteBanks` | 8 | Data/mask write-bank count per byte lane |
+| `StoreQueueForwardWithMask` | true | Address hit additionally requires byte-mask intersection |
+| `StorePipelineWidth` | 2 | STA-address and STD-data write-port count |
+| `LoadPipelineWidth` | 3 | Forwarding-query port count |
+| `EnsbufferWidth` | 2 | Consecutive SQ-to-DataBuffer/SBuffer delivery width |
+| `StoreBufferSize` | 16 | Downstream line-oriented SBuffer entries, not SQ depth |
+| `LSQStEnqWidth` | `LSQEnqWidth min backendParams.numStoreDp` | Max store-dispatch space reserved when SQ accepts |
+
+The parameter evidence is [Parameters.scala:174](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:174) through [Parameters.scala:226](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:226) and [Parameters.scala:783](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:783).
+
+`SqPtr` is a flag-plus-value `CircularQueuePtr`. Since the queue has 56 entries rather than a power-of-two depth, pointer addition subtracts 56 and flips `flag` on wrap; `distanceBetween` chooses ordinary difference or `56 + difference` depending on flags [CircularQueuePtr.scala:35](/home/yanyusong/xs-memory-env/XiangShan/utility/src/main/scala/utility/CircularQueuePtr.scala:35), [CircularQueuePtr.scala:102](/home/yanyusong/xs-memory-env/XiangShan/utility/src/main/scala/utility/CircularQueuePtr.scala:102).
+
+| Pointer | Reset | Advance condition | Role |
+| --- | --- | --- | --- |
+| `enqPtrExt` | 0 | Valid store-flow count; subtract cancellations two cycles after redirect | Allocation tail, returned `sqIdx`, occupancy |
+| `rdataPtrExt` | 0 | DataBuffer acceptance or NC/special completion | Prefetch pointer for synchronous SQ-array reads |
+| `deqPtrExt` | 0 | Contiguous `allocated && completed` prefix | Actual reclamation and empty detection |
+| `cmtPtrExt` | 0 | `commitCount` | Scans/marks contiguous ROB-committable stores |
+| `addrReadyPtrExt` | 0 | Scans up to four items, stopping at unready address | Lets LoadQueue observe store-address readiness |
+| `dataReadyPtrExt` | 0 | Similar, but requires data ready and non-unaligned | Lets LoadQueue observe store-data readiness |
+
+SQ admission reserves an entire maximum store-dispatch group rather than waiting until exactly 56 entries are occupied. `LsqWrapper` ANDs LQ and SQ admission, preventing a memory uop from being half-allocated. Allocation clears stale `completed`, address/data-valid, commit, MMIO/NC, and exception state and sets `waitStoreS2=true` until final STA S2 classification [StoreQueue.scala:365](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:365) through [StoreQueue.scala:419](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:419).
+
+## 5. Storage Organization and Entry Lifetime
+
+Each entry follows this implicit lifetime: `Free -> Allocated -> AddrReady/DataReady -> Ready -> Committed -> ToSbuffer or NC/MMIO wait -> Completed -> Free`. An uncommitted allocated/address-ready/data-ready entry can return directly to free on redirect. This is a derived reading model, not a source-declared standalone FSM.
+
+Address storage receives STA results, supports registered DataBuffer reads, and produces line/subline/mask CAM matches for forwarding. Data storage uses byte-level modules and eight write banks; `storeDataIn.fire` writes data while `datavalid` arrives on the following cycle. Mask and address are independent, so neither a data write nor an address write alone makes an entry normally deliverable.
+
+`DatamoduleResultBuffer` decouples synchronous SQ data reads from SBuffer readiness using `EnsbufferWidth` prefix FIFO entries. `valid && ready` is the actual handoff; a stalled SBuffer must retain payload and prevent premature `completed` state.
+
+## 6. Core Control and Data Algorithms
+
+### 6.1 Independent Address, Data, and Mask Writes
+
+STA S0 creates VA/mask, S1 writes physical/virtual address and `addrvalid` after TLB, and S2 supplies final classification. STD writes data separately and sets `datavalid` one cycle after fire. `allvalid` is therefore a joint readiness condition rather than an arrival event from one port.
+
+### 6.2 Store-to-Load Forwarding
+
+SQ uses a circular-age mask to restrict CAM searches to older live entries. It checks physical/virtual-line relationships, subline/byte location, and mask overlap, returning byte-granular `forwardData/forwardMask`. It separately reports `dataInvalid`, `addrInvalid`, and mismatched address cases. A conservative `loadWaitStrict` condition can force a load to wait for all older stores; it is not equivalent to a completed store.
+
+### 6.3 ROB Commit, SBuffer, and Actual Reclamation
+
+Addresses/data may arrive out of order, but only the contiguous ROB-commit prefix gains `committed`. A committed, valid, cacheable normal store becomes a DataBuffer entry and must fire into SBuffer before `completed` can set. `deqPtrExt` advances only through a contiguous `allocated && completed` prefix, so a younger completed entry cannot reclaim around an older one.
+
+### 6.4 MMIO, NC, and CMO
+
+| FSM | Core behavior |
+| --- | --- |
+| MMIO/CMO | Waits until a pending store is ROB-head with valid address/data and no exception, requests uncache or CMO work, waits for response, maps errors, writes back, and waits for commit as required. |
+| NC | Selects a committed/allvalid/nonvector/nonexception/non-MMIO/CMO NC entry, sends request, waits for UBuffer acknowledgement and response, then makes completion eligible. |
+
+Within SQ, MMIO has priority over NC: `ncReq.ready` requires uncache ready and no MMIO request. Between LoadQueue and StoreQueue uncache requests, LsqWrapper selects lower `robIdx`; ties select StoreQueue because LoadQueue selection uses a strict less-than predicate [LSQWrapper.scala:265](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265) through [LSQWrapper.scala:321](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:321).
+
+## 7. Exceptions, Redirect, and Special Cases
+
+| Category | Producer | SQ treatment | Architectural/downstream effect |
+| --- | --- | --- | --- |
+| Address misalignment | StoreUnit S0/S1/S2 | `unaligned`/`cross16Byte`/exception; may use StoreMisalignBuffer | Split or exception, never an ordinary visible write |
+| TLB PF/AF/GPF | StoreUnit S1 | uop exception reaches SQ; StoreExceptionBuffer retains oldest address metadata | Higher exception-address/ROB path uses vaddr/gpaddr/vstart/vl |
+| PMP/PMA/PBMT MMIO/NC | StoreUnit S2 | Writes MMIO/NC/memBackTypeMM/exception and clears `waitStoreS2` | Cancels normal DCache write intent and selects special FSM |
+| Uncache denied/corrupt | Uncache/CMO response | Writes `uncacheUop.exceptionVec` | Denied maps to `storeAccessFault`; corrupt without denied maps to `hardwareError` |
+| Trigger/debug | StoreUnit trigger | Carries trigger/exception metadata with uop | SQ does not independently arbitrate trap priority |
+| Redirect | Branch/exception redirect | Cancels only `allocated && !committed && needFlush` entries | Clears allocated/completed, then restores enqueue pointer |
+
+StoreExceptionBuffer receives STA S1, STA S2, vector feedback, and MMIO error candidates. It recursively chooses the oldest by `robIdx` then `uopIdx`, initializes `req_valid=false`, and filters redirect-flushed candidates [StoreQueue.scala:73](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:73) through [StoreQueue.scala:144](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:144).
+
+The redirect algorithm counts in-flight enqueue and entry cancellations, subtracts it from `enqPtr` after two cycles, and prevents an unsafe new-enqueue window [StoreQueue.scala:1483](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1483) through [StoreQueue.scala:1525](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1525). Vector MMIO is not a complete path in this source: `vecmmioStout.valid` is fixed false [StoreQueue.scala:1104](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1104) through [StoreQueue.scala:1119](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1119).
+
+## 8. Memory-Access Classes, Latency, and Throughput
+
+| Class | Effective SQ path | Special case |
+| --- | --- | --- |
+| Scalar store | STA address + STD data + STA mask -> SQ -> commit -> SBuffer | SQ does not re-decode opcode or FP format. |
+| Vector store | Multiple-flow allocation with vector commit/last-flow/exception flags | One architectural instruction can use multiple SQ flows. |
+| CBO/CMO | Address classification -> CMO/flush-SBuffer or zero path | Actual cache CMO behavior is in DCache. |
+| NC | Commit -> NC FSM -> uncache acknowledgement/response | Retains SQ forwarding capability until response. |
+| MMIO | Pending and ROB head -> MMIO FSM -> response/writeback -> commit | It must not be treated as ordinary SBuffer work. |
+
+| Path | Established timing boundary | Main variables/bottlenecks |
+| --- | --- | --- |
+| STD -> `datavalid` | Sets status only on `RegNext(storeDataIn.fire)` | STD issue, bank/port constraints, redirect |
+| STA -> `addrvalid` | S1 fire writes address and status; S2 classification follows separately | TLB miss, S1/S2 readiness, PMP/PMA, redirect |
+| SQ -> SBuffer | Committed/allvalid entry crosses DataBuffer then Decoupled `sbuffer.fire` | SBuffer ready, preceding NC/MMIO, misaligned pair |
+| SBuffer -> DCache | Active line -> DCache req fire -> response | DCache ready, same-block inflight, merge, replacement, probe/refill |
+| MMIO/NC | Eligibility -> request/response/writeback FSM | Uncache arbitration/outstanding/error/ROB commit |
+
+Two STA/STD/SQ input lanes and two SQ-to-SBuffer lanes are structural maxima, not a promise of two final DCache line writes per cycle. SBuffer exposes one DCache request and `NumDcacheWriteResp=1` [Sbuffer.scala:45](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:45), [Sbuffer.scala:661](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:661).
+
+## 9. Cross-Boundary Code Analysis
+
+| Boundary | Fragments | Independent checks/resources | Ordering/recovery |
+| --- | --- | --- | --- |
+| Virtual-page boundary | StoreMisalignBuffer reports cross-page state and PA to SQ | STA TLB/PMP/PMA; SQ supplies sqPtr/dequeue/uop | High-page PA reaches its DataBuffer fragment; SQ itself is not a generic two-page atomic FSM. |
+| 16-B subline crossing | Data/mask shift and split low/high; high address is low plus 8 | Both DataBuffer entries must be ready | Low has `sqNeedDeq=false`, high has it true, so one SQ entry completes once. |
+| Cache-line boundary | SQ gives ordinary payload to SBuffer; SBuffer merges/allocates by ptag/vtag | Active/inflight SBuffer state and DCache request | SQ has no general CacheLineSize split algorithm, so automatic atomic two-line behavior cannot be claimed. |
+| MMIO/uncache | StoreUnit S2 classification produces uncache work | Translation/PMA/PMP, commit/pending, uncache readiness/response | MMIO waits for ROB head; NC issues after commit; neither enters ordinary SBuffer. |
+
+If `crossPageCanDeq` for the high-page fragment is not available, the low-page address alone does not prove side-effect completion. On a redirect before commit, `needCancel` clears allocation and the enqueue pointer is recovered; low-fragment address visibility, SBuffer fire, and final DCache write are separate events.
+
+## 10. Difftest: Architectural Boundary
+
+| Signal/state | Category | Generation time | Correct reading |
+| --- | --- | --- | --- |
+| `allocated/addrvalid/datavalid/committed/completed` | Microarchitectural state | StoreQueue registers | Not RISC-V architectural state. |
+| `diffStore.pmaStore` | Reference-model event input | SQ DataBuffer `enq.fire` | PMA-store payload toward SBuffer. |
+| `diffStore.ncStore` | Reference-model event input | NC or MMIO request fire with `memBackTypeMM` | Store-event source outside ordinary SBuffer. |
+| `DiffStoreEvent` | Difftest event | SBuffer gated by pmaStore fire/mask/vector valid | Store addr/data/mask/ROB/PC record, not SQ-entry validity. |
+| `DiffSbufferEvent` | Cache-debug/reference event | SBuffer DCache hit-response fire | A later line-level DCache result than SQ completed. |
+
+The SQ Difftest inputs are at [StoreQueue.scala:1408](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1408) through [StoreQueue.scala:1433](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1433), with MemBlock wiring at [MemBlock.scala:1538](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1538) through [MemBlock.scala:1555](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1555).
+
+## 11. Dynamic Examples
+
+### 11.1 Ordinary Cacheable Scalar Store with Forwarding to a Younger Load
+
+1. Dispatch allocates an `sqIdx` when SQ has capacity; its entry becomes allocated and stale address/data/commit state is cleared.
+2. STD may fire first, writing the byte-data array and causing `datavalid=true` next cycle. STA later forms VA/mask in S0 and writes PA/VA plus `addrvalid` after TLB in S1.
+3. A younger load's `sqIdxMask` includes this older entry; its VA CAM and byte mask match. Fast mask returns in load S1 and data in load S2.
+4. At the ROB boundary, SQ sets `committed` and places synchronous-read payload into DataBuffer.
+5. When SBuffer is ready, `io.sbuffer.fire` makes SQ `completed`. The entry reclaims only when every older allocated entry is also completed; SBuffer may still merge, wait for DCache, and write later.
+
+### 11.2 Missing Store Address Causes Load Replay
+
+1. An older store is allocated and StoreSet/LFST marks it potentially related, but STA has not set `addrvalid`.
+2. SQ `addrInvalidMask` finds such entries in both circular segments and reports `addrInvalid` and the SQ pointer. With `loadWaitStrict`, it points to the preceding SQ entry to conservatively wait for every older store.
+3. LoadUnit/RS replays the load. The older SQ entry remains intact and can later provide normal forwarding once its address arrives.
+
+## 12. Waveform: Allocation, Delivery, and Backpressure
+
+`io.enq.req` is `ValidIO`, not Decoupled; for this document, `alloc.accept` means `req.valid && canAccept`. SQ-to-SBuffer is the real Decoupled boundary, where `io.sbuffer[0].fire = valid && ready`. While SBuffer ready is low, payload and valid must remain stable and `completed` must not set. The timing is conditional rather than a fixed nine-cycle path: TLB, S1/S2 ready, ROB, DataBuffer, SBuffer, and uncache can all insert stalls.
+
+## 13. Verification Points
+
+Directed verification should cover reset-to-empty state; reversed STD/STA arrival; full-threshold admission with vector multi-flow; non-power-of-two pointer wrap; duplicate same-entry writes; same-index read/write semantics; held SBuffer backpressure; redirect overlapping dispatch/STA/STD; global stalls; replay loops; MMIO/NC ordering and error mapping; and cross-page cancellation. Specific invariants include:
+
+- no cacheable delivery before `allvalid`;
+- an `io.sbuffer` payload remains stable while `valid=1, ready=0`;
+- lane 1 fire implies lane 0 fire;
+- redirect cancels only uncommitted entries and restores `enqPtr` correctly;
+- an unresolved high-page fragment cannot leak a visible side effect;
+- same-index storage read/write behavior must be proven from elaborated RTL/FST rather than assumed from source.
+
+## 14. Confirmed Conclusions and Evidence Still Needed
+
+Confirmed for this baseline:
+
+- SQ defaults to depth 56, and address, data, and mask arrive independently.
+- `committed`, `completed`, SBuffer-line completion, and DCache response are four distinct events.
+- Load forwarding returns byte-granular data and explicitly reports data/address/match invalid conditions.
+- Redirect removes only uncommitted SQ entries and fixes the enqueue pointer later.
+- NC/MMIO/CMO have dedicated paths; vector MMIO is not a currently complete feature.
+
+Generated RTL, FST, or lower-level analysis is still required to establish the exact read-old/read-new semantics for simultaneous same-index address/data-array read/write, final memory-visible timing under DCache miss/refill/coherence, StoreMisalignBuffer's second-page translation and exception priority, and any fixed latency or IPC claim. All effective implementation conclusions above apply to `kunminghu-v2 @ e12436c7cba86b195deec24981976d78bc263661`.

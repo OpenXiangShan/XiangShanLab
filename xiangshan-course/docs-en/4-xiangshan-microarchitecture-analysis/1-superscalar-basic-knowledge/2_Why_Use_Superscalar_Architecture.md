@@ -1,3 +1,4 @@
+<!--
 # 2. 为什么需要超标量
 
 [附件: 为什么需要超标量？——从性能瓶颈到架构革新.pptx](./attachments/kOzN-DCAcFxAkkWD/为什么需要超标量？——从性能瓶颈到架构革新.pptx)
@@ -179,3 +180,140 @@ mul x7, x8, x9     ; 发射到乘法器（同一周期，若有独立乘法器�
 
 > 更新: 2026-06-03 15:36:56  
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/gszwug0p01w7f6ux>
+-->
+
+# 2. Why Do We Need Superscalar Architecture?
+
+[Attachment: Why superscalar? From performance bottlenecks to architectural innovation](./attachments/kOzN-DCAcFxAkkWD/为什么需要超标量？——从性能瓶颈到架构革新.pptx)
+
+> This chapter explains how superscalar architecture breaks the performance ceiling of a single-issue pipeline, why high-compute workloads need more instruction-level parallelism, and why XiangShan adopts a superscalar design.
+
+## 2.1 Background: the continuing pursuit of processor performance
+
+Processor design seeks higher instruction throughput and lower execution latency. The progression from single-cycle and multi-cycle processors to pipelines improves performance step by step, but a single-issue (non-superscalar) pipeline eventually reaches a hard ceiling. That ceiling is the fundamental reason superscalar architecture emerged.
+
+### 2.1.1 Three dimensions of performance
+
+The classic execution-time equation is:
+
+![CPI](img/2-why-use-superscalar-architecture/figure-001-cpi.png)
+
+**Execution time = instruction count x CPI x clock-cycle time**
+
+Here, instruction count depends on the workload, algorithm, and compiler; CPI (cycles per instruction) is the reciprocal of IPC and captures microarchitectural efficiency; and clock-cycle time is determined by process technology and circuit design. Superscalar execution primarily lowers CPI (raises IPC), often with a better energy trade-off than frequency scaling alone.
+
+### 2.1.2 Core performance metrics
+
+| Metric | Full name | Definition | Importance |
+| --- | --- | --- | --- |
+| **IPC** | Instructions per cycle | Instructions completed per clock cycle | The primary measure of hardware parallelism |
+| **CPI** | Cycles per instruction | Average cycles required per instruction | Reciprocal of IPC (`IPC = 1/CPI`) |
+
+The central value of a superscalar design is breaking the single-issue ceiling (`IPC <= 1`). By expanding hardware resources laterally and executing several independent instructions in parallel, it can reach `IPC > 1`.
+
+## 2.2 The single-issue pipeline ceiling
+
+A classic five-stage MIPS pipeline (IF -> ID -> EX -> MEM -> WB) time-multiplexes the same ALU or memory unit across cycles. This creates two limits.
+
+### 2.2.1 Ideal IPC is at most one
+
+Even with no conflicts or stalls, a single-issue pipeline can issue only one instruction per cycle. Its theoretical maximum IPC is therefore 1, regardless of clock frequency.
+
+### 2.2.2 Real IPC is well below one
+
+Structural, data, and control hazards introduce stalls, so real programs achieve much less than one. For example, consider this RISC-V sequence for `a = b + c; d = a + e`:
+
+```plain
+addi x1, x0, 10    ; x1 = 10 (b)
+addi x2, x0, 20    ; x2 = 20 (c)
+add x3, x1, x2     ; x3 = x1 + x2 (a = b + c)
+addi x4, x0, 30    ; x4 = 30 (e)
+add x5, x3, x4     ; x5 = x3 + x4 (d = a + e)
+```
+
+In a single-issue five-stage pipeline, `add x3` reaches EX before `add x5` can read `x3`; the producer does not write back until a later cycle. This RAW hazard forces a one-cycle stall, giving the source example an IPC of approximately `5/7 = 0.71` instead of one.
+
+A structural example has one ALU and the sequence `add`, `sub`, `mul`. All three instructions require the same unit, so the single-issue pipeline must serialize them. The resource is reused in time, never in parallel.
+
+### 2.2.3 Why frequency scaling alone is insufficient
+
+Higher frequency has diminishing returns:
+
+- Power rises sharply (the source text describes a cubic relationship with frequency).
+- A deeper pipeline makes a branch misprediction more expensive. Flushing a 20-stage pipeline costs much more than flushing a five-stage pipeline and can reduce effective IPC.
+
+The “high frequency plus single issue” route therefore cannot meet indefinitely increasing performance requirements.
+
+## 2.3 High-compute workloads need higher IPC
+
+### 2.3.1 Scientific and high-performance computing
+
+Matrix multiplication and fluid simulation contain many independent arithmetic operations. For a 2x2 matrix, the two products contributing to `C[0][0]` are independent:
+
+```plain
+mul x1, x10, x20   ; x1 = A[0][0]*B[0][0]
+mul x2, x11, x21   ; x2 = A[0][1]*B[1][0]
+add x3, x1, x2     ; x3 = C[0][0]
+```
+
+On a single-issue pipeline the two multiplies are serialized, even though they have no data dependence. A superscalar core exploits this ILP by issuing them to different ALUs or multipliers in the same cycle.
+
+### 2.3.2 Servers and cloud computing
+
+Servers process thousands of concurrent requests, each containing memory accesses, decisions, and calculations. Insufficient single-issue throughput increases response latency and lowers system throughput; multiple issue is a direct way to raise compute capacity.
+
+### 2.3.3 Multimedia and embedded high performance
+
+Video codecs and AI inference (for example, CNN convolution) contain SIMD and parallel arithmetic. Single issue cannot keep the available units busy, so superscalar issue is needed to expose that parallelism.
+
+## 2.4 The core idea: spatially reuse hardware resources
+
+Superscalar architecture uses several independent functional units in the same clock cycle: multiple ALUs, Load/Store units, and multipliers. It issues and executes multiple non-conflicting instructions in parallel.
+
+### 2.4.1 Superscalar vs. single issue
+
+| Dimension | Single-issue pipeline | Superscalar pipeline |
+| --- | --- | --- |
+| Hardware | One ALU and one memory unit | Multiple ALUs, memory units, and multiply/divide units |
+| Issue capability | One instruction per cycle | `N` instructions per cycle (`N >= 2`) |
+| Ideal IPC | 1 | `N` |
+| Resource reuse | Time reuse | Time and spatial reuse |
+
+### 2.4.2 Resolving a structural conflict
+
+With two ALUs and an independent multiplier, the following can issue together:
+
+```plain
+add x1, x2, x3     ; ALU 1
+sub x4, x5, x6     ; ALU 2, same cycle
+mul x7, x8, x9     ; multiplier, same cycle
+```
+
+In the idealized example, three instructions issue in one cycle and throughput is three times that of the single-issue core.
+
+### 2.4.3 The parallelism prerequisite
+
+Parallel issue is conditional: structural, data, and control conflicts still have to be absent or resolved. Superscalar cores therefore commonly combine out-of-order execution, register renaming, and branch prediction to expose as much ILP as possible.
+
+## 2.5 XiangShan's architectural rationale
+
+XiangShan targets servers and high-performance computing and is intended to approach high-end x86/ARM performance. A superscalar design is therefore necessary:
+
+1. **Compute demand**: Server workloads require high IPC. The source describes mainstream XiangShan configurations as six- or eight-issue out-of-order superscalar cores.
+2. **RISC-V positioning**: Superscalar issue plus out-of-order execution demonstrates that RISC-V can scale to high-performance systems.
+3. **Energy efficiency**: Lateral parallelism provides a better energy trade-off than simply pushing a single issue pipeline to a higher frequency.
+
+XiangShan's “multiple-issue queues,” renamed register file, and multi-port functional units are all designed to sustain this parallel execution.
+
+## 2.6 Summary
+
+Superscalar architecture marks the shift from deepening a pipeline to raise frequency to widening it to raise IPC:
+
+- It breaks the single-issue `IPC = 1` ceiling and uses program ILP.
+- It offers a better energy trade-off than frequency scaling alone under modern power limits.
+- It matches HPC, server, and AI workloads and has become standard in high-performance processors.
+
+The following chapters on single vs. multiple issue, out-of-order execution, and the Tomasulo algorithm explain how to make that parallel execution efficient; the same logic is central to XiangShan's design.
+
+> Updated: 2026-06-03 15:36:56
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/gszwug0p01w7f6ux>

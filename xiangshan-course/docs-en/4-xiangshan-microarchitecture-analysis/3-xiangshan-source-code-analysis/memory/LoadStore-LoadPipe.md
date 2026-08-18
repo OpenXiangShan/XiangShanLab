@@ -1,3 +1,4 @@
+<!--
 # LoadStore-LoadPipe：Kunminghu V2 DCache LoadPipe 源码分析
 
 > 本文的行为结论只来自用户指定的 Kunminghu V2 源码 checkout。课程材料仅用于解释术语和组织章节，不用于替代源码证据。
@@ -72,28 +73,105 @@ issueLda[i] -> LoadUnit S0/S1 -> DCache.LoadPipe[i] S0/S1/S2/S3
 | LSQ / `LoadQueueUncache` | LSU | 保持 load 生命周期、慢回放、MMIO/NC 与内存序检查 | 接收 LoadUnit S3 `ldin`，不是 LoadPipe 的内部状态 | From `LoadUnit`；To replay、uncache、ROB/rollback |
 
 ### 1.2 端到端数据与控制图
+-->
+
+# LoadStore-LoadPipe: Kunminghu V2 DCache LoadPipe Source Analysis
+
+> The behavioral conclusions in this document come only from the user-specified Kunminghu V2 source checkout. Course material is used to explain terminology and organize sections, never to replace source evidence.
+>
+> Conclusion first: `LoadPipe` is the L1 DCache read pipeline on each scalar-load path. It issues meta/tag reads in parallel, uses physical addresses returned by the DTLB for tag and permission decisions, drives the banked data SRAM, requests or merges misses through MissQueue, and returns hit/miss/replay results in S2. It does **not** own the DTLB, PMP, LoadQueue, final integer writeback, or rollback; those belong to the connected `LoadUnit`, LSQ, and `MemBlock`.
+
+## 0. Scope, Version, and Evidence Boundary
+
+### 0.1 Questions Answered Here
+
+This document traces the following closed loop for an ordinary scalar load, including DCache software prefetches carried by the same entry point:
+
+```text
+issueLda[i] -> LoadUnit S0/S1 -> DCache.LoadPipe[i] S0/S1/S2/S3
+           -> meta/tag/data bank or MissQueue -> LoadUnit S2/S3
+           -> LSQ update, writeback, or replay/rollback
+```
+
+The focus is `LoadPipe.scala`. It must be read in the real wiring to `LoadUnit`, `DCacheWrapper`, `BankedDataArray`, and `MissQueue`; otherwise the meanings of `valid/ready/fire`, kill, miss, and replay are easily misread.
+
+| Item | Fixed baseline / treatment |
+| --- | --- |
+| Source checkout | `/home/yanyusong/xs-memory-env/XiangShan` |
+| Branch and commit | `kunminghu-v2` @ `e12436c7cba86b195deec24981976d78bc263661` |
+| Remote identity | `git@github.com:OpenXiangShan/XiangShan`; conclusions still use the local pinned commit |
+| Primary modules | [LoadPipe.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:34), [DCacheWrapper.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1017), [LoadUnit.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:112), [BankedDataArray.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:660), [MissQueue.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:1059) |
+| Working-tree note | The checkout already contained `difftest` modifications and untracked `src/main/resources/aia/`; it was not touched. The Scala files discussed here are evidence at this commit. |
+| Official Design Doc | No `XiangShan-Design-Doc` checkout required by the skill was found locally. **Design Doc baseline: unavailable / not consulted.** Course documents are not presented as formal design documents. |
+| Skill synchronization | A conservative weekly-sync check was performed by the skill; it was skipped because the state file showed less than seven days since the prior run. No reset, clean, or pull was performed. |
+
+Notation:
+
+* **Verified**: followed by a local source link and describes RTL/Chisel behavior visible at this commit.
+* **Inference**: a direct calculation based on verified logic; its premises are stated.
+* **To confirm**: requires elaboration, generated RTL, or waveforms and cannot be determined uniquely from the source discussed here.
+
+### 0.2 Traceability of Official Documentation and Course Material
+
+| ID | Document / source | Usable material in this analysis | Relation to this commit | Conclusion status |
+| --- | --- | --- | --- | --- |
+| D0 | Official XiangShan Design Doc | Missing locally and not read | None | Unavailable; no conclusion uses it |
+| C0 | Course load/store overview | Classroom context for LoadUnit, DCache, MissQueue, and replay | Different material may target another version | Background only, not code evidence |
+| S0 | Local `kunminghu-v2` source | All ports, stages, arbitration, exceptions, and boundary behavior | Pinned to the commit above | Sole behavioral evidence in this document |
+
+The familiar course concepts of a four-stage load pipeline, non-blocking cache, structural conflict, and speculative replay map here to the `s0/s1/s2/s3` code, MissQueue, bank conflict, and `resp.bits.replay`/LSQ replay respectively. A fixed-cycle course diagram is not treated as a fixed-latency promise of this implementation.
+
+### 0.3 Evidence Index
+
+| Topic | Key source evidence | Verified conclusion |
+| --- | --- | --- |
+| Instantiation and port count | [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214), [DCacheWrapper.scala:1043](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1043) | Source defaults `LoadPipelineWidth = 3`; Wrapper instantiates `LoadPipe(i)` at that width. |
+| LoadUnit to DCache | [MemBlock.scala:853](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:853), [MemBlock.scala:880](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:880) | `LoadUnit(i).io.dcache <> dcache.io.lsu.load(i)`; the ordinary path connects by the same index. |
+| S0 read launch | [LoadPipe.scala:119](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:119) | `req.fire` drives meta/tag reads in the same cycle; S0 derives bank one-hot from the virtual address. |
+| S1 hit and data read | [LoadPipe.scala:179](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:179), [LoadPipe.scala:305](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:305) | DTLB duplicate paddr is used for tag/permission decisions; the hit path drives a data-bank read. |
+| S2 miss/replay | [LoadPipe.scala:387](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:387), [LoadPipe.scala:433](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:433) | Lack of an MSHR, WBQ/data-bank conflicts, cancellation, WPU/BtoT, and related factors feed response or miss behavior. |
+| S3 error/flag update | [LoadPipe.scala:538](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:538), [LoadPipe.scala:573](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:573) | Delayed ECC/TL sidebands, replacement access, and access/prefetch flags are produced in this stage. |
+| Data-SRAM conflicts | [BankedDataArray.scala:703](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:703), [BankedDataArray.scala:725](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:725) | Read/write, readline, and read/read bank conflicts are explicitly detected; read/read retains the oldest LQ request. |
+| MSHR allocation/merge | [MissQueue.scala:1076](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:1076) | A request takes exactly one of allocation, merge, or rejection; `handled/merged` return to LoadPipe. |
+| Flush/uncache boundary | [LoadUnit.scala:957](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:957), [LoadUnit.scala:1523](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1523) | S1 kill prevents installation into LoadPipe S2; S2 kill cancels a miss request rather than clearing S2 valid. |
+
+## 1. Module Position, Responsibilities, and Actual Wiring
+
+### 1.1 Who / Why / How / From / To
+
+| Module | Who owns it | Why it exists | How it works | From / To boundary |
+| --- | --- | --- | --- | --- |
+| `LoadUnit(i)` | LSU/MemBlock | Receives issue and coordinates address generation, DTLB/PMP, forwarding, replay, and writeback | S0-S3 retain uop/address state; S2 joins DCache, PMP, and forwarding results | `issueLda[i]`, DTLB, PMP, LSQ <-> `DCacheLoadIO` |
+| `LoadPipe(i)` | DCache | Reads L1D with low latency and hands misses to the non-blocking miss mechanism | S0 meta/tag, S1 compare plus data request, S2 immediate response/miss, S3 delayed error/metadata | From `DCacheLoadIO`; to arrays, MissQueue, WBQ conflict checks, and LoadUnit response |
+| `DCacheWrapper` | DCache | Instantiates three load pipes and connects their shared arrays and arbiters | Statically assigns ports, blocks tag reads during tag writes, and merges miss requests | `io.lsu.load(i)` <-> `LoadPipe(i)` <-> `MissQueue` |
+| `BankedDataArray` | DCache | Lets multiple load ports access eight single-port data banks | Selects banks, checks RR/RW/readline conflicts, and emits slow-conflict and fast-wakeup-disable signals | From `LoadPipe.banked_data_read`; to `banked_data_resp` |
+| `MissQueue` | DCache | Allocates/merges MSHRs for cache misses, sends L2 transactions, and forwards to loads | Computes alloc/merge/reject and returns `id/handled/merged` | From arbitrated `MissReq`; to TileLink/MainPipe/LoadUnit forwarding |
+| LSQ / `LoadQueueUncache` | LSU | Retains load lifetime, slow replay, MMIO/NC, and memory-order checks | Receives LoadUnit S3 `ldin`; it is not LoadPipe internal state | From `LoadUnit`; to replay, uncache, ROB/rollback |
+
+### 1.2 End-to-End Data and Control Diagram
 
 ```mermaid
 flowchart LR
-  Issue[issueLda[i]] --> LU0[LoadUnit S0\n选源、VA、DTLB req]
+  Issue[issueLda[i]] --> LU0[LoadUnit S0\nsource select, VA, DTLB req]
   LU0 --> DTLB[DTLB / PMP]
-  DTLB --> LU1[LoadUnit S1\n两份 paddr duplicate]
+  DTLB --> LU1[LoadUnit S1\ntwo paddr duplicates]
   LU0 --> LP0[LoadPipe S0\nmeta/tag request]
-  LU1 --> LP1[LoadPipe S1\ntag/coh compare\ndata-bank request]
+  LU1 --> LP1[LoadPipe S1\ntag/coherence compare\ndata-bank request]
   LP0 --> Meta[Meta / Tag / flag arrays]
   LP1 --> Data[BankedDataArray\n8 banks]
-  LP1 --> LP2[LoadPipe S2\nresp / MissReq]
+  LP1 --> LP2[LoadPipe S2\nresponse / MissReq]
   Data --> LP2
-  LP2 -->|hit/miss/replay| LU2[LoadUnit S2\nPMP、forward、replay 分类]
-  LP2 -->|miss_req| Arb[低编号优先仲裁]
+  LP2 -->|hit/miss/replay| LU2[LoadUnit S2\nPMP, forwarding, replay classification]
+  LP2 -->|miss_req| Arb[low-index-priority arbitration]
   Arb --> MQ[MissQueue / MSHR]
   MQ --> L2[L2 / TileLink]
   MQ -->|forward_mshr| LU2
-  LU2 --> LU3[LoadUnit S3\nLSQ 更新、writeback/rollback]
+  LU2 --> LU3[LoadUnit S3\nLSQ update, writeback/rollback]
   LU3 --> LSQ[LSQ / Replay / Uncache]
-  LU3 --> WB[整数/向量写回]
+  LU3 --> WB[integer/vector writeback]
 ```
 
+<!--
 `MemBlock` 把每个 `LoadUnit(i)` 的 DCache IO 直接连到 `dcache.io.lsu.load(i)`，见 [MemBlock.scala:880](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:880)。Wrapper 再把该端口接至同 index 的 `ldu(i)`，见 [DCacheWrapper.scala:1377](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1377)。因此“每条 scalar load pipeline”是静态端口映射，不是 3 个 LoadUnit 先经一个共享 request arbiter。
 
 例外必须保留：当 `vSegmentFlag` 置位，`MemBlock` 会令普通 LoadUnit 的 DCache `req.ready := false`，并让 segment unit 接管 port 0 的 request 和 S1/S2 sideband；不能把 port 0 写成永远只服务普通 scalar load。[MemBlock.scala:892](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:892)
@@ -322,20 +400,254 @@ S3 由 `s3_valid = RegNext(s2_valid)` 驱动，产生 data/tag/TL error 的 dela
 前两项见 [LoadPipe.scala:305](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:305)，第三项见 [LoadPipe.scala:452](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:452)。尤其是已有 tag 但权限不足的 coherence upgrade：它满足“发 MissReq”，却未必让 `real_miss` 为真。该路径上 nack/replay 的组合应以实际波形确认，不能把 `resp.bits.miss` 直接用作“所有 cache transaction 未命中”的同义词。
 
 ### 4.2 MissQueue 仲裁、alloc 与 merge
+-->
 
+`MemBlock` connects each `LoadUnit(i)` DCache interface directly to `dcache.io.lsu.load(i)`: [MemBlock.scala:880](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:880). Wrapper then connects that port to `ldu(i)` of the same index: [DCacheWrapper.scala:1377](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1377). Thus, each scalar-load pipeline is a static port mapping, not three LoadUnits first passing through a shared request arbiter.
+
+One exception must remain explicit. When `vSegmentFlag` is asserted, `MemBlock` drives the ordinary LoadUnit DCache `req.ready := false` and lets the segment unit take over port 0 request and S1/S2 sidebands. Port 0 must not be described as permanently dedicated to ordinary scalar loads: [MemBlock.scala:892](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:892).
+
+### 1.3 `DCacheLoadIO` Stage Contract
+
+Besides `req/resp`, `DCacheLoadIO` carries `s1_paddr_dup_lsu`, `s1_paddr_dup_dcache`, `s1_kill`, `s1_kill_data_read`, `s2_kill`, PC, a 128-bit flag, fast-wakeup information, conflict sidebands, and more: [DCacheWrapper.scala:632](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:632). This explains three commonly confused facts:
+
+1. The DTLB is still working in parallel when LoadPipe S0 has received a virtual-address request.
+2. LoadPipe S1 uses physical-address duplicates returned by LoadUnit.
+3. LoadPipe S2 returns a local DCache result; LoadUnit S2/S3 still makes the final decision whether the instruction can write back or must replay.
+
+LoadUnit S0 source priority, DTLB request, and ordinary scalar-issue ready are at [LoadUnit.scala:290](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:290), [LoadUnit.scala:383](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383), and [LoadUnit.scala:831](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:831). That is why LoadPipe alone is not a complete load execution unit.
+
+### 1.4 Instruction and Request Classification
+
+LoadPipe S0 asserts that it accepts only `M_XRD`, `M_PFR`, and `M_PFW`; ordinary reads and DCache software prefetches therefore share the entry: [LoadPipe.scala:144](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:144).
+
+| Category | Carried by this LoadPipe? | Source-visible distinction | Must not be described as |
+| --- | --- | --- | --- |
+| Ordinary scalar load (`M_XRD`) | Yes | Uses tag/data, can issue a miss, and returns data in S2 | A conflict-free fixed one-cycle load |
+| DCache software prefetch (`M_PFR/M_PFW`) | Yes | When `instrtype === DCACHE_PREFETCH_SOURCE`, it suppresses data-bank read and generates separate prefetch statistics | An ordinary load that always reads data and writes a register |
+| Store / AMO | No | Handled by other paths such as `StorePipe` / `MainPipe` | A LoadPipe subtype |
+| MMIO / NC return | Not as the final uncached transaction | LoadUnit S2 identifies it and sends it to `LoadQueueUncache` | A hard bypass in LoadPipe S0 |
+
+`cmd` and `instrtype/source` are different fields: the assertion constrains `cmd`, while `s1_is_prefetch` uses `instrtype`. Seeing `M_PFR/M_PFW` alone is insufficient to skip the values of both fields: [LoadPipe.scala:185](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:185).
+
+## 2. Parameters, Address Indexing, and Storage Arrays
+
+### 2.1 Source Defaults and Calculations
+
+The following are **defaults visible in the source**, not a guarantee for a particular Chipyard/elaboration result. If external configuration overrides these case-class parameters, recalculate from elaborated parameters.
+
+| Parameter | Source value | Derivation / meaning |
+| --- | ---: | --- |
+| `LoadPipelineWidth` | 3 | Three LoadPipes: [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214). |
+| `nSets` | 128 | Default `DCacheParameters`: [DCacheWrapper.scala:39](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:39). |
+| `nWays` | 8 | Same source. |
+| `blockBytes` | 64 B | Same source. |
+| `rowBits` | 64 bits | Each bank-SRAM row is 8 B. |
+| `DCacheBanks` | 8 | Hard coded: [DCacheWrapper.scala:126](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:126). |
+| `nMissEntries` | 16 | DCache default override in `XSCoreParameters`: [Parameters.scala:330](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:330). |
+| D-WPU | `enWPU = false` | The active data array is `BankedDataArray`, not `SramedDataArray`: [Parameters.scala:260](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:260), [DCacheWrapper.scala:1019](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1019). |
+
+`128 sets x 8 ways x 64 B/block` yields 64 KiB. The "64 sets / 32K" comment at [DCacheWrapper.scala:88](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:88) conflicts with the actual default `nSets = 128`; it is treated as stale commentary, not baseline parameter evidence.
+
+For those defaults:
+
+```text
+rowBytes = 64 / 8 = 8 B                  -> bank offset = log2(8) = 3
+banks    = 8                             -> bank bits   = VA/PA[5:3]
+sets     = 128                           -> set bits    = VA/PA[12:6]
+block    = 64 B                          -> block offset = [5:0]
+untagBits = log2(64) + log2(128) = 13
+pgUntagBits = min(13, 12) = 12           -> get_phy_tag(paddr) = paddr >> 12
+```
+
+These formulas come from [L1Cache.scala:46](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/L1Cache.scala:46), [L1Cache.scala:81](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/L1Cache.scala:81), and [DCacheWrapper.scala:148](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:148). `get_idx(addr)` takes `[untagBits-1:blockOffBits]`, namely `[12:6]` under the defaults above.
+
+Because `nSets x blockBytes = 8192 B > 4 KiB`, parameter logic generates `aliasBitsOpt` and notes that cache aliases must be handled: [DCacheWrapper.scala:60](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:60). This establishes only that the default scale needs virtual/physical-index alias handling. Alias encoding and lower-cache protocol are outside LoadPipe and are not inferred here.
+
+### 2.2 S0 Virtual Index and S1 Physical Tag
+
+LoadPipe S0 uses `get_idx(io.lsu.req.bits.vaddr)` for both meta and tag reads. S1 compares the tag using `get_tag(s1_paddr_dup_dcache)` and separately uses the `_lsu` duplicate for the LSU-side hit result: [LoadPipe.scala:163](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:163), [LoadPipe.scala:223](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:223).
+
+At the code level this is accurately stated as **virtual-address indexing, physical-address tag comparison**. Calling the whole design VIPT would require validating alias and other tag-array paths, so this analysis does not extend the name beyond the shown evidence.
+
+The S1 data-bank address does not replace the whole VA with PA. It preserves the upper bits of the S0 request and splices only the paddr block-offset low bits:
+
+```scala
+val s1_vaddr_update = Cat(s1_req.vaddr(VAddrBits - 1, blockOffBits),
+                          io.lsu.s1_paddr_dup_lsu(blockOffBits - 1, 0))
+val s1_vaddr = Mux(s1_load128Req,
+                   Cat(s1_vaddr_update(VAddrBits - 1, 4), 0.U(4.W)),
+                   s1_vaddr_update)
+```
+
+See [LoadPipe.scala:181](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:181). The two paddr copies come from the LoadUnit S1 DTLB response: [LoadUnit.scala:941](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:941).
+
+### 2.3 Storage Structures Touched by LoadPipe
+
+| Storage structure | Construction / ports | LoadPipe read/write behavior | Reset / conflict note |
+| --- | --- | --- | --- |
+| Coherence meta | `L1CohMetaArray(readPorts = LoadPipelineWidth + 1, writePorts = 1)` | S0 reads all ways; S1 selects hit metadata and calls `onAccess(cmd)` | Write port is MainPipe; reads follow Decoupled ready. |
+| Duplicated tag | `DuplicatedTagArray` | S0 reads all ways; S1 compares paddr tag | MainPipe tag-write intent lowers load tag-read `ready`. |
+| Error/prefetch/access metadata | Additional flag arrays | S1 reads error/prefetch/access; S3 updates access and clears prefetch | Multiple write ports exist; exact same-index/way semantics need array implementation or waveforms. |
+| Banked data | Default active `BankedDataArray` | S1 supplies `addr/addr_dup/way_en/bankMask`; S2 receives two raw-data slices | Eight single-port SRAMs explicitly handle RR/RW/readline conflicts. |
+| MissQueue entries | `Seq.fill(cfg.nMissEntries)` | S2 sends `MissReq` and receives `MissResp` | Sixteen default entries; alloc/merge/reject are mutually exclusive. |
+| LoadPipe pipeline registers | `s1_valid/s2_valid` plus request/address/way registers | Hold control and data between stages | `s1_valid` and `s2_valid` are `RegInit(false.B)`; S3 is `RegNext(s2_valid)`. |
+
+Creation and wiring are at [DCacheWrapper.scala:1017](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1017), [DCacheWrapper.scala:1108](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1108), and [DCacheWrapper.scala:1211](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1211). The data SRAM uses `shouldReset = false` and `singlePort = true`, with a note that external control disallows same-cycle read/write: [BankedDataArray.scala:163](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:163). After reset, data-SRAM contents must not be assumed zero; valid/meta/coherence state must prevent invalid data from being recognized as a hit.
+
+### 2.4 Same-Cycle Read/Write, Bank Conflicts, and Priority
+
+1. **Tag-write conflict.** When `tag_write_intend = mainPipe.io.tag_write_intend`, each LoadPipe uses `tag_read.ready := !tag_write_intend`, which backpressures the S0 request: [DCacheWrapper.scala:1234](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1234).
+2. **Data read/write conflict.** With a write on the same div/bank, `wr_bank_conflict(i)` lowers `io.read(i).ready`; the result later forms an S2 data nack or slow conflict: [BankedDataArray.scala:758](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:758).
+3. **Multiple loads reading one bank.** RR requires the same div, overlapping bank masks, and different sets. `LqPtr` retains the oldest conflicting request; other requests are marked `rr_bank_conflict_oldest` and report a slow conflict on the next cycle: [BankedDataArray.scala:725](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:725), [BankedDataArray.scala:339](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:339).
+4. **Fast wakeup.** Before a conflict becomes an S2 replay, `disable_ld_fast_wakeup` rises for write/readline/earlier-port RR conflicts, preventing a possibly replayed load from being treated as a reliable early wakeup: [BankedDataArray.scala:769](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:769).
+5. **Multiple flag writes.** Wrapper records a performance event when `ldu(0)` and `ldu(1)` update a prefetch flag at the same index/way, but this file does not define last-writer semantics. Treat the collision as a verification case rather than guessing from port count: [DCacheWrapper.scala:1217](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1217).
+
+## 3. LoadPipe's Four Pipeline Stages and Handshakes
+
+### 3.1 Stage Summary
+
+| Stage | Input and `fire` | Key register/storage access | Output / exit condition | Kill or blocking point |
+| --- | --- | --- | --- | --- |
+| S0 | `io.lsu.req.fire` | Launches meta/tag reads in the same cycle; derives a 64-bit/128-bit bank mask from VA | `s0_fire = s0_valid && s1_ready` | Needs meta ready, tag ready, and S1 ready; current integration has `io.nack=false`. |
+| S1 | `s1_valid && s2_ready` | Holds S0 request; reads tag/meta; compares paddr and coherence permission; launches data-bank read | `s1_fire` pushes request/control to S2 | `io.lsu.s1_kill` prevents S2 valid; `s1_kill_data_read` cancels only data read. |
+| S2 | `s2_valid` with internal `s2_ready=true` | Receives bank raw data; computes miss/nack/merge/cancel | `io.lsu.resp.valid = s2_valid`; can issue `MissReq` | MSHR absence, WBQ/data readiness, slow bank conflict, WPU, and BtoT affect replay. |
+| S3 | `RegNext(s2_valid)` | Delayed ECC/TL error, replacement/access/prefetch flags | Delayed sideband, BEU error, replacement update | Does not directly produce LoadUnit writeback; LoadUnit S3 consumes it. |
+
+### 3.2 S0: Accept a Request and Launch Meta/Tag Reads
+
+In normal integration Wrapper ties `io.nack` to `false.B`: [DCacheWrapper.scala:1387](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1387). The reachable S0 ready condition is therefore mainly:
+
+```scala
+val not_nacked_ready = io.meta_read.ready && io.tag_read.ready && s1_ready
+io.lsu.req.ready := (!io.nack && not_nacked_ready) || (io.nack && true.B)
+io.meta_read.valid := io.lsu.req.fire && !io.nack
+io.tag_read.valid  := io.lsu.req.fire && !io.nack
+```
+
+See [LoadPipe.scala:119](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:119). `req.fire` is the only reliable acceptance event; `req.valid` alone does not show that tag/meta reads were launched.
+
+A 128-bit request aligns low vaddr bits to 16 bytes and expands a single-bank one-hot to an adjacent-two-bank mask:
+
+```scala
+val s0_bank_oh_64  = UIntToOH(addr_to_dcache_bank(s0_vaddr))
+val s0_bank_oh_128 = (s0_bank_oh_64 << 1.U).asUInt | s0_bank_oh_64.asUInt
+val s0_bank_oh     = Mux(s0_load128Req, s0_bank_oh_128, s0_bank_oh_64)
+```
+
+This proves adjacent-bank access, not a cross-cache-line split state machine within LoadPipe: [LoadPipe.scala:137](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:137). See Section 6 for the boundary.
+
+### 3.3 S1: Tag/Coherence Decision and Data-Bank Request
+
+`s1_valid` is `RegInit(false.B)`: S0 fire sets it, S1 fire clears it, and `s1_ready = !s1_valid || s1_fire`: [LoadPipe.scala:179](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:179).
+
+An S1 hit is not simply tag equality:
+
+```scala
+val s1_tag_match_dup_dc = ParallelORR(s1_tag_match_way_dup_dc)
+val (s1_has_permission, s1_shrink_perm, s1_new_hit_coh) =
+  s1_hit_coh.onAccess(s1_req.cmd)
+val s1_hit = s1_tag_match_dup_dc && s1_has_permission &&
+             s1_hit_coh === s1_new_hit_coh
+```
+
+See [LoadPipe.scala:275](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:275) and [LoadPipe.scala:305](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:305). Two tag-matching ways for one request trigger an assertion, providing a checker for tag-array and valid/coherence consistency: [LoadPipe.scala:277](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:277).
+
+Only a non-prefetch S1 fire not killed by `s1_kill_data_read` issues a data read:
+
+```scala
+io.banked_data_read.valid := s1_fire && !s1_nack && !s1_is_prefetch &&
+                             !io.lsu.s1_kill_data_read
+io.banked_data_read.bits.way_en   := s1_pred_tag_match_way_dup_dc
+io.banked_data_read.bits.bankMask := s1_bank_oh
+```
+
+Therefore, "prefetch does not read the data bank" is a local fact expressed through `instrtype`, not a string-level inference from every `M_PFR/M_PFW`: [LoadPipe.scala:309](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:309).
+
+### 3.4 Exact Boundary Between S1 Kill and S2 Valid
+
+LoadUnit combines local redirect/late kill, DTLB miss, prior exception, delayed error, and cross-16B misalignment kill into `dcache.s1_kill`. `s1_kill_data_read` represents only the misaligned data-read cancellation: [LoadUnit.scala:939](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:939), [LoadUnit.scala:1059](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1059).
+
+LoadPipe reacts as follows:
+
+```scala
+when (s1_fire) {
+  s2_valid := !io.lsu.s1_kill
+}.elsewhen(io.lsu.resp.fire) {
+  s2_valid := false.B
+}
+```
+
+See [LoadPipe.scala:327](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:327). An S1 kill means "do not install this request into LoadPipe S2" and must not be conflated with the later `s2_kill`.
+
+### 3.5 S2: Data, MissReq, and Immediate Response
+
+S2 has no internal backpressure: `s2_ready := true.B`, `s2_fire := s2_valid`: [LoadPipe.scala:342](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:342). The external response also asserts that downstream is always ready: [LoadPipe.scala:520](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:520).
+
+The data path concatenates raw data from two banks into 128 bits:
+
+```scala
+val s2_data128bit = Cat(io.banked_data_resp(1).raw_data,
+                         io.banked_data_resp(0).raw_data)
+resp.bits.data := s2_data128bit
+```
+
+Byte selection, sign/zero extension, and priority among D-cache, MSHR, LSQ, and SBuffer forwarding happen in LoadUnit S2/S3, not LoadPipe. Forwarding merge code is visible at [LoadUnit.scala:1387](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1387).
+
+S2 sends a block-aligned address to MissQueue and has an explicit cancel field:
+
+```scala
+io.miss_req.bits.addr   := get_block_addr(s2_paddr)
+io.miss_req.bits.cancel := io.lsu.s2_kill || s2_tag_error || s2_btot_occupy_fail
+io.miss_req.bits.lqIdx  := io.lsu.req.bits.lqIdx
+```
+
+See [LoadPipe.scala:433](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:433). The final assignment uses live `io.lsu.req.bits.lqIdx`, not an explicit `s2_req.lqIdx`. Static reading does not establish whether that is correct; verification should track `debug_robIdx` and `lqIdx` continuously to rule out identity mismatch under multiple requests.
+
+### 3.6 S3: Delayed Errors and Replacement/Flag Sidebands
+
+`s3_valid = RegNext(s2_valid)` drives delayed data/tag/TL-error sidebands, BEU error, replacement access, and access/prefetch flag updates: [LoadPipe.scala:538](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:538).
+
+The primary `io.lsu.resp.valid` is S2-aligned, while `error_delayed`, `data_delayed`, `replacementUpdated`, and related fields are S3-aligned companions. LoadUnit S3 consumes delayed error and replacement information in that timing domain: [LoadUnit.scala:1558](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1558), [LoadUnit.scala:1595](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1595). A waveform must not treat every `resp.bits.*` field as one S2-synchronous transaction field.
+
+### 3.7 Ordinary-Hit Handshake Sketch
+
+```wavedrom
+{"signal":[{"name":"clk","wave":"p....."},{"name":"lsu.req.valid","wave":"010..."},{"name":"lsu.req.ready","wave":"1....."},{"name":"lsu.req.fire","wave":"010..."},{"name":"meta/tag read.valid","wave":"010..."},{"name":"s1_valid","wave":"0.10.."},{"name":"banked_data_read.valid","wave":"0.010."},{"name":"s2_valid","wave":"0..10."},{"name":"lsu.resp.valid","wave":"0..10."},{"name":"s3_valid (delayed sideband)","wave":"0...10"}]}
+```
+
+The sketch expresses register-stage relations only: request fire triggers S0 arrays, S1 triggers data read, S2 produces the immediate response, and S3 produces delayed sidebands. DTLB, PMP, forwarding, arbitration, and replay can all change the actual issue-to-final-writeback interval.
+
+## 4. Hits, Misses, Arbitration, and Replay
+
+### 4.1 Three Easily Confused Meanings of "Miss"
+
+| Name | Code condition | Meaning | Must not be equated with |
+| --- | --- | --- | --- |
+| `s1_hit` | Tag match, coherence permission, and unchanged coherence state | Directly usable L1 hit | Tag match alone |
+| `s1_will_send_miss_req` | `s1_valid && !s1_nack && !s1_hit` | A request is sent to MissQueue, possibly for tag miss or permission/upgrade | Only "tag absent" |
+| `resp.bits.real_miss/miss` | `!s2_real_way_en.orR` | Defined by code as no real tag-match way | Every request that issues `MissReq` |
+
+The first two are at [LoadPipe.scala:305](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:305); the third is at [LoadPipe.scala:452](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:452). A coherence upgrade with an existing tag but insufficient permission sends `MissReq` without necessarily making `real_miss` true. Verify its nack/replay combinations in waveforms rather than treating `resp.bits.miss` as a synonym for every uncompleted cache transaction.
+
+### 4.2 MissQueue Arbitration, Allocation, and Merge
+
+<!--
 Wrapper 的 miss request 仲裁按低编号优先：port 0 是 MainPipe，`LoadPipe(w)` 是 `w+1`，然后才是其他可选端口；`TreeArbiter` 的左侧/低编号优先逻辑和 `MissReadyGen` 的“前面 valid 即压制后面 ready”均可见于 [DCacheWrapper.scala:857](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:857)、[DCacheWrapper.scala:917](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:917)。实际接线在 [DCacheWrapper.scala:1474](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1474)。
+-->
+
+Wrapper arbitrates miss requests with low-index priority: port 0 is MainPipe, `LoadPipe(w)` is `w+1`, and other optional ports follow. The left/low-index priority of `TreeArbiter` and `MissReadyGen` behavior, where an earlier valid suppresses a later ready, are at [DCacheWrapper.scala:857](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:857) and [DCacheWrapper.scala:917](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:917). The actual wiring is at [DCacheWrapper.scala:1474](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1474).
 
 ```mermaid
 flowchart LR
-  MP[MainPipe\nport 0] --> A[TreeArbiter\n低编号优先]
+  MP[MainPipe\nport 0] --> A[TreeArbiter\nlow-index priority]
   L0[LoadPipe 0\nport 1] --> A
   L1[LoadPipe 1\nport 2] --> A
   L2[LoadPipe 2\nport 3] --> A
   A --> MQ[MissQueue.req]
   MQ --> Q{alloc / merge / reject}
-  Q -->|alloc| E[一个空 MSHR entry]
-  Q -->|merge| M[匹配的 entry / pipe reg]
-  Q -->|reject| R[req.ready = 0\n上游重放]
+  Q -->|alloc| E[one free MSHR entry]
+  Q -->|merge| M[matching entry / pipe register]
+  Q -->|reject| R[req.ready = 0\nupstream replay]
   E --> Resp[MissResp\nid, handled, merged]
   M --> Resp
   Resp --> L0
@@ -343,6 +655,7 @@ flowchart LR
   Resp --> L2
 ```
 
+<!--
 MissQueue 的组合逻辑为 `alloc = !reject && !merge && primary_ready`、`accept = alloc || merge`，并断言一条 request 不会被多个 MSHR 处理。[MissQueue.scala:1076](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:1076)、[MissQueue.scala:1094](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:1094) `MissResp.handled` 表示已由新 entry 或 merge 承接，`merged` 表示合并到已有 transaction；字段定义见 [MissQueue.scala:132](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:132)。
 
 ### 4.3 S2 nack 与 replay 的精确公式
@@ -418,6 +731,85 @@ io.miss_req.bits.cancel := io.lsu.s2_kill || s2_tag_error || s2_btot_occupy_fail
 LoadPipe S3 将 tag/data/L2 error 送往 BEU，[LoadPipe.scala:562](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:562)。LoadUnit S3 把 delayed TL error 映射为 load access fault/hardware error，[LoadUnit.scala:1634](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1634)。所以“DCache 读到 data”不自动代表该 load 可架构提交。
 
 ### 5.3 回放与恢复状态图
+-->
+
+Wrapper arbitrates miss requests with low-index priority: port 0 is MainPipe, `LoadPipe(w)` is `w+1`, followed by other optional ports. The left/low-index priority of `TreeArbiter` and `MissReadyGen` behavior where an earlier valid suppresses a later ready are at [DCacheWrapper.scala:857](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:857) and [DCacheWrapper.scala:917](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:917). Actual wiring is at [DCacheWrapper.scala:1474](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1474).
+
+MissQueue combinationally defines `alloc = !reject && !merge && primary_ready` and `accept = alloc || merge`, and asserts that one request is not handled by multiple MSHRs: [MissQueue.scala:1076](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:1076), [MissQueue.scala:1094](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:1094). `MissResp.handled` means a new entry or merge has accepted the request; `merged` means it joined an existing transaction: [MissQueue.scala:132](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:132).
+
+### 4.3 Exact S2 Nack and Replay Formula
+
+LoadPipe defines nack sources as follows:
+
+```scala
+val s2_nack_no_mshr      = s2_miss_req_valid_dup && !io.miss_req.ready
+val s2_nack_wbq_conflict = s2_miss_req_valid_dup && io.wbq_block_miss_req
+val s2_nack_data         = RegEnable(!io.banked_data_read.ready, s1_fire)
+val s2_nack = s2_nack_hit || s2_nack_no_mshr || s2_nack_data || s2_nack_wbq_conflict
+```
+
+See [LoadPipe.scala:387](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:387). `s2_nack_hit` is unreachable in the current Wrapper integration because `io.nack := false.B`; it must not be presented as a dynamic retry mechanism of the default path.
+
+The final replay condition is:
+
+```scala
+resp.bits.replay :=
+  (resp.bits.miss && (s2_nack || io.miss_req.bits.cancel)) ||
+  io.bank_conflict_slow || s2_wpu_pred_fail || s2_btot_occupy_fail
+```
+
+See [LoadPipe.scala:466](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:466). With default `dwpuParameters.enWPU = false`, WPU response is tied invalid: [DCacheWrapper.scala:1369](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1369). The WPU-fail branch should therefore be a configuration-reachability check, not the first suspected cause in a default waveform.
+
+| Trigger | Local LoadPipe result | Required LoadUnit/downstream action | Evidence |
+| --- | --- | --- | --- |
+| Tag plus permission hit; data bank readable | `replay=0`, return data | LoadUnit S2 still merges forwarding/PMP; S3 writes back only when safe | [LoadPipe.scala:415](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:415) |
+| Tag miss and MSHR accepts | `handled=1`, normally no immediate replay | Instruction can remain in LQ awaiting refill/forward | [LoadPipe.scala:477](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:477) |
+| MSHR not ready | `s2_nack_no_mshr` | `s2_mq_nack` enters LoadUnit replay classification | [LoadPipe.scala:395](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:395) |
+| WBQ conflict on same block | `s2_nack_wbq_conflict` / cancel protection | Prevents an ordering violation between miss and writeback; upstream classifies replay | [LoadPipe.scala:396](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:396) |
+| Data-bank read rejected or slow conflict | Data nack or `bank_conflict_slow` | Disables fast wakeup and creates replay/fast-replay conditions | [BankedDataArray.scala:767](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:767) |
+| BtoT occupancy failure, tag ECC, or S2 kill | `MissReq.cancel=1` | Does not allocate a new miss; replay follows the formula above plus LoadUnit logic | [LoadPipe.scala:442](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:442) |
+
+### 4.4 LoadUnit's Second Classification of DCache Results
+
+LoadUnit S2 takes `miss`, `s2_mq_nack`, `s2_bank_conflict`, and `s2_wpu_pred_fail` from the DCache response, but masks some DCache results when TL-D or MSHR forwarding already supplies data, or when there is full forwarding: [LoadUnit.scala:1254](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1254).
+
+It records TLB miss, DCache MQ nack, DCache miss, bank conflict, WPU failure, RAR/RAW nack, forwarding failure, and other causes separately in `rep_info`: [LoadUnit.scala:1423](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1423). Documentation and waveforms should retain cause bits rather than observe only a generic `replay`.
+
+## 5. Kill, Flush, Exceptions, and Architectural Visibility
+
+### 5.1 Difference Between S1 Kill, S2 Cancel, and LoadUnit Redirect
+
+| Mechanism | Origin | Effect in LoadPipe | Does it mean the load has architecturally disappeared? |
+| --- | --- | --- | --- |
+| `dcache.s1_kill` | LoadUnit S1: redirect, DTLB miss, exception, delayed error, cross-16B misalignment, and more | Sets `s2_valid := false` on S1 fire | No. A DTLB miss, for example, still requires LoadUnit replay state. |
+| `dcache.s1_kill_data_read` | Cross-16B misalignment in LoadUnit S1 | Prevents only the banked-data read | No. Control information can still reach later LoadUnit logic. |
+| `dcache.s2_kill` | LoadUnit S2: PMP fault, uncache, redirect, and more | Only contributes to `MissReq.cancel` | **Not** a clearing of LoadPipe `s2_valid`. |
+| `robIdx.needFlush(redirect)` | LoadUnit S1/S2/S3, LSQ/MAB | Clears valid, suppresses writeback, or triggers cleanup according to stage | It is the recovery protocol for speculative uops across modules. |
+
+The decisive counterexample is:
+
+```scala
+// LoadUnit S2
+io.dcache.s2_kill := s2_pmp.ld || s2_pmp.st || s2_actually_uncache || s2_kill
+
+// LoadPipe S2
+io.miss_req.bits.cancel := io.lsu.s2_kill || s2_tag_error || s2_btot_occupy_fail
+```
+
+See [LoadUnit.scala:1523](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1523) and [LoadPipe.scala:433](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:433). The accurate wording is "block or cancel MissQueue allocation," not "`s2_kill` directly kills LoadPipe S2."
+
+### 5.2 Division of Responsibility for Exceptions and ECC
+
+| Category | First detector | LoadPipe role | Final visible handling |
+| --- | --- | --- | --- |
+| DTLB page/guest-page/access fault | LoadUnit S1 TLB response | `s1_kill` prevents normal DCache S2 access | LoadUnit retains exception/replay semantics and writes back the exception in S3. |
+| PMP/PMA/MMIO/NC | LoadUnit S2 | `s2_kill` cancels miss; LoadPipe is not an uncache state machine | LoadUnit/LoadQueueUncache handles uncached transaction. |
+| Tag/data ECC, TL denied/corrupt | LoadPipe S3 | Produces `error_delayed`, `tl_error_delayed`, and BEU error | LoadUnit S3 maps them to access fault/hardware error. |
+| Store-load / load-load violation | LSQ/LoadUnit | Supplies address/cache result; does not select oldest redirect | LoadUnit S3 / MemBlock produces and combines rollback. |
+
+LoadPipe S3 sends tag/data/L2 errors to BEU: [LoadPipe.scala:562](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:562). LoadUnit S3 maps delayed TL error to load access fault/hardware error: [LoadUnit.scala:1634](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1634). Reading DCache data therefore does not automatically mean that the load can architecturally commit.
+
+### 5.3 Replay and Recovery State Diagram
 
 ```mermaid
 stateDiagram-v2
@@ -437,6 +829,7 @@ stateDiagram-v2
   Writeback --> [*]
 ```
 
+<!--
 这是控制关系图，不把 `HandledMiss` 描述为“立即有结果”：它表示 MissQueue 已接管 transaction，LoadQueue 之后可等待 refill 或 MSHR forward。
 
 ### 5.4 Difftest 与可观测性覆盖
@@ -574,3 +967,140 @@ assert(!(s2_valid && (s2_dcache_should_resp && !io.dcache.resp.valid)))
 3. [MissQueue.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:1059)：MSHR 分配/合并/refill forward；
 4. [LoadMisalignBuffer.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:165)：跨 16B/跨页拆分；
 5. [LoadQueueUncache.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:386)：MMIO/NC、response 和 rollback。
+-->
+
+This is a control-relationship diagram, not a statement that `HandledMiss` has an immediate result. It means MissQueue has taken ownership of the transaction; LoadQueue can subsequently wait for refill or MSHR forwarding.
+
+### 5.4 Difftest and Observability Coverage
+
+Searching this pinned `LoadPipe.scala` for `DiffTest|difftest` gives no direct match, so LoadPipe itself must not be claimed to emit a Difftest event. It does provide ChiselDB traces and performance counters: `LoadTrace`, `LoadTraceMiss`, `LoadPfMshr`, `load_replay`, `load_replay_for_dcache_no_mshr`, and `load_replay_for_dcache_conflict`, among others: [LoadPipe.scala:616](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:616), [LoadPipe.scala:642](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:642).
+
+| Observation target | Available signal/record | Suitable verification |
+| --- | --- | --- |
+| Identity of one demand load | `debug_robIdx`, `lqIdx`, `LoadTrace` | Detect mismatch across ports or after replay. |
+| Miss lifecycle | `MissReq.addr`, `MissResp.id/handled/merged`, `LoadTraceMiss` | Check allocation, merge, rejection, and refill forwarding. |
+| Bank structural conflict | `bank_conflict_slow`, `disable_ld_fast_wakeup`, BankConflict table | Check port competition and replay cause. |
+| Exception | `error_delayed`, `tl_error_delayed`, LoadUnit exceptionVec | Check that delayed sidebands align with S3. |
+
+Architectural Difftest/commit consistency must be correlated separately at LoadUnit, LSQ, writeback, and ROB boundaries. The absence of direct Difftest in this file does not mean the whole load path lacks Difftest.
+
+## 6. Cross-Page, Cross-Cache-Line, Misaligned, and MMIO/NC Boundaries
+
+### 6.1 Misalignment and Crossing 16 B / Cache Lines
+
+LoadPipe has no cross-cache-line FSM. It knows only one or two adjacent banks: for a 128-bit request bank 1 is bank 0 plus one: [BankedDataArray.scala:703](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:703). S2 also has only one `get_block_addr(s2_paddr)` miss address: [LoadPipe.scala:433](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:433).
+
+For an ordinary misaligned scalar load crossing 16 B, LoadUnit S1 sets `s1_misalign_kill`, suppressing LoadPipe S2/data read; LoadUnit S3 subsequently sends the request to `LoadMisalignBuffer`: [LoadUnit.scala:939](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:939), [LoadUnit.scala:1589](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1589).
+
+`LoadMisalignBuffer` explicitly splits such an access into at most two aligned sub-loads through `s_split -> s_req -> s_resp`, retaining two `splitLoadReqs`: [LoadMisalignBuffer.scala:165](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:165), [LoadMisalignBuffer.scala:314](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:314).
+
+* When the subrequests fall in different cache lines, they are two independent LoadPipe/MissQueue accesses, not two lines merged internally by LoadPipe.
+* If the upper half enters the next virtual page and faults, the buffer deliberately retains/overwrites exception-address information; source comments and logic cover the cross-page special case: [LoadMisalignBuffer.scala:625](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:625).
+* If either half becomes an exception or MMIO/NC, the buffer does not wait to merge the other half. It switches to exception/misalignment handling and writeback: [LoadMisalignBuffer.scala:192](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:192), [LoadMisalignBuffer.scala:522](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:522).
+
+Whether vector or other `is128Req` combinations have additional cross-line constraints must be verified in that configuration's RTL/waveforms. `bank0 + 1` alone cannot establish full cross-line semantics.
+
+### 6.2 Virtual-Page and Alias Boundaries
+
+LoadUnit S0 issues DTLB and DCache requests together; S1 installs DTLB `paddr/fullva/gpaddr/pbmt/excp` into its stage bundle: [LoadUnit.scala:903](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:903), [LoadUnit.scala:1009](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1009).
+
+LoadPipe responsibility ends at virtual indexing, physical tagging, and S1 kill. It neither retains cross-page split state nor decides architectural page-fault writeback. Cross-page tests should at least cover a lower-half hit with upper-half page fault, lower-half miss with upper-half redirect, and requests with different alias bits but the same physical block.
+
+### 6.3 MMIO / NC Is Not a Complete LoadPipe Bypass
+
+LoadUnit S2 uses PBMT, PMP, and existing `nc/mmio` flags to decide `s2_actually_uncache` / `s2_uncache`: [LoadUnit.scala:1206](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1206). It then asserts `dcache.s2_kill`. As described in Section 5, that cancels LoadPipe's `MissReq`; it does not directly clear LoadPipe S2.
+
+LoadUnit also states that uncache should not expect an ordinary DCache response:
+
+```scala
+val s2_dcache_should_resp =
+  !(s2_in.tlbMiss || s2_exception || s2_in.delayedLoadError || s2_uncache || s2_prf)
+assert(!(s2_valid && (s2_dcache_should_resp && !io.dcache.resp.valid)))
+```
+
+See [LoadUnit.scala:1309](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1309). `LoadQueueUncache` handles actual uncached request/response/writeback: it separates MMIO and NC paths, prioritizes MMIO requests, and uses a round-robin arbiter for NC: [LoadQueueUncache.scala:386](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:386), [LoadQueueUncache.scala:438](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:438).
+
+The precise timing description is therefore: **address attributes become sufficiently trustworthy only in S2; DCache front-end activity may already have begun, but later MSHR allocation is cancelled and LSQ/UncacheBuffer takes over the final uncached transaction.**
+
+## 7. Latency, Throughput, and Verifiable Performance Boundaries
+
+### 7.1 No Fixed Cycle Count Without Waveform Evidence
+
+The internal register relationships name an ideal path of S0 request/meta-tag, S1 compare/data-read, S2 response, and S3 delayed sideband. Full load issue-to-writeback is also affected by LoadUnit source selection, DTLB, PMP, tag-write intent, bank conflicts, MSHR/WBQ, forwarding, LSQ replay, redirect, uncache, and writeback ready.
+
+This document therefore does not state "L1 hit = N cycles" as source-proven. It establishes only that:
+
+* LoadPipe S0 accepts when `meta_read.ready && tag_read.ready && s1_ready`.
+* There is no extra internal stall between S1 and S2 (`s2_ready=true`).
+* S2 response requires downstream ready.
+* LoadUnit S3 can still decide when to leave based on `ldout.ready` or kill.
+
+The final point is visible at [LoadUnit.scala:1576](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1576).
+
+### 7.2 Throughput Ceiling and Practical Constraints
+
+| Layer | Static capacity / limit | Meaning |
+| --- | --- | --- |
+| Number of LoadPipes | 3 by default | Three port-level requests can coexist; three are not guaranteed to complete. |
+| Meta/tag | Per-load read ports; tag write can block read | S0 backpressures on tag-write intent. |
+| Data SRAM | Eight banks, one port per bank | RR/RW/readline contention rejects or replays some requests. |
+| MissQueue | 16 entries by default | Also constrained by same-block merge/reject, WBQ conflict, and arbitration order. |
+| LoadUnit issue | Priority mux | Replay, misalignment, prefetch, and other higher-priority sources can suppress ordinary issue. |
+
+Performance analysis should count `load_req`, `load_hit`, `load_miss`, each replay class, data-array RR/RW conflict, and MSHR occupancy together. IPC or one miss counter is not sufficient to explain a bottleneck: [LoadPipe.scala:642](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:642), [BankedDataArray.scala:769](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:769).
+
+### 7.3 Conflict/Replay Timing Sketch
+
+```wavedrom
+{"signal":[{"name":"clk","wave":"p......"},{"name":"L0 data_read.valid","wave":"010...."},{"name":"L1 data_read.valid","wave":"010...."},{"name":"overlap bank conflict","wave":"010...."},{"name":"L1 disable_fast_wakeup","wave":"010...."},{"name":"L1 bank_conflict_slow","wave":"0.10..."},{"name":"L1 resp.valid","wave":"0..10.."},{"name":"L1 resp.replay","wave":"0..10.."},{"name":"LoadUnit replay cause","wave":"0...10."}]}
+```
+
+This sketch only shows the relative sequence: detect a conflict in this cycle, report slow conflict in the next cycle, carry replay on the S2 response, then form the cause in LoadUnit. Which port wins depends on the oldest selection by `LqPtr`; inspect a waveform containing real `lqIdx` values.
+
+## 8. Verification Notes
+
+| ID | Risk / scenario | Stimulus | Signals and checker to inspect | Source-proven expectation |
+| --- | --- | --- | --- | --- |
+| V1 | False hit after reset | Immediately issue loads to different sets/ways after reset | `s1_valid/s2_valid`, meta coherence valid, SRAM reset | Pipeline valid begins at 0; data SRAM is not reset and its contents must not determine hit. |
+| V2 | Same-cycle tag write and read | MainPipe tag-write intent with LoadPipe req in one cycle | `tag_write_intend`, `tag_read.ready`, `req.fire` | Tag-read ready falls; S0 must not fire incorrectly. |
+| V3 | Three-port RR bank conflict | Three loads with same div, overlapping bank masks, different sets, and different LQ ages | `rr_bank_conflict`, selected port, `bank_conflict_slow`, `lqIdx` | Oldest conflicting request wins; other requests see slow conflict/replay next cycle. |
+| V4 | Data RW/readline conflict | MainPipe data write or readline concurrent with load-bank read | `wr_bank_conflict`, `read.ready`, `disable_ld_fast_wakeup` | Read is rejected or fast wakeup disabled; do not assume same-cycle SRAM bypass. |
+| V5 | MSHR full/merge/reject | Fill 16 entries then load same/different blocks | `miss_req.ready`, `MissResp.handled/merged/id`, `s2_nack_no_mshr` | Merge same-block requests when possible; unavailable requests are handled as nack/replay upstream. |
+| V6 | WBQ same-block conflict | WBQ processes same block as a load miss | `wbq_block_miss_req`, `MissReq.cancel`, `s2_mq_nack` | A new miss is not allocated incorrectly; cause can be traced to WBQ. |
+| V7 | DTLB miss / PMP fault / redirect | Inject separately in S1/S2/S3 | `dcache.s1_kill`, `s2_kill`, `s2_valid`, ROB needFlush | S1 kill does not install S2; S2 kill cancels MissReq but does not clear S2 valid; redirect makes no wrong writeback. |
+| V8 | Permission upgrade and `real_miss` | Tag match but `onAccess` has no permission | `s1_tag_match`, `s1_hit`, `will_send_miss_req`, `real_miss`, `replay` | Verify that the distinction between sending `MissReq` and `real_miss` loses no recovery path. |
+| V9 | Cross-16B/cross-page misalignment | For example, lower half's final byte and upper half enters next page and faults | `s1_misalign_kill`, MAB state, two `splitLoadReq`, exception VA | MAB splits two requests; exception/uncache of either half does not merge data incorrectly; redirect clears state. |
+| V10 | Late MMIO/NC classification | S0 sent DCache request, S2 classifies PMA/PBMT uncache | `s2_actually_uncache`, `dcache.s2_kill`, `MissReq.cancel`, UncacheBuffer req | No new DCache miss allocation; uncache completes through LSQ buffer path. |
+| V11 | Delayed ECC alignment | Tag/data ECC or TL denied/corrupt | `s3_valid`, `error_delayed`, `tl_error_delayed`, LoadUnit S3 exception | Error is consumed in delayed-sideband timing and is neither lost nor paired with the next load. |
+| V12 | Segment preempts port 0 | `vSegmentFlag` concurrent with ordinary LDU0 request | LDU0 `req.ready`, segment req/sideband | Ordinary LDU0 is backpressured; segment takes over without identity or response mixing. |
+
+A minimal assertion/scoreboard strategy is to track each request by the tuple `debug_robIdx + lqIdx + paddr block`, recording `req.fire -> tag/data -> resp -> miss handled/merge or replay -> LoadUnit S3`. Do not join by PC or one `valid` alone. For replay, retain the set of cause bits rather than only recording that replay occurred.
+
+## 9. Verified Conclusions, Unknowns, and Reading List
+
+### 9.1 Verified Conclusions
+
+* Default source has three LoadPipes with static same-index LoadUnit/DCache connections; segment execution can preempt port 0.
+* LoadPipe S0 uses vaddr for tag/meta reads; S1 uses DTLB duplicate paddr for tag compare and coherence permission to define a real hit.
+* Under defaults the data array is an eight-bank, single-port `BankedDataArray`; bank conflicts are implemented with explicit ready, slow-conflict, and fast-wakeup-disable logic rather than abstract comments.
+* LoadPipe S2 response and MissQueue takeover are distinct outcomes: `handled` means an MSHR accepted the transaction, while `replay` follows the nack/cancel/conflict combination.
+* `dcache.s1_kill` prevents S2 installation; `dcache.s2_kill` only contributes to MissReq cancel. They cannot be merged into one generic "flush."
+* LoadPipe does not own complete MMIO/NC handling, cross-line splitting, or final writeback; those are completed by LoadUnit, LoadMisalignBuffer, LoadQueueUncache, and LSQ.
+
+### 9.2 Items Not Decidable From This Static Reading Alone
+
+* Whether a particular elaborated configuration overrides default `nSets/nWays/blockBytes`, and same-address read/write semantics of generated SRAM. This requires parameter dumps, RTL, or waveforms.
+* Every timing combination of `real_miss`, nack, MSHR ready, and replay for tag hit with coherence-permission upgrade. Perform V8 waveform testing.
+* Complete legality and bank-index-wrap behavior at cache-line boundaries for 128-bit/vector requests. LoadPipe contains no cross-line FSM.
+* Final storage behavior of multiple prefetch/access flag write ports at one index/way. Wrapper observes collisions, but this file does not define the last writer.
+* Absolute issue-to-architectural-writeback latency. Source establishes stage boundaries and possible stalls, not a fixed cycle promise.
+
+### 9.3 Recommended Reading Order
+
+To extend from LoadPipe to verifiable behavior of the complete load instruction, read in this order:
+
+1. [LoadUnit.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:290): source selection, DTLB/PMP, forwarding/replay, and S3 writeback.
+2. [BankedDataArray.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/data/BankedDataArray.scala:660): bank arbitration and SRAM timing.
+3. [MissQueue.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:1059): MSHR allocation/merge/refill forwarding.
+4. [LoadMisalignBuffer.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:165): cross-16B/cross-page splitting.
+5. [LoadQueueUncache.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:386): MMIO/NC, response, and rollback.

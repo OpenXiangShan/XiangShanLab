@@ -1,3 +1,4 @@
+<!--
 # Cache-RequestBuffer：昆明湖 V2 的 CoupledL2 与 HuanCun 请求缓冲分析
 
 ## 1. 范围、配置与证据
@@ -88,16 +89,16 @@ Design Doc 与源代码提交不同。D1--D4 仅可用于 CoupledL2，不能复�
 
 ~~~mermaid
 flowchart LR
-  L1["L1 / TileLink A"] -->|TL A| SinkA
-  PF["L2 prefetch"] -->|PrefetchReq| SinkA
-  SinkA -->|TaskBundle, valid/ready| RB["RequestBuffer (4 entries)"]
-  MSHR["MSHRCtl / MSHRInfo"] -->|conflict, willFree| RB
-  MP["MainPipe S2/S3"] -->|same-set block| RB
-  RA["RequestArb"] -->|S1 entrance, S2 task| RB
-  RB -->|TaskBundle| RA
-  RB -->|aMergeTask| MSHR
-  RA -->|S2| MP
-  MP -->|miss allocation| MSHR
+  L1["L1 / TileLink A"] --&gt;|TL A| SinkA
+  PF["L2 prefetch"] --&gt;|PrefetchReq| SinkA
+  SinkA --&gt;|TaskBundle, valid/ready| RB["RequestBuffer (4 entries)"]
+  MSHR["MSHRCtl / MSHRInfo"] --&gt;|conflict, willFree| RB
+  MP["MainPipe S2/S3"] --&gt;|same-set block| RB
+  RA["RequestArb"] --&gt;|S1 entrance, S2 task| RB
+  RB --&gt;|TaskBundle| RA
+  RB --&gt;|aMergeTask| MSHR
+  RA --&gt;|S2| MP
+  MP --&gt;|miss allocation| MSHR
 ~~~
 
 实际连线见 [tl2chi/Slice.scala:58](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:58) 和 [tl2chi/Slice.scala:93](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:93)。
@@ -324,14 +325,14 @@ io.in.map(_.ready).zip(chosenOH.asBools).foreach {
 
 ~~~mermaid
 stateDiagram-v2
-  [*] --> Invalid: reset / valid=false
-  Invalid --> Flow: io.in.valid && canFlow && io.out.ready
-  Flow --> Invalid: input accepted without allocation
-  Invalid --> BufferedWait: alloc with conflict/block
-  BufferedWait --> BufferedReady: waitMS=0 && waitMP=0 && !noFreeWay
-  BufferedReady --> Chosen: FastArbiter grants and chosenQ enqueues
-  Chosen --> BufferedWait: cancel = !buffer(id).rdy
-  Chosen --> Invalid: io.out fire && !cancel, clear valid
+  [*] --&gt; Invalid: reset / valid=false
+  Invalid --&gt; Flow: io.in.valid && canFlow && io.out.ready
+  Flow --&gt; Invalid: input accepted without allocation
+  Invalid --&gt; BufferedWait: alloc with conflict/block
+  BufferedWait --&gt; BufferedReady: waitMS=0 && waitMP=0 && !noFreeWay
+  BufferedReady --&gt; Chosen: FastArbiter grants and chosenQ enqueues
+  Chosen --&gt; BufferedWait: cancel = !buffer(id).rdy
+  Chosen --&gt; Invalid: io.out fire && !cancel, clear valid
 ~~~
 
 reset 时 buffer 整体零化，故 valid/rdy/wait 位均为零；chosenQ 由 Chisel Queue 自身复位。模块没有 redirect、flush 或 exception 输入，所以不存在“在 RequestBuffer 内响应前端 redirect”的逻辑；coherence/retry 的恢复通过 wait 位、cancel 与上游 ready/valid 表达。
@@ -389,13 +390,13 @@ reset 时 buffer 整体零化，故 valid/rdy/wait 位均为零；chosenQ 由 Ch
 
 ~~~mermaid
 flowchart LR
-  TLA["TL A via HuanCun SinkA"] -->|MSHRRequest| AArb["optional A/prefetch arbiter"]
-  PF["L3 prefetch"] -->|MSHRRequest| AArb
-  AArb -->|in| HRB["HuanCun RequestBuffer (4 entries)"]
-  HMSHR["ABC MSHR status"] -->|will_free / set| HRB
-  HRB -->|out| OP["1-entry output_pipe"]
-  OP -->|a_req| MA["MSHRAlloc"]
-  MA -->|C > B > A, dir ready| ABC["ABC MSHR allocation"]
+  TLA["TL A via HuanCun SinkA"] --&gt;|MSHRRequest| AArb["optional A/prefetch arbiter"]
+  PF["L3 prefetch"] --&gt;|MSHRRequest| AArb
+  AArb --&gt;|in| HRB["HuanCun RequestBuffer (4 entries)"]
+  HMSHR["ABC MSHR status"] --&gt;|will_free / set| HRB
+  HRB --&gt;|out| OP["1-entry output_pipe"]
+  OP --&gt;|a_req| MA["MSHRAlloc"]
+  MA --&gt;|C > B > A, dir ready| ABC["ABC MSHR allocation"]
 ~~~
 
 HuanCun Slice 的实际连线为 SinkA/可选二输入 Arbiter 到 RequestBuffer，再到 MSHRAlloc.a_req；RequestBuffer 仅被接入 abc_mshr 的 status，MSHRAlloc 自己则检查全部 mshrsAll。
@@ -554,3 +555,303 @@ RequestBuffer 已位于 L1/预取到外层 cache 的物理 TaskBundle/MSHRReques
 2. HuanCun RequestBuffer 是同仓库的不同实现，真实 Slice 也为 4 项，但使用 MSHRRequest、wait_table、buffer_dep_mask 与 output_pipe；它不具有 CoupledL2 的 MSHR 合并和 MainPipe 同 set/way 协作逻辑。
 3. 两者都不是响应队列、TLB、异常处理器或架构提交结构；对跨页、跨 line、MMIO、响应周期和软件可见顺序的结论必须继续沿 DCache/TLB/MSHR/response 路径验证。
 4. 最优先的波形/形式化检查是 CoupledL2 的 mergeA one-hot 目标、chosenQ cancel 后重发、HuanCun full 同拍释放限制，以及 HuanCun flow 与同组 buffer 依赖的交叉情况。
+-->
+
+# Cache-RequestBuffer: CoupledL2 and HuanCun Request-Buffer Analysis for Kunminghu V2
+
+## 1. Scope, Configuration, and Evidence
+
+This article analyzes cache request buffers in the user-supplied local checkout instead of inferring a module's role from its name. Chisel/Scala is the source of every behavioral conclusion; the Design Doc only helps identify design intent.
+
+| Item | Baseline |
+| --- | --- |
+| XiangShan top-level repository | `kunminghu-v2`, commit `e12436c7cba86b195deec24981976d78bc263661` |
+| CoupledL2 submodule | commit `fb5469838c8902b6cb33992c0a30ee3d446e4453` |
+| HuanCun submodule | commit `65ef077373ecf398b4cecdea06b65ef9b8d79044` |
+| Design Doc | `/home/yanyusong/XiangShan-Design-Doc`, commit `58d9e2ad11f044cb6f8887d9687d9e110696d1aa` |
+| Weekly synchronization check | Run on 2026-08-17; the prior check was 2.89 days earlier, so network synchronization was skipped by the skill rule. |
+
+### 1.1 Which RequestBuffer Is Active in Kunminghu V2?
+
+`KunminghuV2Config` combines `WithCHI`; `WithCHI` sets `EnableCHI` true. `L2Top` then selects `TL2CHICoupledL2` rather than `TL2TLCoupledL2`. Therefore, the primary object for standard Kunminghu V2 is `RequestBuffer` in the CoupledL2 `tl2chi` Slice. [`Configs.scala:477`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:477) [`Configs.scala:481`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:481) [`L2Top.scala:112`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:112)
+
+HuanCun is not the LLC on this default V2+CHI path: `L3CacheParamsOpt` is conditional on `!EnableCHI`, and the top level instantiates HuanCun only when that option exists. [`Configs.scala:219`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:219) [`Top.scala:111`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Top.scala:111) Section 6 still analyzes HuanCun's RequestBuffer as an optional TileLink-LLC variant, not as elaborated default V2+CHI hardware.
+
+### 1.2 Instance Count, Depth, and Similar but Different Structures
+
+| Subsystem | Effective instantiation | Arguments | Instances per bank | Status here |
+| --- | --- | --- | --- | --- |
+| CoupledL2 `tl2chi` | [tl2chi/Slice.scala:60](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:60) | default `flow=true`, `entries=4` | One | V2+CHI primary path |
+| CoupledL2 `tl2tl` | [tl2tl/Slice.scala:40](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2tl/Slice.scala:40) | default `flow=true`, `entries=4` | One | Non-CHI external-protocol alternative |
+| HuanCun | [huancun/Slice.scala:128](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:128) | explicit `entries=4`, default `flow=true` | One | Optional TL LLC variant |
+
+Both CoupledL2 and HuanCun create Slices by bank. Their similarly named Slice classes cannot simply be added to obtain the instance count for one elaboration. [`CoupledL2.scala:419`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:419) [`HuanCun.scala:253`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/HuanCun.scala:253)
+
+The CoupledL2 `PrefetchReqBuffer`, `MSHRBuffer`, `GrantBuffer`, HuanCun `RefillBuffer`, and the inactive `tl2tl` `ProbeQueue` are not the A-request RequestBuffer discussed here. They filter prefetches, store MSHR data beats, send D responses, bypass refill data, or are connected to `DontCare`, respectively. [`BestOffsetPrefetch.scala:409`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/prefetch/BestOffsetPrefetch.scala:409) [`MSHRBuffer.scala:47`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/MSHRBuffer.scala:47) [`GrantBuffer.scala:114`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:114) [`huancun/Slice.scala:80`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:80) [`tl2tl/Slice.scala:54`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2tl/Slice.scala:54)
+
+## 2. Theory, Design Intent, and Source Layers
+
+### 2.1 Theory-to-Code Mapping
+
+| Concept | Course-level meaning | Implementation | Difference from a generic textbook model |
+| --- | --- | --- | --- |
+| Structural conflict | Finite queues, ports, and MSHRs can prevent simultaneous progress. | `full`, `waitMS`, `waitMP`, `noFreeWay`, and RequestArb ready. | This schedules physical/coherence cache tasks, not an instruction issue queue. |
+| Non-blocking cache | One incomplete miss need not stop every later request. | CoupledL2 MSHR state plus four RequestBuffer entries; HuanCun `wait_table`. | Same-set/group conflicts, MSHR capacity, and downstream ready still constrain progress. |
+| Prefetch speculation | A prefetch may start before a demand and does not cause architectural writeback. | CoupledL2 Hint deduplication and demand Acquire upgrade. | A prefetch can be dropped; this is not generic address-request merging. |
+| Ordering constraint | Shared resources need protection from overlapping updates. | CoupledL2 same-set `waitMP/noFreeWay`; HuanCun `buffer_dep_mask`. | HuanCun flow bypass does not inspect `buffer_dep_mask`, so strict FIFO ordering cannot be claimed for every path. |
+
+Course material defines structural conflict and pipelined buffering, but this RequestBuffer is not a ROB, LSQ, or instruction-commit mechanism.
+
+### 2.2 Design-Doc Traceability
+
+| ID | Atomic design intent | Source relation | Status |
+| --- | --- | --- | --- |
+| D1 | Temporarily blocked A requests are buffered; directly passable requests avoid occupancy. | CoupledL2 `canFlow/doFlow` and allocation conditions. | Verified. [`RequestBuffer.scala:179`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:179) |
+| D2 | A same-address demand Acquire can upgrade an incomplete prefetch MSHR. | `mergeAMask` selects an MSHR; `aMergeTask` reaches MSHRCtl through Slice. | Verified. [`RequestBuffer.scala:153`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:153) [`tl2chi/Slice.scala:140`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:140) |
+| D3 | Full buffer may still accept a merge or duplicate prefetch. | CoupledL2 `io.in.ready` includes `mergeA` and `dup`. | Verified. [`RequestBuffer.scala:205`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:205) |
+| D4 | `waitMP`, `waitMS`, and same-set way limits govern admission. | Four-bit `waitMP`, MSHR bitmaps, and s2+s3+MSHR accounting. | Verified. [`RequestBuffer.scala:167`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:167) [`RequestBuffer.scala:251`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:251) |
+| D5 | RequestArb S1/S2 and MainPipe S3/S4/S5 form the pipeline intent. | RequestBuffer receives S1 entrance and S2/S3 backpressure. | Partially verified; no fixed response latency follows. [`RequestArb.scala:191`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:191) [`MainPipe.scala:930`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:930) |
+| D6 | RequestBuffer merge semantics generalize to HuanCun. | HuanCun checks only buffer-resident duplicate prefetches and has no `aMergeTask`. | Version/implementation mismatch. [`huancun/RequestBuffer.scala:58`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RequestBuffer.scala:58) |
+
+The Design Doc revision differs from the source revision. D1--D4 apply only to CoupledL2, not HuanCun, which lacks `mainPipeBlock`, `waitMP`, `noFreeWay`, and an MSHR-prefetch-upgrade interface. The five-stage naming only establishes interface direction; an exact request-to-response time needs elaborated Verilog or measured waveform evidence.
+
+## 3. Top-Level Connections and Module Contract
+
+### 3.1 CoupledL2 `tl2chi` Data Path
+
+```mermaid
+flowchart LR
+  L1["L1 / TileLink A"] -->|TL A| SinkA
+  PF["L2 prefetch"] -->|PrefetchReq| SinkA
+  SinkA -->|TaskBundle, valid/ready| RB["RequestBuffer (4 entries)"]
+  MSHR["MSHRCtl / MSHRInfo"] -->|conflict, willFree| RB
+  MP["MainPipe S2/S3"] -->|same-set block| RB
+  RA["RequestArb"] -->|S1 entrance, S2 task| RB
+  RB -->|TaskBundle| RA
+  RB -->|aMergeTask| MSHR
+  RA -->|S2| MP
+  MP -->|miss allocation| MSHR
+```
+
+The actual wiring is at [tl2chi/Slice.scala:58](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:58) and [tl2chi/Slice.scala:93](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:93).
+
+### 3.2 Who, Why, How, From, and To
+
+| Object | Who | Why | How | From | To |
+| --- | --- | --- | --- | --- | --- |
+| RequestBuffer | Owned by Slice; default `entries=4`, `flow=true` | Holds tasks that cannot safely enter A path, while avoiding occupancy for flow-through tasks. | `RegInit` buffer, FastArbiter, and one-entry `chosenQ`. | `SinkA.task` | `RequestArb.sinkA` or `MSHRCtl.aMergeTask` |
+| `io.in` | SinkA drives it; RequestBuffer drives ready. | Normalizes L1 A and optional prefetch as TaskBundle. | DecoupledIO. | Transformed TL A / PrefetchReq. | Buffer, flow, merge, or drop branches. |
+| `mshrInfo` | Produced by MSHRCtl. | Blocks a request from preempting unreleased/conflicting coherence state. | `conflictMask`, `mergeAMask`, and `willFree` clearing. | Each MSHRInfo. | `waitMS`, mergeA, `noFreeWay`. |
+| `mainPipeBlock` and `s1Entrance` | MainPipe and RequestArb. | Avoids overlapping directory/metadata-write windows for one set. | `waitMP` shifting and S1-block reinjection. | S2/S3 and S1 entrance state. | Entry `rdy`. |
+| `io.out` | Produced by RequestBuffer; consumed by RequestArb. | Delivers approved A tasks to directory-read arbitration. | chosenQ/dequeue or `canFlow` mux. | Ready entry or current input. | RequestArb S1/S2. |
+
+The interface is declared at [CoupledL2 RequestBuffer.scala:73](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:73).
+
+### 3.3 Downstream Priority Is Not Internal Buffer Priority
+
+RequestBuffer uses FastArbiter only among ready buffer entries. After it, RequestArb arbitrates external SinkC, SinkB, and SinkA tasks with C > B > A, while MSHR tasks have a separate S0/S1 register entrance. An A that leaves RequestBuffer can still be backpressured by C/B, an MSHR task, the directory, or MSHR capacity. [`RequestArb.scala:145`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:145) [`RequestArb.scala:153`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:153) [`MSHRCtl.scala:110`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHRCtl.scala:110)
+
+## 4. Parameters, Addresses, and Indexing
+
+### 4.1 Parameter Ownership and Current V2 Derivation
+
+| Parameter or value | Owner | Effect |
+| --- | --- | --- |
+| `entries=4` | CoupledL2 class default; HuanCun Slice explicitly overrides it | Four main buffer entries. |
+| `flow=true` | Default for both RequestBuffers | Input can bypass when the output holding register is empty. |
+| L2 size 1 MiB, 8 ways, 4 banks | `KunminghuV2Config` and default `L2CacheConfig` | Sets per bank = `1MiB / 4 / 8 / 64B = 512`, subject to elaboration. |
+| CoupledL2 `mshrs=16` | L2Param default, not overridden in V2 configuration | Width of `waitMS` and input to `noFreeWay`. |
+| HuanCun MSHRs | `HCCacheParameters` | RequestBuffer observes normal ABC MSHRs only; do not report default 14 as a platform fact without elaboration. |
+
+Sources: [`L2Param.scala:65`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/L2Param.scala:65), [`Configs.scala:278`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:278), and [`HCCacheParameters.scala:83`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/HCCacheParameters.scala:83).
+
+### 4.2 Address to Tag / Set / Off
+
+CoupledL2 SinkA applies `parseAddress` to TileLink A and creates `TaskBundle.tag/set/off`; Slice bank bits are skipped before the set. HuanCun SinkA likewise converts TL A to `MSHRRequest` before HuanCun RequestBuffer. [`CoupledL2.scala:186`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:186) [`SinkA.scala:54`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkA.scala:54) [`huancun/HuanCun.scala:147`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/HuanCun.scala:147) [`huancun/SinkA.scala:85`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkA.scala:85)
+
+CoupledL2 `sameAddr` compares `Cat(tag,set)`, so conflict, duplicate, and merge granularity is the cache-line identity within the Slice; `off` is not compared. It is not arbitrary byte-range merging. HuanCun `set_conflict` compares low `block_granularity` set bits and does not compare tag. [`CoupledL2 RequestBuffer.scala:108`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:108) [`HuanCun RequestBuffer.scala:47`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RequestBuffer.scala:47)
+
+### 4.3 Allocation Index and Priority
+
+| Selector | Computation | Consumer | Rule for simultaneous candidates |
+| --- | --- | --- | --- |
+| CoupledL2 `insertIdx` | `PriorityEncoder(buffer.map(!valid))` | Selected `RegInit` buffer entry | Selects the priority-encoded empty entry; full means no allocation. |
+| CoupledL2 `mergeAId` | `OHToUInt(mergeAMask)` | `aMergeTask.bits.id` | No local one-hot assertion; prior conflict protocol must make target unambiguous. |
+| HuanCun `insert_idx` | `PriorityEncoder(~valids.asUInt)` | Memory, valids, wait table, dependency matrix | Selects the priority-encoded empty entry. |
+| HuanCun MSHRSelector | `ParallelPriorityMux(idle)` | ABC MSHR allocation | Picks a priority-encoded idle normal MSHR; C/B/A input priority belongs to MSHRAlloc. |
+
+## 5. CoupledL2: Active RequestBuffer for Kunminghu V2+CHI
+
+### 5.1 Visible Stages and Data/Control Flow
+
+| Stage | Payload/state | Work | Block, cancel, or retry | Output |
+| --- | --- | --- | --- | --- |
+| Combinational ingress | `io.in.bits` TaskBundle | Computes conflict, merge, duplicate, `noFreeWay`, and `canFlow`. | Full, MSHR conflict, MainPipe block, or way saturation. | Flow-through, buffer allocation, `aMergeTask`, or drop. |
+| Buffer entry | `valid/rdy/task/waitMP/waitMS` | Holds a task that cannot safely flow. | `waitMS`, `waitMP`, `s1_Block`, `noFreeWay`. | FastArbiter input. |
+| Issue selection | Multiple ready entries | FastArbiter selects one and writes `chosenQ`. | `chosenQ.enq.ready`. | `chosenQ` entry ID and payload. |
+| `chosenQ` / output | One `ChosenQBundle` | Holds a candidate until RequestArb accepts it. | If source entry becomes not ready, it cancels without clearing buffer validity. | `io.out` or later reselection. |
+| RequestArb S1/S2 and MainPipe S2/S3 | TaskBundle | Directory read and A/B/C/MSHR arbitration; same-set information feeds back. | C/B priority, MSHR full, directory and data-port constraints. | `mainPipeBlock`, `s1Entrance`, `taskFromArb_s2`. |
+
+RequestBuffer has no response, TLB, exception, or commit port. Response latency belongs to MainPipe, MSHR, GrantBuffer, and CHI; entry depth cannot derive it.
+
+### 5.2 Conflict Algorithm and Wait Bitmaps
+
+MSHR address conflict requires the same set and either the MSHR's active `reqTag` or its `metaTag` in a replacement/release window. An MSHR with `willFree` does not block. The vector initializes `waitMS` and clears bits each cycle for MSHRs that will release. [`CoupledL2 RequestBuffer.scala:112`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:112) [`CoupledL2 RequestBuffer.scala:217`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:217) [`CoupledL2 RequestBuffer.scala:257`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:257)
+
+The initial four-bit `waitMP` encoding represents the duration of same-set A blocking across S1/S2/S3 and then shifts. At its recheck point it resamples `conflictMask`. A same-set A leaving output, or B/C/MSHR entering S1, reinjects a wait through `s1_Block`. MainPipe `s23Block` applies same-set restriction only to tasks that might write metadata. [`CoupledL2 RequestBuffer.scala:221`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:221) [`CoupledL2 RequestBuffer.scala:268`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:268) [`MainPipe.scala:914`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:914)
+
+### 5.3 Same-Set Way Protection
+
+`noFreeWay` conservatively counts `fromA` MSHRs and s2/s3 A-path tasks for a set against `ways`. It prevents flow and entry readiness when that set has no safe way capacity. It is a structural-resource protection, not proof that every physical way is already allocated on a specific cycle.
+
+### 5.4 Flow, Allocation, Prefetch Drop, and Demand Upgrade
+
+| Case | Winner/blocker | State transition | Downstream observer |
+| --- | --- | --- | --- |
+| Conflict-free A | `canFlow && out.ready` | Current input flows; no buffer write. | `RequestArb.sinkA` |
+| Same-address MSHR | Nonzero `conflictMask` | Task buffers and waits for `willFree` to clear `waitMS`. | MSHRCtl state, FastArbiter |
+| MainPipe same set | `mainPipeBlock` or same-set `s1Entrance` | New or old entry waits through shifted/reinjected `waitMP`. | MainPipe, RequestArb |
+| Same-set way saturation | s2+s3+fromA MSHR count reaches ways | No flow or ready until occupancy drops. | Later directory way selection |
+| Late Acquire matches prefetch MSHR | `mergeAMask` | Emits `aMergeTask`; no entry allocation. | MSHRCtl and selected MSHR |
+| Duplicate Hint | `isPrefetch && dupMask.orR` | Hint is accepted but not allocated. | Drop-prefetch performance event; no response |
+| Stale chosenQ entry | selected `buffer(id).rdy` goes low | chosenQ cancels but buffer remains valid for future selection. | `io.out` hides it |
+| A with B/C | RequestArb has B/C valid | B/C win and A remains held. | RequestArb |
+
+The relevant conditions are in [`CoupledL2 RequestBuffer.scala:153`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:153), [`CoupledL2 RequestBuffer.scala:279`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:279), [`CoupledL2 RequestBuffer.scala:297`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestBuffer.scala:297), and [`RequestArb.scala:155`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:155).
+
+### 5.5 Storage, Search, Update, Release, Replacement, and Port Conflicts
+
+The CoupledL2 buffer entry retains a task plus validity and readiness state. `waitMS` tracks per-MSHR release, `waitMP` tracks same-set pipeline exclusion, and `noFreeWay` protects the shared way domain. The FastArbiter yields one selected entry; `chosenQ` preserves the selected identity until handoff. A cancel deliberately does not release the main entry, preventing data loss when eligibility changes after selection.
+
+### 5.6 Simultaneous Ready Entries in FastArbiter
+
+FastArbiter selects at most one ready entry for the one-output path. Its arbitration is internal to RequestBuffer and must not be confused with RequestArb's C > B > A input priority. Observe both selection and the downstream `io.out.fire`; a selection blocked or canceled does not mean the source entry was released.
+
+### 5.7 Implicit State Machine and Handshake Timing
+
+```mermaid
+stateDiagram-v2
+  [*] --> Invalid: reset / valid=false
+  Invalid --> Flow: io.in.valid && canFlow && io.out.ready
+  Flow --> Invalid: input accepted without allocation
+  Invalid --> BufferedWait: alloc with conflict/block
+  BufferedWait --> BufferedReady: waitMS=0 && waitMP=0 && !noFreeWay
+  BufferedReady --> Chosen: FastArbiter grants and chosenQ enqueues
+  Chosen --> BufferedWait: cancel = !buffer(id).rdy
+  Chosen --> Invalid: io.out fire && !cancel, clear valid
+```
+
+This is an explanation of visible control, not a separately encoded enum in the source. The retained WaveDrom sketch is illustrative: it should be read with `valid`, `ready`, entry status, cancel, and downstream RequestArb conditions rather than as a measured fixed-latency trace.
+
+### 5.8 Scenario Matrix
+
+The table in Section 5.4 is the scenario matrix: it covers direct flow, MSHR conflict, same-set MainPipe pressure, way saturation, demand merge, duplicate-prefetch drop, cancellation, and B/C preemption. Those cases jointly demonstrate why `entries=4` cannot be interpreted as four independent FIFO slots.
+
+### 5.9 Latency and Throughput
+
+| Path | Start/end | Source-confirmed statement | Variables |
+| --- | --- | --- | --- |
+| Flow-through | `io.in.valid` to `io.out.valid` | Combinational within this module only when `canFlow && out.ready`; it does not use the main buffer. | RequestArb ready, MSHR/directory/MainPipe/way conditions. |
+| Buffered issue | Allocation to `io.out.fire` | Passes at least entry selection and chosenQ; no fixed cycle count follows. | `waitMS`, `waitMP`, `noFreeWay`, arbitration, cancel, downstream ready. |
+| Input acceptance | `io.in` | One Decoupled task per cycle at most; four entries are absorption capacity. | Full; ordinary input is not accepted when full. |
+| Output issue | `io.out` | One FastArbiter output means one task per cycle at most. | Same-set masking, RequestArb C/B/MSHR priority, directory and MSHR state. |
+
+"One per cycle" is an all-conditions-satisfied upper bound for this module, not a promise about L2 hits, misses, CHI response traffic, or software load throughput.
+
+## 6. HuanCun: Optional TileLink LLC RequestBuffer Variant
+
+### 6.1 Boundary, Upstream, and Downstream
+
+```mermaid
+flowchart LR
+  TLA["TL A via HuanCun SinkA"] -->|MSHRRequest| AArb["optional A/prefetch arbiter"]
+  PF["L3 prefetch"] -->|MSHRRequest| AArb
+  AArb -->|in| HRB["HuanCun RequestBuffer (4 entries)"]
+  HMSHR["ABC MSHR status"] -->|will_free / set| HRB
+  HRB -->|out| OP["1-entry output_pipe"]
+  OP -->|a_req| MA["MSHRAlloc"]
+  MA -->|C > B > A, dir ready| ABC["ABC MSHR allocation"]
+```
+
+HuanCun Slice connects SinkA and an optional two-input A/prefetch arbiter to RequestBuffer, then to `MSHRAlloc.a_req`. RequestBuffer observes only `abc_mshr` status; MSHRAlloc checks all `mshrsAll`. [`huancun/Slice.scala:127`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:127) [`huancun/Slice.scala:145`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:145) [`huancun/Slice.scala:168`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:168)
+
+### 6.2 State, Allocation, and Release
+
+The HuanCun class default is 16 entries, but the effective Slice instance overrides it to four. Payload memory, `wait_table`, and `buffer_dep_mask` have no reset initialization; safety depends on reset `valids = 0` and accessing/updating only valid rows. `rdys` reset to zero. [`HuanCun RequestBuffer.scala:8`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RequestBuffer.scala:8) [`HuanCun RequestBuffer.scala:16`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RequestBuffer.scala:16)
+
+| Operation | Source rule | Important meaning |
+| --- | --- | --- |
+| Full / accept | `full` means all valids; `io.in.ready = !full` | When full, an input cannot be accepted in the same cycle in which one main entry moves into `output_pipe`. |
+| Allocate | Not full, input valid, not successfully flowing, not duplicate | PriorityEncoder selects empty slot and writes request, wait table, dependency row, and valid. |
+| Release MSHR wait | `wait_table & ~free_mask` | `will_free` means a release next cycle and removes the wait bit in the current update. |
+| Release buffer dependency | Any `issueArb.out.fire` clears the selected dependency column in all rows. | A successor can release local dependency once predecessor enters `output_pipe`, not only when MSHRAlloc accepts it. |
+| Release main entry | `issueArb.io.in(i).fire` clears `valids(i)` | Main occupancy transfers to the one-entry `output_pipe`; `full` excludes `output_pipe`. |
+
+### 6.3 Conflict Domain, Prefetch Deduplication, and Flow Limit
+
+HuanCun builds `conflict_mask` from `mshr_status` entries for the same low `block_granularity` set bits that are not `will_free`, and asserts no more than one conflict at allocation. `buffer_dep_mask` records existing buffered entries in the same group. [`HuanCun RequestBuffer.scala:47`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RequestBuffer.scala:47) [`HuanCun RequestBuffer.scala:63`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RequestBuffer.scala:63)
+
+Its duplicate case is not CoupledL2 demand upgrading: it only matches tag+set prefetches already in the buffer. A non-full duplicate prefetch is accepted without allocation, does not update the existing entry, and does not make `aMergeTask`; a full input is already held by `io.in.ready=0` and cannot be accepted.
+
+More importantly, the flow branch checks `output_pipe.valid`, `io.in.valid`, and `full`, but does not check duplicate, conflict, or `req_deps`. With downstream ready high, an input can bypass an existing same-group buffered dependency; only when downstream ready is low will it allocate and obey buffer dependency. Thus the buffered allocation path maintains same-group dependency, but strict same-group FIFO across all buffered and flow paths is not established by this source. [`HuanCun RequestBuffer.scala:39`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RequestBuffer.scala:39) [`HuanCun RequestBuffer.scala:67`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/RequestBuffer.scala:67)
+
+### 6.4 Downstream MSHRAlloc Second Arbitration
+
+RequestBuffer `out` means only that a request reached `MSHRAlloc.a_req`. Actual A acceptance also requires an idle normal ABC MSHR, no same-group conflict across all MSHRs, and no valid C or B request. C outranks B, B outranks A. This global arbitration complements RequestBuffer's local visibility of only `abc_mshr` status. [`MSHRAlloc.scala:79`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/MSHRAlloc.scala:79) [`MSHRAlloc.scala:116`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/MSHRAlloc.scala:116)
+
+### 6.5 Key Differences Between the Implementations
+
+| Dimension | CoupledL2 V2+CHI | HuanCun variant |
+| --- | --- | --- |
+| Status in standard V2 | Elaborated primary path | Not elaborated under `EnableCHI` because `L3CacheParamsOpt` is absent |
+| Payload | `TaskBundle` | `MSHRRequest` |
+| MSHR conflict | Tag+set / replacement tag over `mshrsAll` | Grouped set over ABC MSHRs; downstream repeats global check |
+| MainPipe cooperation | `mainPipeBlock`, `s1Entrance`, `taskFromArb_s2`, `waitMP` | No corresponding interfaces |
+| Way protection | `noFreeWay` counts s2+s3+MSHR against ways | No equivalent local count |
+| Prefetch behavior | MSHR/buffer duplicate drop plus late-prefetch Acquire upgrade | Only buffer-resident prefetch duplicate suppression |
+| Local order | Same-set MainPipe/way protection plus cancel | `buffer_dep_mask` only on buffered path; flow has explicit bypass limit |
+| Output holding | One-entry `chosenQ`, cancel retains main entry | One-entry `output_pipe`, main entry releases when transferred |
+
+## 7. Cross-Boundary Code Analysis
+
+RequestBuffer sits after the L1/prefetch-to-external-cache physical `TaskBundle` or `MSHRRequest` boundary. It holds no page-table state, PMP/PMA exception state, ROB index, or response merger.
+
+| Boundary | Behavior provable at RequestBuffer | Nearby code and limit | Failure/recovery |
+| --- | --- | --- | --- |
+| Virtual page | No translation or permission input; consumes already split tag/set/off task. | `LoadMisalignBuffer` creates split load requests and stores second-fragment exception address, but is not a RequestBuffer child. | RequestBuffer does not merge pages; LoadMisalignBuffer owns redirect cleanup. |
+| Cache line | CoupledL2 `sameAddr` compares only tag+set. | No mask/off splitting or response reassembly exists here. | Each fragment may independently hit/miss or be blocked by a different MSHR/entry. |
+| MMIO/uncache | V2 CHI separates cacheable manager node from `mmioNode/MMIOBridge`; RequestBuffer is in Slice, not MMIOBridge. | MMIOBridge has `UNCACHED` region type, private state, and CHI transaction-ID path. | MMIO side effects, retry, and commit gating do not belong to RequestBuffer. |
+
+Upstream page-crossing/redirect references are [`LoadMisalignBuffer.scala:172`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:172), [`LoadMisalignBuffer.scala:504`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:504), [`LoadMisalignBuffer.scala:610`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:610), and [`LoadMisalignBuffer.scala:625`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:625). The MMIO bypass is evidenced by [`TL2CHICoupledL2.scala:40`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:40), [`TL2CHICoupledL2.scala:65`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:65), and [`MMIOBridge.scala:51`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MMIOBridge.scala:51).
+
+For example, when LoadMisalignBuffer splits an unaligned load into low/high requests and the high fragment is uncacheable/MMIO or faults, that buffer handles `loadAddrMisaligned`; RequestBuffer does not merge a cacheable low fragment and MMIO high fragment into one transaction. This conclusion is limited to the shown split-load path; other page/line behavior needs corresponding DCache/TLB waveform proof.
+
+## 8. Exceptions, Speculation, Difftest, and Visibility
+
+Neither RequestBuffer has exception, interrupt, privilege, redirect, commit, or Difftest IO, nor a DiffTest instance. They hold speculative/coherence scheduling state: a CoupledL2 prefetch may be dropped or upgraded, and a HuanCun prefetch may be withheld from allocation by deduplication. Neither behavior directly represents committed RISC-V architectural state.
+
+Errors and exceptions must be followed through DCache, TLB, MMIO, and response paths. The page-crossing/redirect state cited above belongs to MemBlock's LoadMisalignBuffer, not RequestBuffer. To relate a RequestBuffer entry to a software instruction, trace backward and forward in waveform/FST using L1 TL source ID, `ReqSource`, MSHR ID, and downstream response, not PC or tag/set alone.
+
+## 9. Verification Notes
+
+| Verification ID | Risk / invariant | Directed stimulus | Expected observation |
+| --- | --- | --- | --- |
+| `RB_RESET_FIRST` | No stale valid entry after reset; first request does not read uninitialized valid payload. | Send conflict-free A after reset deassertion. | CoupledL2 `buffer.valid` and HuanCun `valids/rdys` are zero; first task flows or allocates correctly. |
+| `RB_CPL_FLOW_HOLD` | Flow only occurs under `canFlow`; `out.ready=0` cannot falsely lose input. | Continuous A; block second request with `mainPipeBlock` or `out.ready=0`. | `doFlow` requires handshake; second request allocates or stays valid upstream. |
+| `RB_CPL_WAIT_RELEASE` | `waitMS` clears only for matching `willFree`. | Allocate same tag/set conflict; delay `willFree`. | Entry stays unready; after release, wait bit clears and remaining conditions govern issue. |
+| `RB_CPL_WAY_LIMIT` | Same-set all-way guard cannot be exceeded. | Make same-set fromA MSHR plus S2/S3 count reach ways. | `noFreeWay=1`, no flow/ready; admission returns after one use is released. |
+| `RB_CPL_MERGE_DUP` | Demand upgrade and prefetch drop are not confused or double-responded. | Prefetch miss followed by same-address Acquire; separate same-address Hint. | One `aMergeTask` for Acquire; Hint does not allocate; full can still accept valid merge/dup cases. |
+| `RB_CPL_CANCEL` | chosenQ cancel cannot clear its main entry. | Select an entry, then reintroduce `waitMS/waitMP`. | chosenQ cancels; `buffer(id).valid` stays high and can be selected later. |
+| `RB_HC_FULL_DEQ` | HuanCun cannot reuse a slot in the cycle it transfers a full-buffer entry. | Fill four entries, issue one, and present a fifth in the same cycle. | `io.in.ready` remains low; fifth can arrive no earlier than the next cycle. |
+| `RB_HC_FLOW_DEP` | HuanCun flow's omission of `buffer_dep_mask` is covered rather than assumed away. | Preload same-group buffered entry, empty `output_pipe`, downstream ready, then send same-group task. | Input can flow; property must not assert strict all-path same-group FIFO. |
+| `RB_HC_STATUS_SCOPE` | Local ABC status and global MSHRAlloc status are not conflated. | Occupy BC/C MSHRs then attempt A. | Local wait need not see the status; MSHRAlloc still applies global conflict/priority backpressure. |
+| `RB_BOUNDARY_MMIO` | Cross-page or uncache fragment is not treated as one cache RequestBuffer transaction. | Unaligned cross-page load with high fragment MMIO/NC or fault, plus redirect. | Split buffer owns exception/redirect cleanup; RequestBuffer sees only legal cache-side tasks. |
+
+Suggested checkers are occupancy, ready/valid payload-stability, bitmask scoreboards, progress/liveness, set-occupancy, merge-target, storage-conflict, and cross-boundary scoreboards. The retained Chinese review copy contains direct source anchors for each row.
+
+## 10. Conclusions and Open Validation Items
+
+1. The standard Kunminghu V2+CHI A RequestBuffer is the four-entry CoupledL2 `tl2chi/Slice` implementation. `waitMS`, `waitMP`, `noFreeWay`, `chosenQ`, and MSHR prefetch upgrade jointly control the point at which a request enters RequestArb.
+2. HuanCun RequestBuffer is a different same-repository implementation. Its active Slice is also four entries, but it uses `MSHRRequest`, `wait_table`, `buffer_dep_mask`, and `output_pipe`; it does not have CoupledL2's MSHR merge or MainPipe same-set/way cooperation.
+3. Neither is a response queue, TLB, exception handler, or architectural commit structure. Cross-page, cross-line, MMIO, response-cycle, and software-visible ordering claims require continued evidence along DCache/TLB/MSHR/response paths.
+4. Highest-priority waveform/formal checks are the CoupledL2 mergeA one-hot target, reselection after chosenQ cancellation, HuanCun full same-cycle release behavior, and the interaction between HuanCun flow and same-group buffer dependency.

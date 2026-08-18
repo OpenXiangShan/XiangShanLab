@@ -1,3 +1,4 @@
+<!--
 # Decode 端 Fusion 全部场景
 
 本文基于 XiangShan `kunminghu-v3` 分支源码梳理 Decode 端指令融合。结论只按源码证据列出，不从注释或既有文档外推。
@@ -61,4 +62,88 @@ Fusion 修改的是第一条指令的译码结果，第二条指令被清除。�
 3. 有异常或 trigger 的 decode 输出不进入 fusion 检测，避免错误修改异常路径指令。源码证据：[`CtrlBlock.scala:592`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L592)、[`CtrlBlock.scala:595`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L595)。
 4. `SLLI/SRLI + ADD`、`ANDI + ADD/ADDW/OR/MULW` 这类场景允许第一条结果流入第二条的 `rs1` 或 `rs2`，因此需要 `lsrc2NeedMux` 和 Rename 侧 `fusionInfo` 配合，保留第二条指令的另一个源操作数。源码证据：[`FusionDecoder.scala:86`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L86)、[`FusionDecoder.scala:664`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L664)、[`Rename.scala:558`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/rename/Rename.scala#L558)。
 5. DecodeStage 只接收上一级返回的 fusion 结果用于性能计数，实际 fusion 检测和替换在 `CtrlBlock` 中完成。源码证据：[`DecodeStage.scala:60`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/DecodeStage.scala#L60)、[`DecodeStage.scala:438`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/DecodeStage.scala#L438)、[`CtrlBlock.scala:623`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L623)。
+-->
+
+# All Decode-Side Fusion Scenarios
+
+
+This document summarizes instruction fusion on the Decode side from the XiangShan `kunminghu-v3` source. Conclusions are listed only when supported by source evidence; they are not inferred from comments or existing documentation.
+
+
+Core source files:
+
+- `src/main/scala/xiangshan/backend/decode/FusionDecoder.scala`
+- `src/main/scala/xiangshan/backend/CtrlBlock.scala`
+- `src/main/scala/xiangshan/backend/rename/Rename.scala`
+- `src/main/scala/xiangshan/backend/decode/DecodeStage.scala`
+
+
+## 1. General Rules for Fusion
+
+
+Decode-side fusion examines only adjacent instruction pairs within the decode width. `BaseFusionCase` requires `pair.length == 2` and defines common dependency predicates: `withSameDest`, `destToRs1`, `destToRs2`, and `instr2Rs1ToRs2`. These predicates are shared foundations for the individual cases. Source evidence: [`FusionDecoder.scala:31`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L31), [`FusionDecoder.scala:46`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L46).
+
+
+Fusion changes the decoded result of the first instruction and clears the second instruction. Replaceable fields include `fuType`, `fuOpType`, `lsrc2`, `src2Type`, `selImm`, and `imm`; `FusionDecodeReplace.update` writes these fields back to `DecodeOutUop`. Source evidence: [`FusionDecoder.scala:522`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L522), [`FusionDecoder.scala:531`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L531), [`FusionDecoder.scala:676`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L676).
+
+
+`FusionDecoder` builds the same `fusionList` for every adjacent pair; list order is the match priority. The source contains 28 cases. An output is valid only when the pair is valid, the current first instruction was not cleared by a previous fusion, at least one case matches, neither instruction is a HINT, and the CSR has not disabled fusion. Source evidence: [`FusionDecoder.scala:571`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L571), [`FusionDecoder.scala:607`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L607), [`FusionDecoder.scala:610`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L610).
+
+
+The enclosing `CtrlBlock` instantiates `FusionDecoder`. Fusion is disabled in single-step mode or when CSR `fusion_enable` is off, and decoded outputs carrying an exception or trigger are excluded from fusion detection. After a match, `CtrlBlock` clears the second instruction's valid bit sent to Rename/Dispatch and applies the replacement result to the first instruction. Source evidence: [`CtrlBlock.scala:98`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L98), [`CtrlBlock.scala:107`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L107), [`CtrlBlock.scala:593`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L593), [`CtrlBlock.scala:608`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L608), [`CtrlBlock.scala:624`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L624).
+
+
+For fusion cases that need `rs2` from the second instruction, Rename uses `fusionInfo` to redirect the fused uop's physical source register to the second instruction's `rs1` or `rs2`, or to zero. Source evidence: [`FusionDecoder.scala:666`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L666), [`Rename.scala:558`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/rename/Rename.scala#L558).
+
+
+## 2. Complete Fusion Scenario Table
+
+| No. | Source class / event name | Source instruction pair | Key conditions | Fusion result | Source evidence |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `FusedAdduw` / `slli32_srli32` | `SLLI shamt=32` + `SRLI shamt=32` | `rd1 == rd2` and `rd1 == rs1_2` | `ADD_UW`, `rs2=zero`, i.e. `zext.w` semantics | [`FusionDecoder.scala:98`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L98) |
+| 2 | `FusedZexth` / `slli48_srli48` | `SLLI shamt=48` + `SRLI shamt=48` | `rd1 == rd2` and `rd1 == rs1_2` | `PACKW`, `rs2=zero`, i.e. `zext.h` semantics | [`FusionDecoder.scala:113`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L113) |
+| 3 | `FusedZexth1` / `slliw16_srliw16` | `SLLIW shamt=16` + `SRLIW shamt=16` | Inherits the destination-register and dependency conditions from `FusedZexth` | `PACKW`, `rs2=zero`, i.e. another `zext.h` form | [`FusionDecoder.scala:128`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L128) |
+| 4 | `FusedSexth` / `slliw16_sraiw16` | `SLLIW shamt=16` + `SRAIW shamt=16` | `rd1 == rd2` and `rd1 == rs1_2` | `SEXT_H`, `rs2=zero` | [`FusionDecoder.scala:140`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L140) |
+| 5 | `FusedSh1add` / `slli1_add` | `SLLI shamt=1` + `ADD` | `rd1 == rd2`; `rd1` is the second instruction's `rs1` or `rs2`; and the second instruction's two sources differ | `SH1ADD`; the other addend comes from the second instruction | [`FusionDecoder.scala:155`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L155) |
+| 6 | `FusedSh2add` / `slli2_add` | `SLLI shamt=2` + `ADD` | Same as `FusedSh1add` | `SH2ADD` | [`FusionDecoder.scala:170`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L170) |
+| 7 | `FusedSh3add` / `slli3_add` | `SLLI shamt=3` + `ADD` | Same as `FusedSh1add` | `SH3ADD` | [`FusionDecoder.scala:185`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L185) |
+| 8 | `FusedSzewl1` / `slli32_srli31` | `SLLI shamt=32` + `SRLI shamt=31` | `rd1 == rd2` and `rd1 == rs1_2` | Custom `ALUOpType.szewl1` | [`FusionDecoder.scala:200`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L200) |
+| 9 | `FusedSzewl2` / `slli32_srli30` | `SLLI shamt=32` + `SRLI shamt=30` | `rd1 == rd2` and `rd1 == rs1_2` | Custom `ALUOpType.szewl2` | [`FusionDecoder.scala:213`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L213) |
+| 10 | `FusedSzewl3` / `slli32_srli29` | `SLLI shamt=32` + `SRLI shamt=29` | `rd1 == rd2` and `rd1 == rs1_2` | Custom `ALUOpType.szewl3` | [`FusionDecoder.scala:226`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L226) |
+| 11 | `FusedByte2` / `srli8_andi255` | `SRLI shamt=8` + `ANDI imm=255` | `rd1 == rd2` and `rd1 == rs1_2` | Custom `ALUOpType.byte2` | [`FusionDecoder.scala:239`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L239) |
+| 12 | `FusedSh4add` / `slli4_add` | `SLLI shamt=4` + `ADD` | `rd1 == rd2`; `rd1` is the second instruction's `rs1` or `rs2`; and the second instruction's two sources differ | Custom `ALUOpType.sh4add` | [`FusionDecoder.scala:252`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L252) |
+| 13 | `FusedSr29add` / `srli29_add` | `SRLI shamt=29` + `ADD` | Same as `FusedSh4add` | Custom `ALUOpType.sr29add` | [`FusionDecoder.scala:268`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L268) |
+| 14 | `FusedSr30add` / `srli30_add` | `SRLI shamt=30` + `ADD` | Same as `FusedSh4add` | Custom `ALUOpType.sr30add` | [`FusionDecoder.scala:284`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L284) |
+| 15 | `FusedSr31add` / `srli31_add` | `SRLI shamt=31` + `ADD` | Same as `FusedSh4add` | Custom `ALUOpType.sr31add` | [`FusionDecoder.scala:300`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L300) |
+| 16 | `FusedSr32add` / `srli32_add` | `SRLI shamt=32` + `ADD` | Same as `FusedSh4add` | Custom `ALUOpType.sr32add` | [`FusionDecoder.scala:316`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L316) |
+| 17 | `FusedOddadd` / `andi1_add` | `ANDI imm=1` + `ADD` | `rd1 == rd2`; `rd1` is the second instruction's `rs1` or `rs2`; and the second instruction's two sources differ | Custom `ALUOpType.oddadd` | [`FusionDecoder.scala:332`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L332) |
+| 18 | `FusedOddaddw` / `andi1_addw` | `ANDI imm=1` + `ADDW` | Same as `FusedOddadd` | Custom `ALUOpType.oddaddw` | [`FusionDecoder.scala:348`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L348) |
+| 19 | `FusedOrh48` / `andi_f00_or` | `ANDI imm=0xf00` + `OR` | `rd1 == rd2`; `rd1` is the second instruction's `rs1` or `rs2`; and the second instruction's two sources differ | Custom `ALUOpType.orh48` | [`FusionDecoder.scala:442`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L442) |
+| 20 | `FusedMulw7` / `andi127_mulw` | `ANDI imm=127` + `MULW` | `rd1 == rd2`; `rd1` is the second instruction's `rs1` or `rs2`; and the second instruction's two sources differ | Custom `MULOpType.mulw7` | [`FusionDecoder.scala:458`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L458) |
+| 21 | `FusedAddwbyte` / `addw_andi255` | `ADDIW` or `ADDW` + `ANDI imm=0xff` | `rd1 == rd2` and `rd1 == rs1_2` | Custom `ALUOpType.addwbyte` | [`FusionDecoder.scala:362`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L362) |
+| 22 | `FusedAddwbit` / `addw_andi1` | `ADDIW` or `ADDW` + `ANDI imm=1` | Inherits the first-instruction and dependency conditions from `FusedAddwbyte` | Custom `ALUOpType.addwbit` | [`FusionDecoder.scala:376`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L376) |
+| 23 | `FusedAddwzexth` / `addw_zexth` | `ADDIW` or `ADDW` + `ZEXT_H` | Inherits the first-instruction and dependency conditions from `FusedAddwbyte` | Custom `ALUOpType.addwzexth` | [`FusionDecoder.scala:387`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L387) |
+| 24 | `FusedAddwsexth` / `addw_sexth` | `ADDIW` or `ADDW` + `SEXT_H` | Inherits the first-instruction and dependency conditions from `FusedAddwbyte` | Custom `ALUOpType.addwsexth` | [`FusionDecoder.scala:398`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L398) |
+| 25 | `FusedLogiclsb` / `logic_andi1` | Logic instruction + `ANDI imm=1` | Logic op is `ANDI/AND/ORI/OR/XORI/XOR/ORC_B`, with `rd1 == rd2` and `rd1 == rs1_2` | `ALUOpType.logicToLsb`, generated from the first instruction's original `fuOpType` | [`FusionDecoder.scala:410`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L410) |
+| 26 | `FusedLogicZexth` / `logic_zexth` | Logic instruction + `ZEXT_H` | Inherits the logic-instruction set and dependency conditions from `FusedLogiclsb` | `ALUOpType.logicToZexth`, generated from the first instruction's original `fuOpType` | [`FusionDecoder.scala:431`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L431) |
+| 27 | `FusedLui32` / `lui_addi` | `LUI` + `ADDI` | `rd1 == rd2` and `rd1 == rs1_2` | Custom `ALUOpType.lui32add`, `selImm=IMM_LUI32`, immediate `Cat(lui[31:12], addi[31:20])` | [`FusionDecoder.scala:475`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L475) |
+| 28 | `FusedLui32w` / `lui_addiw` | `LUI` + `ADDIW` | `rd1 == rd2` and `rd1 == rs1_2` | Custom `ALUOpType.lui32addw`, `selImm=IMM_LUI32`, immediate `Cat(lui[31:12], addiw[31:20])` | [`FusionDecoder.scala:497`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L497) |
+
+
+## 3. Important Boundary Conditions
+
+
+1. Even if three adjacent instructions could form two overlapping fusions, both cannot take effect simultaneously. `io.clear(i + 1) := out.valid` clears the second instruction, while the next pair's `out.valid` also checks `!thisCleared`. Source evidence: [`FusionDecoder.scala:609`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L609), [`FusionDecoder.scala:676`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L676).
+
+
+2. HINT instructions do not participate in fusion. The source requires `bits(11, 7) =/= 0.U`, so both instructions' `rd` fields must differ from `x0`. Source evidence: [`FusionDecoder.scala:604`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L604), [`FusionDecoder.scala:607`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L607).
+
+
+3. Decoded outputs carrying an exception or trigger are excluded from fusion detection, preventing erroneous changes to instructions on an exceptional path. Source evidence: [`CtrlBlock.scala:592`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L592), [`CtrlBlock.scala:595`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L595).
+
+
+4. Cases such as `SLLI/SRLI + ADD` and `ANDI + ADD/ADDW/OR/MULW` allow the first result to feed either `rs1` or `rs2` of the second instruction. They therefore require `lsrc2NeedMux` together with Rename-side `fusionInfo` to retain the second instruction's other source operand. Source evidence: [`FusionDecoder.scala:86`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L86), [`FusionDecoder.scala:664`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/FusionDecoder.scala#L664), [`Rename.scala:558`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/rename/Rename.scala#L558).
+
+
+5. `DecodeStage` receives only the fusion result returned by the upper level for performance counting; the actual fusion detection and replacement occur in `CtrlBlock`. Source evidence: [`DecodeStage.scala:60`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/DecodeStage.scala#L60), [`DecodeStage.scala:438`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/DecodeStage.scala#L438), [`CtrlBlock.scala:623`](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/CtrlBlock.scala#L623).
 

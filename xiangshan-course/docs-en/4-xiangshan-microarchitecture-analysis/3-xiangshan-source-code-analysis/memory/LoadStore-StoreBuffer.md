@@ -1,3 +1,4 @@
+<!--
 # 香山 Kunminghu-v2 Load/Store StoreBuffer（SBuffer）源码分析
 
 > 本文分析对象是用户指定工作树 `/home/yanyusong/xs-memory-env/XiangShan` 中实际生效的 `Sbuffer`（源码文件名采用小写 `Sbuffer.scala`）。它是已提交、可缓存 Store 的按 Cache-line 合并缓冲，而不是按程序顺序简单出队的 FIFO。
@@ -61,18 +62,18 @@
 
 ```mermaid
 flowchart LR
-  SU[StoreUnit\naddr/mask + DTLB/PMP] --> SQ[StoreQueue\ncommit/order/data-ready]
-  SQ --> DB[DatamoduleResultBuffer\nEnsbufferWidth lanes]
-  DB -->|Decoupled io.in| SB[Sbuffer\nline data/mask/tag/state]
-  VS[VSegmentUnit store] -->|lane 0 arbitration| SB
-  SB -->|DCacheToSbufferIO\nwhole cache line| DCW[DCacheWrapper]
-  DCW --> MP[MainPipe arbiter]
-  MP -->|hit / replay response| SB
-  SQ -->|MMIO / NC| UC[Uncache path]
-  LU[LoadUnit] -->|forward query| SQ
-  LU -->|forward query| SB
-  SB -->|forward data/mask| LU
-  F[Fence / Atomics / CMO] -->|flush.valid| SB
+  SU[StoreUnit\naddr/mask + DTLB/PMP] --&gt; SQ[StoreQueue\ncommit/order/data-ready]
+  SQ --&gt; DB[DatamoduleResultBuffer\nEnsbufferWidth lanes]
+  DB --&gt;|Decoupled io.in| SB[Sbuffer\nline data/mask/tag/state]
+  VS[VSegmentUnit store] --&gt;|lane 0 arbitration| SB
+  SB --&gt;|DCacheToSbufferIO\nwhole cache line| DCW[DCacheWrapper]
+  DCW --&gt; MP[MainPipe arbiter]
+  MP --&gt;|hit / replay response| SB
+  SQ --&gt;|MMIO / NC| UC[Uncache path]
+  LU[LoadUnit] --&gt;|forward query| SQ
+  LU --&gt;|forward query| SB
+  SB --&gt;|forward data/mask| LU
+  F[Fence / Atomics / CMO] --&gt;|flush.valid| SB
 ```
 
 图中 `StoreUnit -> DCache` 不是存储数据写入路径。源码用注释明确它只读 meta/tag 来判断 Store hit/miss；真正写 Cache 的数据在 `StoreQueue -> Sbuffer -> DCache MainPipe` 上流动。
@@ -148,15 +149,15 @@ isDcacheReqCandidate  = state_valid && !state_inflight && !w_sameblock_inflight
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Invalid
-  Invalid --> Active: 分配新 ptag/vtag，且无同 ptag inflight
-  Invalid --> WaitSameLine: 分配新 ptag/vtag，但已有同 ptag inflight
-  Active --> Active: 同 ptag 合并新的 data/mask
-  Active --> Inflight: SBuffer out s0 选择并 fire
-  Inflight --> Invalid: DCache hit_resp.fire
-  Inflight --> Active: DCache replay_resp.fire
-  WaitSameLine --> Active: 旧 entry 完成后清 wait 标志
-  Active --> Inflight: drain / replace / timeout
+  [*] --&gt; Invalid
+  Invalid --&gt; Active: 分配新 ptag/vtag，且无同 ptag inflight
+  Invalid --&gt; WaitSameLine: 分配新 ptag/vtag，但已有同 ptag inflight
+  Active --&gt; Active: 同 ptag 合并新的 data/mask
+  Active --&gt; Inflight: SBuffer out s0 选择并 fire
+  Inflight --&gt; Invalid: DCache hit_resp.fire
+  Inflight --&gt; Active: DCache replay_resp.fire
+  WaitSameLine --&gt; Active: 旧 entry 完成后清 wait 标志
+  Active --&gt; Inflight: drain / replace / timeout
 ```
 
 图中的 `WaitSameLine` 是 `w_sameblock_inflight` 派生的阅读状态，不是源码 `Enum`。当前 entry 的状态并不是“写入 Cache 已完成”：`Inflight` 代表请求已经从 SBuffer 发出、尚在等 DCache 返回。
@@ -204,10 +205,10 @@ sequenceDiagram
   SQ->>SQ: committed && addrvalid && datavalid
   SQ->>DB: cacheable fragment
   DB->>SB: valid + bits
-  SB-->>DB: ready
+  SB--&gt;>DB: ready
   Note over SB: only valid && ready is io.sbuffer.fire
   SB->>DC: complete cache-line request
-  DC-->>SB: hit_resp or replay_resp
+  DC--&gt;>SB: hit_resp or replay_resp
 ```
 
 `io.sbuffer.fire && sqNeedDeq && !wline` 才将对应 SQ entry 标为 `completed`。注释解释这一延迟是为了在 SBuffer data 还未实际写好前，仍让 Load 能从 SQ 转发；不能把 `committed`、`io.sbuffer.fire` 和 line drain 混成一个时刻。[StoreQueue.scala:1330](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1330)
@@ -396,3 +397,226 @@ MainPipe 不是无条件每周期接 Store：probe、refill、store、atomic 进
 Kunminghu-v2 的 `Sbuffer` 是处在 **ROB 已提交 StoreQueue** 与 **DCache MainPipe** 之间的、按物理 Cache line 组织的合并/转发/排空结构。它的正确性核心不只是容量：还包括 SQ 延后释放以维持转发、active/inflight 同行顺序、data-write 与 line-read 的互锁、DCache replay、虚实 tag mismatch 恢复，以及 fence/atomic/CMO 与 Uncache 的共同排空。分析和调试时应始终以 `fire`、entry state、DCache response ID 和 ROB/SQ 身份共同判定事件，不要把单个 `valid` 或 Store PC 当作生命周期证据。
 
 在 VS Code 中可用 Markdown Preview 查看 Mermaid 与 WaveDrom 渲染；波形验证应将本文的静态推导与实际 elaboration/FST 交叉核对。
+<!-- END ORIGINAL CHINESE -->
+
+# XiangShan Kunminghu-v2 Load/Store StoreBuffer (SBuffer) Source-Code Analysis
+
+> This document analyzes the effective `Sbuffer` in the user-specified `/home/yanyusong/xs-memory-env/XiangShan` worktree (the source file is named `Sbuffer.scala`). It is a cache-line-merging buffer for committed cacheable stores, not a FIFO that simply dequeues stores in program order.
+
+## 1. Scope, Version, and Evidence Boundary
+
+### 1.1 Source Baseline
+
+| Item | Value | Notes |
+| --- | --- | --- |
+| Source repository | [XiangShan](/home/yanyusong/xs-memory-env/XiangShan) | The local worktree specified by the user |
+| Branch / commit | `kunminghu-v2@e12436c7cba86b195deec24981976d78bc263661` | All source-validated statements use this baseline |
+| Worktree state | Modified `difftest`; untracked `src/main/resources/aia/` | Pre-existing changes; this analysis did not alter the source |
+| Effective path | `MemBlock -> LsqWrapper/StoreQueue -> Sbuffer -> DCache MainPipe` | `FakeSbuffer` is commented out and marked obsolete, so it is not behavioral evidence |
+| Documentation location | `memory/LoadStore-StoreBuffer.md` | Corresponds to `src/main/scala/xiangshan/mem/` |
+
+The weekly synchronization script ran a `fetch` only because the worktree was dirty and did not run `pull`. No local `XiangShan-Design-Doc` checkout was found. Consequently, unsynchronized course or design material is not used as proof for the current RTL.
+
+### 1.2 Design-Document Traceability
+
+The available public SBuffer/LSU description is for Kunminghu-v3, whereas this source is Kunminghu-v2 and the page has no commit identifier that can be paired with the local tree. It is useful only for design intent; implementation conclusions are traced to the v2 source lines below.
+
+| Design intent | Supporting material | v2 source trace | Status |
+| --- | --- | --- | --- |
+| Committed stores enter SBuffer, are accumulated by line, then write DCache | [Course LoadStore, older baseline](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:459) | [StoreQueue.scala:1122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1122), [StoreQueue.scala:1200](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1200), [Sbuffer.scala:314](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:314) | Verified in the current source |
+| A 64-B line collects multiple vwords and supports same-line merge | [Public v3 SBuffer description](https://docs.xiangshan.cc/projects/design/zh-cn/kunminghu-v3/memblock/LSU/SBuffer/) | [Sbuffer.scala:38](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:38), [Sbuffer.scala:240](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:240), [Sbuffer.scala:425](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:425) | Mechanism verified; versions differ |
+| Store address/data separation and store-side load forwarding | [Public v3 LSU description](https://docs.xiangshan.cc/projects/design/zh-cn/kunminghu-v3/memblock/LSU/) | [StoreUnit.scala:90](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:90), [LoadUnit.scala:1356](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1356), [Sbuffer.scala:780](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:780) | Verified in the current source |
+| Background draining is constrained by cache/coherence resources | Public LSU/SBuffer description | [Sbuffer.scala:607](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:607), [MainPipe.scala:235](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala:235) | Verified in the current source |
+
+### 1.3 Reading Conventions
+
+- `valid && ready` (or `.fire`) means a Decoupled transfer occurred. `valid` alone does not prove enqueue, dequeue, or a cache write.
+- `state_valid && !state_inflight` is called **active**. `state_inflight` means that a line has been sent to DCache and is awaiting an SBuffer response; neither is a standalone Chisel `Enum` state.
+- "Completion" has three distinct levels: ROB commit; StoreQueue handoff to SBuffer via `io.sbuffer.fire`; and SBuffer receipt of the DCache hit/miss acceptance response. The latter two do not equal architectural commit.
+
+## 2. Conclusion First: SBuffer's Responsibility on the Effective Path
+
+1. StoreUnit generates virtual address and mask in S0 and launches DTLB/DCache meta-tag probes; this DCache request is **not** a real write [StoreUnit.scala:236](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:236).
+2. StoreQueue retains address, data, and commit state. Only a committed cacheable store with ready address/data and no MMIO, NC, or exception writes its `DatamoduleResultBuffer` and then enters SBuffer through the Decoupled `io.sbuffer` interface [StoreQueue.scala:1122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1122), [StoreQueue.scala:1175](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1175).
+3. SBuffer searches by physical line tag. Same-line stores merge data/masks into one entry; different lines use even/odd allocation, PLRU replacement, and a global FSM. It can accept up to `EnsbufferWidth` prefix lanes per cycle, which defaults to two.
+4. Draining hands one complete cache-line request to `DCacheToSbufferIO`. DCache MainPipe arbitrates probe, refill, atomic, and store work; a store can be backpressured, replayed, or released by a hit/miss acceptance response.
+5. The load side queries active and inflight lines for byte-granular data/masks. An invalid physical/virtual-tag relationship triggers microarchitectural drain/rollback rather than silently forwarding incorrect data.
+
+## 3. Effective Wiring and Module Contract
+
+### 3.1 Who, Why, How, From, and To
+
+| Module | Role | From | To | Effective source behavior |
+| --- | --- | --- | --- | --- |
+| `StoreUnit` | Generates store address/mask and performs the DTLB/PMP front-end classification | Issue, vector, and misalignment inputs | StoreQueue LSQ updates; DCache only for meta/tag lookup | S0 produces address; S1 obtains PA; S2 kills DCache write intent for MMIO/NC/exceptions |
+| `StoreQueue` | Makes stores visible to the memory system only after ROB commit and retains a forwarding source for younger loads | StoreUnit address/data and ROB commit | `DatamoduleResultBuffer`, then SBuffer; MMIO/NC goes to Uncache | Conditions such as `committed && addrvalid && datavalid` determine eligibility |
+| `DatamoduleResultBuffer` | Converts SQ read results to a shallow `EnsbufferWidth` Decoupled buffer | StoreQueue multi-read ports | `Sbuffer.io.in` | Supports consecutive prefix lanes; it is not the main line storage |
+| `Sbuffer` | Aggregates, forwards, and drains by physical cache line | `StoreQueue.sbuffer` and vector lane | DCache MainPipe, load-forwarding ports, Difftest | Same active lines merge; same inflight lines wait; flush/drain can drive it |
+| `DCache MainPipe` | Accepts whole-line stores and competes for cache resources with probe/refill/atomic traffic | `DCacheWrapper.store` | Cache arrays / MissQueue | Can accept as hit/miss or replay; SBuffer changes entry state from the result |
+
+The effective instantiation is at [MemBlock.scala:615](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:615). Scalar/vector arbitration from StoreQueue to SBuffer is at [MemBlock.scala:1516](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1516), and SBuffer's DCache/flush wiring is at [MemBlock.scala:1763](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1763).
+
+### 3.2 End-to-End Data and Control Diagram
+
+```mermaid
+flowchart LR
+  SU[StoreUnit\naddress/mask plus DTLB/PMP] --> SQ[StoreQueue\ncommit/order/data-ready]
+  SQ --> DB[DatamoduleResultBuffer\nEnsbufferWidth lanes]
+  DB -->|Decoupled io.in| SB[Sbuffer\nline data/mask/tag/state]
+  VS[Vector store] -->|lane 0 arbitration| SB
+  SB -->|DCacheToSbufferIO\nwhole cache line| DCW[DCacheWrapper]
+  DCW --> MP[MainPipe arbiter]
+  MP -->|hit / replay response| SB
+  SQ -->|MMIO / NC| UC[Uncache path]
+  LU[LoadUnit] -->|forward query| SQ
+  LU -->|forward query| SB
+  SB -->|forward data/mask| LU
+  F[Fence / Atomics / CMO] -->|flush.valid| SB
+```
+
+`StoreUnit -> DCache` in this diagram is not the store-data write path. The source explicitly says that it reads metadata/tags to determine store hit/miss. Real cache-write data flows through `StoreQueue -> Sbuffer -> DCache MainPipe`.
+
+### 3.3 Key Interfaces and Handshakes
+
+| Boundary | Interface / width | Meaning of `fire` | Backpressure / retention requirement |
+| --- | --- | --- | --- |
+| SQ -> SB | `Vec(EnsbufferWidth, Decoupled(DCacheWordReqWithVaddrAndPfFlag))` | The committed cacheable fragment for that lane is accepted by SBuffer | Lane 1 must follow lane 0; SBuffer `ready` depends on available even/odd entries |
+| SB -> DCache | `DCacheToSbufferIO.req` | A selected line reaches DCache after SBuffer out S0/S1 | SBuffer retains the S1 request while `dcache.ready` is low or a same-entry data write has not completed |
+| DCache -> SB | `hit_resp` / `replay_resp` (`ValidIO`) | `hit_resp.fire` releases an entry; `replay_resp.fire` retains it and marks timeout | The response has no `ready`, so SBuffer cannot backpressure it; low ID bits recover the SBuffer index |
+| Load -> SB | `LoadForwardQueryIO` | A load supplies address, mask, uop, and related query information | `forwardMask/data` is valid only for matching bytes; `matchInvalid` triggers recovery |
+| Fence/Atomics/CMO -> SB | `SbufferFlushBundle` | `flush.valid` requests drain rather than discard | `flush.empty` waits for SBuffer, current input, and `io.sqempty` to become empty |
+
+## 4. Parameters, Address Decomposition, and Capacity Semantics
+
+| Parameter | Default | Effect |
+| --- | ---: | --- |
+| `StorePipelineWidth` | 2 | Store-execution-side width |
+| `StoreBufferSize` | 16 | SBuffer entry count, PLRU ways, and index width |
+| `StoreBufferThreshold` | 7 | Default background-drain threshold |
+| `EnsbufferWidth` | 2 | Parallel SQ-to-SB/DataBuffer lanes |
+| `CacheLineBytes` | `CacheLineSize / 8` | Line size covered by an SBuffer entry |
+| `CacheLineVWords` | `CacheLineBytes / VDataBytes` | Data/mask vwords per line |
+
+The parameter evidence is [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214) and [Sbuffer.scala:38](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:38). Therefore "16 entries, two inputs, 64-B lines" is a configuration-specific reading. The standard `KunminghuV2Config` inherits defaults, while `KunminghuV2MinimalConfig` changes SBuffer to four entries with threshold three [Configs.scala:40](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:40), [Configs.scala:487](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:487).
+
+| Name | Construction | Use |
+| --- | --- | --- |
+| `ptag` | Physical-address high bits after removing line offset | Same-line test and whole-line DCache physical address |
+| `vtag` | Virtual-address high bits after removing line offset | Cross-checks the ptag relationship during forwarding |
+| `vwordOffset` | Offset divided into `VDataBytes` vwords | Selects a data/mask vword in the line |
+| `SbufferIndexWidth` | `log2Up(StoreBufferSize)` | Entry index and DCache response-ID low bits |
+| `replaceIdx` | `ValidPseudoLRU.way(candidateVec.reverse)` | Victim candidate for replacement |
+| `drainIdx` | `PriorityEncoder(activeMask)` | Active entry prioritized for drain |
+
+These definitions are at [Sbuffer.scala:240](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:240) through [Sbuffer.scala:282](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:282). A same line means equal `ptag`, not merely equal virtual address.
+
+## 5. Storage Organization, Entry Lifetime, and Global FSM
+
+| Structure | Initialization / validity | Update | Release / reuse | Search/conflict role |
+| --- | --- | --- | --- | --- |
+| `SbufferData.data` | `Reg`; semantic validity follows mask/valid | Input is staged in S1 then updated bytewise in S2 | Hit response clears associated byte masks | Forwarding source and whole-line DCache data |
+| `SbufferData.mask` | `RegInit(false)` | S2 sets input byte mask | Hit response `fire` generates one-hot `maskFlushReq` | Determines valid bytes |
+| `ptagArray/vtagArray` | Written when an entry becomes valid | New allocation writes ptag/vtag; merge does not rewrite ptag | Replaceable after `state_valid=false` | Same-line test and forwarding address-consistency check |
+| `stateVec` | `RegInit(0)` | New line sets valid; DCache send sets inflight | Hit clears valid/inflight; replay clears inflight but preserves valid | Source of active/inflight/candidate state |
+| `cohCount/missqReplayCount` | `RegInit(0)` | Count while active/inflight | Reset on merge, replay, release, and related paths | Coherence/replay-timeout priority |
+| `waitInflightMask` | Associated with allocation | Set when a new entry finds a same-ptag inflight entry | The older response later clears the dependent wait | Prevents concurrent DCache writes for one line |
+| `plru` | `ValidPseudoLRU(StoreBufferSize)` | Entry index accessed on enqueue | Chooses only a replaceable candidate | Replacement control, not data storage |
+
+The effective derived predicates are `isInvalid = !state_valid`, `isActive = state_valid && !state_inflight`, and `isDcacheReqCandidate = state_valid && !state_inflight && !w_sameblock_inflight` [Sbuffer.scala:66](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:66). A `WaitSameLine` condition is a reading abstraction derived from `w_sameblock_inflight`, not a declared source `Enum`. `Inflight` means the request was sent and is awaiting DCache response, not that cache writing has completed.
+
+`SbufferState` has `x_idle`, `x_replace`, `x_drain_all`, and `x_drain_sbuffer` [Sbuffer.scala:227](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:227). `x_idle` normally accepts/merges and may initiate background drain; `x_replace` evacuates a selected victim; `x_drain_all` is used by fence/atomics/CMO flush and returns only after local empty; and `x_drain_sbuffer` is an internal drain that prevents new input and need not empty the complete StoreQueue. The state transition logic is at [Sbuffer.scala:554](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:554).
+
+`sbuffer_empty` means no valid main-storage entry. `sq_empty` means all `io.in.valid` signals are low. `empty`/`io.sbempty` combine those two conditions, while `io.flush.empty` also requires `io.sqempty` [Sbuffer.scala:535](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:535). These signals are not interchangeable: the stronger flush condition is what external fence logic requires.
+
+## 6. Enqueue: From a Committed Store to Line Merge
+
+ROB commit does not directly write DCache. StoreQueue sets `committed`, then applies address/data readiness, exception, NC, and MMIO conditions before presenting a cacheable fragment [StoreQueue.scala:1122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1122), [StoreQueue.scala:1175](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1175). Only `io.sbuffer.fire && sqNeedDeq && !wline` marks the SQ entry `completed`; the delay preserves a forwarding source until SBuffer data is really written [StoreQueue.scala:1330](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1330).
+
+Input logic computes two-lane `sameTag` and matches active entries by `ptag` to form `mergeMask`. Each input may match at most one active entry, with an assertion against multiple matching entries [Sbuffer.scala:314](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:314), [Sbuffer.scala:335](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:335). New lines are assigned between even/odd free sets to reduce same-cycle structural conflicts. Lane 1 participates only if lane 0 is accepted, creating a prefix protocol.
+
+Data and mask write in stages: an input is staged, then bytewise state is written. That staging is why a newly updated entry cannot be drained until its data write completes.
+
+## 7. Drain: Candidates, DCache Requests, Backpressure, and Responses
+
+An entry is a drain candidate only when it is valid, not inflight, and does not wait for a same-ptag inflight entry. Selection priority is MissQueue replay timeout, drain entry, coherence timeout, then PLRU replacement [Sbuffer.scala:588](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:588), [Sbuffer.scala:607](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:607).
+
+Background drain is not triggered only by "full." `do_eviction` becomes true at the configured threshold, near-full condition, or full valid count; `force_write` reduces the internal threshold base. Although an IO `csrCtrl` exists, the source's threshold CSR use is commented out, so it is not sound to claim that software must directly control the drain threshold [Sbuffer.scala:535](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:535).
+
+SBuffer out S0 selects an entry and reads its complete data/mask, marking it inflight on handshake. Out S1 forms the `M_XWR` line request. `shouldWaitWriteFinish` blocks DCache issue while a same-entry data update remains incomplete, preventing stale data/mask from being read [Sbuffer.scala:607](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:607), [Sbuffer.scala:642](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:642).
+
+MainPipe accepts stores only through resource arbitration involving probe, refill, atomic, set conflicts, data reads, and force-write behavior [MainPipe.scala:235](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala:235). `hit_resp.fire` clears `state_inflight`, `state_valid`, and the data mask. `replay_resp.fire` preserves the entry, clears inflight, sets timeout, and resets replay counting so it can retry with higher priority. Neither response is a general proof that an external DRAM write has become persistent.
+
+## 8. Load Forwarding and Ordering Meaning
+
+Every Load pipeline issues an `LoadForwardQueryIO` to SBuffer. SBuffer compares virtual tag and registered physical tag, obtains matching-vword data/mask, and allows both inflight and active lines to participate. It selects active bytes over inflight bytes so a newer unsent store overlays an older sent store [Sbuffer.scala:780](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:780).
+
+`matchInvalid` caused by inconsistent virtual/physical matching is not an ordinary miss. It raises `forward_need_uarch_drain`, and LoadUnit incorporates that mismatch into rollback/flush handling [Bundles.scala:185](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/Bundles.scala:185), [LoadUnit.scala:1606](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1606).
+
+The useful summary is not an unconditional linear "SQ, then SBuffer, then DCache" priority. LoadUnit first overlays SQ masks; for cacheable accesses it uses SBuffer bytes, whereas for noncacheable `s2_nc_with_data` it uses UBuffer. Thus the correct abstraction is **SQ overlay first; SBuffer for cacheable accesses; UBuffer for NC accesses** [LoadUnit.scala:1356](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1356).
+
+## 9. Store Classes and Cross-Boundary Behavior
+
+| Type / scenario | Uses SBuffer? | Source basis | Note |
+| --- | --- | --- | --- |
+| Committed cacheable scalar store with ready address/data | Yes | [StoreQueue.scala:1175](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1175) | Goes through DataBuffer then `io.sbuffer.fire` |
+| CBO write-line | Yes, but `wline` affects SQ-completed conditions | [StoreUnit.scala:122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:122), [StoreQueue.scala:1338](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1338) | Ordinary-store `!wline` rules cannot be applied mechanically |
+| Vector store | Can enter through VSegmentUnit arbitration with SQ lane 0 | [MemBlock.scala:1520](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1520) | Analyze vector split/exception paths too |
+| MMIO / NC / Uncache | No; uses Uncache | [StoreUnit.scala:469](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:469), [StoreQueue.scala:824](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:824) | StoreUnit S1/S2 also kills DCache write intent |
+| AMO / LR/SC | Drains SBuffer first, then uses AtomicUnit | [AtomicsUnit.scala:467](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala:467) | Not an ordinary SBuffer line write |
+| Exceptional store | No | [StoreQueue.scala:1200](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1200) | `toSbufferVecValid` excludes exceptions |
+
+Translation, PMP/PMA/MMIO classification, and page-boundary splits precede SBuffer. SBuffer receives entries already translated and, when necessary, split by upstream logic. It allocates/merges at physical line (`ptag`) granularity, so different physical lines are necessarily different entries. The static read establishes upstream 16-B/cross-page splitting and physical-line separation, but does not prove every fragment rule for any cache-line-crossing scalar store; that case needs configuration and waveform evidence.
+
+On redirect, StoreQueue cancels `allocated && !committed` entries, while already committed/SBuffer data is not discarded through that cancellation path [StoreQueue.scala:1482](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1482). Fence waits for both `sbuffer.flush.empty` and `uncache.flush.empty` [Fence.scala:47](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/Fence.scala:47), [MemBlock.scala:1763](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1763). Atomics requests `flush_sbuffer` until empty before atomic cache access [AtomicsUnit.scala:467](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/AtomicsUnit.scala:467).
+
+## 10. Resource Conflicts and Priority Cases
+
+| Scenario | Current handling | Important interpretation | Recommended observation |
+| --- | --- | --- | --- |
+| Two same-ptag inputs in one cycle | `sameTag`/`mergeMask` merges or follows first-input index choice | Static source has no explicit same-byte arbitration/assertion across the dual-port data-write loop; confirm final overwrite priority in elaborated RTL/test | Two lanes, same line, overlapping/non-overlapping masks |
+| Two different-ptag inputs | Even/odd allocation and prefix `ready` | Lane 1 cannot be accepted independently | Assert `io.in(1).fire -> io.in(0).fire` |
+| New same-line store when full | May still backpressure because `ready` depends on allocatable slots | There is no unconditional full-buffer merge bypass | Sample `sbFull`, `canMerge`, and `io.in.ready` together |
+| New write to selected drain entry | `shouldWaitWriteFinish` blocks DCache request | DCache must not read old data/mask | Entry index, write request, `blockDcacheWrite` |
+| Older same-ptag entry inflight | New entry waits through `w_sameblock_inflight` | Two same-line DCache requests cannot issue concurrently | `waitInflightMask` and old response/new candidate |
+| DCache busy with probe/refill/atomic | MainPipe can deassert store ready | SBuffer out valid does not establish DCache acceptance | `io.dcache.req.valid/ready` and arbitration source |
+| Replay response | Entry is retained and receives timeout priority | Replay is neither release nor discard | `state_valid`, `state_inflight`, `w_timeout` |
+| Forward virtual/physical mismatch | SBuffer drain / Load rollback | Not an ordinary load miss | `matchInvalid`, `forward_need_uarch_drain`, load rollback |
+
+## 11. Difftest, Performance Hooks, and Targeted Validation
+
+| Event | Generation point | Data meaning | It must not be read as |
+| --- | --- | --- | --- |
+| `DiffStoreEvent` | StoreQueue `dataBuffer.io.enq.fire`, or NC/MMIO request fire | A committed store entering DataBuffer/UBuffer | An SBuffer line already drained from DCache |
+| `DiffSbufferEvent` | `io.dcache.hit_resp.fire` | Line addr/data/mask drain event used by GoldenMem-related checks | ROB retirement or final external-DRAM persistence |
+
+The first source comment ties the event to `rdataPtr` movement [StoreQueue.scala:1420](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1420). The second is gated by `env.EnableDifftest` and tied to the DCache hit-response handshake [Sbuffer.scala:766](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:766).
+
+Minimum directed tests should cover reset-empty state; first-store write; Decoupled backpressure; two-lane prefix behavior; same-line merge; write/drain contention; same-line inflight ordering; replay retention/retry; redirect; fence/atomic/CMO flush; 4-KiB/16-B splits; MMIO/NC bypass; forwarding mismatch; and concurrent flush sources. In particular, a `valid`-only trace cannot establish any of these transfers.
+
+## 12. Latency, Throughput, and Claims That Cannot Be Made
+
+| Segment | Source-established throughput / register boundary | Not established by this static read |
+| --- | --- | --- |
+| SQ -> SBuffer | Up to `EnsbufferWidth` prefix lanes; defaults to two | Total cycles from store issue to commit |
+| SBuffer data write | Input is staged in S1 and byte-updated in S2 | A fixed two-cycle forwarding/draining latency in every condition |
+| SBuffer -> DCache | One selected line; out S0/S1 then waits for `ready` | A deterministic MainPipe/MissQueue response latency |
+| DCache arbitration | Store competes with probe/refill/atomic, set conflicts, and force-write | One line drained every cycle under all loads |
+| DCache response | Hit can release; replay retains and retries | Final external-memory write/persistence time |
+
+To turn an unverified item into a number, track `io.sbuffer[*].fire`, `sbuffer_out_s1_valid`, `io.dcache.req.fire`, `hit_resp/replay_resp.fire`, the entry ID, and a stable ROB ID together in a concrete test. Do not infer a lifecycle from a Store PC or one `valid` waveform.
+
+## 13. Reading Order and Open Verification Points
+
+1. [MemBlock.scala:1516](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1516): establish SQ/vector/SBuffer/DCache top-level wiring.
+2. [StoreQueue.scala:1122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1122) and [StoreQueue.scala:1200](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1200): establish eligibility from committed/cacheable/no-exception store to DataBuffer.
+3. [Sbuffer.scala:314](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:314), then [Sbuffer.scala:607](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/sbuffer/Sbuffer.scala:607): analyze merge/allocation/ready, then drain/response.
+4. [MainPipe.scala:235](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala:235): determine the external source of SBuffer backpressure.
+5. [LoadUnit.scala:1356](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1356): place SBuffer forwarding in the actual load mux.
+
+RTL/FST evidence is still required for the final overwrite priority when two same-line ingress writes overlap on the same byte; every split step for an arbitrary cache-line-crossing scalar store; mutual-exclusion prerequisites for vector lane and SQ lane 0 in the same cycle; and the precise boundary between DCache hit response and final MissQueue/external-memory completion.
+
+## 14. Summary
+
+Kunminghu-v2 `Sbuffer` sits between the **ROB-committed StoreQueue** and **DCache MainPipe** as a physical-cache-line merge, forwarding, and drain structure. Its correctness depends on more than capacity: delayed SQ release for forwarding, active/inflight same-line ordering, data-write/line-read interlock, DCache replay, virtual/physical tag-mismatch recovery, and joint flush with fence/atomic/CMO and Uncache. Analyze and debug it using `fire`, entry state, DCache response ID, and ROB/SQ identity together; neither one `valid` nor a store PC proves a lifecycle event.
+
+Use Markdown Preview to inspect the visible Mermaid diagram. Waveform validation should cross-check the static relationships above against the actual elaboration and FST.

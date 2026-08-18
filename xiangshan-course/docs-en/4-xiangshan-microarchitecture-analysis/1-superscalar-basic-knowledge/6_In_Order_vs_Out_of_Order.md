@@ -1,3 +1,4 @@
+<!--
 # 6.顺序 vs. 乱序
 
 ## [附件: 顺序执行 vs. 乱序执行——香山处理器执行架构深度解析.pptx](./attachments/eBC_LgF-_5-lFJZw/顺序执行 vs. 乱序执行——香山处理器执行架构深度解析.pptx)
@@ -48,3 +49,60 @@
 
 > 更新: 2026-06-03 15:46:27  
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/icmlznspik7sm7qu>
+-->
+
+# 6. In-Order vs. Out-of-Order Execution
+
+## [Attachment: In-Order vs. Out-of-Order Execution - A Deep Analysis of XiangShan's Execution Architecture](./attachments/eBC_LgF-_5-lFJZw/顺序执行 vs. 乱序执行——香山处理器执行架构深度解析.pptx)
+
+## 6.1 Overview
+
+XiangShan is a domestically developed, high-performance RISC-V processor. Its instruction-execution architecture is built around the principle that in-order execution preserves correctness while out-of-order execution improves performance. This chapter explains how XiangShan implements both modes, where each is used, and why they matter, helping developers understand the design and underlying mechanisms of the execution architecture.
+
+## 6.2 In-Order Execution: The Foundation of Architectural Correctness
+
+### 6.2.1 Where ordering is preserved
+
+In XiangShan's front end (fetch, decode, and register renaming), memory-access pipeline, and result-commit stage, processing follows the program's inherent order:
+
+1. **Front-end fetch and decode**: The fetch unit reads the instruction stream from the instruction cache in increasing program-counter (PC) order. The decode unit parses each instruction's opcode, operand types, and addressing mode in sequence, so instruction semantics are identified without reordering.
+2. **Register renaming**: Although this stage remaps architectural registers to eliminate WAR and WAW hazards, every instruction retains a program-order tag; its logical order is unchanged.
+3. **Memory instructions**: Under the RISC-V memory-consistency model, XiangShan applies strict ordering rules to Load/Store instructions. Address generation, cache access, and data write-back follow program order, avoiding memory races or corruption.
+4. **Result commit**: Every instruction commits its result to architectural state in program order, ensuring that the final output conforms to the RISC-V architectural specification.
+
+### 6.2.2 Value of in-order execution
+
+In-order execution is the foundation of stable operation in XiangShan. It is especially suitable for timing-sensitive workloads with strong consistency requirements, such as operating-system kernel scheduling, real-time control programs, and embedded-device drivers. It prevents crashes and data errors caused by executing operations in an invalid order.
+
+## 6.3 Out-of-Order Execution: The Engine of High Performance
+
+### 6.3.1 How out-of-order execution works
+
+To overcome the performance limits of in-order execution, XiangShan's back end uses a deeply out-of-order execution architecture:
+
+1. **Instruction dispatch**: Decoded instructions enter a unified reservation station rather than going directly to execution units in program order.
+2. **Dynamic scheduling**: The reservation station continuously monitors operand readiness (for example, whether register data has been written or a memory response has returned) and the availability of functional units such as ALUs, floating-point units, and multipliers. If an instruction is blocked by memory latency or a data dependency, the scheduler skips it and prioritizes a later instruction whose operands are ready.
+3. **Temporary result storage**: An instruction that finishes out of order does not immediately update architectural state. Its result is first kept in the reorder buffer (ROB), and is committed in program order after all older instructions have completed.
+
+### 6.3.2 Value of out-of-order execution
+
+Out-of-order execution makes full use of XiangShan's multiple-issue front end and multiple execution units. It hides memory and computation latency, exposes instruction-level parallelism (ILP), and significantly improves peak compute capability and throughput for general-purpose, server, and high-performance workloads.
+
+# 6.4 Coordinating In-Order and Out-of-Order Execution in XiangShan
+
+XiangShan coordinates the two modes through a layered design:
+
+```plain
+Strictly in-order front end (fetch/decode) -> flexible out-of-order back end (execute) -> ordered commit
+```
+
+This arrangement satisfies the architectural requirement for correct execution while using out-of-order scheduling to keep hardware busy. The cooperation can be summarized as follows:
+
+1. The front end preserves decode order and supplies accurate instruction semantics and order tags to the back end.
+2. The back end improves execution efficiency through out-of-order scheduling, processing independent instructions in parallel.
+3. The reorder buffer (ROB) commits results in program order, converting out-of-order completion back into architecturally ordered output and preserving program correctness.
+
+In summary, XiangShan's combination of in-order and out-of-order execution is tailored to both RISC-V characteristics and high-performance computing. In-order stages establish the foundation of architectural correctness and support low-latency, highly consistent workloads; out-of-order execution releases the available hardware parallelism for compute-intensive, high-throughput applications. Understanding this mechanism helps developers optimize programs for XiangShan, for example by managing instruction dependencies and memory order to use the processor's performance effectively.
+
+> Updated: 2026-06-03 15:46:27
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/icmlznspik7sm7qu>

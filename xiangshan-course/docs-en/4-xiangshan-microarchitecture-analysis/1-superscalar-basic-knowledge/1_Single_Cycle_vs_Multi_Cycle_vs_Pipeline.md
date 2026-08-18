@@ -1,3 +1,4 @@
+<!--
 # 1. 单周期 vs. 多周期  vs. 流水线
 
 ***
@@ -275,3 +276,218 @@
 
 > 更新: 2026-05-11 18:28:42  
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/hfysfscwr90mfbwr>
+-->
+
+# 1. Single-Cycle vs. Multi-Cycle vs. Pipelined Processors
+
+---
+
+[Attachment: Processor evolution from single-cycle to pipelined execution](./attachments/9YseBDj4QSwqiGJ6/处理器架构的演进：从单周期到流水线.pptx)
+
+## Learning objectives
+
+- Understand the definitions and execution rules of single-cycle, multi-cycle, and pipelined processors.
+- Apply quantitative performance analysis and reason about the design trade-offs of the three architectures.
+- Identify the three classes of pipeline hazard and their engineering solutions.
+- Build a complete view of processor evolution and the foundations of the XiangShan design.
+
+## Prerequisite: the complete execution of a RISC-V instruction
+
+A CPU executes a program by running the RISC-V instructions produced by the compiler through a fixed sequence of steps. A basic RISC-V integer instruction normally passes through five stages, each with defined inputs, logic, and outputs:
+
+| Stage | Abbreviation | Function |
+| --- | --- | --- |
+| Instruction fetch | IF (Instruction Fetch) | Read the current instruction from instruction memory and calculate the address of the next instruction. |
+| Instruction decode | ID (Instruction Decode) | Decode the operation and operands, then read the required source operands from the general-purpose register file. |
+| Execute | EX (Execute) | Perform arithmetic and logical operations in the arithmetic-logic unit (ALU), including branch-target calculation. |
+| Memory access | MEM (Memory Access) | Read or write data memory for Load/Store instructions; this stage does no work for non-memory instructions. |
+| Write-back | WB (Write Back) | Write the final result into the general-purpose register file for use by later instructions. |
+
+The three processor organizations discussed here are three different instruction-scheduling models. The scheduling model determines the performance ceiling, hardware cost, and design complexity of the CPU.
+
+## The central design rule: the CPU performance equation
+
+Every CPU architecture ultimately tries to reduce total program execution time. The classic computer-architecture equation is:
+
+**Execution time = instruction count x CPI x clock-cycle time**
+
+The parameters are defined as follows:
+
+1. **Instruction count**: The total number of RISC-V instructions required by the program, determined by the ISA and compiler optimization.
+2. **CPI (cycles per instruction)**: The average number of clock cycles used by one instruction, determined largely by the instruction-scheduling model.
+3. **Clock-cycle time**: The CPU's basic timing quantum. Frequency equals `1 / clock-cycle time`; the cycle time is set by the longest logic path that must complete in one cycle.
+
+The three architectures are engineering trade-offs around these two core variables, CPI and clock-cycle time.
+
+## Part I: single-cycle processors
+
+**Definition.** A single-cycle processor completes every effective stage of one instruction serially within one complete clock cycle. The next instruction is not fetched until the current instruction has completed its entire path.
+
+### Datapath and execution
+
+- Each stage has a dedicated hardware block, and the blocks operate in sequence during the same cycle.
+- The clock period must cover the maximum end-to-end delay, namely the sum of the five stage delays.
+- At completion, the result is written directly to the register file. There is no intermediate pipeline state, so the control logic is very small.
+
+![Single-cycle execution](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-001-execute-stage-ns.png)
+
+### Quantitative performance
+
+Assume a maximum logic delay of `0.5 ns` per stage. The source material computes the complete instruction path as `5 x 0.5 ns = 2.5 ns` and gives the following single-cycle figures:
+
+- The clock period is set by the complete instruction path (the source text lists `0.5 ns` and `2 GHz`; the end-to-end calculation above would instead imply `2.5 ns`).
+- One instruction occupies one cycle, so `CPI = 1`.
+- For 100 instructions, the stated calculation is `100 x 1 x 0.5 ns = 50 ns = 0.05 us`.
+
+### Trade-offs
+
+| Advantages | Limitations |
+| --- | --- |
+| Very simple control logic, with no complex state machine or timing protocol. | The cycle is determined by the longest instruction path, so the maximum frequency is low. |
+| The whole instruction completes in one cycle; there are no intermediate results or inter-instruction timing conflicts. | Hardware utilization is poor: each stage's hardware is idle outside its part of the path. |
+| Fixed `CPI = 1` makes timing predictable. | Even short arithmetic instructions must wait for the full cycle, wasting performance. |
+
+### XiangShan engineering perspective
+
+Single-cycle processors fit only simple embedded controllers. XiangShan's high-performance RISC-V processors do not use this organization because:
+
+1. **Timing closure and frequency**: Nanhu targets more than 2 GHz, with a cycle below 0.5 ns, so a complete instruction path cannot fit in one cycle.
+2. **PPA**: Single-cycle hardware is poorly utilized and wastes area and power, conflicting with performance, power, and area requirements in automotive and server systems.
+3. **Extensibility**: Multiply/divide, floating-point, and vector extensions have much longer paths than base integer instructions and would further reduce the clock frequency.
+
+## Part II: multi-cycle processors
+
+**Definition.** A multi-cycle processor splits the long single-cycle period into several short cycles. Each cycle performs one execution stage, and one instruction advances through several cycles before the next instruction begins.
+
+The key engineering changes are:
+
+1. **Pipeline/state registers** are inserted between stages to hold the previous stage's result and instruction state. Each cycle then needs to complete only one stage's logic.
+2. **Hardware reuse** allows one unit to serve different stages in different cycles. For example, an ALU can calculate an arithmetic result in EX and a next-PC address in IF, avoiding redundant hardware.
+
+![Multi-cycle execution](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-002-execute-stage-ns.png)
+
+### Quantitative performance
+
+With the same `0.5 ns` stage delay:
+
+- The clock period only needs to cover one stage (`0.5 ns`, or 2 GHz in the source example), five times the source's single-cycle frequency.
+- A base integer or memory instruction takes about five cycles; a branch may take three. The stated workload average is approximately `CPI = 4.2`.
+- For 100 instructions, `100 x 4.2 x 0.5 ns = 210 ns = 0.21 us`; the source compares this with 250 ns for its single-cycle calculation and reports roughly a 16% improvement.
+
+The important point is that shorter cycles raise the frequency ceiling, while instruction-specific cycle counts avoid forcing short operations to pay for the longest path.
+
+### Trade-offs
+
+| Advantages | Limitations |
+| --- | --- |
+| Shorter cycle and higher frequency potential. | A single instruction takes multiple cycles, so average CPI is well above one. |
+| Hardware reuse reduces area and power and gives a better PPA balance. | A controller/state machine must schedule stages and resources. |
+| Different instructions can use different numbers of cycles, which helps support ISA extensions. | At any moment only one stage is active; utilization can still be low. |
+
+### XiangShan engineering perspective
+
+XiangShan is not a purely multi-cycle core, but the same idea appears throughout the design:
+
+1. Long-latency multiply/divide, floating-point, and vector operations use multi-cycle execution so they do not slow the main clock.
+2. Cache and memory-management-unit accesses are pipelined over multiple cycles to handle different memory latencies without blocking the main pipeline.
+3. Low-power MCU and embedded cores in the RISC-V ecosystem often use multi-cycle designs for a balanced cost, power, and performance point.
+
+## Part III: pipelined processors
+
+**Definition.** A pipelined processor treats the execution stages as independent pipeline stages separated by pipeline registers. When one instruction advances to the next stage, the following instruction can enter the stage it just left. Several instructions therefore occupy different stages and execute concurrently.
+
+### Five-stage timing
+
+| Cycle | IF | ID | EX | MEM | WB |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Instruction 1 | - | - | - | - |
+| 2 | Instruction 2 | Instruction 1 | - | - | - |
+| 3 | Instruction 3 | Instruction 2 | Instruction 1 | - | - |
+| 4 | Instruction 4 | Instruction 3 | Instruction 2 | Instruction 1 | - |
+| 5 | Instruction 5 | Instruction 4 | Instruction 3 | Instruction 2 | Instruction 1 |
+
+Once the pipeline is full, an ideal single-issue pipeline completes one instruction per cycle (`CPI ~= 1`), while its cycle time is only the delay of the slowest stage.
+
+An individual instruction still takes five cycles to traverse the five stages; pipelining improves **throughput**, not the inherent latency of that instruction.
+
+![Pipelined execution](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-003-execute-stage-ns-ghz.png)
+
+### Quantitative performance
+
+Using the source's common assumptions of a `0.5 ns` maximum stage delay, a `0.5 ns` cycle, and a 2 GHz five-stage pipeline, 100 instructions take:
+
+```text
+(pipeline depth + instruction count - 1) x cycle time
+= (5 + 100 - 1) x 0.5 ns
+= 52 ns = 0.052 us
+```
+
+The source compares this with 250 ns for its single-cycle example and 210 ns for its multi-cycle example, reporting approximately 4.8 times and 4 times higher performance, respectively. The key observation is that overlapped instructions retain the short cycle of the multi-cycle design while driving average CPI toward one.
+
+### Trade-offs
+
+| Advantages | Limitations |
+| --- | --- |
+| Greatly improves instruction throughput while retaining a high frequency ceiling. | Highest control complexity because timing conflicts and hazards must be handled. |
+| Keeps most stage hardware active instead of leaving it idle. | Pipeline registers add area and timing overhead. |
+| Can be deepened or widened for additional performance. | Excessive depth increases hazard and timing costs and can reduce the benefit. |
+
+The classic five-stage pipeline is the foundation of XiangShan's high-performance RISC-V designs.
+
+### XiangShan's pipeline practice
+
+1. **Deep pipelining**: The Nanhu integer pipeline has 11 stages, splitting the classic five stages to shorten each logic path and target more than 2 GHz.
+2. **Superscalar multiple issue**: XiangShan can issue two instructions per cycle in the stated design, doubling ideal throughput.
+3. **Out-of-order execution**: Dynamic scheduling prevents a long-latency instruction from idling the entire pipeline and exposes more ILP.
+4. **Fully pipelined functional units**: ALUs, multiply/divide units, and floating-point units accept new operations continuously, avoiding structural blockage.
+
+## Part IV: pipeline hazards and engineering solutions
+
+Overlapping instructions creates resource, data, and control conflicts. These **pipeline hazards** can stall the pipeline or produce incorrect results.
+
+### 1. Structural hazards
+
+A structural hazard occurs when instructions in the same cycle compete for an exclusive hardware resource. A classic von Neumann design may require IF to fetch an instruction while MEM accesses data through the same memory.
+
+Common solutions are resource duplication (for example, a Harvard instruction/data-memory split) and inserting a bubble when duplication is impossible. XiangShan uses separate instruction and data caches plus multiple ALUs and address-generation units for its multi-issue pipeline.
+
+![Issue, execute, cache, and ALU resources](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-004-issue-execute-cache-alu.png)
+
+### 2. Data hazards
+
+A data hazard occurs when a later instruction needs a result that an earlier instruction has not written back. A typical Load-Use pair needs the loaded value before the load's MEM stage has returned it. Forwarding sends a result directly from an EX/MEM or MEM/WB path to the consumer's ALU; a load-use pair may still require one stall cycle. Out-of-order scheduling, register renaming, and the ROB further hide dependencies. XiangShan provides forwarding paths across integer, floating-point, and vector units.
+
+![Forwarding / bypassing](img/1-single-cycle-vs-multi-cycle-vs-pipeline/figure-005-bypassing-forwarding-writeback-ex.png)
+
+The central bypassing idea is to send a value to its consumer immediately after it is produced rather than routing it through the register file. A practical implementation needs the forwarding paths, multiplexers at the consumer inputs, and hazard-detection logic to choose the correct input.
+
+### 3. Control hazards
+
+A branch, jump, exception, or interrupt changes the PC after later instructions may already have been fetched. Those wrong-path instructions must be flushed. Branch prediction supplies a target and direction early; a correct prediction avoids a stall, while a misprediction flushes the wrong path. Delay slots are another, older ISA-level solution. XiangShan uses a TAGE predictor together with a return-address stack and indirect-branch prediction, achieving the high prediction accuracy needed by a deep pipeline.
+
+## Comparison of the three organizations
+
+| Property | Single-cycle | Multi-cycle | Pipelined |
+| --- | --- | --- | --- |
+| Execution | One instruction completes all stages in one cycle. | One instruction uses several cycles, one stage per cycle. | Multiple instructions overlap; after fill, one completes per cycle ideally. |
+| Average CPI | 1 | Greater than 1 (typically 4-5). | Approximately 1 in the ideal case. |
+| Cycle time | Longest: whole instruction path. | Medium: longest stage. | Shortest: longest pipeline stage. |
+| Frequency ceiling | Very low | Medium | High |
+| Hardware utilization | Very low | Medium | High |
+| Area/cost | High without reuse | Low because of reuse | Medium; requires registers and multiple units |
+| Control complexity | Minimal | Medium | Highest |
+| Typical use | Very simple embedded control | Low-power MCU and embedded control | Modern high-performance CPUs, including XiangShan |
+
+## Closing: from the classic pipeline to XiangShan
+
+Starting from the RISC-V instruction path, this chapter traced the evolution from single-cycle to multi-cycle and then to pipelined execution. Each organization balances frequency, CPI, and hardware cost according to the performance equation.
+
+The classic five-stage pipeline is the foundation of modern CPUs. XiangShan's superscalar issue, out-of-order execution, branch prediction, and cache hierarchy extend that foundation to increase throughput and reduce stalls. These concepts provide the background needed for deeper study of XiangShan, digital IC design, and processor architecture.
+
+## References
+
+- [ETH Zurich - Digital Design and Computer Architecture](https://safari.ethz.ch/foca/spring2025/doku.php?id=schedule)
+- Hu Weiwu, Chinese Academy of Sciences University, *Computer Architecture* slides
+
+> Updated: 2026-05-11 18:28:42
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/hfysfscwr90mfbwr>

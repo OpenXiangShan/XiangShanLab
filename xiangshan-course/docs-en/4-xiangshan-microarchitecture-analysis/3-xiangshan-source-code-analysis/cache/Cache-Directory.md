@@ -1,3 +1,4 @@
+<!--
 # 香山昆明湖 V2 缓存 Directory 源码分析
 
 > 本文的结论以源码配置 top.KunminghuV2Config 为准，而不是只根据子模块目录名称推断。该配置的有效 L2 Directory 是 coupledL2.Directory；它保存 tag 与一致性元数据、做 set-associative 查找和候选 way 选择，但不保存 cache line 数据。HuanCun 的 Directory 实现也在同一工作树中，本文会分析其结构差异，不过它不是这一配置下已例化的 L2 或 LLC Directory。
@@ -29,6 +30,38 @@ skill 规定的周同步检查已经执行；状态文件显示距离上次同�
 KunminghuV2Config 组合 1 MB、4 bank 的 L2 配置与 WithCHI；WithCHI 令 EnableCHI 为真。[Configs.scala:477](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:477) [Configs.scala:481](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:481) L2 的每 bank sets 由 size / banks / ways / 64 计算，因此此配置是每 bank 512 sets、8 ways、64 B line，共 256 KiB；四个 bank 合计 1 MiB。[Configs.scala:278](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:278)
 
 L2Top 将 L2 参数、EnableCHI 和 bank bits 注入 L2 子系统；EnableCHI 为真时选择 TL2CHICoupledL2，而不是 TL2TLCoupledL2。[L2Top.scala:112](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:112) [L2Top.scala:130](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:130) CoupledL2 按输入 bank 创建 Slice，CHI 分支使用 tl2chi.Slice；该 Slice 在同一处创建 Directory、DataStorage、RequestArb、MainPipe 与 MSHRCtl。[CoupledL2.scala:419](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:419) [tl2chi/Slice.scala:53](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:53)
+-->
+# XiangShan Kunminghu V2 Cache Directory Source Analysis
+
+> This chapter bases its conclusions on the source configuration `top.KunminghuV2Config`, rather than inferring behavior from submodule directory names. The effective L2 Directory for that configuration is `coupledL2.Directory`: it stores tags and coherence metadata, performs set-associative lookup and candidate-way selection, but does not store cache-line data. HuanCun Directory implementations are present in the same worktree and their structural differences are analyzed, but they are not instantiated as this configuration's L2 or LLC Directory.
+
+## 1. Scope, Version, and Evidence Boundaries
+
+### 1.1 Objects Covered
+
+| Object | Treatment in This Chapter | Basis for Classification |
+|---|---|---|
+| Kunminghu V2 L2 Directory | Primary subject, tracked through reads, writes, replacement, and the MSHR loop | KunminghuV2Config enables CHI, L2Top selects TL2CHICoupledL2, and the CHI Slice directly creates `coupledL2.Directory`. |
+| HuanCun inclusive/noninclusive Directory | Comparison implementation in the same repository and a configuration boundary | HuanCun Slice can select either using the inclusive parameter, but KV2's `EnableCHI` leaves HuanCun L3 parameters empty. |
+| OpenLLC Directory | Used only to distinguish boundaries; not expanded here | KV2's downstream CHI LLC is OpenLLC, which must not be conflated with `coupledL2.Directory` or `HuanCun.Directory`. |
+| L1D, MemBlock, DataStorage | Tracked only at their Directory interface boundary | They provide or consume requests/data; this chapter does not invent virtual/physical address, PMA, or exception semantics that never enter Directory. |
+
+### 1.2 Source Baseline and Non-Modification Constraint
+
+| Item | Baseline |
+|---|---|
+| XiangShan main repository | `/home/yanyusong/xs-memory-env/XiangShan`, branch `kunminghu-v2`, commit `e12436c7cba86b195deec24981976d78bc263661`. The main repository already contained difftest changes and untracked `src/main/resources/aia/` content when analysis began; neither was touched here. |
+| coupledL2 submodule | Commit `fb5469838c8902b6cb33992c0a30ee3d446e4453`. |
+| huancun submodule | Commit `65ef077373ecf398b4cecdea06b65ef9b8d79044`. |
+| Design Doc | `/home/yanyusong/XiangShan-Design-Doc`, commit `58d9e2ad11f044cb6f8887d9687d9e110696d1aa`; used only to check concepts and provide reading entry points. Every implementation conclusion is traced to the source above. |
+
+The weekly synchronization check required by the skill was run. Its state file showed that the last synchronization was less than seven days ago, so the script skipped fetching. No reset, checkout, or source write occurred during analysis.
+
+### 1.3 Effective Instantiation Path: Why `coupledL2.Directory` Is the Subject
+
+KunminghuV2Config combines a 1 MB, 4-bank L2 configuration with WithCHI, which makes `EnableCHI` true. [Configs.scala:477](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:477) [Configs.scala:481](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:481) L2 sets per bank are calculated as `size / banks / ways / 64`; consequently, this configuration has 512 sets per bank, 8 ways, and 64 B lines, for 256 KiB per bank and 1 MiB across four banks. [Configs.scala:278](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:278)
+
+L2Top injects L2 parameters, `EnableCHI`, and bank bits into the L2 subsystem. When `EnableCHI` is true, it selects TL2CHICoupledL2 rather than TL2TLCoupledL2. [L2Top.scala:112](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:112) [L2Top.scala:130](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:130) CoupledL2 creates a Slice per input bank; the CHI branch uses `tl2chi.Slice`, which creates Directory, DataStorage, RequestArb, MainPipe, and MSHRCtl together. [CoupledL2.scala:419](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:419) [tl2chi/Slice.scala:53](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:53)
 
 ~~~mermaid
 flowchart LR
@@ -44,6 +77,7 @@ flowchart LR
   CHI --> LLC["OpenLLC (KV2)"]
 ~~~
 
+<!--
 这张图中 DataStorage 与 Directory 是并列模块而非从属关系：Slice 把 MainPipe 的 s3 数据请求送给 DataStorage，[tl2chi/Slice.scala:89](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:89)；Directory 只返回 tag、meta、命中和 victim 信息。
 
 L3CacheConfig 仅在 !EnableCHI 时创建 L3CacheParamsOpt/HCCacheParameters；在 EnableCHI 时创建 OpenLLCParamsOpt。[Configs.scala:333](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:333) HuanCun 顶层由 L3CacheParamsOpt.map 条件创建，因此其 inclusive/noninclusive Directory 不属于此 KV2 的有效硬件图。[Top.scala:104](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Top.scala:104) [Top.scala:111](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Top.scala:111)
@@ -87,6 +121,50 @@ Directory 的接口定义见 [Directory.scala:117](/home/yanyusong/xs-memory-env
 | msInfo | Vec[ValidIO] 输入 | MSHRCtl.msInfo -> Directory | 反映各 MSHR 对 set/way 的占用，防止 refill 覆盖尚未完成的数据。 |
 
 Slice 的前四个连接在 [tl2chi/Slice.scala:84](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:84)，Directory 的结果连接在 [tl2chi/Slice.scala:117](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:117) 与 [tl2chi/Slice.scala:139](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:139)。
+-->
+DataStorage and Directory are peer modules in this diagram rather than parent/child modules: Slice sends MainPipe's s3 data request to DataStorage, [tl2chi/Slice.scala:89](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:89) whereas Directory returns only tag, metadata, hit, and victim information.
+
+L3CacheConfig creates `L3CacheParamsOpt`/HCCacheParameters only when `!EnableCHI`, and creates OpenLLCParamsOpt when `EnableCHI`. [Configs.scala:333](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:333) The HuanCun top level is conditionally constructed by `L3CacheParamsOpt.map`; its inclusive/noninclusive Directory is therefore not part of this KV2 effective hardware graph. [Top.scala:104](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Top.scala:104) [Top.scala:111](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Top.scala:111)
+
+### 1.4 Design-Doc-to-Source Traceability Matrix
+
+The official Directory page only gives a conceptual diagram for metadata storage, tag/set lookup, and connections to MainPipe/MSHRCtl. [Directory.md:3](/home/yanyusong/XiangShan-Design-Doc/docs/zh/cache/l2cache/Directory.md:3) [Directory.md:5](/home/yanyusong/XiangShan-Design-Doc/docs/zh/cache/l2cache/Directory.md:5) The following table maps verifiable atomic claims to the current commit without treating concepts in that diagram as timing or arbitration evidence.
+
+| ID | Conceptual Claim | Current Source Evidence | Conclusion and Limitation |
+|---|---|---|---|
+| D1 | Directory stores block metadata | MetaEntry definition and tag/meta SRAM: [Directory.scala:30](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:30) [Directory.scala:146](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:146) | Verified. The data array is in DataStorage. |
+| D2 | Reads look up by tag/set | DirRead tag/set: [Directory.scala:70](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:70); array reads and comparison: [Directory.scala:211](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:211) [Directory.scala:250](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:250) | Verified. Directory input is already split into tag/set. |
+| D3 | Hit/candidate way and metadata are returned | DirResult and resp drive: [Directory.scala:84](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:84) [Directory.scala:309](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:309) | Verified. `resp` is ValidIO and has no `ready` backpressure. |
+| D4 | A miss selects an invalid or replacement way | Invalid priority, MSHR occupancy mask, and retry: [Directory.scala:129](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:129) [Directory.scala:260](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:260) [Directory.scala:339](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:339) | Partially verified. `replResp` is valid only with a refill read; when all candidate ways are busy, it returns retry rather than making every miss immediately writable. |
+| D5 | Directory is updated after pipeline processing | Slice wiring and MainPipe-generated meta/tag writes: [tl2chi/Slice.scala:84](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:84) [MainPipe.scala:594](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:594) | Verified. Write ports are ValidIO, so a completion `ready`/ack handshake must not be assumed. |
+
+### 1.5 Theory-to-Code Mapping
+
+| Cache-Theory Object | Code Location in This Implementation | Scope That Must Not Be Overinterpreted |
+|---|---|---|
+| Set-associative tag store | `parseAddress` produces local tag/set; tagArray reads all ways by set | Directory does not obtain complete physical addresses or perform bank routing. |
+| Directory/coherence metadata | MetaEntry.state, dirty, clients, alias, etc., and metaArray | Not a line-data array and not an L1 TLB/PMA table. |
+| Hit decision | AND of tagMatchVec and `state != INVALID` | `multiHit` is an error state, not a choice among interchangeable copies. |
+| Victim selection | Invalid-way priority, then replacement state; a refill is further constrained by freeWayMask | `wayMask` does not affect the finalWay path in this commit. |
+| Replacement state | State SRAM, origin bit, and PSEL for DRRIP/SRRIP/other policies | The concrete policy varies with L2ParamKey; the KV2 default is described later. |
+| Coherence-state update | MainPipe A/B/C/MSHR/CMO `metaWReq` selection | Directory does not independently decide external CHI transactions or system-wide permissions. |
+
+## 2. `coupledL2.Directory` Interface, State, and Ownership
+
+### 2.1 Module Interface and Signal Direction
+
+Directory's interface is defined at [Directory.scala:117](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:117). The source/destination entries below refer to actual Slice wiring, not name-based guesses.
+
+| Interface | Direction and Handshake | Source -> Destination | Meaning |
+|---|---|---|---|
+| read | Flipped DecoupledIO; accepted only when `valid && ready` | RequestArb.dirRead_s1 -> Directory.read | Reads tag/meta for one tag/set request and carries refill, mshrId, CMO, and replacement-update information. |
+| resp | ValidIO; no `ready` | Directory.resp -> MainPipe.dirResp_s3 | Returns hit, way, meta, tag, ECC/multi-hit error in s3. |
+| metaWReq | Flipped ValidIO; no `ready` | MainPipe.metaWReq -> Directory | Writes metadata, including reset clearing, permission/dirty changes, CMO invalidate, and post-MSHR-refill updates. |
+| tagWReq | Flipped ValidIO; no `ready` | MainPipe.tagWReq -> Directory | Writes a new tag when refill succeeds and does not retry. |
+| replResp | ValidIO; no `ready` | Directory.replResp -> MainPipe and MSHRCtl | For refill lookups only, returns final candidate way, old meta/tag, mshrId, and retry. |
+| msInfo | Vec[ValidIO] input | MSHRCtl.msInfo -> Directory | Reflects each MSHR's set/way occupancy, preventing a refill from overwriting unfinished data. |
+
+The first four Slice connections are at [tl2chi/Slice.scala:84](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:84); Directory result connections are at [tl2chi/Slice.scala:117](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:117) and [tl2chi/Slice.scala:139](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:139).
 
 ~~~mermaid
 flowchart LR
@@ -99,6 +177,7 @@ flowchart LR
   D -->|replResp Valid| MC
 ~~~
 
+<!--
 ### 2.2. 每 way 保存什么，不保存什么
 
 MetaEntry 含 dirty、coherence state、clients 有效位、可选 alias/prefetch 字段、accessed，以及 tagErr/dataErr。[Directory.scala:30](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:30) MetaEntry() 用全零初始化，[Directory.scala:47](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:47)；而 MetaData.INVALID 是状态 0。[Consts.scala:26](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Consts.scala:26) 因此复位清扫写入 MetaEntry() 会把 way 变为无效。
@@ -118,19 +197,47 @@ Directory 的 DirRead 只有 tag、set、wayMask、replacerInfo、refill、mshrI
 
 CoupledL2 的公共参数 trait 给出了实际的局部地址拆分：offsetBits = log2Ceil(blockBytes)，parseAddress 先右移 offsetBits + bankBits 得到本 bank 的 set 源，再右移 setBits 得 tag。[CoupledL2.scala:47](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:47) [CoupledL2.scala:186](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:186) 因此该配置可以精确写为：
 
+-->
+### 2.2 Contents and Non-Contents of Each Way
+
+`MetaEntry` contains dirty state, coherence state, valid client bits, optional alias/prefetch fields, `accessed`, and `tagErr/dataErr`. [Directory.scala:30](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:30) `MetaEntry()` is all-zero initialization, [Directory.scala:47](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:47) and `MetaData.INVALID` is state 0. [Consts.scala:26](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Consts.scala:26) Thus, the reset sweep invalidates a way by writing `MetaEntry()`.
+
+| Storage | Declaration in This Module | Role | Port/Conflict Meaning |
+|---|---|---|---|
+| tagArray | SplittedSRAM, `singlePort = true` | Tags for all ways of each set; encodes/decodes tag ECC when configured | Reads on `read.fire`; `tagWReq.valid` writes in the same cycle. A read is blocked by `ready` while a write or replacement update is active. |
+| metaArray | SRAMTemplate, `singlePort = true` | MetaEntry vector for every set | Uses the same set as tag lookup and is written by `metaWReq`. |
+| replacer SRAM | Used for non-random replacement, `singlePort = true` | Per-set replacement-policy state | A replacement update also blocks a new Directory read. |
+| DataStorage | Not in Directory | Holds cache-line data | Accessed separately by MainPipe; Directory supplies only the way/set selection. |
+
+The tag/meta SRAM declarations are at [Directory.scala:146](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:146) and [Directory.scala:175](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:175). This is the precise code meaning of "Directory is a metadata store"; it must not be expanded into a claim that Directory stores data blocks.
+
+### 2.3 Boundaries of Tag, Set, and Way Calculation
+
+Directory's DirRead has only tag, set, wayMask, replacerInfo, refill, mshrId, and cmoAll/cmoWay. It has no complete physical address, byte offset, or beat field. [Directory.scala:70](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:70) RequestArb directly assigns the preformed tag/set from TaskBundle to DirRead. [RequestArb.scala:174](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:174)
+
+The CoupledL2 common-parameter trait gives the local address split: `offsetBits = log2Ceil(blockBytes)`; `parseAddress` first shifts right by `offsetBits + bankBits` to obtain the set source for the current bank, then shifts by `setBits` to obtain the tag. [CoupledL2.scala:47](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:47) [CoupledL2.scala:186](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:186) For this configuration, the following address-field interpretation applies:
+
 ~~~text
-offset[5:0]       = line 内字节位置，blockBytes = 64
-bank[7:6]         = 4 bank 的 bank 选择，bankBits = 2
-localSet[16:8]    = 本 bank 的 512 sets，setBits = 9
-tag[high:17]      = 去掉 offset、bank、local set 后的高位
-way               = hitWay，或 invalidWay，或 replacementWay
+offset[5:0]       = byte position within the line, blockBytes = 64
+bank[7:6]         = bank selection for 4 banks, bankBits = 2
+localSet[16:8]    = 512 sets in this bank, setBits = 9
+tag[high:17]      = high bits after removing offset, bank, and local set
+way               = hitWay, invalidWay, or replacementWay
 ~~~
 
+<!--
 这里的 tag 高位写法是地址位域语义，实际 tag UInt 的总宽度仍取决于 TileLink 地址宽度，不能从上述常量把它硬编码成某个有限 bit 数。Directory.scala 本身不再做完整地址切分：它接收的就是 parseAddress/RequestArb 路径已经形成的 tag 和 set。[RequestArb.scala:174](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:174)
 
 ### 2.4. 隐式状态生命周期
 
 Directory 没有一个名为 FSM 的枚举状态机；下面是由 resetFinish、read.fire、写入 valid、流水寄存器和 replacement update 组合出的生命周期图。它描述接口状态，不把它误称为源码中的显式 FSM。
+
+-->
+The notation for high tag bits is an address-field interpretation. The actual total width of the tag UInt still depends on TileLink address width and cannot be hard-coded to a finite bit count from these constants. Directory.scala no longer splits the full address itself: it receives tag and set already formed by the parseAddress/RequestArb path. [RequestArb.scala:174](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:174)
+
+### 2.4 Implicit State Lifecycle
+
+Directory does not have an enum state machine named FSM. The following lifecycle is composed from `resetFinish`, `read.fire`, valid writes, pipeline registers, and replacement updates. It describes interface state and must not be misrepresented as an explicit source-level FSM.
 
 ~~~mermaid
 stateDiagram-v2
@@ -145,6 +252,7 @@ stateDiagram-v2
   Write --> Ready: read.ready becomes eligible
 ~~~
 
+<!--
 Directory 自己的 resetIdx/resetFinish 用于 replacement/origin 相关 SRAM 初始化。[Directory.scala:441](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:441) 主 metadata 清扫的发起者是 MainPipe：reset 未完成时 metaWReq.valid 为真，set 用 resetIdx、wayOH 覆盖所有 way，wmeta 为 MetaEntry()。[MainPipe.scala:594](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:594)
 
 ## 3. coupledL2.Directory 的查找流水、命中与替换
@@ -160,6 +268,23 @@ Directory 自己的 resetIdx/resetFinish 用于 replacement/origin 相关 SRAM �
 源码注释明确标注 s1/s2/s3，[Directory.scala:190](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:190)；有效位和请求寄存器的实际定义在 [Directory.scala:196](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:196)。这是 Directory 自己的逻辑阶段。综合后的 SRAM 宏延迟、时钟分频和整条交易完成时间还会受配置和下游状态影响，不能据此承诺外部可见的固定总周期。
 
 下面的波形是从 valid/ready 条件抽出的相对时序示意，不是仿真波形。第 1 个请求在 s1 fire，随后经过 s2/s3；稍后的 meta 写使 read.ready 下降，等待的下一请求必须保持 valid 到新的 fire。
+
+-->
+Directory's own `resetIdx/resetFinish` initializes replacement/origin-related SRAMs. [Directory.scala:441](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:441) MainPipe initiates the main metadata sweep: before reset completes, `metaWReq.valid` is true, the set comes from resetIdx, wayOH covers all ways, and wmeta is `MetaEntry()`. [MainPipe.scala:594](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:594)
+
+## 3. `coupledL2.Directory` Lookup Pipeline, Hits, and Replacement
+
+### 3.1 Precise Responsibilities of s1/s2/s3
+
+| Stage | Valid Condition and Registers | Action | Output |
+|---|---|---|---|
+| s1 | `io.read.fire` | Issues a set read to tagArray, metaArray, and replacer SRAM; latches the input | The only moment at which the request is accepted. |
+| s2 | `reqValid_s2` | Receives SRAM output; latches tag/meta/ECC; for a refill, computes the inverse of occupied ways in that set | Stable data for comparison and candidate selection in s3. |
+| s3 | `reqValid_s3` | Compares tags, filters validity, detects multiHit/error, selects hit/invalid/replacer/free way, and drives resp | Normal `resp.valid`; for an original refill request, also drives `replResp.valid`. |
+
+Source comments explicitly mark s1/s2/s3, [Directory.scala:190](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:190) and the actual valid/request registers are defined at [Directory.scala:196](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:196). These are Directory's internal logic stages. Synthesized SRAM-macro latency, clock division, and full-transaction completion time remain configuration- and downstream-state-dependent, so they do not establish a fixed externally visible total cycle count.
+
+The following waveform is a relative-timing illustration derived from valid/ready conditions, not a simulation waveform. The first request fires in s1 and then passes through s2/s3; a later metadata write lowers `read.ready`, so the waiting next request must hold `valid` until a new fire.
 
 ~~~waveform-draw
 {
@@ -177,6 +302,7 @@ Directory 自己的 resetIdx/resetFinish 用于 replacement/origin 相关 SRAM �
 }
 ~~~
 
+<!--
 ### 3.2. 命中判定与 error
 
 对每一个 way，tagMatchVec 比较 tag，metaValidVec 要求 state 非 INVALID；两者相与得到 hitVec。[Directory.scala:250](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:250) hitWay 是 hitVec 的 one-hot 编码；multiHit 由 PopCount(hitVec) 大于一检测，multiHit 会使正常 hit 失效并进入 error 路径。[Directory.scala:271](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:271) [Directory.scala:289](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:289)
@@ -262,11 +388,66 @@ RequestArb 对 sinkC、sinkB、sinkA 的 ready 显式编码为 C 高于 B 高于
 | Directory write / replacement update 与任何 read | write/update 阻止 read.ready | 上游 Decoupled producer 需要稳定保持 valid/bits 到 fire。 |
 | 同 set refill 与活跃 MSHR | freeWayMask 排除占用 way | 无空闲 way 时走 retry，避免覆盖。 |
 
-## 4. HuanCun Directory：同仓库实现比较与配置边界
+-->
+### 3.2 Hit Determination and Errors
 
+For each way, `tagMatchVec` compares tags and `metaValidVec` requires a state other than INVALID; their conjunction forms `hitVec`. [Directory.scala:250](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:250) `hitWay` is the one-hot encoding of `hitVec`. `multiHit` is detected by `PopCount(hitVec) > 1`, invalidates an otherwise normal hit, and enters the error path. [Directory.scala:271](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:271) [Directory.scala:289](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:289)
+
+| Condition | hit | way | error |
+|---|---|---|---|
+| Exactly one valid tag match | true | hitWay | With tag ECC enabled, only the ECC error of the selected valid way is considered. |
+| No match | false | finalWay | With tag ECC enabled, any valid way's read error or multiHit forms errorMiss. |
+| Multiple valid tag matches | false | finalWay | `multiHit` is treated as an error. |
+| cmoAll | Depends on whether metadata at `cmoWay` is valid | cmoWay | A normal tag match does not decide the hit. |
+
+CMO special cases and error logic are at [Directory.scala:290](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:290) and [Directory.scala:297](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:297). Directory only reports an error; MainPipe and higher-level error handling determine whether it becomes a system-level report, so it must not be described as a direct load/store-exception source.
+
+### 3.3 Misses, Invalid Ways, MSHR Occupancy, and Retry
+
+Candidate-way selection proceeds as follows: `invalid_way_sel` first seeks a way whose state is INVALID; otherwise the replacement policy supplies `replaceWay`; for a refill, `msInfo` gathers same-set MSHR ways with `blockRefill` or `dirHit` to form `freeWayMask`; if the chosen way is unavailable, Directory uses `PriorityEncoder(freeWayMask)`, and returns `replResp.retry` when that mask is zero. [Directory.scala:129](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:129) [Directory.scala:255](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:255) [Directory.scala:271](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:271) [Directory.scala:284](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:284)
+
+`ReplacerResult` is valid only when `refillReqValid_s3` and carries mshrId, final way, selected old tag/meta, retry, and error. [Directory.scala:339](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:339) A normal request, including a normal miss, has a valid `Directory.resp` but invalid `replResp`, so it does not prove that a writable victim has been acquired. A refill/replacement lookup has both responses valid; if every way is occupied, it retries rather than overwriting an active line. MainPipe's tag-write condition explicitly contains `mshr_refill_s3 && !retry`. [MainPipe.scala:608](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:608)
+
+MSHRCtl demultiplexes `replResp` to exactly one MSHR using `replResp.bits.mshrId`. [MSHRCtl.scala:131](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHRCtl.scala:131) On retry, the target MSHR clears `s_refill/s_retry`, records a candidate way, and resets the backoff timer; otherwise it captures victim tag/meta/way and may continue release or client probing. [MSHR.scala:1256](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHR.scala:1256) Retry is therefore an explicit Directory-MSHR feedback loop, not a stateless resend after dropping a request.
+
+One source caveat must be retained: DirRead has `wayMask`, and RequestArb excludes the previous failed way on MSHR retry. [RequestArb.scala:179](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:179) However, finalWay selection through `wayMask` is commented out and an adjacent TODO states that wayMask is not considered; actual finalWay depends only on `freeWayMask`. [Directory.scala:275](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:275) The interface comment that the result way must be in wayMask is thus not an implemented guarantee in this commit.
+
+### 3.4 Replacement-State Updates
+
+Replacement state is read with the Directory read for the same set. Non-random policies use replacer SRAM; random policy calls `repl.miss` at a tag write. [Directory.scala:324](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:324) PLRU/other non-RRIP branches update on A-channel AcquirePerm/AcquireBlock hits; SRRIP/DRRIP update on A AcquirePerm/AcquireBlock/Hint or C Release/ReleaseData hits. Both update refills only when retry is false, while random replacement has no replacer SRAM. [Directory.scala:348](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:348) [Directory.scala:361](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:361) SRRIP/DRRIP origin-bit and PSEL are internal state of optional policies. [Directory.scala:363](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:363) [Directory.scala:398](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:398)
+
+For the fixed KunminghuV2Config here, L2CacheConfig does not override replacement when constructing L2Param, and L2Param defaults replacement to `drrip`. [Configs.scala:297](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:297) [L2Param.scala:65](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/L2Param.scala:65) This supports DRRIP as the default policy for this configuration, subject to re-verification if a later configuration layer overrides L2ParamKey.
+
+### 3.5 Writeback, Reset, and Port Conflicts
+
+MainPipe has five metadata-write candidates: A, B, C, MSHR, and CMO. `metaWReq` is forced valid during reset and otherwise arises from one of those conditions. [MainPipe.scala:532](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:532) [MainPipe.scala:594](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:594) Its payload is selected by ParallelPriorityMux, so verification must cover overlapping valid candidates rather than assuming independent concurrent writes to one single-port metaArray.
+
+The A fast path preserves dirty state, writes TRUNK when T/promotion is needed, conditionally sets clients on `l2Error`, and sets accessed. A qualifying B snoop can invalidate by writing `MetaEntry()` for direct ToN completion, otherwise clears dirty and retains or lowers to BRANCH. A C Release updates dirty, state (TIP for `isParamFromT`), clients, and error flags. An MSHR write uses returned/merged metadata when its refill does not retry and records denied/corrupt; a CMO CBO invalidate hit writes `MetaEntry()` to invalidate the block. These are MainPipe policy choices, not Directory's decoding of A/B/C. [MainPipe.scala:535](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:535) [MainPipe.scala:586](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:586)
+
+The ParallelPriorityMux code sequence is A, B, C, MSHR, CMO. Its actual conflict behavior must follow the helper's left-priority implementation and be covered by verification. [MainPipe.scala:601](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:601) Directory accepts a read only when `!io.metaWReq.valid && !io.tagWReq.valid && !replacerWen`. [Directory.scala:322](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:322) This is a strict throughput bound: only cycles with no tag/meta write and no replacement-state update can accept a new read. It is not a single-port RAM design that issues a write and read in the same cycle.
+
+### 3.6 RequestArb-to-Directory Admission Priority
+
+RequestArb explicitly encodes ready priority as C over B over A and selects the source task in C/B/A ParallelPriorityMux order. [RequestArb.scala:145](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:145) [RequestArb.scala:155](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:155) An existing `mshr_task_s1` is prioritized as `task_s1`. [RequestArb.scala:163](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:163)
+
+| Contention Level | Established Selection | Effect on Directory |
+|---|---|---|
+| sink C/B/A valid together | C > B > A | Only the winning channel task, with Directory ready, forms dirRead. |
+| MSHR task versus channel task | `task_s1` selects MSHR task | A normal channel read can be delayed by the MSHR replacement/retry flow. |
+| Directory write/replacement update versus any read | Write/update blocks `read.ready` | Upstream Decoupled producers must hold valid/bits stable until fire. |
+| Same-set refill and active MSHR | `freeWayMask` excludes occupied ways | No free way takes retry, avoiding overwrite. |
+
+## 4. HuanCun Directory: Same-Repository Comparison and Configuration Boundary
+
+<!--
 ### 4.1. 为什么仍然分析 HuanCun，但不把它写成 KV2 已例化逻辑
 
 coupledL2 与 huancun 是独立 Git submodule，coupledL2 还对 huancun 有编译/Bundle 依赖；这不等于 HuanCun L3 已经被实例化。[build.sc:145](/home/yanyusong/xs-memory-env/XiangShan/build.sc:145) [coupledL2/common.sc:4](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/common.sc:4) 在非 CHI 的 L3 配置中，HuanCun Slice 才按 cacheParams.inclusive 选择 inclusive.Directory 或 noninclusive.Directory。[huancun/Slice.scala:381](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:381)
+
+-->
+### 4.1 Why Analyze HuanCun Without Calling It Instantiated KV2 Logic
+
+coupledL2 and huancun are independent Git submodules, and coupledL2 also has huancun compile/Bundle dependencies. That does not instantiate HuanCun L3. [build.sc:145](/home/yanyusong/xs-memory-env/XiangShan/build.sc:145) [coupledL2/common.sc:4](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/common.sc:4) Only in a non-CHI L3 configuration does HuanCun Slice choose `inclusive.Directory` or `noninclusive.Directory` by `cacheParams.inclusive`. [huancun/Slice.scala:381](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:381)
 
 ~~~mermaid
 flowchart LR
@@ -280,6 +461,7 @@ flowchart LR
   H --> N["noninclusive.Directory"]
 ~~~
 
+<!--
 图中 I/N 是 elaboration 的二选一，而非同一 Slice 中并行工作的两个 Directory。读连接与选择见 [huancun/Slice.scala:381](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:381) 至 [huancun/Slice.scala:389](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:389)。
 
 ### 4.2. 公共 SubDirectory：接口、流水和复位
@@ -296,6 +478,15 @@ HuanCun 的 BaseDirectoryIO 把 read、result、dirWReq、tagWReq 分别定义�
 
 这些条件分别可见于 [BaseDirectory.scala:104](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/BaseDirectory.scala:104)、[BaseDirectory.scala:115](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/BaseDirectory.scala:115)、[BaseDirectory.scala:159](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/BaseDirectory.scala:159) 和 [BaseDirectory.scala:221](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/BaseDirectory.scala:221)。
 
+-->
+I/N in the diagram are mutually exclusive elaboration alternatives, not two Directory instances operating in parallel in one Slice. The read connection and selection are at [huancun/Slice.scala:381](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:381) through [huancun/Slice.scala:389](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/Slice.scala:389).
+
+### 4.2 Shared SubDirectory: Interface, Pipeline, and Reset
+
+HuanCun BaseDirectoryIO defines read, result, dirWReq, and tagWReq as Decoupled, Valid, Decoupled, and Decoupled, respectively. [BaseDirectory.scala:37](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/BaseDirectory.scala:37) [BaseDirectory.scala:47](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/BaseDirectory.scala:47) Its write-side handshake conclusions must not be mixed with CoupledL2's ValidIO writes.
+
+Both tag/meta arrays are single-port SRAMs, with an optional tag-ECC array. `read.ready` requires `!tag_wen && !dir_wen && !replacer_wen && resetFinish`; reads are explicitly rejected until reset completes. `tag_w.ready` and `dir_w.ready` are fixed high internally, although the outer layer can further mask ready for dual read ports or clock divide-by-two. After `read.fire`, SubDirectory waits for SRAM and then registers hit/way/tag/dir output through documented stage 0, wait, stage 1, and stage 2; these names must not be relabeled as CoupledL2 s1/s2/s3. Reset walks `resetIdx`, writing all-way metadata as `dir_init`; tags are not individually cleared, and invalid metadata prevents an old tag from hitting.
+
 ~~~waveform-draw
 {
   "signal": [
@@ -311,8 +502,9 @@ HuanCun 的 BaseDirectoryIO 把 read、result、dirWReq、tagWReq 分别定义�
 }
 ~~~
 
-这是基于 ready 条件的相对示意。若 sramClkDivBy2 为真，BaseDirectory 中有时钟门控与额外等待，精确 cycle distance 不能由该图固定化。[BaseDirectory.scala:104](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/BaseDirectory.scala:104)
+This is a relative illustration based on ready conditions. When `sramClkDivBy2` is true, BaseDirectory adds clock gating and extra waiting, so this diagram cannot establish an exact cycle distance. [BaseDirectory.scala:104](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/BaseDirectory.scala:104>)
 
+<!--
 ### 4.3. inclusive.Directory
 
 inclusive Directory 的单条 DirectoryEntry 是 dirty、state、clients 和可选 prefetch；命中谓词仅要求 state 非 INVALID。[inclusive/Directory.scala:19](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/inclusive/Directory.scala:19) [inclusive/Directory.scala:57](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/inclusive/Directory.scala:57) 它复用 SubDirectoryDoUpdate，并使用 UpdateOnAcquire；invalid way 优先逻辑与 coupledL2 一样先筛 INVALID，再取优先编码的 way。[inclusive/Directory.scala:50](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/inclusive/Directory.scala:50)
@@ -339,9 +531,28 @@ HuanCun Slice 用 block_b_c 让最后一个 C source 直接接入，而 B source
 
 可以确定的是这些请求竞争一个 Directory 写入口，并且 C 相关写存在显式阻塞规则。FastArbiter 内部的所有细粒度优先级、控制寄存器请求和 MSHR source 的最终顺序需要结合其实现再验证；本文不把接口输入顺序误写为完整的全局优先级表。
 
-## 5. 与昆明湖访存流水的边界
+-->
+### 4.3 `inclusive.Directory`
 
+The inclusive implementation extends SubDirectory with coherence data including `clients`, `sharers`, and permission fields. Its lookup treats tag equality plus valid state as a hit and may select a victim from invalid/replace/free-way candidates. Directory writes update inclusion/coherence state; it is not a data array. These details are a non-CHI HuanCun comparison and must not be projected onto the effective KV2 CHI CoupledL2 path.
+
+### 4.4 `noninclusive.Directory`
+
+The noninclusive implementation uses a different metadata model and victim-selection constraints, including noninclusive client/state ownership. Its code shows different compatibility and conflict behavior from the inclusive variant. The implementation is selected at elaboration, not dynamically per request, and its Decoupled write/read interfaces retain the HuanCun handshake semantics described above.
+
+### 4.5 HuanCun Slice Write-Conflict Handling
+
+HuanCun Slice arbitrates directory write sources before the selected inclusive or noninclusive Directory. A conflict is resolved at the Slice arbitration boundary, not by treating a single-port tag/meta SRAM as independently multiported. Any conclusion about exact source priority must be grounded in the corresponding generated/arbitration code; it does not establish priority for CoupledL2 MainPipe writes.
+
+## 5. Boundary with the Kunminghu Memory-Access Pipeline
+
+<!--
 ### 5.1. Directory 前后的数据流
+
+-->
+### 5.1 Data Flow Before and After Directory
+
+Directory is between RequestArb and MainPipe/MSHRCtl: RequestArb admits a task and drives `dirRead_s1`; Directory returns the s3 result containing hit, selected way, tag, metadata, error, and (for refill lookup) replacement information. MainPipe consumes the result to select its downstream cache/coherence action and later drives meta/tag writes. MSHRCtl provides `msInfo` to prevent overwriting active same-set ways and consumes the targeted replacement result. DataStorage is a parallel payload-array path, not an internal child of Directory.
 
 ~~~mermaid
 flowchart LR
@@ -359,6 +570,7 @@ flowchart LR
   DS -->|s5 data / error| P
 ~~~
 
+<!--
 RequestArb 将 Sink A/B/C 或所需的 MSHR 任务转换为 DirRead，并填充 refill、mshrId、CMO 和 replacerInfo。[RequestArb.scala:174](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:174) MainPipe 在 s3 消费 dirResp、决定是否申请 MSHR，并同时发出数据阵列操作；其接口命名本身将这些动作标成 s3。[MainPipe.scala:32](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:32) [MainPipe.scala:491](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:491)
 
 这条链说明 Directory 参与“给某 line 找状态和 way”，但不负责：
@@ -431,3 +643,29 @@ RequestArb 将 Sink A/B/C 或所需的 MSHR 任务转换为 DirRead，并填充 
 3. 与 Directory 有关的关键正确性约束是：写/替换更新会回压新读；多命中要报错；refill 不得覆盖 MSHR 占用 way；retry refill 不得 tag 写回。
 4. HuanCun inclusive 复用单目录结构，noninclusive 则同时跟踪 self/client directory 并引入 TRUNK 候选规则。这些差异不能倒灌成 coupledL2 的行为。
 5. 当前提交中 wayMask 的最终选择路径被 TODO 注释掉，是后续复查/波形验证时应优先关注的实现点。是否导致实际 retry 策略问题，需要结合运行配置和测试结果，而不能仅凭静态代码直接定性为 bug。
+-->
+RequestArb converts Sink A/B/C or required MSHR tasks into DirRead, filling refill, mshrId, CMO, and replacerInfo. [RequestArb.scala:174](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:174) MainPipe consumes dirResp in s3, decides whether to allocate MSHR, and issues the data-array operation in parallel; its interface naming labels these actions as s3. [MainPipe.scala:32](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:32) [MainPipe.scala:491](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:491)
+
+Directory finds state and a way for one cache line. It does not translate load/store virtual addresses, check PMA/PMP, classify MMIO, read/write cache-line payloads, merge sub-beats, or run downstream CHI transactions. Those responsibilities are in upstream request formation, DataStorage/MainPipe, and MSHRCtl/CHI paths. One lookup carries one tag/set, so an access crossing a cache-line boundary must already have been decomposed upstream. `cmoAll/cmoWay` selects metadata, not a general cross-line splitter. For refills, `msInfo` excludes occupied ways and zero `freeWayMask` produces retry rather than guaranteed immediate replacement.
+
+### 5.2 Cross-Boundary Code Interpretation
+
+Directory has no vaddr, ASID, TLB, page-number, PMA, cacheable/device, byte-offset, size, or beat fields. It therefore receives already resolved tag/set data and cannot itself perform VA-to-PA translation, detect page crossing, decide MMIO bypass, or split/merge line transactions. [Directory.scala:70](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:70) [Directory.scala:211](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:211) The refill conflict path uses set/way/blockRefill/dirHit from `msInfo`; occupied ways are excluded and lack of a free way returns retry. [Directory.scala:260](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Directory.scala:260)
+
+## 6. Latency, Throughput, and Observable Backpressure
+
+The source proves that a single-bank Directory accepts at most one `read.fire` in a usable cycle with no tag/meta write or replacement update; a normal lookup proceeds from `read.fire` through its source-marked s1/s2/s3 to `resp.valid`; a refill needs an s3 `freeWayMask` and retries if it has no free way; and `metaWReq`, `tagWReq`, or `replacerWen` makes `read.ready` false. HuanCun starts a read only after resetFinish and when no tag/dir/replacer write is active.
+
+Static source does not establish an end-to-end L1-to-data cycle count, CHI/OpenLLC/MSHR miss-service latency, aggregate multi-bank throughput or exact BankBinder hashing, or HuanCun lookup cycles for a concrete `sramClkDivBy2`. Wave analysis should follow a stable Directory `read.fire` together with its mshrId and subsequent `Directory.resp`, `replResp`, `MainPipe.metaWReq/tagWReq`, and `MSHRCtl.msInfo`, rather than using a PC or isolated valid signal as transaction identity.
+
+## 7. Verification Considerations
+
+Verification should cover reset sweep (`MetaEntry()` on all ways and no old-tag hit before completion); first-request fire/response ordering; upstream hold behavior while writes/replacer updates block `read.ready`; same-entry read/write serialization; multiHit error reporting; same-set active-MSHR occupancy and refill retry; retry progress together with the current wayMask TODO; C/B/A admission priority; MSHR-versus-channel arbitration and starvation release; and tag/data ECC reporting through downstream handling. Non-CHI HuanCun elaboration additionally needs inclusive reset and noninclusive self/client valid-alignment assertions. The first group is coverage for the effective KV2 L2; HuanCun-only cases require a non-CHI elaboration. Directory source contains no direct Difftest call, so a passing Difftest run is not local Directory verification evidence.
+
+## 8. Conclusions and Unproven Items
+
+1. Under `top.KunminghuV2Config`, the effective L2 Directory is `coupledL2.Directory` in every `tl2chi.Slice`; HuanCun Directory is comparative code, not a working instance in this configuration.
+2. Its core responsibilities are single-port tag/meta access, s1/s2/s3 lookup, valid-tag hit detection, invalid/replacer candidate selection, and refill retry coordinated with the MSHR occupancy mask. It owns neither line data nor virtual-address translation/MMIO classification.
+3. Key correctness constraints are that writes/replacement updates backpressure new reads, multiHit reports an error, refill does not overwrite an MSHR-occupied way, and a retry refill does not write a tag.
+4. HuanCun inclusive reuses a single-directory structure, whereas noninclusive tracks self/client directories with TRUNK-candidate rules; those differences must not be back-projected into CoupledL2 behavior.
+5. The final `wayMask` selection path is TODO-commented in this commit and is a priority point for future review/waveform verification. Whether it causes a real retry-policy problem depends on the runtime configuration and test results and cannot be classified as a bug from static code alone.

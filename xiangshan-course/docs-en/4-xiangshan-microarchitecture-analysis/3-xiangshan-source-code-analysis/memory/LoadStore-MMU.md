@@ -1,15 +1,89 @@
-# LoadStore-MMU：Kunminghu V2 访存单元 MMU 源码分析
+<!-- # LoadStore-MMU：Kunminghu V2 访存单元 MMU 源码分析 -->
+# LoadStore-MMU: Kunminghu V2 Memory-Access-Unit MMU Source Analysis
 
-> 本文严格以用户指定的 Kunminghu V2 本地源码为行为证据。课程材料只用于解释术语和组织章节，不能替代 RTL/Chisel 连线。
+<!-- > 本文严格以用户指定的 Kunminghu V2 本地源码为行为证据。课程材料只用于解释术语和组织章节，不能替代 RTL/Chisel 连线。 -->
+> This document uses the user-specified local Kunminghu V2 source tree as its sole behavioral evidence. Course material explains terminology and organizes the chapters, but cannot substitute for RTL/Chisel connectivity.
 >
-> 结论先行：昆明湖 V2 的数据侧 MMU 不是一个只做 VPN 到 PPN 查表的孤立模块。`MemBlock` 将 load、store 与预取 requestor 接到三组非阻塞 L1 DTLB；L1 hit 回送 `paddr/gpaddr/PBMT/页表异常`，独立 PMP/PMA checker 随后以物理地址作属性与访问许可判断。L1 miss 被 `PTWNewFilter` 按请求类别合并，经共享 L2TLB、页表缓存与 PTW/LLPTW/HPTW 访问 TileLink，再以 refill、同拍 bypass 或 `tlbreplay` 重放收束。DCache 的虚拟地址 S0 与 TLB 并行，但 TLB miss、页故障、访问故障、MMIO/NC 会在后续阶段 kill 该 cache 路径；最终 load/store 的提交、MMIO 时序和异常写回属于 LSQ/ROB 边界，而非 TLB 本体。
+<!-- > 结论先行：昆明湖 V2 的数据侧 MMU 不是一个只做 VPN 到 PPN 查表的孤立模块。`MemBlock` 将 load、store 与预取 requestor 接到三组非阻塞 L1 DTLB；L1 hit 回送 `paddr/gpaddr/PBMT/页表异常`，独立 PMP/PMA checker 随后以物理地址作属性与访问许可判断。L1 miss 被 `PTWNewFilter` 按请求类别合并，经共享 L2TLB、页表缓存与 PTW/LLPTW/HPTW 访问 TileLink，再以 refill、同拍 bypass 或 `tlbreplay` 重放收束。DCache 的虚拟地址 S0 与 TLB 并行，但 TLB miss、页故障、访问故障、MMIO/NC 会在后续阶段 kill 该 cache 路径；最终 load/store 的提交、MMIO 时序和异常写回属于 LSQ/ROB 边界，而非 TLB 本体。 -->
+> Conclusion first: Kunminghu V2's data-side MMU is not an isolated VPN-to-PPN lookup module. `MemBlock` connects load, store, and prefetch requestors to three non-blocking L1 DTLB groups; an L1 hit returns `paddr/gpaddr/PBMT` and page-table exceptions, after which independent PMP/PMA checkers evaluate physical-address attributes and access permissions. `PTWNewFilter` merges L1 misses by request category, which then access TileLink through the shared L2TLB, page-table cache, and PTW/LLPTW/HPTW; refill, same-cycle bypass, or `tlbreplay` completes the flow. DCache virtual-address S0 runs in parallel with the TLB, but a TLB miss, page fault, access fault, or MMIO/NC classification kills that cache path in later stages. Final load/store commit, MMIO ordering, and exception writeback belong to the LSQ/ROB boundary, not to the TLB itself.
 
-## 1. 范围、版本与证据边界
+<!-- ## 1. 范围、版本与证据边界 -->
+## 1. Scope, Version, and Evidence Boundaries
 
-### 1.1. 本文覆盖的闭环
+<!-- ### 1.1. 本文覆盖的闭环 -->
+### 1.1. End-to-End Scope Covered by This Document
 
-本文分析数据侧地址翻译与其访存接入，覆盖：
+<!-- 本文分析数据侧地址翻译与其访存接入，覆盖： -->
+This document analyzes data-side address translation and its connection to memory accesses, covering:
 
+## 12. Translation Pipeline Stages, Permissions, and Flush Control
+
+### 12.1. PTE Validity, Permissions, and Fault Outputs
+
+`PteBundle` validity checks distinguish page faults, guest-page-faults, and access faults. Reserved bits, illegal PBMT, non-leaf fields, invalid PTEs, `R=0/W=1`, NAPOT, superpage alignment, and related cases feed the PF/GPF decision; PPN values beyond physical-address width and similar cases feed the AF-related path. Whether `canRefill` may enter the page-table cache is also constrained by these results. [MMUBundle.scala:729](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:729)
+
+L1 `perm_check` further combines:
+
+- Stage-1 U/S, SUM, MXR, R/W/X, HLVX, and A/D;
+- Stage-2 R/W/X and A/D;
+- `EffectiveVa` and the request command; and
+- Any access fault returned by the page-table access itself.
+
+It ultimately writes PF, GPF, and AF into `TlbResp`. [TLB.scala:449](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:449) Under ordinary conditions, page fault is early in fault priority, but source comments explicitly retain an exception in which AF overrides PF when PTW has returned AF while translation is invalid. [TLB.scala:523](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:523) Thus, “PF always overrides AF” is an incorrect simplification.
+
+Final PBMT selection also depends on translation stage: only-stage1/no-S2 uses stage 1, only-stage2 uses stage 2, and all-stage prefers a nonzero stage-1 PBMT or otherwise uses stage 2. [TLB.scala:436](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:436)
+
+### 12.2. GPF, `need_gpa`, and Replay
+
+GPF does not always directly become an ordinary replay. The TLB has a single `need_gpa` state holding VPN, translation type, and ROB-related information. When the request corresponds to a recoverable condition such as ROB pending, instruction fetch, or MABUF, it issues a PTW request with `getGpa` and waits for the response to complete GPA. If GPA cannot be obtained or specific conditions are unmet, it instead uses `tlbreplay`. [TLB.scala:108](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:108), [TLB.scala:300](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:300), [TLB.scala:544](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:544)
+
+`need_gpa` is released by redirect, ITLB flush, explicit clear, or a counter limit. [TLB.scala:311](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:311) This state machine is an implementation detail that preserves two-stage exception information; it must not be summarized as every GPF “immediately receives complete `gpaddr`.”
+
+### 12.3. PMP/PMA: L1 TLB Issues Requests; the `MemBlock` Checker Completes Checks
+
+The data-side path is:
+
+## 15. Exceptions, Privilege, Cross-Boundary Behavior, and Recovery
+
+### 15.1. Virtual Pages, 16B Alignment, and the Misalignment Buffer
+
+LoadUnit distinguishes unaligned requests within one 16B block from requests crossing 16B; the latter enter `LoadMisalignBuffer` for fragmentation. [LoadUnit.scala:711](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:711) This buffer reissues requests through a fixed LoadUnit port, so each fragment re-enters the DTLB/PMP path rather than one paddr automatically covering two pages. [LoadMisalignBuffer.scala:143](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:143), [LoadMisalignBuffer.scala:510](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:510), [MemBlock.scala:1020](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1020)
+
+Stores use the corresponding `StoreMisalignBuffer`. On a cross-page access, it first awaits the relevant ROB-pending condition and then performs split, request, response, writeback/block. An exception/MMIO/NC in any fragment stops the normal two-fragment flow; the uncache branch becomes software `storeAddrMisaligned`. [StoreMisalignBuffer.scala:233](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala:233), [StoreMisalignBuffer.scala:542](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala:542)
+
+| Defensible conclusion | Evidence strength |
+|---|---|
+| `fullva/checkfullva` participates in TLB decisions for cross-page/full-address cases | Verified |
+| Every actual sub-access of a cross-page access follows a visible TLB/PMP path | Verified |
+| A fault in the high half always writes the high-page address to `xtval` | **Unverified; the current buffer's override output hardwires valid to false** |
+
+The final item is implemented in [LoadMisalignBuffer.scala:625](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:625) and [StoreMisalignBuffer.scala:658](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala:658). Although `MemBlock` has this exception-VA override priority, current source does not permit treating it as a functioning feature. [MemBlock.scala:1861](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1861)
+
+### 15.2. Cache-Line/Bank Boundaries: MMU Responsibility and DCache Responsibility
+
+The MMU is responsible for producing physical address, PBMT, and permission results for **each actual access fragment**. The LoadUnit/DCache interface can carry 128-bit aligned/adjacent-bank requests, but the MMU source analyzed here contains no “MMU merge state machine spanning a complete cache line.” The following boundary must therefore be retained:
+
+1. It can be confirmed that cross-page/cross-16B fragments return to the TLB/PMP path.
+2. It can be confirmed that DCache controls tag/data/bank/miss from the paddr returned by LoadUnit.
+3. MMU code cannot establish final cross-cache-line merge, MSHR occupancy, data-bank conflict, or retirement cycle.
+
+The latter two must be traced in [LoadStore-DCache.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/LoadStore-DCache.md:1) and corresponding waveforms; address slicing must not be promoted into confirmed cache behavior.
+
+### 15.3. Three Cancellation Layers: Request, Translation, and Cache Pipeline
+
+| Layer | Trigger / behavior | Layer it cannot substitute for |
+|---|---|---|
+| request `kill` / `flushPipe` | Cancels or suppresses a normally retained TLB request response | Does not automatically clear L2/filter/page-cache in-flight state |
+| TLB/filter/L2 flush | Invalidates entries, clears filter, or suppresses stale refill | Does not automatically establish that DCache S1/S2 was killed |
+| DCache S1/S2 kill | Load/Store cancels the parallel DCache path on TLB miss, fault, MMIO/NC, or redirect | Does not automatically mean a software fence completed |
+
+LoadUnit's S1 kill and final S2 DCache kill are visible respectively in [LoadUnit.scala:953](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:953) and [LoadUnit.scala:1520](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1520); the corresponding Store path is in [StoreUnit.scala:412](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:412) and [StoreUnit.scala:462](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:462).
+
+### 15.4. Convergence of Exception Addresses and Memory Redirects
+
+LSQWrapper selects between StoreQueue and LoadQueue exception addresses according to `isStoreException`, and registers the result due to commit/pointer-update timing. [LSQWrapper.scala:245](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:245) `MemBlock` uses the following exception-address priority:
+
+<!--
 ```text
 issue / replay / prefetch request
   -> LoadUnit 或 StoreUnit S0 的 TLB request
@@ -18,52 +92,78 @@ issue / replay / prefetch request
   -> refill / bypass / tlbreplay
   -> LoadUnit、StoreUnit、LSQ 的异常、MMIO/NC 与 replay 分流
 ```
+-->
+```text
+issue / replay / prefetch request
+  -> LoadUnit or StoreUnit S0 TLB request
+  -> L1 DTLB lookup / PMP-PMA response
+  -> L1 miss filter -> shared L2TLB -> PtwCache / walkers -> TileLink
+  -> refill / bypass / tlbreplay
+  -> Exception, MMIO/NC, and replay routing in LoadUnit, StoreUnit, and LSQ
+```
 
-范围不包括前端 ITLB 的内部流水、DCache/LSQ 的全部实现、以及某次仿真的真实时序。ITLB 与 DTLB 共用 L2TLB 输入仲裁这一事实会说明，但不会把前端行为混入数据侧结论。
+<!-- 范围不包括前端 ITLB 的内部流水、DCache/LSQ 的全部实现、以及某次仿真的真实时序。ITLB 与 DTLB 共用 L2TLB 输入仲裁这一事实会说明，但不会把前端行为混入数据侧结论。 -->
+The scope excludes the frontend ITLB's internal pipeline, the full DCache/LSQ implementation, and the actual timing of any particular simulation. The shared L2TLB input arbitration for ITLB and DTLB is noted, but frontend behavior is not folded into data-side conclusions.
 
-| 项目 | 固定基线 / 处理方式 |
+| <!-- 项目 --> Item | <!-- 固定基线 / 处理方式 --> Fixed baseline / handling |
 |---|---|
-| 源码 checkout | `/home/yanyusong/xs-memory-env/XiangShan` |
-| 分支与提交 | `kunminghu-v2` @ `e12436c7cba86b195deec24981976d78bc263661` |
-| 主要源码 | [MemBlock.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:262)、[TLB.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:48)、[TLBStorage.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:86)、[Repeater.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:163)、[L2TLB.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:35)、[PageTableWalker.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:99) |
-| 工作树说明 | checkout 原本已有 `difftest` 修改和 `src/main/resources/aia/` 未跟踪内容；本文未触碰它们。所引 Scala 主树在检查时没有该路径上的 tracked diff。 |
-| 官方 Design Doc | 本机未发现 skill 约定的 `XiangShan-Design-Doc` checkout。因此 **Design Doc baseline: not consulted (local checkout unavailable)**；不能虚构 MMU 设计文档映射。 |
-| skill 同步 | 已按当前 `xiangshan-code-analyzer` skill 做保守周同步检查；状态距上次同步不足 7 天，因此未 pull、reset 或 clean。 |
+| <!-- 源码 checkout --> Source checkout | `/home/yanyusong/xs-memory-env/XiangShan` |
+| <!-- 分支与提交 --> Branch and commit | `kunminghu-v2` @ `e12436c7cba86b195deec24981976d78bc263661` |
+| <!-- 主要源码 --> Primary source files | [MemBlock.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:262), [TLB.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:48), [TLBStorage.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:86), [Repeater.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:163), [L2TLB.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:35), [PageTableWalker.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:99) |
+| <!-- 工作树说明 --> Working-tree note | <!-- checkout 原本已有 `difftest` 修改和 `src/main/resources/aia/` 未跟踪内容；本文未触碰它们。所引 Scala 主树在检查时没有该路径上的 tracked diff。 --> The checkout already contained `difftest` modifications and untracked content under `src/main/resources/aia/`; this document did not touch them. The cited Scala main tree had no tracked diff at those paths when checked. |
+| <!-- 官方 Design Doc --> Official Design Doc | <!-- 本机未发现 skill 约定的 `XiangShan-Design-Doc` checkout。因此 **Design Doc baseline: not consulted (local checkout unavailable)**；不能虚构 MMU 设计文档映射。 --> The `XiangShan-Design-Doc` checkout expected by the skill was not found locally. Therefore, **Design Doc baseline: not consulted (local checkout unavailable)**; no MMU design-document mapping is invented. |
+| <!-- skill 同步 --> Skill synchronization | <!-- 已按当前 `xiangshan-code-analyzer` skill 做保守周同步检查；状态距上次同步不足 7 天，因此未 pull、reset 或 clean。 --> A conservative weekly synchronization check was performed using the current `xiangshan-code-analyzer` skill. The time since the previous synchronization was under seven days, so no pull, reset, or clean was performed. |
 
-## 2. 关键源码证据
+<!-- ## 2. 关键源码证据 -->
+## 2. Key Source Evidence
 
-| ID | 来源 | 本文中的用途 | 结论状态 |
+| ID | <!-- 来源 --> Source | <!-- 本文中的用途 --> Use in this document | <!-- 结论状态 --> Conclusion status |
 |---|---|---|---|
-| D0 | 官方 Design Doc | 本机缺失，未读取 | 不可用 |
-| C0 | 课程总览，如 [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:269) | 解释 LSU、TLB、PMP、PTW 的课堂语境 | 仅背景 |
-| S0 | 上述 pinned checkout 的 Chisel 源码 | 端口、状态、仲裁、异常与地址路径 | 本文唯一行为证据 |
+| D0 | <!-- 官方 Design Doc --> Official Design Doc | <!-- 本机缺失，未读取 --> Missing locally and not read | <!-- 不可用 --> Unavailable |
+| C0 | <!-- 课程总览，如 [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:269) --> Course overview, such as [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:269) | <!-- 解释 LSU、TLB、PMP、PTW 的课堂语境 --> Explains the course context for LSU, TLB, PMP, and PTW | <!-- 仅背景 --> Background only |
+| S0 | <!-- 上述 pinned checkout 的 Chisel 源码 --> Chisel source in the pinned checkout above | <!-- 端口、状态、仲裁、异常与地址路径 --> Ports, state, arbitration, exceptions, and address paths | <!-- 本文唯一行为证据 --> The document's sole behavioral evidence |
 
-下文的“已验证”均可回链到 S0；“推导”会注明参数前提；“待波形验证”表示仅靠源码无法确认具体事务、周期或某个触发序列。不能把代码中的结构性一拍寄存器，扩大表述成软件可见的固定 load latency。
+<!-- 下文的“已验证”均可回链到 S0；“推导”会注明参数前提；“待波形验证”表示仅靠源码无法确认具体事务、周期或某个触发序列。不能把代码中的结构性一拍寄存器，扩大表述成软件可见的固定 load latency。 -->
+Every “verified” conclusion below can be traced back to S0; each “inference” states its parameter assumptions; and “requires waveform verification” means that source alone cannot establish a specific transaction, cycle count, or triggering sequence. A structurally registered stage in the code must not be overstated as a fixed, software-visible load latency.
 
-## 3. 理论、设计意图与有效代码映射
+<!-- ## 3. 理论、设计意图与有效代码映射 -->
+## 3. Theory, Design Intent, and Effective Code Mapping
 
-课程材料中的“TLB 命中、PTW miss、PMP 检查、MMIO 强序”是理解术语的理论层；本文件的有效行为只来自下表所列的已实例化源码。由于正式 Design Doc checkout 缺失，本章不把任何课程叙述升级为 design intent 证据。
+<!-- 课程材料中的“TLB 命中、PTW miss、PMP 检查、MMIO 强序”是理解术语的理论层；本文件的有效行为只来自下表所列的已实例化源码。由于正式 Design Doc checkout 缺失，本章不把任何课程叙述升级为 design intent 证据。 -->
+Course material's “TLB hit, PTW miss, PMP check, and strongly ordered MMIO” form a terminology layer; this document's effective behavior comes only from the instantiated source listed below. Because the formal Design Doc checkout is unavailable, this chapter does not elevate any course narrative into design-intent evidence.
 
-| 层次 | 本文使用方式 | 有效代码映射 | 状态 |
+| <!-- 层次 --> Layer | <!-- 本文使用方式 --> Use in this document | <!-- 有效代码映射 --> Effective code mapping | <!-- 状态 --> Status |
 |---|---|---|---|
-| 理论 | 课程说明 TLB、PMP、PTW、LSQ/ROB 的职责边界 | 仅帮助读者定位术语 | 背景，不作行为证据 |
-| Design intent | 本机无正式 Design Doc checkout | 无可引用的 Design Doc 行级映射 | D0：not consulted |
-| 有效实现 | `MemBlock -> TLBNonBlock -> PTWNewFilter -> L2TLB -> PtwCache/walkers -> TileLink` | [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686)、[Repeater.scala:338](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:338)、[L2TLB.scala:125](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:125) | S0：已验证 |
+| <!-- 理论 --> Theory | <!-- 课程说明 TLB、PMP、PTW、LSQ/ROB 的职责边界 --> Course material describes the responsibility boundaries of TLB, PMP, PTW, and LSQ/ROB | <!-- 仅帮助读者定位术语 --> Only helps readers locate terminology | <!-- 背景，不作行为证据 --> Background, not behavioral evidence |
+| Design intent | <!-- 本机无正式 Design Doc checkout --> No formal Design Doc checkout is present locally | <!-- 无可引用的 Design Doc 行级映射 --> No citable line-level Design Doc mapping | <!-- D0：not consulted --> D0: not consulted |
+| <!-- 有效实现 --> Effective implementation | `MemBlock -> TLBNonBlock -> PTWNewFilter -> L2TLB -> PtwCache/walkers -> TileLink` | [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686), [Repeater.scala:338](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:338), [L2TLB.scala:125](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:125) | <!-- S0：已验证 --> S0: verified |
 
-| 主题 | 关键证据 | 已验证事实 |
+| <!-- 主题 --> Topic | <!-- 关键证据 --> Key evidence | <!-- 已验证事实 --> Verified facts |
 |---|---|---|
-| 参数与模式 | [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214)、[Parameters.scala:252](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:252)、[Parameters.scala:266](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:266) | 默认定义 load/store 流水宽度、ASID/VMID 宽度及各 L1 TLB 参数。 |
-| DTLB 组装 | [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686)、[MemBlock.scala:742](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:742) | 三组 L1 DTLB、PTW 返回路由、filter 与 L2 接口的真实连线。 |
+| <!-- 参数与模式 --> Parameters and modes | [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214), [Parameters.scala:252](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:252), [Parameters.scala:266](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:266) | <!-- 默认定义 load/store 流水宽度、ASID/VMID 宽度及各 L1 TLB 参数。 --> Defaults define load/store pipeline widths, ASID/VMID widths, and the parameters of each L1 TLB. |
+| <!-- DTLB 组装 --> DTLB assembly | [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686), [MemBlock.scala:742](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:742) | <!-- 三组 L1 DTLB、PTW 返回路由、filter 与 L2 接口的真实连线。 --> Actual wiring of the three L1 DTLB groups, PTW-return routing, filters, and the L2 interface. |
+<!--
 | 请求/响应 bundle | [MMUBundle.scala:563](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:563)、[MMUBundle.scala:669](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:669) | `TlbReq/TlbResp` 字段及 `TlbIO` 边界。 |
 | L1 lookup/refill | [TLB.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:250)、[TLBStorage.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:97) | storage lookup、PTW bypass、refill 和 replacement。 |
 | miss 合并与 L2 | [Repeater.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:338)、[L2TLB.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:125) | load/store/prefetch filter、L2 request counter、PtwCache 和 walkers。 |
 | LSU 消费翻译结果 | [LoadUnit.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383)、[StoreUnit.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:215) | Load/Store S0 并行发出 DTLB 与 DCache 请求，S1/S2 处理结果。 |
 | 异常与非缓存路径 | [LoadQueueUncache.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122)、[StoreQueue.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:824) | MMIO/NC 最终由 LSQ/ROB 约束，不是 TLB 内部提交。 |
 
-## 4. 理论与有效实现
+-->
+| Topic | Key evidence | Verified facts |
+|---|---|---|
+| Request/response bundle | [MMUBundle.scala:563](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:563), [MMUBundle.scala:669](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:669) | `TlbReq/TlbResp` fields and the `TlbIO` boundary. |
+| L1 lookup/refill | [TLB.scala:250](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:250), [TLBStorage.scala:97](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:97) | Storage lookup, PTW bypass, refill, and replacement. |
+| Miss merging and L2 | [Repeater.scala:338](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:338), [L2TLB.scala:125](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:125) | Load/store/prefetch filters, the L2 request counter, PtwCache, and walkers. |
+| LSU consumption of translation results | [LoadUnit.scala:383](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383), [StoreUnit.scala:215](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:215) | Load/Store S0 sends DTLB and DCache requests in parallel; S1/S2 process the results. |
+| Exceptions and uncache paths | [LoadQueueUncache.scala:122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122), [StoreQueue.scala:824](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:824) | MMIO/NC is ultimately constrained by LSQ/ROB, rather than being committed inside the TLB. |
+
+<!-- ## 4. 理论与有效实现 -->
+## 4. Theory and Effective Implementation
 
 ### 4.1. Who / Why / How / From / To
 
+<!--
 | 模块 | Who（谁拥有） | Why（为什么存在） | How（如何工作） | From / To |
 |---|---|---|---|---|
 | `TLBNonBlock` | `MemBlock` 的 load/store/prefetch DTLB | 并发处理 L1 翻译与 miss replay | 捕获 request，查 L1 storage；miss 时向 PTW 发 request 或 replay | LSU requestor ↔ PTW/filter；PMP request/mode 独立输出 |
@@ -74,6 +174,18 @@ issue / replay / prefetch request
 | `LoadUnit/StoreUnit` | LSU | 把翻译、DCache、LSQ、异常和 replay 汇合 | S0 并行发 request；S1 取得 TLB response；S2 合并 PMP/PBMT | issue/replay ↔ TLB/PMP/DCache/LSQ |
 
 ### 4.2. 有效模块连接
+
+-->
+| Module | Who (owner) | Why (purpose) | How (operation) | From / To |
+|---|---|---|---|---|
+| `TLBNonBlock` | `MemBlock`'s load/store/prefetch DTLB | Processes L1 translation and miss replay concurrently | Captures a request and consults L1 storage; sends a request to PTW or issues replay on a miss | LSU requestor ↔ PTW/filter; independently emits PMP request/mode |
+| `TLBFA` | L1 TLB storage | Retains matchable page-table entries | Compares a register array in parallel, registers the hit vector, and writes by replacement | From `TLB` lookup/refill; to `TLBRead` |
+| `PTWNewFilter` | Data-side DTLB miss aggregation layer | Suppresses repeated walks for the same page and reuses one L2 data port | Maintains load/store/prefetch entry classes, merges duplicate requests, and sends requests through RR arbitration | From each DTLB's `ptw.req`; to `ptw.io.tlb(1)` |
+| `L2TLBWrapper/L2TLB` | `MemBlock`'s shared PTW | Connects ITLB/DTLB requests to the page-table cache and walkers | Includes arbiters, miss queue, PtwCache, PTW/LLPTW/HPTW, and TileLink master logic | From `tlb(0/1)`; to the L2 TileLink node |
+| `PMPChecker` | `MemBlock` / walkers | Applies access permissions and PMA attributes to formed physical addresses | Each DTLB requestor has one checker group; walkers have independent checkers as well | From TLB `paddr`, CSR/PMP/PMA; to Load/Store/Walker |
+| `LoadUnit/StoreUnit` | LSU | Combines translation, DCache, LSQ, exceptions, and replay | S0 sends requests in parallel; S1 obtains the TLB response; S2 combines PMP/PBMT | issue/replay ↔ TLB/PMP/DCache/LSQ |
+
+### 4.2. Effective Module Connectivity
 
 ```mermaid
 flowchart LR
@@ -107,11 +219,49 @@ flowchart LR
   SU --> DC
 ```
 
+<!--
 图中 `tlb(0)` 是 ITLB 输入、`tlb(1)` 是 data-side filter 输入；这是 L2TLB 的两个上游槽位，不表示数据侧有两条独立 PTW。[L2TLB.scala:183](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:183)  `MemBlock` 通过 `L2TLBWrapper` 的 TileLink node 接到 L2 一侧，见 [MemBlock.scala:262](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:262) 与 [L2TLB.scala:1044](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:1044)。
 
 ### 4.3. DTLB 实例、端口划分和静态数量
 
 `MemBlock` 实例化三组数据 L1 TLB：
+
+-->
+The diagram uses `tlb(0)` for the ITLB input and `tlb(1)` for the data-side filter input. These are the L2TLB's two upstream slots, not two independent data-side PTWs. [L2TLB.scala:183](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:183) `MemBlock` reaches the L2 side through the `L2TLBWrapper` TileLink node; see [MemBlock.scala:262](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:262) and [L2TLB.scala:1044](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:1044).
+
+### 4.3. DTLB Instances, Port Partitioning, and Static Counts
+
+`MemBlock` instantiates three data-side L1 TLB groups:
+
+The TLB itself emits only a PMP request/mode and accepts no PMP response. [TLB.scala:274](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:274), [MMUBundle.scala:693](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:693) `MemBlock` collects these outputs from the DTLBs, creates `PMPChecker(4, leaveHitMux = true)` per data requestor, and connects them to CSR/PMP/PMA information and execution-unit responses. [MemBlock.scala:704](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:704), [MemBlock.scala:789](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:789)
+
+The `ld/st/instr/mmio/atomic` results of `PMPChecker` combine PMP, PMA, and related checks; PMA cacheability/AMO attributes participate as well. [PMP.scala:386](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/PMP.scala:386), [PMA.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/PMA.scala:211) Documentation should therefore use “PMP/PMA checker response,” rather than mislabeling `pmp.mmio` as a pure PMP permission bit.
+
+The L2 page-table walk uses a different internal checker set: L2TLB creates same-cycle PMPCheckers for PTE accesses by PTW, LLPTW, HPTW, and others. [L2TLB.scala:93](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:93), [L2TLB.scala:592](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:592) This is a distinct boundary from the checker for instruction paddr and must not be conflated into one permission query.
+
+### 12.4. SFENCE/HFENCE, CSR Changes, and L1 Invalidation
+
+| Trigger source | Verifiable L1 action | Design reason / limit |
+|---|---|---|
+| `sfence` / SATP, VSATP, HGATP / `virt_changed` | After `fenceDelay`, forms an MMU-flush condition and blocks requests/refills that must not be retained | A pin change at the input does not mean storage clears in the same cycle. [TLB.scala:60](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:60) |
+| `flushPipe` | Svinval/SFENCE “discard pipeline request” control is separate from entry invalidation | The presence of sfence alone cannot establish that every in-flight request is killed under identical conditions. |
+| SFENCE.VMA / HFENCE.GVMA | Storage invalidates according to VA, ASID, VMID, global, and stage conditions | See matching branches in [TLBStorage.scala:187](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:187). |
+| HFENCE.VVMA | Relevant two-stage entries receive conservative invalidation | An L1-composed S1/S2 entry cannot reliably match a VS large-page address; the source explicitly chooses full-address invalidation to avoid a missed invalidation. [TLBStorage.scala:216](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:216) |
+| PTW return races a context change | `MemBlock` registers the PTW response first, then suppresses stale returns on sfence/CSR/virt changes | This protects against stale refills; precise same-cycle races still require waveform verification. [MemBlock.scala:742](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:742) |
+
+### 12.5. Flush Behavior of L2/PtwCache/Walkers
+
+L2TLB also first delays sfence/CSR and then uses `flush_latch` for an already-issued TileLink page-table read: flush stops new memory requests; old responses still drain and clear the relevant waiting state, but `refill_valid` explicitly requires no flush/flush-latch before PtwCache may be contaminated. [L2TLB.scala:382](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:382), [L2TLB.scala:534](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:534), [L2TLB.scala:687](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:687)
+
+PtwCache also invalidates L0/L1 on SFENCE, and PTW, LLPTW, and HPTW all return to their initial/idle states on flush. [PageTableCache.scala:1098](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala:1098), [PageTableWalker.scala:578](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:578), [PageTableWalker.scala:1036](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:1036)
+
+What can be confirmed is that an old PTE response drains but must not refill. Whether a specific transaction lands immediately before or after a fence must be verified in a trace and cannot be generalized from this section as a fixed ordering promise.
+
+## 13. Control-Path Rationale: Misses, Filtering, Arbitration, and Walkers
+
+### 13.1. `TLBNonBlock` Miss/Replay Branch
+
+The LSU uses `TLBNonBlock`, not a blocking TLB. [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686) On the non-blocking path, a miss does not cause L1 to keep one request blocked internally:
 
 ```scala
 val dtlb_ld_tlb_ld = Module(new TLBNonBlock(LduCnt + HyuCnt + 1, 2, ldtlbParams))
@@ -119,11 +269,19 @@ val dtlb_st_tlb_st = Module(new TLBNonBlock(StaCnt, 1, sttlbParams))
 val dtlb_prefetch  = Module(new TLBNonBlock(2, 2, pftlbParams))
 ```
 
+<!--
 代码见 [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686)。load 组的末一端口用于流预取，store 组按 `StaCnt`，prefetch 组有两个 requestor；因此“DTLB 端口数”应写为参数表达式，而不能只凭默认 scalar load 数猜成常数。源码默认 `LoadPipelineWidth = 3`、`StorePipelineWidth = 2`，见 [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214)；Hybrid/vector 等是否启用还会改变表达式。
 
 每组都收到 hartId、sfence、TLB CSR、redirect 和 ROB pending pointer。[MemBlock.scala:704](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:704) 这表明 flush、特权/虚拟化上下文变化和 GPA 恢复不是外围软件约定，而是已经接进 TLB 的硬件控制输入。
 
 ### 4.4. 已实现的翻译路径概览
+
+-->
+The code is in [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686). The final port of the load group serves stream prefetching, the store group uses `StaCnt`, and the prefetch group has two requestors. Therefore, the DTLB-port count should be expressed parametrically rather than guessed as a constant from the default scalar-load count. The source defaults are `LoadPipelineWidth = 3` and `StorePipelineWidth = 2`, as shown in [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214); enabling Hybrid/vector paths can also change the expression.
+
+Every group receives hartId, sfence, TLB CSR, redirect, and the ROB pending pointer. [MemBlock.scala:704](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:704) This shows that flush, privilege/virtualization-context changes, and GPA recovery are hardware control inputs already connected to the TLB, rather than peripheral software conventions.
+
+### 4.4. Overview of Implemented Translation Paths
 
 ```mermaid
 sequenceDiagram
@@ -152,6 +310,7 @@ sequenceDiagram
   end
 ```
 
+<!--
 此图的 `alt` 只描述控制分支，不承诺一个 L1 hit 必定在某个软件可见 cycle 完成。请求被寄存、storage hit 向量被 `RegNext`，且 Load/Store 还有各自的流水和 DCache 侧旁路，见 [TLB.scala:68](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:68) 和 [TLBStorage.scala:128](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:128)。
 
 ## 5. 参数、容量与资源边界
@@ -176,6 +335,30 @@ sequenceDiagram
 1. `partialStaticPMP` 虽是参数，当前 Scala 主树未见将其变为 L1 entry 的缓存 PMP 结果的有效消费；不能据此声称“TLB 命中自带静态 PMP”。[MMUConst.scala:42](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:42)
 2. `missqueueExtendSize` 只是参数声明；实际 `MissQueueSize` 仍由 `ifilterSize + dfilterSize` 定义。[MMUConst.scala:81](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:81)、[MMUConst.scala:274](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:274)
 
+-->
+## 5. Parameters, Capacity, and Resource Boundaries
+
+### 5.1. Default Parameters: Source-Visible Values and Boundaries
+
+`KunminghuV2Config` is composed from the default configuration path and does not override TLB parameters in that definition. Consequently, “default” in the table below is a static fact of this source configuration path; the actual generation command may still layer additional Config overrides. [Configs.scala:460](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:460)
+
+| Parameter / derived quantity | Source-visible value | Meaning and limits |
+|---|---:|---|
+| `LoadPipelineWidth / StorePipelineWidth` | 3 / 2 | Default scalar LSU width; configurable override is possible. [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214) |
+| ASID / VMID bits | 16 / 14 | Widths of CSR- and TLB-tag-related bundles. [Parameters.scala:252](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:252) |
+| L1 ITLB/LDTLB/STTLB/HYTLB/PFTLB `NWays` | Default 48 | Default sector-TLB parameter, not a capacity report from a particular elaboration. [Parameters.scala:266](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:266) |
+| L1 sector granularity | Eight contiguous 4 KiB subpages | `sectortlbwidth = 3`; one entry does not represent only one 4 KiB page. [MMUConst.scala:102](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:102) |
+| `PtwWidth` | 2 | The two ITLB and DTLB upstream channels of L2TLB. [MMUConst.scala:237](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:237) |
+| L2 MissQueueSize | `ifilterSize + dfilterSize = 8 + 32 = 40` | This is the L2 ingress outstanding limit, not a uniform depth for the data-side filter. [MMUConst.scala:81](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:81), [MMUConst.scala:274](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:274) |
+| DTLB filter capacity | load 16; store 8 (when the store pipeline is below 3, otherwise 16); prefetch 8 | The three categories are independently partitioned; `dfilterSize=32` must not be misreported as a 32-entry filter. [MMUConst.scala:133](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:133), [Repeater.scala:338](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:338) |
+| H extension / Sv48 | Enabled by default | Address width, two-stage translation, and reachability of `s2xlate` still depend on runtime CSR and privilege state. [Parameters.scala:63](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:63), [Parameters.scala:614](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:614) |
+
+Two intentionally excluded misconceptions:
+
+1. Although `partialStaticPMP` is a parameter, the current Scala main tree has no effective consumer that turns it into cached PMP results in L1 entries; it therefore does not justify claiming that “an L1 TLB hit includes static PMP.” [MMUConst.scala:42](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:42)
+2. `missqueueExtendSize` is only a parameter declaration; the actual `MissQueueSize` remains defined by `ifilterSize + dfilterSize`. [MMUConst.scala:81](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:81), [MMUConst.scala:274](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:274)
+
+<!--
 ## 6. 模块边界、接口与 handshake
 
 ### 6.1. `TlbReq`、`TlbResp` 与 TLB/PMP 边界
@@ -196,6 +379,27 @@ L1 TLB 本体没有 PMP response 输入。它输出由翻译结果组成的 PMP 
 
 ### 6.2. handshake 波形：L1 hit 的结构示意
 
+-->
+## 6. Module Boundaries, Interfaces, and Handshake
+
+### 6.1. `TlbReq`, `TlbResp`, and the TLB/PMP Boundary
+
+`TlbReq` carries more than a VA: it contains `vaddr/fullva/checkfullva`, access `cmd`, `hyperinst/hlvx`, `size`, `kill`, `memidx`, prefetch and `no_translate` information, the PMP address, FRM, and debug information. `TlbResp` returns `paddr/gpaddr/pbmt`, `miss/fastMiss`, the VS non-leaf marker, PF/GPF/AF vectors, `ptwBack`, and `memidx`. [MMUBundle.scala:563](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:563)
+
+| Channel / field group | Semantics |
+|---|---|
+| `requestor.req` | `Decoupled[TlbReq]`; only `req.fire` means the TLB has accepted the payload. |
+| `requestor.resp` | `Decoupled[TlbResp]`; only `resp.fire` means the consumer has accepted the result. |
+| `io.ptw` | The PTW boundary for L1 miss requests, PtwResp, and replay. |
+| `io.pmp / io.pmpMode` | **PMP/PMA check request and privilege mode issued by the TLB**, not a PMP response already obtained inside the TLB. |
+| `sfence`, `redirect`, `robPendingPtr` | Affect flush, cancellation, and GPF/GPA-related control. |
+
+The interface composition is shown in [MMUBundle.scala:669](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:669). On `req.fire`, the TLB captures the request in `req_out` and retains its validity with `ValidHold`; `ValidHold` is set on input fire and cleared on output fire or flush. [TLB.scala:68](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:68), [Hold.scala:38](/home/yanyusong/xs-memory-env/XiangShan/utility/src/main/scala/utility/Hold.scala:38)
+
+The L1 TLB itself has no PMP-response input. It emits a PMP request and mode built from the translation result; `MemBlock` then instantiates `PMPChecker(4, leaveHitMux = true)` for each data requestor and connects the checker response to the execution units. [TLB.scala:274](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:274), [MemBlock.scala:789](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:789)
+
+### 6.2. Handshake Waveform: Structural Example for an L1 Hit
+
 ```waveform-draw
 {
   "signal": [
@@ -211,6 +415,7 @@ L1 TLB 本体没有 PMP response 输入。它输出由翻译结果组成的 PMP 
 }
 ```
 
+<!--
 这是依据 `req.fire` 捕获、`ValidHold` 与 storage 的寄存 hit 路径画出的**结构示意**，不是波形实测，也不是“每个 L1 hit 固定三拍”的承诺。storage 读端本身 `ready := true`、response 为 `RegNext(req.valid)`，而完整端到端还受 flush、PTW bypass、Load/Store 流水影响。[TLBStorage.scala:97](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:97)
 
 ### 6.3. 地址、虚拟化与 PBMT 字段语义
@@ -292,14 +497,98 @@ L1 entry 是 sector 结构，不是简单的一页一行。`TlbSectorEntry` 保�
 
 TLB lookup 同时考虑：
 
+-->
+The following is a structural illustration derived from `req.fire` capture, `ValidHold`, and the registered-hit storage path. It is neither a measured waveform nor a promise that every L1 hit takes exactly three cycles. The storage read port itself has `ready := true` and a response of `RegNext(req.valid)`, while end-to-end behavior also depends on flush, PTW bypass, and the Load/Store pipelines. [TLBStorage.scala:97](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:97)
+
+### 6.3. Address, Virtualization, and PBMT Field Semantics
+
+| Field / concept | Verifiable use in this implementation |
+|---|---|
+| `vaddr` | Normal translation input; Load/Store S0 also uses it for the DCache virtual-address-side request. |
+| `fullva` and `checkfullva` | Used for full-VA checks and exception semantics for unaligned or cross-page accesses; the TLB cross-page branch selects the full VA under the relevant conditions. [TLB.scala:391](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:391) |
+| `paddr` | TLB translation result, consumed subsequently by PMP/PMA, DCache tags, and the LSQ. |
+| `gpaddr` | Guest physical address in two-stage/guest cases; the TLB contains `need_gpa` and ROB-pending recovery logic. [TLB.scala:108](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:108) |
+| `s2xlate` | Selected jointly by virtualization, instruction attributes, and CSR mode; it cannot be inferred from `hyperinst` alone. [TLB.scala:96](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:96) |
+| PBMT | `PMA=00, NC=01, IO=10`; both `NC/IO` are uncache classes, but their final load/store commit policies differ. [MMUBundle.scala:434](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:434) |
+
+## 7. Why This MMU Structure Exists
+
+### 7.1. Four Hardware Problems It Solves
+
+| Problem | Implementation choice | Why it is needed | Downstream beneficiaries |
+|---|---|---|---|
+| Concurrent translation for multiple LSU requestors | Three load/store/prefetch `TLBNonBlock` groups | Prevents each load/store from being tied to one blocking walk | LoadUnit, StoreUnit, prefetch ports |
+| Repeated misses for the same VPN | `PTWNewFilter` merges the same VPN/`s2xlate` | Reduces redundant page-table walks and pressure on the shared L2TLB | L2TLB, TileLink PTE requests |
+| Physical attributes and page-table attributes require separate layers | TLB emits paddr/PBMT/PMP request; the `MemBlock` checker emits PMP/PMA results | PTE permissions and physical-address-region attributes are not the same table | Load/Store S2, walker |
+| Context changes with in-flight walks | L1/L2 flush, filter clear, `flush_latch` | Prevents results under an old ASID/VMID/page-table context from contaminating a new context | TLB storage, PtwCache, ROB exception path |
+
+The first three are realized respectively by [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686), [Repeater.scala:338](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:338), and [MemBlock.scala:789](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:789); the last is protected by [TLB.scala:60](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:60) and [L2TLB.scala:687](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:687).
+
+## 8. Dynamic Operation: Normal and Stalled Recovery Paths
+
+### 8.1. Normal L1 Hit
+
+`req.fire` first captures the request; storage performs a registered lookup of the sector entry, and the TLB assembles PPN/PBMT/permission for the LSU response and PMP request. LoadUnit/StoreUnit then decides from the paddr result whether the DCache path proceeds. The start event is `requestor.req.fire`, not merely `req.valid`; the end event is `requestor.resp.fire` plus downstream LSU consumption, not the TLB's internal `e_hit`. [TLB.scala:68](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:68), [TLBStorage.scala:97](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:97)
+
+### 8.2. Miss, Response Return, and Replay
+
+On an L1 miss, `TLB.handle_nonblock` chooses between issuing `ptw.req` and issuing `tlbreplay`; the filter handles only the former. The filter-generated `PtwResp` returns through `MemBlock` to the matching TLB group, after which the TLB decides between response and `tlbreplay` based on match, kill, and GPA conditions. Forward progress after a stall therefore requires at least an available or mergeable filter entry, L2TLB request acceptance, a walker/PtwCache result, and exactly one requestor acceptance of replay or response. [TLB.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:565), [Repeater.scala:425](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:425), [MemBlock.scala:746](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:746)
+
+## 9. Address, Indexing, and Sector Entries
+
+### 9.1. Request Capture, Translation Mode, and Canonical Checks
+
+At its input, the TLB applies parameterized delay to sfence/CSR signals and then forms MMU-flush-related control. It captures `req_out` on `req.fire` rather than sending combinational `req.bits` through the entire translation path. [TLB.scala:60](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:60)
+
+Translation mode is selected from `virt`, `hyperinst`, `vsatp.mode`, `hgatp.mode`, and privilege state:
+
+| `s2xlate` encoding | Meaning |
+|---:|---|
+| 0 | `noS2xlate` |
+| 1 | `onlyStage1` |
+| 2 | `onlyStage2` |
+| 3 | `allStage` |
+
+The encoding is defined in [MMUConst.scala:141](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:141), and its selection logic is in [TLB.scala:96](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:96). Whether ordinary `satp` translation is enabled is also constrained by M-mode conditions; in H-mode scenarios, `vsatp/hgatp` modes are likewise not determined by instruction names alone.
+
+`EffectiveVa` implements PMLEN7/PMLEN16 address extension/masking and, under `checkfullva`, checks Sv39/Sv48 canonical addresses, high GPA bits, and untranslated physical-address exceptions. [TLB.scala:180](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:180) This means:
+
+- `fullva` is not a debugging-only copy; cross-page and full-address faults can depend on it.
+- `no_translate` does not skip every subsequent access-permission check; PMP/PMA remains an independent path after translation.
+- Compile-time enablement of the H extension does not imply that every request performs S2.
+
+### 9.2. `TlbSectorEntry`: One Entry Covers Multiple Pages
+
+An L1 entry uses a sector structure rather than a simple one-page-per-line format. `TlbSectorEntry` stores the VPN tag, ASID, VMID, `s2xlate`, page level, common high PPN bits, subpage low PPN bits, `valididx[8]`, `pteidx[8]`, and stage-1/stage-2 PBMT and permission information. [MMUBundle.scala:181](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:181)
+
+| Lookup element | Role on a hit |
+|---|---|
+| ASID / global bit | A global PTE can relax ASID matching; otherwise the value is compared with the entry tag. |
+| VMID / `s2xlate` | Prevents entries for different guests or translation stages from being mixed. |
+| Page-level-masked VPN tag | A large page masks the appropriate low bits rather than treating all VPN bits as a 4 KiB-page tag. |
+| `valididx[vpn[2:0]]` | An ordinary 4 KiB subpage requires the corresponding sector slot to be valid. |
+| `pteidx` | A two-stage ordinary page must also match the corresponding stage information. |
+
+The comparisons and page-level reconstruction are implemented in [MMUBundle.scala:217](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:217) and [MMUBundle.scala:390](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:390). On a hit, `genPPN` reconstructs low VPN portions by page level; NAPOT is handled in the same object. Therefore, “a hit directly takes a fixed PPN from the entry” is incomplete.
+
+On refill, stage-1/stage-2 PPNs, PBMT, permissions, and page sizes are combined. Two-stage translation generally takes the smaller page granularity, with an exceptional page-size correction to avoid missed fence invalidations. [MMUBundle.scala:289](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:289) This is an encoding fact about sector/TLB entries, not a claim that all software page mappings are generated in eight-page units.
+
+## 10. Core Translation and Miss Algorithms
+
+### 10.1. L1 Hit, PTW Bypass, and Response Formation
+
+TLB lookup considers:
+
+<!-- // 概念摘录；完整实现含 flush、getGpa 和 permission guard -->
 ```scala
-// 概念摘录；完整实现含 flush、getGpa 和 permission guard
+// Conceptual excerpt; the complete implementation includes flush, getGpa, and permission guards.
 e_hit = storage lookup result
 p_hit = matching PTW response bypass
 hit   = e_hit || p_hit
 resp  = paddr + gpaddr + pbmt + PF/GPF/AF + miss state
 ```
 
+<!--
 refill 只在 PTW response 满足“非 `getGpa`、非 `need_gpa`、未 flush”等保护条件时进入 storage。[TLB.scala:250](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:250)  与此同时，matching PTW response 可构成 `p_hit_fast` 或随后保持的 `p_hit`，保存 PPN、PBMT、permission 等字段，从而避免已返回的结果无谓多等一次 storage 写入/读取。[TLB.scala:300](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:300)、[TLB.scala:684](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:684)
 
 `paddr` 用命中 PPN 与 page offset 组合；跨页 guest-page-fault 情况会在 `fullva` 与当前子访问 VA 间选择正确偏移。[TLB.scala:363](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:363)、[TLB.scala:391](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:391)
@@ -367,6 +656,75 @@ refill 只在 PTW response 满足“非 `getGpa`、非 `need_gpa`、未 flush”
 
 所有 entry 的 flush 优先将 state 写回 `state_idle`。同拍 `io.out.fire` 与 `io.cache.fire` 指向同一 entry 被 `XSError` 显式禁止；这既给出冲突优先级，也提供了 storage-conflict assertion 目标。[PageTableWalker.scala:892](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:892)、[PageTableWalker.scala:933](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:933)、[PageTableWalker.scala:1040](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:1040)
 
+-->
+Refill enters storage only when the PTW response satisfies guards such as “not `getGpa`, not `need_gpa`, and not flushed.” [TLB.scala:250](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:250) At the same time, a matching PTW response can form `p_hit_fast` or the subsequently held `p_hit`, retaining fields such as PPN, PBMT, and permission and avoiding an unnecessary additional wait for storage write/read after the result has returned. [TLB.scala:300](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:300), [TLB.scala:684](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:684)
+
+`paddr` combines the hit PPN with the page offset. For cross-page guest-page-fault cases, it selects the correct offset between `fullva` and the current sub-access VA. [TLB.scala:363](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:363), [TLB.scala:391](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:391)
+
+It is therefore incorrect to use the rigid model “the PTW response first writes L1 and only the next request can hit”; this implementation has return bypass. Nor should bypass be described as applying to every response: `getGpa`, flush, permission, and match conditions remain controlling constraints.
+
+## 11. State, Storage, and Lifetime
+
+### 11.1. `TLBFA` Storage State and Read/Write Conflicts
+
+On the normal, non-`softTLB` path, the wrapper uses `TLBFA`. It retains entries in `Reg(Vec(nWays, ...))`, resets valid bits to false, and has `nWays=48` under the default parameters. The normal storage path must not be depicted as a direct-mapped or banked helper. [TLBStorage.scala:86](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:86), [TLBStorage.scala:352](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:352)
+
+| Event | Verified storage behavior | Must not be misconstrued as |
+|---|---|---|
+| reset | Valid bits are false; entry bodies may be uninitialized but cannot hit | Every PTE field is cleared in a software-visible way |
+| lookup | `r.req.ready := true`; all ways compare in parallel; the hit vector is registered on request fire | Translation completes combinationally as soon as external `req.valid` arrives |
+| read response | `r.resp.valid := RegNext(r.req.valid)` | A whole Load/Store instruction completes in one fixed cycle |
+| refill | A write-valid refill writes the replacement way and sets valid | L1 can accept an unbounded number of same-cycle refills |
+| simultaneous lookup/refill | The refill target is masked from comparison through `refill_mask` | A new entry automatically bypasses transparently to a same-cycle lookup |
+| duplicate refill | The implementation checks with `XSError` | Duplicate cases have harmless implicit-overwrite semantics |
+
+The lookup, registered hit vector, write, and mask are located from [TLBStorage.scala:97](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:97) through [TLBStorage.scala:185](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:185). The `Associative` parameter affects selection of replacement-related policies; it must not be miswritten as “the normal path currently chooses another non-`TLBFA` storage.”
+
+### 11.2. Replacement, Access Touches, and Capacity
+
+When `outReplace = false` (the default), the storage wrapper internally accepts access/touch information through `ReplacementPolicy` and chooses the refill way. [TLBStorage.scala:379](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:379), [MemBlock.scala:720](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:720)
+
+This establishes the following defensible capacity/performance boundaries:
+
+- The default L1 DTLB is a bounded 48-way sector-entry store.
+- A hit touches replacement state, while a refill must select a valid or replacement way.
+- The single storage write interface and `refill_mask` are contention points.
+- Source alone cannot establish a workload's capacity-miss rate, replacement distribution, or software-visible latency.
+
+### 11.3. Implicit Lifetimes of the Filter, Counter, and In-Flight Responses
+
+| State / bit | Reset / initialization | Set / entry | Hold | Clear / exit | Consumer and reason |
+|---|---|---|---|---|---|
+| `TLBFA.valid(way)` | false | Refill writes the selected way | Retained unless matched by the corresponding fence | Matching SFENCE/HFENCE invalidation | Lookup compares only valid ways, preventing an uninitialized entry from hitting. [TLBStorage.scala:97](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:97), [TLBStorage.scala:187](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:187) |
+| `PTWFilterEntry.v` | false | A request allocates or merges into the entry | Remains after `sent`, pending PtwResp | Matching PtwResp or flush | Indicates that the entry has one or more requestors awaiting translation. [Repeater.scala:163](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:163) |
+| `PTWFilterEntry.sent` | false | After downstream `ptw.req.fire` | Waits for PtwResp | Response releases the entry or flush | Prevents the entry from sending the same walk repeatedly; `v && !sent` is a candidate. [Repeater.scala:238](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:238) |
+| `tlbCounter` | Cleared on flush/reset | Incremented on L2 upstream request fire | Represents the number of incomplete L2 translations | Decremented on final response fire; cleared on flush | Ingress ready is limited by `< MissQueueSize`, avoiding use beyond L2 processing resources. [L2TLB.scala:183](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:183) |
+| `waiting_resp(source)` / `flush_latch(source)` | No in-flight source | A TileLink page-table request issues; a flush latches a waiting source | Waits for the D beat | Cleared after the D beat drains; the latch blocks refill | Permits the old response to be consumed without recontaminating PtwCache. [L2TLB.scala:382](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:382), [L2TLB.scala:687](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:687) |
+
+The key distinction for the first request is that `TLBFA.valid`, the filter's `v/sent`, and `tlbCounter` are all zero. The first `req.fire` must create only one storage lookup or filter allocation; the first PTE return must form only one L1 refill/bypass/replay. This “first request” case is explicitly checked by `F_FIRST_REQUEST` in Chapter 21.
+
+### 11.4. Complete Lifetime of Six LLPTW Entries Across Twelve States
+
+`LLPTW` resets the state vector of each entry to `state_idle`; by default, `llptwsize=6`. Because `io.in.ready := !full`, all non-idle slots backpressure new requests. This state machine is not simply “one Boolean waiting for a PTE.” [PageTableWalker.scala:711](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:711), [PageTableWalker.scala:1098](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:1098)
+
+| LLPTW state | Transaction phase represented | Typical entry condition | Primary action / contention | Normal exit |
+|---|---|---|---|---|
+| `state_idle` | Free allocatable slot | After reset, `io.out.fire`, or `io.cache.fire` | `enq_ptr` selects a priority free slot | `io.in.fire` selects the initial successor state |
+| `state_hptw_req` | First S2-walk request awaiting arbitration | all-stage requires G-stage address translation | `hyper_arb1` RR; suppressed when an HPTW response already exists in the same cycle | Granted fire leads to `state_hptw_resp` |
+| `state_hptw_resp` | Waits for the first HPTW response | First HPTW has issued | Checks GPA-to-HPA result and G-stage fault | `state_addr_check`, `state_mem_waiting`, or `state_mem_out` |
+| `state_addr_check` | Performs PMP/PMA on the PTE address to be read | Ordinary new entry or successful HPTW | Same-cycle PMP checker; records AF/MMIO in the entry | AF goes to `state_mem_out`, otherwise `state_mem_req` |
+| `state_mem_req` | Can issue a request for a 64B PTE line | Address check passes | `mem_arb` RR; same-VPN/stage duplicates move to waiting together | Request fire leads to `state_mem_waiting` |
+| `state_mem_waiting` | A memory read has issued and awaits a response | After `mem_arb.io.out.fire` | Retains `wait_id`; duplicates await the same D beat | D beat goes to `state_last_hptw_req`, `state_bitmap_check`, or `state_mem_out` |
+| `state_mem_out` | Can return PTE result to L2 merge/output | AF, PTE response, or final HPTW/bitmap completion | `mem_ptr` chooses one output; `io.out.valid` can backpressure | `io.out.fire` returns to `state_idle` |
+| `state_last_hptw_req` | The final-level PTE still requires S2 | all-stage PTE returns without an earlier fault | `hyper_arb2` RR and mutual exclusion with the first HPTW response | Granted fire leads to `state_last_hptw_resp` |
+| `state_last_hptw_resp` | Waits for final HPTW response | `hyper_arb2` issued | Consumes the HPTW result | Response leads to `state_mem_out` |
+| `state_cache` | Merge/bypass path that rechecks PtwCache | Duplicate associated with a just-returned or existing result | `io.cache.valid`; not a direct memory request | `io.cache.fire` returns to `state_idle` |
+| `state_bitmap_check` | Bitmap-check request | Bitmap enabled and PTE has no fault | `bitmap_arb` RR | Granted fire leads to `state_bitmap_resp` |
+| `state_bitmap_resp` | Waits for bitmap response | Bitmap request issued | Saves cf/cfs | Response leads to `state_mem_out` |
+
+Flush has priority to write every entry's state back to `state_idle`. `XSError` explicitly forbids `io.out.fire` and `io.cache.fire` from targeting the same entry in the same cycle; this both defines conflict priority and provides a storage-conflict assertion target. [PageTableWalker.scala:892](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:892), [PageTableWalker.scala:933](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:933), [PageTableWalker.scala:1040](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:1040)
+
+<!--
 ## 12. 翻译流水阶段、权限与 flush 控制
 
 ### 12.1. 页表合法性、权限与 fault 输出
@@ -451,6 +809,18 @@ if (matching PTW response || getGpa recovery) {
 
 `PTWFilterEntry` 保存 `v`、`sent`、VPN、`s2xlate`、`getGpa`、`memidx` 等状态。其去重条件以同 VPN + `s2xlate` 为核心：既有相同请求和同拍 duplicate 可收束到一个 entry；未发送的有效 entry 才成为下游 PTW candidate；matching response 清除匹配 entry，并作为 `PtwResp` 回送 TLB。[Repeater.scala:163](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:163)、[Repeater.scala:368](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:368)
 
+-->
+This branch is in [TLB.scala:544](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:544). On the non-blocking side, `resp.valid` comes from the retained request and `req.ready` is established from response ready; the source also asserts that the response side should be ready in this usage. A “miss” is therefore a requestor-controlled replay/filter event, not a combinational flag that can ignore ready.
+
+Distinguish the following:
+
+- **Issuing a walk request**: no directly matching return exists, so filter/L2 must process the VPN.
+- **`tlbreplay`**: an existing response, GPA state, kill, or waiter association causes the requestor to reenter the control path; it does not necessarily issue another physical memory read.
+
+### 13.2. `PTWNewFilter` State and Merging
+
+`PTWFilterEntry` holds state including `v`, `sent`, VPN, `s2xlate`, `getGpa`, and `memidx`. Its deduplication condition is centered on same VPN plus `s2xlate`: existing same requests and same-cycle duplicates can converge into one entry; only valid unsent entries become downstream PTW candidates; and a matching response clears matching entries and returns to the TLB as `PtwResp`. [Repeater.scala:163](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:163), [Repeater.scala:368](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:368)
+
 ```text
 request accepted
   -> existing same VPN/s2xlate ? merge waiter : allocate partitioned entry
@@ -459,6 +829,7 @@ request accepted
   -> flush ? clear valid state
 ```
 
+<!--
 filter 对上游 request 的 `ready` 置为真；`hint.full` 表示本轮不能安全 enqueue，既可能是没有可分配 entry，也可能是正在返回的 PTW response 与该 port 命中，不能将它缩写成“纯空间已满”。[Repeater.scala:198](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:198)、[Repeater.scala:291](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:291)  所以不能写“filter 满时 request ready 为低”；上游如何使用 hint 来提前节流，须继续沿 LSU 发射路径验证。
 
 `PTWNewFilter` 有三组 entry：load、store、prefetch。它们的请求由 `RRArbiterInit` 显式轮转到一个 data-side PTW 输出。[Repeater.scala:338](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:338)、[Repeater.scala:425](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:425)  这是本节唯一已经由源码确认的三路 RR；不要扩展成“L2 内所有 arbiter 都是 round-robin”。
@@ -528,13 +899,88 @@ PTW response 在 `MemBlock` 先寄存，然后按 TLB group 路由给各 TLB 的
 
 LoadUnit S0 有明确来源优先级，包含 LoadMisalignBuffer、super/fast/LSQ replay、预取、vector/scalar issue、MMIO/NC return 和 forwarding 等来源。[LoadUnit.scala:290](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:290)  选定来源后，S0 **并行**做两件事：
 
-```scala
+-->
+The filter sets `ready` for upstream requests. `hint.full` means the port cannot safely enqueue in this round: either no entry is allocatable, or a returning PTW response matches that port. It cannot be abbreviated as “only no space remains.” [Repeater.scala:198](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:198), [Repeater.scala:291](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:291) Therefore, it is incorrect to say “request ready is low when the filter is full”; how upstream uses the hint for advance throttling must be verified along the LSU issue path.
+
+`PTWNewFilter` has three entry groups: load, store, and prefetch. `RRArbiterInit` explicitly rotates their requests onto one data-side PTW output. [Repeater.scala:338](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:338), [Repeater.scala:425](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:425) This is the only three-way RR confirmed by source in this section; it must not be generalized into “every L2 arbiter is round-robin.”
+
+### 13.3. L2TLB Ingress, Backpressure, and the Miss Queue
+
+`L2TLB` creates `arb1`, `arb2`, `L2TLBMissQueue`, `PtwCache`, `PTW`, `LLPTW`, `HPTW`, and related components. [L2TLB.scala:125](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:125)
+
+| Component | Actual connection / behavior | Documentation boundary |
+|---|---|---|
+| `arb1` | Connects `io.tlb(0)` and `io.tlb(1)` | Source uses a conventional arbiter; no custom proof sufficient to call it RR was found. [L2TLB.scala:183](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:183) |
+| `tlbCounter` | Increments on upstream request fire and decrements on final response fire; ready continues only while `< MissQueueSize` | L2 has capacity backpressure and cannot be assumed to absorb unlimited in-flight translations. |
+| `L2TLBMissQueue` | `Queue(io.in, MissQueueSize, flush = Some(...))` | This is the queue's capacity bound, not proof that each entry is an independent external TileLink transaction. [L2TLBMissQueue.scala:40](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLBMissQueue.scala:40) |
+| `arb2` | Merges cache/walker/miss-related paths | Its priority or fairness must not be inferred to be the data-side filter's RR. |
+
+In the default branch with `softPTW = false`, `L2TLBWrapper` connects the real `L2TLB`, not `FakePTW`. [L2TLB.scala:1044](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:1044), [Parameters.scala:614](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:614)
+
+### 13.4. PtwCache: Pipeline, Hierarchy, and Single-Port Risk
+
+A PtwCache request passes through `stageReq -> stageDelay -> stageCheck -> stageResp`. With a single-port SRAM, a refill or bitmap wakeup creates a read/write hazard and can therefore stall a new lookup. [PageTableCache.scala:204](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala:204)
+
+The page-table-cache organization under default parameters is:
+
+| Level | Default implementation / size | Role |
+|---|---|---|
+| L3 | 16-entry fully associative register array | Retains usable high-level non-leaf PTE information |
+| L2 | 16-entry fully associative register array | Same, for the next lower cache level |
+| L1 | 4 sets × 2 ways `SplittedSRAM` | Set/way level of the page-table cache |
+| L0 | 64 sets × 4 ways `SplittedSRAM` | Terminal lookup/leaf-related level |
+| SP | 16 entries | Superpage/NAPOT-related storage |
+
+These defaults and PTE-sector line width are defined in [MMUConst.scala:48](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:48) through [MMUConst.scala:97](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:97); a 64 B line corresponds to eight 64-bit PTEs. [MMUConst.scala:242](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUConst.scala:242)
+
+L3/L2 use register arrays, L1/L0 use split SRAM, and SP is also a register structure. [PageTableCache.scala:249](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala:249) L0/SP hits can directly satisfy ordinary translation; high-level non-leaf hits provide known PPN/level to walkers and reduce higher-level PTE memory accesses. [PageTableCache.scala:714](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala:714)
+
+The refill policy is verifiably as follows: L3/L2 cache only valid non-leaf entries; L1/L0 cache 64 B PTE sectors; ordinary 4 KiB NAPOT, superpage, or only-PF paths use SP; and selection prioritizes an invalid way before applying replacement policy. [PageTableCache.scala:849](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala:849)
+
+### 13.5. PTW, LLPTW, HPTW, and TileLink PTE Accesses
+
+| Walker | Responsibility in source | Key constraint |
+|---|---|---|
+| `PTW` | Walks ordinary higher-level page tables; delegates the final 4 KiB lookup to LLPTW when level 1 remains non-leaf | Can complete when a superpage leaf is found at a higher level. [PageTableWalker.scala:99](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:99) |
+| `LLPTW` | Defaults to six entries and multiple states; can merge requests for the same page-table cache line/`s2xlate`, and can issue memory requests with RR | Entries return to idle on flush. [PageTableWalker.scala:711](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:711), [PageTableWalker.scala:920](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:920) |
+| `HPTW` | Walks page tables from GPA to HPA | Fault construction has explicit priority among access fault, guest page fault, and PPN AF. [PageTableWalker.scala:1136](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:1136) |
+
+L2TLB performs PTE memory accesses as TileLink client transactions: `edge.Get` issues on 64 B alignment, multi-beat responses accumulate in `refill_data`, and only the final beat forms the walker response/cache refill. [L2TLB.scala:403](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:403), [L2TLB.scala:524](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:524) It is therefore correctly described here as a TileLink PTE read, not mislabeled as AXI or simplified as one uniform page-table level for every walk.
+
+### 13.6. Response Reclamation, L1 Refill, and Final Replay
+
+`MemBlock` first registers a PTW response and routes it by TLB group to each TLB's `ptw.resp`. If that response matches the current non-blocking request, `TLB.handle_nonblock` itself produces `tlbreplay`; otherwise, the L1 refill/bypass path handles it. The filter does not produce `tlbreplay` directly. [MemBlock.scala:742](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:742), [TLB.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:565)
+
+The complete dynamic miss flow can be stated as:
+
+1. After LSU `req.fire`, L1 sector lookup determines a miss.
+2. `TLBNonBlock` generates `ptw.req`, or generates `tlbreplay` for an existing return or special state.
+3. The filter merges duplicates, and RR selects one path to `L2TLB.tlb(1)`.
+4. A PtwCache hit responds directly, or PTW/LLPTW/HPTW obtains the PTE through TileLink.
+5. The L2 response returns through the flush guard to filter/TLB.
+6. After L1 refill or bypass, the requestor accepts response/replay.
+7. Load/Store reconverges the DCache/LSQ path under its S1/S2 kill/replay rules.
+
+Steps 1 through 6 summarize wiring/state. The actual latency of step 7, whether a DCache request is reissued, and whether a redirect forms are determined by the specific LoadUnit/StoreUnit replay cause.
+
+## 14. Data Paths and Cross-Boundary Behavior
+
+### 14.1. Scalar Load: Translation Consumption from S0 to Writeback
+
+LoadUnit S0 has explicit source priority including LoadMisalignBuffer, super/fast/LSQ replay, prefetch, vector/scalar issue, MMIO/NC return, and forwarding. [LoadUnit.scala:290](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:290) After selecting a source, S0 performs two actions **in parallel**:
+
+<!--
 // 结构语义：同一 S0 payload 并行交给 DTLB 和 DCache
+// TlbReq 包含 vaddr/fullva/checkfullva、cmd、size、memidx、kill 等
+-->
+```scala
+// Structural meaning: the same S0 payload is presented to DTLB and DCache in parallel.
 io.tlb.req.valid    := s0_tlb_valid
 io.dcache.req.valid := s0_dcache_valid
-// TlbReq 包含 vaddr/fullva/checkfullva、cmd、size、memidx、kill 等
+// TlbReq contains vaddr/fullva/checkfullva, cmd, size, memidx, kill, and related fields.
 ```
 
+<!--
 真实 `TlbReq` 建立与 DCache S0 发起见 [LoadUnit.scala:383](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383) 至 [LoadUnit.scala:423](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:423)。普通 scalar load 的有效地址来自 `src0 + SignExt(imm[11:0])`。[LoadUnit.scala:625](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:625)
 
 | 阶段 | TLB/PMP 侧 | DCache / LSQ 侧 | 关键边界 |
@@ -593,6 +1039,66 @@ LSQWrapper 按最老 ROB 对 LQ/SQ uncache 请求仲裁，并用 `is2lq` 将 res
 
 **边界与 redirect/fault 并发场景。** 设一条跨页 load 的首片已进入 misalign buffer，次片在重新发给 LDU/DTLB 后命中 PBMT IO，且同周期来自错误路径的 redirect 到达。次片仍必须先被 LoadUnit 的 TLB/PMP/exception/redirect kill 条件拦截；即使其分类为 MMIO，也只有无 redirect、无异常、无 replay 的请求才可进入 `LoadQueueUncache`，并且真正 MMIO read 要等 ROB head。此场景的 progress 不是“把首片数据提交”，而是使 killed work 不进入 uncache side effect，然后由 redirect/exception 或 replay 选择唯一恢复路径。[LoadUnit.scala:953](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:953)、[LoadQueueUncache.scala:353](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:353)
 
+-->
+Actual `TlbReq` construction and DCache S0 launch are shown from [LoadUnit.scala:383](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383) through [LoadUnit.scala:423](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:423). The effective address of an ordinary scalar load is `src0 + SignExt(imm[11:0])`. [LoadUnit.scala:625](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:625)
+
+| Stage | TLB/PMP side | DCache / LSQ side | Key boundary |
+|---|---|---|---|
+| S0 | Produces VA, fullVA, checkfullVA, read cmd, size, LQ memidx, debug, and kill | Issues the virtual-address-side DCache request in the same cycle | It is not “DTLB hit first, then access DCache.” |
+| S1 | Receives paddr/gpaddr/PBMT, TLB miss, and PF/AF/GPF | A paddr duplicate returns for subsequent DCache comparison; a miss/error/redirect kills DCache S1 | Forwarding continues only with no miss, error, or kill. [LoadUnit.scala:929](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:929) |
+| S2 | After paddr forms, uses a trustworthy PMP/PMA response and combines PBMT, PMP deny, HLVX/vector, and related conditions | Combines DCache hit/miss, forward, nuke/replay and decides actual MMIO/uncache | PBMT is not the sole input that determines final transaction type. [LoadUnit.scala:1206](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1206) |
+| S3 | Forms final data/exception/replay cause | Updates LQ, produces rollback, and merges data with MMIO/NC/forward returns | Retirement and final writeback are not TLB state. [LoadUnit.scala:1582](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1582), [LoadUnit.scala:1718](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1718) |
+
+S1 writes `Pbmt.isNC` to `nc` and `Pbmt.isIO` to `mmio`. [LoadUnit.scala:1009](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1009) The S2 source comments specifically note that a PMP/PMA response is trustworthy only after the physical address has actually formed; if DTLB already reports a page/access fault, checker values must not be treated as a valid permission conclusion. [LoadUnit.scala:1206](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1206)
+
+TLB miss is only one replay source. LoadUnit also considers failed forwarding, DCache miss, MissQueue nack, bank/WPU conflict, RAR/RAW nack, nuke, and others. [LoadUnit.scala:1254](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1254) Therefore, “Load replay” must not be attributed entirely to the MMU.
+
+`MemBlock` connects scalar `LoadUnit(i).io.tlb` to a load-DTLB requestor; port 0 is shared with VSegment, which takes priority while a segment is active. [MemBlock.scala:935](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:935)
+
+### 14.2. Scalar Store: Translation Results Enter SQ; Commit Has Its Own Timing
+
+StoreUnit likewise initiates DTLB translation and DCache meta/tag intent in parallel. Ordinary stores use `TlbCmd.write`; CBO uses read-class TLB checks. [StoreUnit.scala:215](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:215)
+
+| Stage | Verified action | Boundary that must be retained |
+|---|---|---|
+| S0 | Arbitrates scalar-store, prefetch, vector, misalign-buffer, and other sources, then sends a DTLB request and DCache intent | DCache S0 intent does not mean that a real store is visible to memory. |
+| S1 | Obtains paddr/gpaddr/fullva/PBMT/TLB miss; PBMT NC/IO derives `nc/mmio`; miss, TLB exception, MMIO/NC, and redirect kill DCache S1 | Translation success does not mean StoreQueue has accepted or committed the store. [StoreUnit.scala:288](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:288) |
+| S2 | `s2_mmio = PBMT IO || (PBMT PMA && pmp.mmio)`; PMP store deny, CBO-required load deny, and vector/misalignment conditions enter AF | Actual uncache, exceptions, and redirect also kill DCache S2. [StoreUnit.scala:462](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:462) |
+| SQ | Reports `mmio/updateAddrValid/hasException/miss` and retains address/attributes; SQ supplements late PMP/PMA mmio one cycle later | The actual external write completes after ROB commit through SBuffer/Uncache. [StoreUnit.scala:535](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:535), [StoreQueue.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:565) |
+
+`MemBlock` connects StoreUnit to the store-DTLB requestor and corresponding PMP checker; the index offset avoids load/Hybrid/stream ports. [MemBlock.scala:1247](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1247)
+
+### 14.3. MMIO/NC: Responsibility Boundaries from PBMT/PMA to ROB Commit
+
+| Request type | Entry point | Commit / issue constraint | Resulting exception |
+|---|---|---|---|
+| load MMIO | `LoadQueueUncache` | Must reach the ROB head | denied -> AccessFault; corrupt and not denied -> hardwareError. [LoadQueueUncache.scala:122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122), [LoadQueueUncache.scala:205](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:205) |
+| load NC | `LoadQueueUncache` | Does not use the same ROB-head gate | Only requests without redirect, exception, or replay may enter. [LoadQueueUncache.scala:353](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:353) |
+| store MMIO | StoreQueue uncache path | Only sends outward once pending status and address/data are ready and the store reaches the ROB head; writes back after response | An exceptional store traps at the ROB head without being issued. [StoreQueue.scala:493](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:493), [StoreQueue.scala:824](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:824) |
+| store NC | StoreQueue uncache path | Issues after commit and dequeues after response | DTLB success must not be treated as completion of the external write. [StoreQueue.scala:917](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:917) |
+
+LSQWrapper arbitrates LQ/SQ uncache requests by the oldest ROB entry and uses `is2lq` to route response/id-response back to the relevant side. [LSQWrapper.scala:265](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265) This is LSU/ROB evidence for the eventual strong ordering of MMIO and must not be attributed to TLB hit logic.
+
+### 14.4. Non-Ordinary Boundaries for Prefetch, Hybrid, VSegment, and AMO
+
+| Path | Source fact | Conclusion that must not be generalized |
+|---|---|---|
+| Prefetch | Prefetch has an independent two-requestor L1 TLB and competes with load/store filters for one data-side L2 PTW output. [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686), [Repeater.scala:338](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:338) | It must not be counted as capacity exclusively owned by the ordinary load filter. |
+| HybridUnit | Connects load DTLB, PMP, DCache load/store, and LSQ, but PBMT latch/classification is not fully symmetric with ordinary LoadUnit/StoreUnit. [MemBlock.scala:1046](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1046), [HybridUnit.scala:832](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/HybridUnit.scala:832) | It is not valid to simply claim that Hybrid NC/IO semantics are entirely equivalent to the ordinary scalar path. |
+| VSegment | Shares DTLB/PMP/DCache with LDU0; while active, blocks ordinary LDU from that DCache port; PBMT NC/IO directly causes AF, and comments state that vector MMIO is unsupported. [MemBlock.scala:2058](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:2058), [VSegmentUnit.scala:450](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/vector/VSegmentUnit.scala:450) | The scalar uncache-transaction model does not apply. |
+| AMO/LR/SC | AMO borrows LDU0's DTLB/DCache/PMP response and awaits necessary resources | Source explicitly retains `TODO: complete amo's pmp support`; AMO PMP cannot be called fully covered. [MemBlock.scala:1781](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1781) |
+
+### 14.5. Cross-Boundary Code Analysis
+
+| Boundary | First fragment | Second fragment | Independent checks | Merge/ordering state | Failure and recovery |
+|---|---|---|---|---|---|
+| Virtual page | Initial `vaddr/fullva` goes from LoadUnit S0 to DTLB | On a 16B/page crossing, LoadMisalignBuffer reissues a fragment request through a fixed LDU | Each fragment has independent `TlbReq`, TLB page/guest/access faults, and PMP/PMA; `fullva/checkfullva` preserve cross-page validity | LoadMisalignBuffer retains fragments through split/request/response/combine and returns results to LSU | PF/AF/GPF or uncache on either fragment enters exception/replay; two pages are not treated as one paddr. [LoadUnit.scala:711](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:711), [LoadMisalignBuffer.scala:143](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:143), [LoadMisalignBuffer.scala:510](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:510) |
+| Cache line | DCache S0 issues tag/meta read with `get_idx(vaddr)`; S2 forms MissReq with `get_block_addr(s2_paddr)` | A second DCache request exists only if upstream actually generates a subsequent fragment; the MMU source contains no dedicated FSM that atomically splits one request into two 64B lines | Every actual DCache request independently has tag/meta/data, bank mask, hit/miss, and TLB/PMP results | MissQueue allocates, merges, or rejects each block; current MMU source does not establish an independent assembler or fixed response order across two lines | No MSHR, WBQ conflict, cancel, or bank conflict causes DCache replay; an upper layer/misalignment buffer retries rather than the MMU merging it itself. [L1Cache.scala:83](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/L1Cache.scala:83), [LoadPipe.scala:137](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:137), [LoadPipe.scala:439](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:439), [MissQueue.scala:1076](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:1076) |
+| MMIO/uncache | LSU S1/S2 enters the uncache ingress after PBMT and PMP/PMA classify `mmio/nc`, rather than DCache MSHR | The “second fragment” is an uncache response, not an assumed cache-line split; a pre-redirect candidate must still meet ingress conditions | PBMT NC/IO, PMA/PMP, TLB fault, redirect, replay, and ROB pointer are checked independently | LoadQueueUncache/StoreQueue retain requests; the LQ/SQ uncache arbiter chooses by oldest ROB | MMIO load waits for ROB head; MMIO store sends only at head. denied/corrupt form faults; redirect/exception/replay must not enqueue a request. [LoadUnit.scala:1206](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1206), [LoadQueueUncache.scala:122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122), [LoadQueueUncache.scala:353](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:353), [LSQWrapper.scala:265](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265) |
+
+**Concurrent boundary and redirect/fault scenario.** Suppose the first fragment of a cross-page load has entered the misalignment buffer, the reissued second fragment reaches PBMT IO through LDU/DTLB, and a wrong-path redirect arrives in the same cycle. The second fragment must still first be stopped by LoadUnit's TLB/PMP/exception/redirect kill conditions. Even if classified as MMIO, it may enter `LoadQueueUncache` only with no redirect, exception, or replay, and an actual MMIO read must wait for ROB head. Progress in this case is not “commit the first-fragment data”; it is preventing killed work from producing an uncache side effect, followed by a unique recovery path selected by redirect/exception or replay. [LoadUnit.scala:953](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:953), [LoadQueueUncache.scala:353](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:353)
+
+<!--
 ## 15. 异常、特权、跨边界与恢复
 
 ### 15.1. 虚拟页、16B 对齐与失配 buffer
@@ -669,6 +1175,36 @@ Atomic exception
 
 ### 17.1. Module-interface connectivity
 
+-->
+`GenExceptionVa` extends/selects addresses according to Bare, Sv39, Sv48, Sv39x4, Sv48x4, and virtualization state. [MemBlock.scala:1861](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1861)
+
+Memory-order redirects are not caused only by TLB misses. `MemBlock` chooses the oldest ROB entry among candidates from LoadUnit, HybridUnit, LSQ nack, and LSQ nuke to form `memoryViolation`. [MemBlock.scala:1424](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1424) Documentation and waveforms should distinguish:
+
+- TLB miss: translation replay/filter related.
+- DCache/forward/nuke/RAW/RAR: may be LSU replay or an oldest-entry redirect.
+- Translation/PMP/PMA fault: suppresses the following actual access and enters the exception-address/ROB path.
+
+## 16. CSR Control
+
+### 16.1. Actual Data-Side CSR Control Chain
+
+This module is not the frontend BPU, so the `sbpctl`-to-predictor-enable control chain does not apply. This section records only the CSR/PMP controls actually connected to DTLB/L2TLB, rather than inventing MMU behavior from a frontend-CSR template.
+
+| Producer / field | Propagation chain | Consumer | Source-visible effect |
+|---|---|---|---|
+| `sfence.valid` | After delay, `MemBlock` broadcasts to three DTLB groups and `L2TLBWrapper` | L1 storage, filter, L2TLB, walkers | Invalidation and stopping/draining old translation/refill. [MemBlock.scala:666](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:666), [TLB.scala:60](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:60) |
+| `satp/vsatp/hgatp.changed` and `priv.virt_changed` | `tlbcsr` feeds DTLB/L2TLB/filter | Mode selection, flush, PtwCache/walker | Prevents old ASID/VMID/virt results from remaining effective after a context change. [MemBlock.scala:704](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:704), [L2TLB.scala:60](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:60) |
+| PMP CSR / PMA configuration | `MemBlock` distributes it to each `PMPChecker`; L2 walkers have separate checkers | LoadUnit, StoreUnit, PTW/LLPTW/HPTW | Produces `ld/st/mmio/atomic` or access-fault conclusions for paddr/PTE address. [MemBlock.scala:789](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:789), [L2TLB.scala:93](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:93) |
+| `mPBMTE/hPBMTE` and virtualization mode | TLB/PteBundle PBMT and S1/S2 mode decisions | TLB permission/PBMT selection | Determines PTE-PBMT legality and PBMT selection under all-stage. [TLB.scala:436](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:436), [MMUBundle.scala:729](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:729) |
+
+### 16.2. Isolation of CSR Changes from First/In-Flight Requests
+
+`req_out`, filter entries, PtwCache/walkers, and `waiting_resp/flush_latch` retain in-flight information at different stages. A CSR change cannot merely invalidate an L1 valid bit; it must also suppress/drain in-flight responses. The L1 `ptw_resp_v` guard and the L2 `flush_latch` exist for exactly this purpose. [MemBlock.scala:742](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:742), [L2TLB.scala:687](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:687)
+
+## 17. Diagrams
+
+### 17.1. Module-Interface Connectivity
+
 ```mermaid
 flowchart LR
   LDU[LoadUnit ports] -->|requestor.req / tlbreplay| LDTLB[load TLBNonBlock]
@@ -689,9 +1225,15 @@ flowchart LR
   CSR -->|flush/context| L2
 ```
 
+<!--
 这里区分了 `ptw.req/PtwResp` 与 `tlbreplay`：filter 不产出 replay；`TLB.handle_nonblock` 依据其 PtwResp、kill 和 GPA 状态回送 replay 给 requestor。[TLB.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:565)、[Repeater.scala:368](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:368)
 
 ### 17.2. LLPTW entry 状态图
+
+-->
+This diagram distinguishes `ptw.req/PtwResp` from `tlbreplay`: the filter does not generate replay; `TLB.handle_nonblock` returns replay to the requestor based on PtwResp, kill, and GPA state. [TLB.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:565), [Repeater.scala:368](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:368)
+
+### 17.2. LLPTW Entry State Diagram
 
 ```mermaid
 stateDiagram-v2
@@ -729,9 +1271,15 @@ stateDiagram-v2
   state_bitmap_resp --> state_idle: flush
 ```
 
+<!--
 状态枚举、entry 分配、PMP 分叉、RR grant、response/flush release 分别在 [PageTableWalker.scala:720](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:720)、[PageTableWalker.scala:892](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:892)、[PageTableWalker.scala:933](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:933)、[PageTableWalker.scala:1040](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:1040)。
 
 ### 17.3. non-blocking TLB 的 stall、response 与 replay 时序
+
+-->
+State enumeration, entry allocation, PMP branching, RR grant, and response/flush release are located respectively in [PageTableWalker.scala:720](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:720), [PageTableWalker.scala:892](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:892), [PageTableWalker.scala:933](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:933), and [PageTableWalker.scala:1040](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:1040).
+
+### 17.3. Non-Blocking TLB Stall, Response, and Replay Timing
 
 ```waveform-draw
 {
@@ -752,6 +1300,7 @@ stateDiagram-v2
 }
 ```
 
+<!--
 这是带 stall、payload hold、PtwResp/replay 与最后 flush 的结构性时序例，不是固定 cycle 承诺。`requestor.req.bits.vaddr` 在 `valid=1 && ready=0` 时必须保持；requestor 只在 fire 后被 TLB 接受，`tlbreplay` 由 TLB 而非 filter 产生。[TLB.scala:68](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:68)、[TLB.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:565)
 
 ## 18. Design Doc 与源码差异
@@ -844,3 +1393,96 @@ L2 有 `DiffRefillEvent` 与 `DiffL2TLBEvent`，包含 PPN、permission、level�
 | E_MMIO_COMMIT | side-effect MMIO 不在 wrong path 或未到 head 时发出 | 分别制造 load/store MMIO、NC、denied/corrupt 和 redirect | MMIO load/store 受 ROB-head gate；NC 时序不同；denied/corrupt 映射正确 exception | Architecture-exception scoreboard + commit-order checker + uncache req/resp coverage | [LoadQueueUncache.scala:122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122)、[StoreQueue.scala:824](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:824) |
 
 没有与此 pinned commit 匹配的 FST 被用于本文，因此本表是验证计划而不是“已观测波形”。任何后续 WaveKit 分析都应记录 source commit、FST 路径与 ROB/LSQ identity，再将观察升级为动态证据。
+-->
+This is a structural timing example with stall, payload hold, PtwResp/replay, and a final flush, not a fixed-cycle promise. `requestor.req.bits.vaddr` must remain stable while `valid=1 && ready=0`; the TLB accepts the requestor only after fire, and `tlbreplay` is produced by the TLB rather than the filter. [TLB.scala:68](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:68), [TLB.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:565)
+
+## 18. Design Doc and Source Differences
+
+| ID | Design Doc / course source | Atomic claim | Effective source mapping | Status |
+|---|---|---|---|---|
+| D0 | Local Design Doc checkout | Any formal MMU design intent | None | **not consulted**: the expected local checkout does not exist, so it cannot be cited or inferred. |
+| C0 | Course [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:269) | Pedagogical layering of LSU/DTLB/PMP/PTW | Effective `MemBlock` wiring is in [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686) and [MemBlock.scala:789](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:789) | Background, not Design Doc proof. |
+| S0 | Pinned Kunminghu V2 source | Ports, state, algorithms, exception/replay, and flush | Every source link in this document | **Effective behavioral evidence**. |
+
+Design Doc discrepancy conclusion: no local formal Design Doc supports a line-by-line mapping, so there are no “verified Design Doc behaviors”; all implementation conclusions use S0. Where course material disagrees with or does not cover code, this document retains source evidence and unverified boundaries rather than overwriting them with course terminology.
+
+## 19. Dynamic Scenarios, Concurrency, Throughput, and Difftest
+
+### 19.1. Four Traceable Dynamic Paths
+
+| Scenario | Source-level event sequence | Key observation points |
+|---|---|---|
+| Ordinary 4 KiB L1 hit | `req.fire -> TLBFA registered read -> sector hit/PPN reconstruct -> TLB resp + PMP request -> checker result -> LSU S1/S2` | Check consistency among `valididx[vpn[2:0]]`, paddr, PBMT, PMP response, and DCache kill. |
+| L1 miss with PtwCache hit | `miss -> filter merge/RR -> L2 PtwCache L0/SP hit -> response -> L1 bypass/refill/replay` | Determine whether upstream sends only one filter request and whether L2 avoids TileLink access. |
+| Full page-table walk | `L1 miss -> filter -> L2 miss queue/PTW -> upper PTE -> LLPTW/HPTW if needed -> 64B TileLink PTE read -> PtwCache/L1 refill` | Correlate source ID, walker state, PMP for PTE access, and flush latch. |
+| all-stage + GPF | `VS-stage translation -> GPA recovery or replay -> HPTW GPA-to-HPA -> final PF/GPF/AF response` | Observe `need_gpa`, `getGpa`, ROB pending, and stage translation type. |
+
+These four are tracking starting points derived from visible modules/states, not measured timing. In particular, a “PtwCache hit” on the second path still passes through L2 internal pipeline stages and must not be described as a zero-cycle return.
+
+### 19.2. Concurrency / Resource-Conflict Matrix
+
+| Scenario | Arbitration / merging in code | Supported conclusion | Still requires waveform verification |
+|---|---|---|---|
+| Multiple data requests share VPN and `s2xlate` | PTW filter duplicate merge | Should avoid blindly issuing every walk for the same translation | Actual waiter/replay count under `getGpa`, flush, and request timing |
+| load, store, and prefetch miss together | Three filter groups followed by explicit RR | Data-side PTW output is a shared resource | Long-run fairness / starvation bound |
+| ITLB and DTLB reach L2 together | `PtwWidth=2`, `arb1` | They share L2TLB/PtwCache/walker resources | Specific dynamic priority and QoS of `arb1` |
+| L2 outstanding reaches limit | Accepts only while `tlbCounter < MissQueueSize` | L2 can backpressure upstream | How filter/LSU upstream translates capacity pressure into final issue control |
+| PtwCache lookup and refill coincide | Single-port `rwHazard` | A new lookup can stall | Hit latency for a given workload |
+| SFENCE races a PTE response | L1 PTW-response guard plus L2 `flush_latch` | A stale response must not refill normally | Extra replay on an edge-aligned same-cycle race |
+
+### 19.3. Correct Statements About Capacity and Latency
+
+| Resource | Source default / structure | What may be said | What may not be said |
+|---|---|---|---|
+| L1 DTLB | Default 48-way sector-entry parameter | Each L1 TLB class has bounded entry storage | Every configuration has exactly 48 entries and every lookup finishes in one cycle |
+| data filter | Partitions of load 16, store 8/16, prefetch 8 | Miss-merging resources are partitioned | All three share one 32-entry FIFO |
+| L2 MissQueue | Default derivation `8 + 32 = 40` | L2 ingress has an outstanding limit | Forty entries necessarily mean forty issued TileLink reads |
+| L1 lookup | Registered hit vector after request capture | There is a registered storage-read boundary | Instruction-to-retirement is a fixed N cycles |
+| PTW | PtwCache plus multiple walkers and TileLink | Latency depends on cache hit, page level, PMP, memory, and flush | All page walks take a fixed number of cycles |
+
+### 19.4. Difftest / Debug Observability
+
+L1 `DiffL1TLBEvent` records ITLB/LDTLB/STTLB translation information when difftest is enabled. Its valid requires the previous request fire, response fire, no miss, no fault, translation enabled, and related conditions. [TLB.scala:750](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:750)
+
+L2 has `DiffRefillEvent` and `DiffL2TLBEvent`, including PPN, permission, level, satp/vsatp/hgatp, and `s2xlate`; L2 events also filter particular stage access-fault cases. [L2TLB.scala:548](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:548)
+
+These are verification/comparison signals, not RISC-V software-readable architectural state. During debug, correlate requestor fire, L1 hit/miss, filter entry, L2 request, walker response, PMP response, DCache kill, and LSQ outcome by ROB/LSQ identity; do not correlate one translation by PC alone.
+
+## 20. Conclusion
+
+### 20.1. Confirmed Conclusions
+
+1. The data side has load, store, and prefetch `TLBNonBlock` groups, with requestor counts determined by parameter expressions. TLB emits PMP request/mode; `MemBlock` checkers perform PMP/PMA.
+2. Default L1 storage is bounded sector-`TLBFA`: valid/entry registers, registered hit vector, replacement, and `refill_mask` all have visible implementations. PTW response can bypass; it must not be understood only as “hit after the next request following refill.”
+3. Grouped filters merge L1 misses; load/store/prefetch explicitly use RR to one data-side L2TLB input. L2 has counter, MissQueue, PtwCache, PTW/LLPTW/HPTW, and reads PTEs through TileLink.
+4. Load/Store S0 sends DTLB and DCache virtual-address-side requests together; S1/S2 kills, replays, or enters uncache based on TLB/PMP/PBMT. DCache does not own page-table-exception or MMIO-commit semantics.
+5. HFENCE.VVMA applies conservative invalidation to composed two-stage L1 entries; both L1 and L2 have flush protection against stale refills.
+
+### 20.2. What This Source Alone Cannot Guarantee
+
+- TLB hit rate, PTW traffic, filter occupancy, or precise cycle latency for a particular workload;
+- Final TLB capacity, address width, and LSU-unit count for an external configuration;
+- Full timing when a fence and external TileLink response occur in the same cycle;
+- Whether the current `valid := false.B` high-half cross-page `tval` output is repaired by another path; or
+- Complete AMO PMP coverage, because source retains an explicit TODO.
+
+If a matching FST is subsequently supplied, trace `LoadUnit/StoreUnit TlbReq fire -> L1 hit/miss/PMP request -> PTWNewFilter entry -> L2/walker/TileLink response -> refill/bypass/tlbreplay -> DCache kill -> LSQ exception/replay/commit`, using ROB/LSQ identity rather than PC alone.
+
+## 21. Special Verification Considerations
+
+| Verification ID | Risk / invariant | Directed stimulus | Expected observation | Required checker / coverage | Effective source evidence |
+|---|---|---|---|---|---|
+| F_RESET_IDLE | No stale translation, LLPTW entry, or L2 outstanding after reset | Assert/deassert reset, then observe the first legal load TLB request | All `TLBFA.valid` are 0; all LLPTW are `state_idle`; `tlbCounter=0`; the first `req.fire` is accepted only once | Occupancy checker + FSM checker; cover reset->first-hit and reset->first-miss | [TLBStorage.scala:97](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:97), [PageTableWalker.scala:720](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:720), [L2TLB.scala:183](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:183) |
+| F_FIRST_REQUEST | First request does not read old payload or allocate a filter entry twice | After reset, issue one L1-hit and one L1-miss case | `req_out` is retained after fire; hit emits one response; miss emits only one `ptw.req` or one `tlbreplay` | Handshake checker + filter-entry scoreboard | [TLB.scala:68](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:68), [TLB.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:565) |
+| F_HOLD_BACKPRESSURE | Valid payload remains stable while ready=0 and cannot be double accepted | Hold requestor valid for two cycles with first ready=0; also make L2 PTW sink ready=0 | Exactly one `req.fire`; stable `req.bits`; valid filter/arbiter entry is not sent repeatedly | Handshake checker + payload-stability assertion + arbiter loser-persistence cover | [TLB.scala:68](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:68), [Repeater.scala:425](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:425) |
+| F_REQ_AND_FLUSH | A fence/CSR change must not allow a killed translation to refill or commit | Concurrently assert sfence or satp/vsatp/hgatp change while an L1 miss or TileLink PTE read is in flight | Filter clears; old PTE D beat can drain but `refill_valid` is 0; no stale L1 response | Flush/replay checker + context-isolation checker; cover request-fire x flush same cycle | [TLB.scala:60](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:60), [MemBlock.scala:742](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:742), [L2TLB.scala:687](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:687) |
+| F_RESP_AND_REPLAY | PtwResp and current miss/replay complete only one legal result | Overlap matching PtwResp with a current non-blocking miss, kill, or `need_gpa` condition | Filter sends only PtwResp; TLB emits one response or `tlbreplay`; no duplicate PTW request | Flush/replay checker + response-once scoreboard | [TLB.scala:544](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:544), [Repeater.scala:368](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:368) |
+| C_SAME_ENTRY_RW | A partially written entry is not taken as a hit when lookup/refill use the same way | Perform lookup/refill to a chosen replacement way in the same cycle and cover same/different VPN | `refill_mask` masks that way; PTW bypass/subsequent request gets the correct result | Storage-conflict checker + same-way RAW cover | [TLBStorage.scala:128](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:128), [TLBStorage.scala:150](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:150) |
+| C_MULTI_WRITE_SAME_ENTRY | Duplicate refill must not silently overwrite | Construct an illegal like-kind duplicate PTW refill to the same entry/way | `XSError`/assert triggers, or the environment prevents the multiwrite | Storage-conflict checker + assertion coverage | [TLBStorage.scala:150](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:150) |
+| RESOURCE_CONTENTION | No request is lost when LLPTW is full, L2 counter is full, or filter-hint conditions apply | Fill all six LLPTW entries, fill L2 counter, and issue load/store/prefetch misses together | `io.in.ready=!full`; L2 backpressure is active; filter `hint.full` correctly means “no entry or response match” | Occupancy checker + arbiter checker + full-to-drain coverage | [PageTableWalker.scala:738](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:738), [L2TLB.scala:183](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/L2TLB.scala:183), [Repeater.scala:291](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:291) |
+| P_DEADLOCK_ALL_STALL | After all downstream sinks pause, releasing one sink must eventually drain | Stall L2 TileLink D or PtwResp sink, then restore ready one by one | `sent` entry, `state_mem_waiting`, and `waiting_resp` hold; valid req/resp fire occurs after restoration and frees a slot | Forward-progress checker + FSM legal-transition coverage | [Repeater.scala:238](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:238), [PageTableWalker.scala:933](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/PageTableWalker.scala:933) |
+| P_LIVELOCK_REPLAY_LOOP | Repeated replay must not hold an entry forever or repeat the same walk | Use multiple requestors for one VPN, repeated PtwResp/kill/replay, and interleave filter RR contention | Every PtwResp clears its matching entry; after replay TLB eventually accepts one response or explicit flush; old request progresses under fair ready | Forward-progress checker + replay-count scoreboard + RR grant coverage | [TLB.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:565), [Repeater.scala:163](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:163), [Repeater.scala:425](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/Repeater.scala:425) |
+| E_CROSS_PAGE_REDIRECT | A cross-page second fragment, fault/redirect, and exception address do not leak to a wrong path | Send first fragment to LoadMisalignBuffer, then combine PBMT IO/PF and redirect on the second fragment | Each fragment has independent TLB/PMP; redirect work does not enter uncache; known high-page tval override valid=false is not misinterpreted | Architecture-exception scoreboard + context-isolation checker + cross `page x redirect x fault` cover | [LoadMisalignBuffer.scala:510](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:510), [LoadQueueUncache.scala:353](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:353), [LoadMisalignBuffer.scala:625](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:625) |
+| E_MMIO_COMMIT | Side-effect MMIO must not issue on a wrong path or before reaching head | Create load/store MMIO, NC, denied/corrupt, and redirect cases separately | MMIO load/store is guarded by ROB head; NC timing differs; denied/corrupt map to the correct exception | Architecture-exception scoreboard + commit-order checker + uncache req/resp coverage | [LoadQueueUncache.scala:122](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122), [StoreQueue.scala:824](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:824) |
+
+No FST matching this pinned commit was used for this document, so this table is a verification plan rather than an “observed waveform.” Any later WaveKit analysis should record source commit, FST path, and ROB/LSQ identity before promoting observations into dynamic evidence.

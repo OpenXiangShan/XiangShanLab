@@ -1,3 +1,4 @@
+<!--
 # 10. Physical Register
 
 在前面的章节里，我们提到"物理寄存器堆"——执行单元要从这里读操作数，写回结果也要写到那里。但你有没有想过：**什么时候读？怎么读？写回端口不够怎么办？物理寄存器的一生是怎样的？**
@@ -202,10 +203,10 @@ class RegfileBank(
     val readPorts  = Vec(numReadPorts, new RfReadPortBank(len, width, numBank))
     val writePorts = Vec(numWritePorts, new RfWritePort(len, width))
   })
- 
+
   val bankRaddrWidth = log2Ceil(numBank)
   val bankEntryNum = 1 << (width - bankRaddrWidth)
- 
+
   // 分 Bank 读取：每个 Bank 独立寻址
   for (r <- io.readPorts) {
     for (i <- 0 until numBank) {
@@ -297,7 +298,7 @@ class WBArbiter[T <: Data](val gen: T, val n: Int) extends Module {
   // 饱和计数器：记录连续失败的次数
   val cancelCounter = RegInit(VecInit(Seq.fill(n)(0.U(CounterWidth.W))))
   val isFull = RegInit(VecInit(Seq.fill(n)(false.B)))
- 
+
   // 当连续失败次数达到阈值，标记为"满"
   // 被标记为"满"的端口下次请求时会被优先处理
   cancelCounterNext.zip(isFullNext).zip(cancelCounter).zip(isFull).zipWithIndex.foreach {
@@ -309,7 +310,7 @@ class WBArbiter[T <: Data](val gen: T, val n: Int) extends Module {
       }
       fullNext := (cancelCounter(i) === CounterThreshold.U)
   }
- 
+
   // 有"满"端口时，优先调度它们
   finalValid := io.in.zipWithIndex.map { case (in, i) =>
     in.valid && (!hasFull || !hasFullReq || isFull(i))
@@ -411,10 +412,10 @@ class RegfileBank(
     val readPorts  = Vec(numReadPorts, new RfReadPortBank(len, width, numBank))
     val writePorts = Vec(numWritePorts, new RfWritePort(len, width))
   })
- 
+
   val bankRaddrWidth = log2Ceil(numBank)
   val bankEntryNum = 1 << (width - bankRaddrWidth)
- 
+
   // 分 Bank 读取：每个 Bank 独立寻址、独立读出
   for (r <- io.readPorts) {
     for (i <- 0 until numBank) {
@@ -466,7 +467,7 @@ DataPath 中的 <code>**IntRFBankReadArbiter**</code> 负责将读请求路由�
 // DataPath.scala
 private val intPregNumBank = coreParams.intPreg.numBank
 private val intRFReadArbiter = Module(new IntRFBankReadArbiter(backendParams))
- 
+
 // 整数 RF 分 Bank 读取
 val intRfRaddr = Wire(Vec(params.numPregRd(IntData()),
   Vec(intPregNumBank, UInt(intArbiterAddrWidth.W))))
@@ -563,5 +564,313 @@ val originSrc = Mux1H(Seq(
 核心原则：物理寄存器堆的设计是\*\*"存储密度 vs 访问带宽"\*\*的经典权衡——读端口越多带宽越大，但面积和延迟也随之增长。分 Bank 和 RegCache 都是在这个权衡中寻找更优解的工程手段。
 
 
-> 更新: 2026-07-01 18:03:07  
+> 更新: 2026-07-01 18:03:07
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/zzuaz1ou8z2egm9i>
+-->
+
+# 10. Physical Register
+
+The physical register file (PRF) is the backend's shared warehouse. Each slot is a physical register, read ports are pickup windows, and write ports are receiving windows. Because many execution units share a finite number of ports, accesses must be scheduled and arbitrated.
+
+:::info
+**After this chapter, you will be able to:**
+
+* Distinguish Read-Before-Issue from XiangShan's post-issue register-read strategy.
+* Understand their trade-offs and use cases.
+* Explain why writeback ports contend and how the arbiter resolves conflicts.
+* Trace a physical register from allocation through release.
+* Understand why the integer PRF is banked.
+
+:::
+
+***
+
+## 10.1 Overall Position: What Is the Physical Register File?
+
+Rename allocates physical destinations from a FreeList. The main register-file domains are:
+
+| **Register file** | **Contents** | **Width** | **Banks** |
+| --- | --- | --- | --- |
+| Int RF | Integer physical registers | 64 bit | Multiple banks |
+| FP RF | Floating-point physical registers | 64 bit | One |
+| VF RF | Vector physical registers | 128 bit | One |
+| V0 RF | Vector mask registers | VLEN bits | One |
+| VL RF | Vector-length state | Special | One |
+
+***
+
+## 10.2 Post-Issue Register Read (Before Execution)
+
+### 10.2.1 XiangShan Pipeline Timing
+
+XiangShan's timing is:
+
+```plain
+OG0: Issue Queue selects and issues a uop
+  ↓
+OG1: DataPath reads the RF and selects Forward/Bypass data
+  ↓
+OG2: Additional stage for vector execution only
+  ↓
+Execution unit computes and writes back
+```
+
+Read-Before-Issue reads operands before the issue queue emits the uop. XiangShan instead issues first and reads in OG1, allowing the issue path to remain short and allowing the data path to choose the appropriate operand source at runtime.
+
+### 10.2.2 OG1 Implementation
+
+`DataPath` uses `IntRFBankReadArbiter` to issue an RF-read request only for a source operand that requires the integer RF. The request carries its physical source-register address, ROB index, and issue-valid state:
+
+```scala
+// DataPath.scala: OG1 IntRFBankReadArbiter request arbitration.
+intRFReadArbiter.io.in.zipWithIndex.foreach { case (arbInSeq2, iqIdx) =>
+  arbInSeq2.zipWithIndex.foreach { case (arbInSeq, exuIdx) =>
+    val srcIndices = fromIQ(iqIdx)(exuIdx).bits.exuParams.getRfReadSrcIdx(IntData())
+    for (srcIdx <- 0 until numRegSrc) {
+      if (srcIndices.contains(srcIdx)) {
+        // Arbitrate only operands that need the integer RF.
+        arbInSeq(srcIdx).valid := intRFBankRen(iqIdx)(exuIdx).get(srcIdx).asUInt.orR
+        arbInSeq(srcIdx).bits.addr := fromIQDeqOg1Payload(iqIdx)(exuIdx).psrc(srcIdx)
+        arbInSeq(srcIdx).bits.robIdx := fromIQ(iqIdx)(exuIdx).bits.robIdx
+        arbInSeq(srcIdx).bits.issueValid := fromIQ(iqIdx)(exuIdx).valid
+      } else {
+        arbInSeq(srcIdx).valid := false.B // This source does not need this RF type.
+      }
+    }
+  }
+}
+```
+
+`BypassNetwork` then performs a one-hot selection across all eight data sources, rather than choosing only between RF and one bypass path:
+
+```scala
+// BypassNetwork.scala: OG1 operand-source selection.
+val originSrc = Mux1H(
+  Seq(
+    readForward  -> Mux1H(forwardOrBypassValidVec3(exuIdx)(srcIdx), forwardDataVec),
+    readBypass   -> Mux1H(forwardOrBypassValidVec3(exuIdx)(srcIdx), bypassDataVec),
+    readBypass2  -> bypass2Data,
+    readZero     -> 0.U,
+    readV0       -> v0Data,
+    readRegOH    -> fromDPs(exuIdx).bits.src(srcIdx),  // RF-read data
+    readRegCache -> fromDPsRCData(exuIdx)(srcIdx),     // RegCache data
+    readImm      -> immData,
+  )
+)
+```
+
+For each source operand, wakeup selects exactly one `DataSource`; an execution unit enables only the alternatives it supports.
+
+| **`DataSource`** | **Selected value** |
+| --- | --- |
+| `reg` | The normal physical-register-file read. |
+| `regcache` | A cached integer value from RegCache. |
+| `v0` | The V0 mask-register operand. |
+| `zero` | Constant zero (`x0`/P0). |
+| `forward` | Same-cycle forwarding through the zero-cycle Forward path. |
+| `bypass` | The one-cycle Bypass path. |
+| `bypass2` | The two-cycle Bypass2 path used by applicable vector consumers. |
+| `imm` | The immediate value formed for the uop. |
+
+The selection controls are one-hot: `BypassNetwork` selects one value and never combines values from multiple source paths.
+
+The result is a one-cycle issue-to-Exu input path for scalar units. Vector units add OG2 because their operands are wider and their execution front end is separate.
+
+## 10.3 Read After Issue in Vector Units
+
+### 10.3.1 What Does "Read After Issue" Mean?
+
+"Read after issue" means that the vector execution unit itself reads vector operands after the issue decision. This avoids putting many wide vector read ports on the issue path and lets the vector unit decide whether an operand comes from its RF or a bypass source.
+
+***
+
+## 10.4 Register-File Implementation
+
+### 10.4.1 Basic `Regfile`
+
+The basic register file has registered read addresses and synchronous write ports:
+
+```scala
+// Address is registered; data is read on the following cycle.
+r.data := memForRead(RegNext(r.addr))
+
+// Optional RISC-V zero register.
+if (hasZero) { mem_0 := 0.U }
+
+// Assert that no pair of write ports targets the same address in one cycle.
+for (i <- 0 until writePorts.size - 1) {
+  val hasSameWrite = writePorts.drop(i + 1)
+    .map(w => w.wen && w.addr === writePorts(i).addr && writePorts(i).wen)
+    .reduce(_ || _)
+  assert(!hasSameWrite, "RegFile two or more writePorts write same addr")
+}
+```
+
+The one-cycle read latency explains the OG1 stage. When `hasZero=true`, P0 is always zero, matching the RISC-V x0 semantics. Write-conflict assertions protect the physical implementation.
+
+### 10.4.2 Banked Register File
+
+The integer RF has high read-port demand because several ALUs may read operands simultaneously. Splitting it into banks reduces ports, area, and power. `IntRFBankReadArbiter` routes each request to the proper bank.
+
+| **Dimension** | **Read Before Issue** | **Read After Issue** |
+| --- | --- | --- |
+| Timing | RF read lies on the issue path | RF latency is hidden inside execution |
+| Ports | Issue width x source operands | Reused inside execution units |
+| Area | Many read ports, larger RF | Fewer ports, smaller RF |
+| Bypass | Issue path selects RF vs bypass | Execution/data path centralizes selection |
+| Flexibility | Operand source fixed early | Runtime can decide whether RF access is needed |
+| Best fit | Scalar units with few narrow operands | Vector units with many wide operands |
+
+***
+
+## 10.5 Physical Register Writeback-Port Contention
+
+### 10.5.1 The Problem
+
+Many FUs can finish in the same cycle, but each register-file domain exposes only a limited number of write ports. Two results targeting one port cannot both write immediately.
+
+### 10.5.2 Collision Detection and Arbitration
+
+XiangShan uses per-domain collision checkers:
+
+| **Checker** | **Domain** | **Responsibility** |
+| --- | --- | --- |
+| `IntRFWBCollideChecker` | Integer RF | Detect integer writeback conflicts |
+| `FpRFWBCollideChecker` | FP RF | Detect floating-point conflicts |
+| `VfRFWBCollideChecker` | Vector RF | Detect vector conflicts |
+| `V0RFWBCollideChecker` | V0 RF | Detect mask-register conflicts |
+| `VlRFWBCollideChecker` | VL RF | Detect vector-length conflicts |
+
+The selected writeback is granted, while losing producers remain valid and retry. Saturating fairness counters prevent one producer from starving:
+
+```scala
+when (collide) {
+  blockCounter := Mux(blockCounter === max.U, blockCounter, blockCounter + 1.U)
+}.otherwise {
+  blockCounter := 0.U
+}
+```
+
+### 10.5.3 Issuance Blocking on Contention
+
+When a collision persists, the corresponding Issue Queue is blocked rather than dropping the result:
+
+```scala
+issueQueue.io.out(i).ready := !writebackBlock(i) && downstreamReady(i)
+```
+
+:::warning
+Writeback contention is a structural hazard, not a data dependency. It can delay an otherwise ready instruction and propagate back to issue, but it must never lose a result.
+
+:::
+
+## 10.6 Physical-Register Lifecycle
+
+```plain
+Rename: allocate a new physical destination from FreeList
+   ↓
+Execute/Writeback: write the result into that physical register
+   ↓
+Younger issue: read the RF or bypass result
+   ↓
+ROB commit: confirm the instruction was not speculative
+   ↓
+FreeList: reclaim the old physical register overwritten by Rename
+```
+
+| **Stage** | **When** | **Action** |
+| --- | --- | --- |
+| Allocate | Rename | Take a free physical-register number for the destination |
+| Write | Writeback | Write the execution result |
+| Read | Younger issue | Obtain the value from RF or bypass |
+| Confirm | ROB commit | Make the mapping architectural |
+| Release | After commit | Return the overwritten old register to FreeList |
+
+### Stage Details
+
+The lifecycle table above identifies the ownership transition at each stage: Rename owns allocation, writeback owns result creation, dependent issue consumes the value, and commit makes the mapping architectural before release.
+
+### Exception: Move Elimination
+
+Move Elimination is an exception: a move can reuse an existing physical mapping, so it may skip a new write and execution-unit operation.
+
+***
+
+## 10.7 Physical-Register Banks
+
+### 10.7.1 Why Bank the PRF?
+
+Only the integer RF is heavily banked. Interleaving entries by low address bits reduces the number of ports and the capacitance seen by each bank, lowering area and power.
+
+### 10.7.2 Bank Strategy
+
+```scala
+val bankNum = 4
+val bankId = pregIdx(log2Up(bankNum) - 1, 0)
+val rowId = pregIdx >> log2Up(bankNum)
+```
+
+The bank ID selects the physical bank, while the remaining bits select a row. Read requests are routed by `IntRFBankReadArbiter`, and write data is routed to the bank selected by the destination index.
+
+### 10.7.3 Reading a Banked RF
+
+`IntRFBankReadArbiter` is the banked form of RF-read arbitration, not merely an address router. It groups requests by configured RF read port and instantiates an `OldestArbiter` for every `(read port, bank)` pair. An input carries its `bankValidVec`, physical-source address, `robIdx`, and `issueValid`; its `ready` is the conjunction of the bank-local arbiter ready signals. The bank-local outputs provide the addresses consumed by `IntRegFileBank`, and ROB age resolves same-port, same-bank conflicts.
+
+```scala
+// Send each bank-local winning address to the banked integer RF.
+for (portIdx <- intRfRaddr.indices) {
+  if (intRFReadArbiter.io.out.isDefinedAt(portIdx)) {
+    intRfRaddr(portIdx) :=
+      VecInit(intRFReadArbiter.io.out(portIdx).map(_.bits.addr))
+  } else {
+    intRfRaddr(portIdx) := 0.U
+  }
+}
+```
+
+A bypass hit can bypass the bank read entirely.
+
+### 10.7.4 Costs and Benefits
+
+| **Benefit** | **Cost** |
+| --- | --- |
+| Fewer ports per bank and smaller area | Extra bank-selection muxing |
+| Lower fanout may reduce read delay | An additional address-decode stage may add a cycle |
+| Only the selected bank is activated | Writes must be routed to the correct bank |
+
+***
+
+## 10.8 Special Integer-RF Design: RegCache
+
+RegCache is a small auxiliary cache beside the integer RF. It stores recently written-back integer values to reduce RF read-port pressure. It is not the physical RF itself.
+
+### 10.8.1 Structure
+
+```scala
+// Tag table: physical-register tag -> RegCache index
+// Data array: RegCache index -> recently written value
+// Valid/cancel state: whether the tag is still usable
+```
+
+### 10.8.2 RF versus RegCache
+
+| **Property** | **RF** | **RegCache** |
+| --- | --- | --- |
+| Capacity | All physical registers | Recent subset |
+| Read ports | Many but heavily contended | Fewer and fast |
+| Hit rate | Always contains architectural data | Depends on temporal locality |
+| Data source | Execution-unit writeback | BypassNetwork bypass stage |
+| Purpose | Primary storage | Auxiliary integer-read acceleration |
+
+***
+
+## 10.9 Summary
+
+* **Post-issue register read**: XiangShan issues in OG0 and reads RF/selects bypass data in OG1. Scalar units use centralized DataPath reads; vector units perform Read After Issue.
+* **Writeback contention**: Shared write ports are protected by domain-specific `RFWBCollideChecker` logic, fair saturation counters, and Issue Queue backpressure.
+* **Lifecycle**: A physical register is allocated, written, read, confirmed at ROB commit, and the old mapping is released. Move Elimination can skip write and execution.
+* **Banking**: The integer RF is interleaved by low bits to reduce per-bank ports, area, and power, at the cost of selection/decode latency.
+* **RegCache**: It caches bypass-level integer results and reduces integer RF read-port pressure.
+
+> Updated: 2026-07-01 18:03:07
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/zzuaz1ou8z2egm9i>

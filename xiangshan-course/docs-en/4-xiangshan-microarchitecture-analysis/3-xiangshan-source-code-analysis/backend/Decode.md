@@ -1,3 +1,4 @@
+<!--
 # 1. 译码
 
 ## 3.1 Decode informations（译码信息）
@@ -816,3 +817,686 @@ Segment 拆分是"进阶中的进阶"，现阶段只需理解"不同字段对应
 - 资源填满后必须验证可排空；重复冲突、retry 或 redirect 不得形成 deadlock/livelock，并检查低优先级旧请求是否饥饿。
 - 环形指针必须覆盖最大值到零的 wrap；表索引必须构造 same-index/different-tag 和同拍 read/write 冲突组。
 - 性能覆盖至少记录占用率、反压周期、redirect 恢复延迟、重试次数和恢复后的持续吞吐。
+-->
+
+# 1. Decode
+
+## 3.1 Decode Information
+
+If you are new to processor decode, terms such as "BitPat match table", "instruction fusion", and "vector micro-op splitting" may look intimidating. Decode has one basic purpose: translate a stream of zeros and ones into work instructions that the backend can understand. We will build the picture step by step.
+
+:::info
+After this section, you will be able to:
+
+- Understand the position and role of the decode module in the XiangShan processor.
+- Understand Decode Information: the control signals generated for an instruction.
+- Understand Pre-Decode: how the frontend obtains branch information early.
+- Understand Fusion: why and how two instructions can be combined into one.
+- Read Translate/Split: how one vector instruction becomes N micro-ops.
+- Follow a complete path from source code to practical verification.
+:::
+
+### 3.1.1 A Big-Picture View of the Decode Stage
+
+Think of the processor as a modern factory:
+
+:::info
+- The **frontend (IFU and related units)** is the raw-material procurement department. It retrieves instructions from memory, supplies the production line, and establishes the overall pace and high-level workload.
+- **Decode** is the translation and task-decomposition workshop. It translates the raw instruction, annotates the required hardware resources and operation, decomposes a macro-instruction into executable micro-ops, and sends them to backend units.
+- The **backend (Rename -> Issue -> Execute)** is the main production line. It performs out-of-order scheduling, resource allocation, and execution according to those micro-ops.
+:::
+
+Without this translator, the backend would receive meaningless 0/1 bits. With decoding, each instruction can be scheduled and executed correctly.
+
+### 3.1.2 Decode Pipeline Overview
+
+XiangShan decode is not a single lookup table. It is a multi-stage, hierarchical pipeline:
+
+~~~plain
++---------------- IFU (frontend) ----------------+
+| PreDecode: lightweight branch extraction      |
+|   - branch-type recognition                   |
+|   - jump-offset calculation                   |
+|   - RVC compressed-instruction test           |
+|        |                                      |
+|        +--> PreDecodeInfo --> BPU / FTQ       |
++-------------------+----------------------------+
+                    |
++-------------------v DecodeStage ---------------+
+| IBuffer -> decoders[0..N-1]                   |
+|   lookup -> control signals + uopSplitType    |
+|   simple instruction -> one uop                |
+|   complex instruction -> further processing   |
+|             |                                  |
+|       +-----+---------------------+            |
+|       |                           |            |
+| FusionDecoder                DecodeUnitComp  |
+| adjacent-pair matching       complex split FSM|
+| two instructions -> one       one -> N uops   |
+|       +-------------+-------------------------+
+|                     |
+|              finalDecodedInst -> Rename       |
+| Helpers: UopInfoGen and VTypeGen              |
++------------------------------------------------+
+~~~
+
+**How to read the diagram:** frontend pre-decode is a scout that quickly extracts branch intelligence. Backend decode is the translator that generates complete control signals. Backend decode further separates simple scalar 1:1 mapping from complex processing (fusion and splitting).
+
+:::color4
+**Beginner tip:** Remember only this at first: **Decode = lookup-based translation + fusion optimization + vector splitting**. Do not start with every FSM detail; establish the overall picture first.
+:::
+
+## 3.2 Decode Information - What Does an Instruction Become?
+
+### 3.2.1 Why Is Decode Information Needed?
+
+A 32-bit RISC-V machine instruction is an encrypted, highly compressed work order. Its encoding describes a task, but backend functional units cannot execute the raw encoding directly.
+
+Decode acts as both translator and task decomposer. It interprets the instruction and converts it into standard process cards, or decode information, that backend units can directly understand and execute.
+
+The decode unit must answer the following questions:
+
+:::info
+- **Task identification:** Is this arithmetic, a memory access, or a control transfer?
+- **Resource requirements:** Do the operands come from registers or from an immediate encoded in the instruction?
+- **Dispatch:** Which functional unit should execute the task, and which operation should it perform? For a memory instruction, is it a load or a store?
+- **Writeback destination:** Should the result be written to the integer or floating-point register file?
+- **Special handling:** Is the instruction non-speculative, or must it flush the pipeline after execution?
+:::
+
+Without decode information, the backend is powerful hardware with no description of the work it must perform. Decode transforms each macro-instruction into clearly defined micro-ops and plans its resource, execution, and writeback path.
+
+### 3.2.2 XSDecode - Complete Decode Control Signals
+
+XiangShan uses the <code>XSDecode</code> class to describe an instruction's decode control signals. It is defined around lines 94-110 of <code>src/main/scala/xiangshan/backend/decode/DecodeUnit.scala</code>.
+
+~~~scala
+case class XSDecode(
+  src1: BitPat, src2: BitPat, src3: BitPat,  // types of the three source operands
+  fu: FuType.OHType, fuOp: BitPat,            // functional unit and operation code
+  selImm: BitPat,                              // immediate selection
+  uopSplitType: BitPat = UopSplitType.X,       // micro-op split type
+  xWen: Boolean = false,                       // integer-register write enable
+  fWen: Boolean = false,                       // floating-point-register write enable
+  vWen: Boolean = false,                       // vector-register write enable
+  mWen: Boolean = false,                       // mask-register write enable
+  noSpec: Boolean = false,                     // must not execute speculatively
+  blockBack: Boolean = false,                  // block following instructions
+  flushPipe: Boolean = false,                  // flush the pipeline
+  canRobCompress: Boolean = false,             // ROB compression is allowed
+)
+~~~
+
+This is a process card: each field describes one part of the work assigned to the backend.
+
+#### Core Fields of the Process Card
+
+**1. Resources and operation**
+
+- <code>src1</code>, <code>src2</code>, and <code>src3</code> identify source-operand types, such as an integer register (<code>Reg</code>), floating-point register (<code>FPReg</code>), or immediate (<code>Imm</code>).
+- <code>fu</code> selects a functional unit, such as the integer ALU (<code>ALU</code>), multiplier/divider (<code>MulDiv</code>), or memory unit (<code>Mem</code>).
+- <code>fuOp</code> selects the operation inside that functional unit, such as <code>ADD</code> or <code>LD</code>.
+- <code>selImm</code> tells the hardware how to extract and extend an immediate from the instruction encoding.
+
+**2. Writeback destination**
+
+<code>xWen</code>, <code>fWen</code>, <code>vWen</code>, and <code>mWen</code> are write-enable signals for the integer, floating-point, vector, and mask register files. In the usual case, only the register file targeted by the instruction is enabled.
+
+**3. Special pipeline controls**
+
+- <code>noSpec</code> marks an instruction as non-speculative. It must wait until the processor knows that it will really execute.
+- <code>blockBack</code> blocks issue of younger instructions and is typically used at a serialization point.
+- <code>flushPipe</code> requests a pipeline flush after execution, for example after <code>fence.i</code>.
+- <code>canRobCompress</code> marks an instruction that the reorder buffer (ROB) may compress under suitable conditions.
+
+**4. Instruction complexity**
+
+<code>uopSplitType</code> says whether and how a macro-instruction must be split into multiple micro-ops. A complex vector reduction, for example, may be represented by several simpler micro-ops.
+
+| Category | Field | Type | Meaning |
+| --- | --- | --- | --- |
+| Input resources | <code>src1</code>/<code>src2</code>/<code>src3</code> | <code>BitPat</code> | Select integer-register, floating-point-register, vector, mask, or immediate sources. |
+| Execution control | <code>fu</code> | <code>FuType.OHType</code> | Selects the functional unit. |
+|  | <code>fuOp</code> | <code>BitPat</code> | Selects the operation performed by that unit. |
+|  | <code>selImm</code> | <code>BitPat</code> | Selects and extends the immediate encoding. |
+| Writeback | <code>xWen</code> | <code>Boolean</code> | Writes the result to the integer register file. |
+|  | <code>fWen</code> | <code>Boolean</code> | Writes the result to the floating-point register file. |
+|  | <code>vWen</code> | <code>Boolean</code> | Writes the result to the vector register file. |
+|  | <code>mWen</code> | <code>Boolean</code> | Writes the result to the mask register file. |
+| Pipeline behavior | <code>noSpec</code> | <code>Boolean</code> | Prevents speculative execution. |
+|  | <code>blockBack</code> | <code>Boolean</code> | Blocks issue of younger instructions. |
+|  | <code>flushPipe</code> | <code>Boolean</code> | Flushes the pipeline after execution. |
+| Micro-op handling | <code>uopSplitType</code> | <code>BitPat</code> | Identifies the split procedure for a complex instruction. |
+|  | <code>canRobCompress</code> | <code>Boolean</code> | Allows ROB compression when the instruction is eligible. |
+
+### 3.2.3 Decode Table - Mapping Instruction Encodings to Control Signals
+
+:::info
+XiangShan uses a classic **BitPat match table**. The left side is an instruction encoding pattern; the right side is the corresponding <code>XSDecode</code> control-signal set.
+:::
+
+The decoder looks up a 32-bit instruction, finds the matching pattern, and emits the control signals needed by the backend.
+
+~~~scala
+object XDecode extends DecodeConstants {
+  // Array of (instruction pattern -> control signal) pairs.
+  val decodeArray: Array[(BitPat, XSDecodeBase)] = Array(
+    // Example from the RV64I base instruction set.
+    LW -> XSDecode(
+      SrcType.reg,     // source 1: register
+      SrcType.imm,     // source 2: immediate
+      SrcType.X,       // source 3: unused
+      FuType.ldu,      // load/store unit
+      LSUOpType.lw,    // load word
+      SelImm.IMM_I,    // I-type immediate
+      xWen = true      // write back to the integer register file
+    ),
+    ADD -> XSDecode(
+      SrcType.reg, SrcType.reg, SrcType.X, // both sources are registers
+      FuType.alu,                          // arithmetic and logic unit
+      ALUOpType.add,                       // addition
+      SelImm.X,                            // no immediate
+      xWen = true,
+      canRobCompress = true                // allow ROB compression
+    ),
+    JAL -> XSDecode(
+      SrcType.pc,      // source 1: program counter
+      SrcType.imm,     // source 2: immediate
+      SrcType.X,
+      FuType.jmp,      // jump unit
+      JumpOpType.jal,  // jump and link
+      SelImm.IMM_UJ,   // UJ-type immediate
+      xWen = true
+    ),
+    // The real table contains all supported instructions.
+  )
+}
+~~~
+
+Defined around lines 134-200 of <code>src/main/scala/xiangshan/backend/decode/DecodeUnit.scala</code>.
+
+:::info
+The lookup procedure is:
+
+1. **Fetch:** obtain the 32-bit instruction encoding.
+2. **Match:** compare it with every <code>BitPat</code> in <code>decodeArray</code>. A <code>0</code> or <code>1</code> is fixed; <code>?</code> is a wildcard.
+3. **Output:** retrieve the <code>XSDecode</code> object associated with the matching pattern.
+4. **Pass on:** send the functional-unit selection, operation type, write enables, and other signals to the next stage, such as Rename.
+:::
+
+The static table is the foundation of the ISA implementation: it maps software-visible instructions such as <code>ADD</code> to actions understood by hardware execution units.
+
+### 3.2.4 Default Values - What Happens When There Is No Match?
+
+If no legal entry matches an instruction encoding, the decoder selects <code>decodeDefault</code>. Its <code>selImm</code> is <code>INVALID_INSTR</code>, which triggers an illegal-instruction exception.
+
+~~~scala
+def decodeDefault: List[BitPat] =
+  List(SrcType.X, SrcType.X, SrcType.X, FuType.X, FuOpType.X,
+       N, N, N, N, N, N, UopSplitType.X, SelImm.INVALID_INSTR)
+~~~
+
+Defined around lines 50-61 of <code>src/main/scala/xiangshan/backend/decode/DecodeUnit.scala</code>. It is analogous to a translator encountering an unknown word: mark the instruction as an exception and let the architectural exception mechanism handle it.
+
+### 3.2.5 Decode-Table Categories - Specialized Dictionaries
+
+XiangShan groups instructions by ISA extension and maintains several specialized tables:
+
+| Decode-table object | Coverage | Source |
+| --- | --- | --- |
+| <code>XDecode</code> | RV32/64I, M extension, and system instructions | <code>DecodeUnit.scala</code>, around L133 |
+| <code>FDecode</code> | Floating-point F/D extensions | <code>DecodeUnit.scala</code> |
+| <code>VecDecoder</code> | Vector V extension (OPIVV, OPIVX, OPMVV, and related forms) | <code>VecDecoder.scala</code>, around L186 |
+| <code>BitmanipDecode</code> | B-extension bit-manipulation instructions | <code>DecodeUnit.scala</code> |
+| <code>ScalarCryptoDecode</code> | Scalar cryptographic extensions | <code>DecodeUnit.scala</code> |
+
+The tables are defined independently and merged by <code>DecodeUnit</code> for parallel matching.
+
+## 3.3 Pre-Decode - The Frontend Scout
+
+### 3.3.1 Why Is Pre-Decode Needed?
+
+:::danger
+If the backend already performs full decode, why does the frontend do it again?
+:::
+
+Time is performance. The branch prediction unit (BPU) must decide where to fetch next during the fetch stage. Waiting for backend decode would be too late. Pre-Decode therefore behaves like a scout: it does not translate everything, but quickly extracts the most important intelligence, namely branch information.
+
+### 3.3.2 What Does Pre-Decode Extract?
+
+Pre-Decode does not generate complete decode information. It creates a lightweight <code>PreDecodeInfo</code> summary for early handling of instructions that can change control flow.
+
+| Extracted field | Role and meaning |
+| --- | --- |
+| <code>valid</code> | Instruction-valid flag. It indicates whether the bits form a legal instruction and can enable an early exception. |
+| <code>isRVC</code> | Compressed-instruction flag. It distinguishes a standard 32-bit instruction from a 16-bit RISC-V compressed instruction and therefore affects the next PC increment (+4 or +2). |
+| <code>brAttribute</code> | Branch attribute: non-branch, direct jump, indirect jump, or conditional branch. |
+| <code>jumpOffset</code> | Jump offset extracted from an immediate-bearing jump or branch so that a potential target can be computed as <code>Target PC = Current PC + Offset</code>. |
+
+### 3.3.3 Pre-Decode Branch Match Table
+
+Pre-Decode must identify, quickly and accurately, instructions that may redirect control flow. XiangShan uses a predefined <code>brTable</code> for this purpose. It ignores detailed arithmetic semantics and answers one question: is this instruction a branch, and what kind?
+
+~~~scala
+object PreDecodeInst {
+  // Array[(instruction pattern, branch-attribute list)].
+  val brTable = Array(
+    // Non-branch compressed instruction.
+    C_EBREAK -> List(BranchAttribute.BranchType.None),
+
+    // Compressed instructions.
+    C_J      -> List(BranchAttribute.BranchType.Direct),
+    C_JALR   -> List(BranchAttribute.BranchType.Indirect),
+    C_BRANCH -> List(BranchAttribute.BranchType.Conditional),
+
+    // Standard 32-bit instructions.
+    JAL      -> List(BranchAttribute.BranchType.Direct),
+    JALR     -> List(BranchAttribute.BranchType.Indirect),
+    BRANCH   -> List(BranchAttribute.BranchType.Conditional)
+  )
+}
+~~~
+
+Defined around lines 22-43 of <code>src/main/scala/xiangshan/frontend/ifu/PreDecode.scala</code>.
+
+| Branch attribute | Meaning | Typical instructions | Key follow-up action |
+| --- | --- | --- | --- |
+| <code>None</code> | Non-branch; execution continues in program order. | <code>EBREAK</code>, <code>ADD</code>, <code>LW</code> | Continue sequential fetch. |
+| <code>Direct</code> | Unconditional direct jump; target is current PC plus the immediate offset. | <code>JAL</code>, <code>C.J</code> | Extract <code>jumpOffset</code> so the predictor can calculate the target directly. |
+| <code>Indirect</code> | Indirect jump; target comes from a register and is known at run time. | <code>JALR</code>, <code>C.JALR</code> | The target is not available from the instruction alone. |
+| <code>Conditional</code> | Conditional branch; direction depends on a condition result. | <code>BEQ</code>, <code>BNE</code>, <code>C.BEQZ</code> | Extract the offset; predict taken/not-taken direction and target. |
+
+### 3.3.4 Pre-Decode versus Full Decode
+
+| Dimension | Pre-Decode (frontend scout) | Decode (backend translator) |
+| --- | --- | --- |
+| Location | IFU fetch pipeline | Backend <code>DecodeStage</code> |
+| Purpose | Extract branch information early and assist the BPU | Generate complete micro-op control signals |
+| Output | Branch type, jump offset, and RVC flag | Fields such as <code>FuType</code>, <code>SrcType</code>, and <code>FuOpType</code> |
+| Latency sensitivity | Very high; it affects fetch bandwidth | Moderate; it affects dispatch bandwidth |
+| Scope | Selected jump and branch patterns | All instructions |
+
+:::danger
+Pre-Decode is like customs screening: it quickly checks whether someone needs special attention. Full Decode is like an immigration review: it examines the complete record before deciding what the instruction may do.
+:::
+
+***
+
+## 3.4 Fusion - Two Instructions Become One
+
+Instruction fusion is a microarchitectural optimization. Several adjacent machine instructions that jointly implement a clear semantic operation can be merged into one more complex internal micro-op during decode or a later stage. This reduces backend resource use and improves execution efficiency.
+
+### 3.4.1 Why Is Fusion Needed?
+
+Compilers follow the ISA and may express a simple high-level operation as several basic instructions. That is correct, but processing the pieces independently can be inefficient.
+
+**Example: 32-bit zero extension**
+
+~~~c
+// Zero-extend a 32-bit value to 64 bits.
+uint64_t zext(uint32_t x) { return (uint64_t)x; }
+~~~
+
+A compiler may emit:
+
+~~~plain
+slli r1, r0, 32  // move the low 32 bits into the high half
+srli r1, r1, 32  // clear the high half and restore the low half
+// Final effect: r1[31:0] = r0[31:0]; r1[63:32] = 0
+~~~
+
+The combined semantics are equivalent to <code>ADD.UW r1, r0, zero</code>, the <code>zext.w</code> pseudo-instruction. Without fusion, hardware still treats the pair as two independent tasks.
+
+Fusing the pair provides these benefits:
+
+| Resource or metric | Before fusion (2 instructions) | After fusion (1 micro-op) |
+| --- | --- | --- |
+| Issue-queue entries | 2 | 1 |
+| ROB entries | 2 | 1 |
+| Register reads and writes | Multiple reads and writes | One write |
+| Backend resource use | High | Low |
+
+:::danger
+Fusion recognizes compiler-generated instruction pairs whose semantics can be combined, converts them into one more complex micro-op, and reduces backend pressure while improving throughput and energy efficiency.
+:::
+
+### 3.4.2 Fusion Principles
+
+XiangShan fusion follows strict rules.
+
+#### Principle 1: Fuse Only Adjacent Pairs
+
+The detector examines only two adjacent instructions within the decode width and never crosses a boundary:
+
+~~~scala
+abstract class BaseFusionCase(pair: Seq[Valid[UInt]])(implicit p: Parameters) {
+  require(pair.length == 2)
+}
+~~~
+
+Defined around lines 31-33 of <code>src/main/scala/xiangshan/backend/decode/FusionDecoder.scala</code>. Two instructions separated by another instruction cannot form a fusion pair.
+
+#### Principle 2: The Dependency Must Be Producer-Consumer
+
+The result of the first instruction must feed an input of the second:
+
+~~~scala
+protected def withSameDest: Bool = instr1Rd === instr2Rd
+def destToRs1: Bool = instr1Rd === instr2Rs1
+protected def destToRs2: Bool = instr1Rd === instr2Rs2
+~~~
+
+Defined around lines 46-48 of <code>src/main/scala/xiangshan/backend/decode/FusionDecoder.scala</code>. The first instruction is the producer and the second is the consumer.
+
+#### Principle 3: Fusion Changes Only a Limited Set of Signals
+
+For timing and correctness, a replacement may modify only selected fields:
+
+| Modifiable field | Meaning |
+| --- | --- |
+| <code>fuType</code> | Functional-unit type |
+| <code>fuOpType</code> | Operation code |
+| <code>src2Type</code> | Type of the second source |
+| <code>selImm</code> / <code>imm</code> | Immediate selection and value |
+
+See around lines 76-84 of <code>FusionDecoder.scala</code>.
+
+#### Principle 4: Two Fusion Modes
+
+| Mode | Description | Example |
+| --- | --- | --- |
+| Fuse into an existing instruction | Replace the first operation with the decode result of another legal instruction | <code>SLLI + ADD</code> -> <code>SH1ADD</code> |
+| Fuse into a custom operation | Replace <code>fuOpType</code> with a XiangShan internal operation code | <code>SLLI32 + SRLI31</code> -> <code>szewl1</code> |
+
+#### Principle 5: The Second Instruction Is Consumed
+
+After fusion succeeds, the second instruction is removed from the output stream. The first instruction continues with the fused control signals.
+
+### 3.4.3 How Fusion Works
+
+<code>FusionDecoder</code> checks every adjacent pair in parallel. The order of <code>fusionList</code> determines priority:
+
+~~~scala
+class FusionDecoder(implicit p: Parameters) extends XSModule {
+  val fusionList = Seq(
+    new FusedAdduw(pair),  // slli32 + srli32 -> add.uw
+    new FusedZexth(pair),   // slli48 + srli48 -> zext.h
+    new FusedSexth(pair),   // slliw16 + sraiw16 -> sext.h
+    new FusedSh1add(pair),  // slli1 + add -> sh1add
+    new FusedSh2add(pair),  // slli2 + add -> sh2add
+    new FusedSh3add(pair),  // slli3 + add -> sh3add
+    new FusedLui32(pair)    // lui + addi -> lui32
+    // More than 20 fusion patterns exist.
+  )
+}
+~~~
+
+See around lines 571-594 of <code>FusionDecoder.scala</code>.
+
+When a pattern matches, <code>FusionDecodeReplace</code> carries the fields that must replace the first instruction and marks the second instruction for removal:
+
+~~~scala
+class FusionDecodeReplace(implicit p: Parameters) extends XSBundle {
+  val fuType = Valid(FuType())
+  val fuOpType = Valid(FuOpType())
+  val lsrc2 = Valid(UInt(...))
+  val src2Type = Valid(SrcType())
+  val selImm = Valid(SelImm())
+  val imm = Valid(UInt(32.W))
+}
+~~~
+
+See around lines 522-550 of <code>FusionDecoder.scala</code>.
+
+### 3.4.4 Supported Fusion Cases
+
+| Fusion pattern | Source pair | Fused result | Typical use |
+| --- | --- | --- | --- |
+| Word zero extension | <code>SLLI 32</code> + <code>SRLI 32</code> | <code>ADD.UW</code> (<code>zext.w</code>) | Zero-extend 32 to 64 bits |
+| Halfword zero extension | <code>SLLI 48</code> + <code>SRLI 48</code> | <code>PACKW</code> (<code>zext.h</code>) | Zero-extend 16 to 64 bits |
+| Halfword sign extension | <code>SLLIW 16</code> + <code>SRAIW 16</code> | <code>SEXT.H</code> | Sign-extend 16 to 32 bits |
+| Shift-add | <code>SLLI n</code> + <code>ADD</code> | <code>SHnADD</code> (n = 1, 2, 3, 4) | Address calculation |
+| Shift-right-add | <code>SRLI n</code> + <code>ADD</code> | <code>SRnADD</code> (n = 29, 30, 31, 32) | High-bit extraction and addition |
+| Odd add | <code>ANDI 1</code> + <code>ADD/W</code> | <code>ODDADD/ODDADDW</code> | Alignment calculation |
+| Add and extract byte | <code>ADDW</code> + <code>ANDI 0xFF</code> | <code>ADDWBYTE</code> | Byte extraction |
+| Add and extract bit | <code>ADD</code> + <code>ANDI 0x1</code> | <code>ADDWBIT</code> | Bit extraction |
+| Logical LSB extraction | logical instruction + <code>ANDI 1</code> | <code>logiclsb</code> | Extract the lowest bit after a logical operation |
+| 32-bit immediate construction | <code>LUI</code> + <code>ADDI/W</code> | <code>lui32add/lui32addw</code> | Construct a large immediate |
+| 7-bit multiplication | <code>ANDI 127</code> + <code>MULW</code> | <code>mulw7</code> | Small-range multiplication |
+
+:::danger
+You do not need to memorize every fusion pattern. Focus on why fusion reduces backend pressure and on its conditions: adjacency, a producer-consumer dependency, and a limited replacement set.
+:::
+
+***
+
+## 3.5 Translate/Split - One Macro-Instruction Becomes N Micro-Ops
+
+### 3.5.1 Why Is Splitting Needed?
+
+Some RISC-V instructions cannot be completed by one micro-op. A vector instruction such as <code>VADD.VV</code> may operate on one or as many as eight vector-register groups, depending on LMUL, while the backend unit can process only a limited amount at a time.
+
+A vector instruction is therefore like a bulk order: the order may contain eight groups of goods, but the warehouse ships one group at a time. The macro-instruction must be split into sub-orders and issued separately.
+
+### 3.5.2 Simple versus Complex Instructions
+
+XiangShan uses two decode paths:
+
+| Type | Mapping | Processing module | Example |
+| --- | --- | --- | --- |
+| Simple instruction | 1 macro-instruction -> 1 micro-op | <code>DecodeUnit</code> | Scalar ADD, SUB, LW |
+| Complex instruction | 1 macro-instruction -> N micro-ops | <code>DecodeUnitComp</code> | Vector VADD, <code>vsetvli</code>, VLSE8 |
+
+If <code>uopSplitType</code> is not <code>UopSplitType.X</code>, the instruction requires the complex path.
+
+### 3.5.3 Two-Level Decode Architecture
+
+~~~plain
++------------------------- DecodeStage --------------------------+
+| IBuffer -> decoders[0] ... decoders[N]                       |
+|             |                 |                                |
+|          simple            complex                            |
+|        direct uop       FusionDecoder                         |
+|                              |                                |
+|                        DecodeUnitComp                         |
+|                        one uop per cycle                      |
+|                              |                                |
+|                    finalDecodedInst -> Rename                 |
+|                    complex uops precede simple uops            |
++---------------------------------------------------------------+
+~~~
+
+See <code>src/main/scala/xiangshan/backend/decode/DecodeStage.scala</code>, lines 113-238.
+
+The complex decoder's results are placed at the front of the output sequence, followed by simple-decoder results. This preserves program order while allowing one complex instruction to expand into several uops.
+
+### 3.5.4 UopSplitType at a Glance
+
+| UopSplitType | Meaning | Typical instruction | Split count |
+| --- | --- | --- | --- |
+| <code>X</code> | No split | Scalar ADD, LW | 1 |
+| <code>VSET</code> | vset configuration instruction | <code>vsetvli</code>, <code>vsetvl</code> | 2 (configuration + writeback) |
+| <code>VEC_VVV</code> | Vector OPIVV | <code>VADD.VV</code> | LMUL |
+| <code>VEC_VXV</code> | Vector OPIVX/OPIVI | <code>VADD.VX</code>, <code>VADD.VI</code> | LMUL |
+| <code>VEC_0XV</code> | Vector form with special source 0 | <code>VMACC.VV</code> | LMUL |
+| <code>VEC_US_LDST</code> | Unit-stride or strided vector load/store | <code>VLE8.V</code>, <code>VLSE8.V</code> | EMUL x (NF + 1) |
+| <code>VEC_IX_LDST</code> | Indexed vector load/store | <code>VLUXEI8.V</code> | max(LMUL, EMUL) x (NF + 1) |
+| <code>VEC_RGATHER</code> | <code>vrgather</code> | <code>VRGATHER.VV</code> | Computed from LMUL and SEW |
+| <code>VEC_COMPRESS</code> | <code>vcompress</code> | <code>VCOMPRESS</code> | Computed from LMUL |
+| <code>VEC_SLIDE</code> | <code>vslide</code> | <code>VSLIDEUP</code> | Computed from LMUL |
+
+### 3.5.5 UopInfoGen - Computing the Split Count
+
+<code>UopInfoGen</code> computes the number of uops from <code>uopSplitType</code> and the current VType configuration (LMUL, SEW, and EMUL):
+
+~~~scala
+// For basic vector operations, the split count is LMUL.
+val numOfWB = MuxLookup(typeOfSplit, 1.U)(Seq(
+  UopSplitType.VEC_VVV -> lmul,
+  UopSplitType.VEC_VXV -> lmul,
+  UopSplitType.VEC_0XV -> lmul
+  // ...
+))
+~~~
+
+See <code>UopInfoGen.scala</code>, lines 197-200.
+
+### 3.5.6 Three Splitting Scenarios
+
+#### Scenario 1: Scalar + Scalar
+
+Most scalar instructions map 1:1. A few special scalar instructions expand to two uops:
+
+| Instruction | Split | Reason |
+| --- | --- | --- |
+| <code>vsetvli</code> | 2 uops: configure VType, then write VL to an x register | It changes configuration and returns a value. |
+| <code>vsetvl</code> | 2 uops: same as above | Same reason. |
+
+~~~scala
+case class VSET(vli: Boolean, vtypei: Boolean, fuOp: BitPat, ...)
+    extends XSDecodeBase {
+  def generate() =
+    XSDecode(..., uopSplitType = UopSplitType.VSET, ...).generate()
+}
+~~~
+
+See <code>VecDecoder.scala</code>, lines 155-162.
+
+#### Scenario 2: Scalar + Vector
+
+When a vector instruction has a scalar source, each split uop must reuse the scalar value while selecting a different vector-register group.
+
+~~~scala
+case class OPIVX(
+  fu: FuType.OHType, fuOp: BitPat, ...
+  uopSplitType: BitPat = UopSplitType.VEC_VXV,
+  src1: BitPat = SrcType.xp,   // scalar source from an x register
+  src2: BitPat = SrcType.vp    // vector source from a v register
+) extends XSDecodeBase { ... }
+~~~
+
+See <code>VecDecoder.scala</code>, lines 44-58. Every uop reads the same scalar register but operates on a different vector group; the split count is LMUL. OPIVI uses an immediate instead of <code>src1</code> and uses the same split type.
+
+#### Scenario 3: Vector + Vector
+
+The most complex case depends on LMUL and the instruction class:
+
+| Instruction | LMUL=1 | LMUL=2 | LMUL=4 | LMUL=8 |
+| --- | --- | --- | --- | --- |
+| <code>VADD.VV</code> (OPIVV) | 1 uop | 2 uops | 4 uops | 8 uops |
+| <code>VLE8.V</code> (unit-stride load) | 1 | 2 | 4 | 8 |
+| <code>VRGATHER.VV</code> | 1 | 4 | 16 | 64 |
+| <code>VCOMPRESS</code> | 1 | 4 | 13 | 43 |
+| <code>VSLIDEUP</code> | 1 | 3 | 10 | 36 |
+
+See <code>UopInfoGen.scala</code>, lines 127-145. The count for operations such as <code>vrgather</code> and <code>vcompress</code> grows rapidly, reaching 64 uops at LMUL=8 and becoming a significant vector-performance bottleneck.
+
+### 3.5.7 DecodeUnitComp Split State Machine
+
+The complex decoder uses a state machine to emit one split uop per cycle:
+
+~~~scala
+val s_idle :: s_active :: Nil = Enum(2)
+val state = RegInit(s_idle)
+val numDecodedUop = RegInit(0.U)  // number of uops already emitted
+val uopRes = RegInit(0.U)         // number of uops still to emit
+~~~
+
+See <code>DecodeUnitComp.scala</code>, lines 178-183.
+
+The workflow is:
+
+1. <code>s_idle</code> waits for a complex instruction.
+2. When <code>isComplex</code> is detected, the instruction is latched and the state changes to <code>s_active</code>.
+3. In <code>s_active</code>, one uop is emitted per cycle; <code>numDecodedUop</code> increments and <code>uopRes</code> decrements.
+4. Every uop carries <code>firstUop</code>/<code>lastUop</code> markers, register offsets derived from the uop index, and the <code>vlsInstr</code> marker for vector load/store handling.
+5. When <code>uopRes</code> reaches zero, the state returns to <code>s_idle</code>.
+
+### 3.5.8 Splitting Segment Instructions (Advanced)
+
+For a segment load/store (NF > 0), one instruction accesses multiple fields and the split count is <code>EMUL x (NF + 1)</code>:
+
+~~~scala
+val isUsSegment = instFields.MOP === 0.U && nf =/= 0.U
+val isIxSegment = instFields.MOP(0) === 1.U && nf =/= 0.U
+val isSdSegment = instFields.MOP === "b10".U && nf =/= 0.U
+~~~
+
+See <code>DecodeUnitComp.scala</code>, lines 185-187.
+
+For indexed load/store, <code>vs2</code> and <code>vd</code> can have different EMUL/LMUL values. A dedicated lookup table computes the register offset for each uop:
+
+~~~scala
+class indexedLSUopTable(uopIdx: Int) extends Module {
+  def genCsBundle_VEC_INDEXED_LDST(
+    lmul: Int, emul: Int, uopIdx: Int
+  ): (Int, Int)
+  // QMCMinimizer synthesizes the hardware lookup table.
+  val out = decoder(QMCMinimizer, src, TruthTable(...))
+}
+~~~
+
+See <code>DecodeUnitComp.scala</code>, lines 38-77. Segment splitting is advanced; first understand that different fields map to different register-group offsets, then study the detailed table.
+
+***
+
+## 3.6 Decode-Module Source Map
+
+| Module | Source path | Responsibility |
+| --- | --- | --- |
+| <code>DecodeStage</code> | <code>DecodeStage.scala</code> | Top-level decode pipeline; coordinates simple/complex decode and fusion. |
+| <code>DecodeUnit</code> | <code>DecodeUnit.scala</code> | Simple decoder; BitPat lookup and control-signal generation. |
+| <code>DecodeUnitComp</code> | <code>DecodeUnitComp.scala</code> | Complex decoder; vector-instruction split FSM. |
+| <code>FusionDecoder</code> | <code>FusionDecoder.scala</code> | Fusion detector with more than 20 patterns. |
+| <code>VecDecoder</code> | <code>VecDecoder.scala</code> | Vector decode tables, including OPIVV, OPIVX, and OPMVV. |
+| <code>UopInfoGen</code> | <code>UopInfoGen.scala</code> | Micro-op count calculator. |
+| <code>VTypeGen</code> | <code>VTypeGen.scala</code> | VType state-maintenance module. |
+| <code>PreDecode</code> | <code>PreDecode.scala</code> | Frontend pre-decode. |
+| <code>PreDecodeInst</code> | <code>predecode.scala</code> | Pre-decode branch match table. |
+| <code>Instructions</code> | <code>Instructions.scala</code> | BitPat definitions for custom extension instructions. |
+
+## 3.7 Suggested Learning Path
+
+| Stage | Learning goal | Suggested reading |
+| --- | --- | --- |
+| Beginner | Understand the role and overall architecture of decode. | Sections 3.1-3.2 and the first 200 lines of <code>DecodeUnit.scala</code>. |
+| Intermediate | Understand Fusion and Split. | Sections 3.4-3.5, <code>FusionDecoder.scala</code>, and the first 200 lines of <code>DecodeUnitComp.scala</code>. |
+| Advanced | Modify or extend decode logic. | The complete source map, plus <code>VecDecoder.scala</code> and <code>UopInfoGen.scala</code>. |
+
+## 3.8 Summary
+
+The key points are:
+
+- **Position:** Decode bridges frontend fetch and backend execution by translating instruction encodings into control signals.
+- **Decode Information:** A BitPat match table produces fields such as <code>srcType</code>, <code>fuType</code>, and <code>fuOpType</code>.
+- **Pre-Decode:** A lightweight frontend pass extracts branch information so the BPU can decide early.
+- **Fusion:** Two adjacent, data-dependent instructions become one micro-op, reducing backend resource use.
+- **Split:** A complex instruction, especially a vector instruction, becomes multiple micro-ops through cooperation between simple and complex decoders.
+
+Do not try to understand every detail at once. First follow the overall flow and understand what decode does; then use the source map to inspect the modules that matter to you.
+
+Next, read the [Rename and Dispatch Stage](https://zread.ai/OpenXiangShan/XiangShan/12-rename-and-dispatch-stage) to see how decoded micro-ops are renamed and dispatched to execution units.
+
+> Updated: 2026-05-29 16:47:09
+
+## Verification Notes
+
+This section follows the FSM, conflict, forward-progress, index/hash, cache-structure, exception/virtualization, and performance-bottleneck rules in <code>tools/verification-driver/skills</code>. Every expectation must be based on valid Chisel for <code>kunminghu-v2</code>.
+
+| Verification ID | Risk / invariant | Directed stimulus | Expected observation | Checker / coverage |
+| --- | --- | --- | --- | --- |
+| <code>F_HOLD_BACKPRESSURE</code> | Decode results must not drift or pass through while Rename applies backpressure. | Set <code>io.out.head.ready=0</code> while simple and complex inputs remain valid. | <code>readyCounter</code>, <code>complexValid</code>, output valid/payload, and input ready remain stable under the acceptance rules; evidence [DecodeStage.scala:94-150](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/decode/DecodeStage.scala#L94-L150). | Handshake checker; lane-order scoreboard |
+| <code>DECODE_COMPLEX_EXPAND</code> | Complex expansion can produce the wrong uop count or order. | Cover several <code>complexNum</code> values with simple instructions before and after. | Complex uops appear before simple results and do not exceed Rename's receive width; evidence [DecodeStage.scala:141-181](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/decode/DecodeStage.scala#L141-L181). | Expansion scoreboard; uop-count cross |
+| <code>F_REQ_AND_FLUSH</code> | Redirect can race with complex decode and VType update. | Assert redirect in the same cycle as <code>decoderComp.io.in.fire</code>. | The wrong path must not update VType; complex-decode state and output are killed; evidence [DecodeStage.scala:156-176](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/decode/DecodeStage.scala#L156-L176). | Flush/FSM checker; VType scoreboard |
+| <code>DECODE_ILLEGAL_PRIORITY</code> | Illegal/virtual-instruction exceptions may receive the wrong priority. | Combine illegal encodings, virtual instructions, and frontend exceptions. | <code>EX_II</code>/<code>EX_VI</code> apply only to the corresponding instruction and the oldest illegal instruction is selected as required by the code; evidence [DecodeStage.scala:131-139](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/decode/DecodeStage.scala#L131-L139). | Architectural exception scoreboard |
+| <code>C_MULTI_COMPLEX</code> | At most one complex instruction may be processed in a cycle. | Mark multiple lanes <code>isComplex</code> simultaneously. | <code>PriorityMux</code> accepts the oldest candidate selected by the code; other inputs are held or retried without loss. | Arbiter checker; oldest-wins coverage |
+| <code>DECODE_DEFAULT_SAFE</code> | Unknown encodings must not create ghost writeback or memory access. | Randomize reserved/illegal opcodes, funct fields, and extension combinations. | <code>DecodeUnitComp</code> emits safe defaults, exceptions, and functional-unit selections; evidence [DecodeUnitComp.scala:108-220](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/decode/DecodeUnitComp.scala#L108-L220). | Decode truth-table checker; illegal cross |
+| <code>PB_RECOVERY_THROUGHPUT</code> | Throughput may fail to recover after complex decode or backpressure is released. | Saturate a mixed simple/complex stream with periodic redirects and Rename blocking. | After recovery, no uop is duplicated or lost and sustained decode bandwidth returns to the level allowed by the implementation. | Performance checker; decode IPC and recovery-latency coverage |
+
+### General Evaluation Principles
+
+- During <code>valid && !ready</code>, the payload must remain stable; only <code>fire</code> may advance a pointer or state or perform one training update.
+- Check flush, redirect, and replay precedence according to the implementation. The wrong path must not commit, write a table, train a predictor, or expose an exception or data.
+- After a resource fills, verify that it can drain. Repeated conflicts, retries, or redirects must not create deadlock or livelock; check starvation of older low-priority requests.
+- Circular pointers must cover wraparound from the maximum value to zero. Table tests must include same-index/different-tag and same-cycle read/write conflicts.
+- At minimum, record occupancy, backpressure cycles, redirect recovery latency, retry count, and sustained throughput after recovery.

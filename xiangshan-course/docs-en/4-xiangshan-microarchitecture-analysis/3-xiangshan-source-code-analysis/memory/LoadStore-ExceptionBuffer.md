@@ -1,3 +1,4 @@
+<!--
 # 1. LoadStore-ExceptionBuffer：Kunminghu-v2 访存异常地址缓冲源码解析
 
 ## 1.1. 阅读范围
@@ -43,8 +44,59 @@
 | ROB 按序发现/提交异常 | ROB 在头部异常条件满足时产生 exception/flush [Rob.scala:555](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:555)、[Rob.scala:635](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:635) | ExceptionBuffer 不直接连接为 ROB exception valid 的来源 |
 | 访存异常地址用于 CSR 的 trap value | MemBlock 组装 LSQ 地址，送往后端；CSR 根据 memory exception 输入更新 trap-value [MemBlock.scala:1983](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1983)、[CSR.scala:1363](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:1363) | 地址与 cause 是两条相关但不同的路径 |
 | 课程中 LQ ExceptionBuffer 的介绍 | [14_LoadStore.md:2814](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:2814) | 仅作概念参照，不能代替本 commit 的端口和时序证据 |
+-->
 
+# 1. LoadStore-ExceptionBuffer: Kunminghu-v2 Memory Exception-Address Buffer Source Analysis
+
+## 1.1 Scope of Reading
+
+This document analyzes only the two Kunminghu-v2 memory-unit implementations that carry exception **addresses and associated address attributes**:
+
+| Name | Implementation location | Meaning in this document |
+| --- | --- | --- |
+| `LqExceptionBuffer` | [LoadExceptionBuffer.scala:35](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:35) | Address-candidate arbiter for load, vector-load feedback, and load-MMIO response exceptions |
+| `StoreExceptionBuffer` | [StoreQueue.scala:73](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:73) | Address-candidate arbiter for scalar/vector stores and store-MMIO response exceptions |
+
+"ExceptionBuffer" here does not generate an exception cause, decide ROB commit, or execute a trap. When multiple memory sources report exceptions simultaneously, it retains the oldest candidate not flushed by `redirect` and forwards its address metadata to LSQ/MemBlock. The exception cause continues with `uop.exceptionVec` into the ROB/CSR path.
+
+## 1.2 Source Baseline and Reproducibility
+
+| Item | Record |
+| --- | --- |
+| RTL checkout | `/home/yanyusong/xs-memory-env/XiangShan` |
+| Branch | `kunminghu-v2` |
+| Commit | `e12436c7cba86b195deec24981976d78bc263661` |
+| Commit subject | `fix(Store): prevent rdataptr from advancing out of order (#6353)` |
+| Checkout state | Existing `difftest` modifications and untracked `src/main/resources/aia/`; this document did not change the checkout |
+| Course/theory reference | [14_LoadStore.md:2814](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:2814), [13_ROB.md:14](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/2-xiangshan-design-document/13_ROB.md:14) |
+| XiangShan-Design-Doc | No independent checkout was found locally. A network copy is not substituted; all implementation conclusions use the RTL at this commit. |
+
+"Source-confirmed" in this document means a static conclusion from the commit above. An inference is labelled explicitly; course text and general microarchitectural knowledge are not presented as RTL behavior.
+
+## 2. Conclusion First
+
+1. Both modules are **single-slot oldest-candidate holders** made of `req_valid` plus one `req` register, not queues with depth, ready, full/empty state, or per-entry dequeue.
+2. They can observe multiple `Valid` candidates per cycle, but a recursive binary selector retains only the ROB-oldest one. Younger unselected candidates enter neither an extra slot nor a backpressure path.
+3. The retained item competes again with incoming candidates: an older new candidate replaces it; an older retained candidate remains; `redirect` invalidates wrong-path candidates.
+4. `exceptionAddr` has no independent `valid`. It is an address sideband synchronized by ROB exception timing; LSQWrapper uses one-cycle-delayed `isStore` to choose between load and store outputs.
+5. ExceptionBuffer does not encode cache set/way, physical-memory access, MMIO request state, or exception-cause priority. It emits `fullva`, extension/virtualization, and vector/guest-physical metadata; MemBlock/CSR construct the final tval-like address later.
+
+## 3. Mapping Theory to Source
+
+Course material describes the LQ exception-address buffer as a mechanism for precise-exception address retention, while the ROB chapter places exception processing at the in-order commit boundary. These are contextual goals; the table below gives relationships directly established by current RTL.
+
+| Theoretical concept | Current implementation evidence | Conclusion boundary |
+| --- | --- | --- |
+| Precise exceptions require the oldest exceptional instruction's address | Both implementations select oldest by `robIdx`, then `uopIdx` within the same ROB: [LoadExceptionBuffer.scala:67](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:67), [StoreQueue.scala:108](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:108) | Proves age ordering for address candidates, not that trap cause is decided here |
+| ROB discovers/commits exceptions in order | ROB produces exception/flush when head exception conditions hold: [Rob.scala:555](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:555), [Rob.scala:635](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:635) | ExceptionBuffer is not directly the source of ROB exception valid |
+| Memory exception address feeds CSR trap value | MemBlock assembles LSQ address for backend; CSR updates trap value from memory-exception input: [MemBlock.scala:1983](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1983), [CSR.scala:1363](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:1363) | Address and cause are related but distinct paths |
+| Course introduction to LQ ExceptionBuffer | [14_LoadStore.md:2814](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:2814) | Conceptual reference only; not a substitute for this commit's ports/timing evidence |
+
+<!--
 ## 4. 实现位置和实例关系
+-->
+
+## 4. Implementation Location and Instance Relationships
 
 ```mermaid
 flowchart LR
@@ -62,6 +114,7 @@ flowchart LR
   BE --> CSR[CSR trap-value handling]
 ```
 
+<!--
 `LoadQueue` 实例化自己的缓冲并把 `exceptionAddr` 直接连出 [LoadQueue.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:214)、[LoadQueue.scala:290](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:290)。`StoreQueue` 在其内部实例化 Store 版本并转接同名输出 [StoreQueue.scala:228](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:228)、[StoreQueue.scala:1451](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1451)。二者由 `LSQWrapper` 汇合。
 
 ## 5. 参数化端口和静态资源
@@ -100,37 +153,90 @@ val s1_valid = VecInit(io.req.map(x => x.valid))
 ```
 
 以上来自 [LoadExceptionBuffer.scala:38](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:38)。这意味着上游不能借 `ready=0` 得到“未接收”的反馈；下游也不是通过读取并弹出一项来消费它。地址有效的上下文来自 ROB 的异常/提交时序，而不是 `exceptionAddr` 本身携带的握手。
+-->
 
+`LoadQueue` instantiates its own buffer and wires out `exceptionAddr` directly: [LoadQueue.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:214), [LoadQueue.scala:290](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:290). `StoreQueue` instantiates the store version internally and forwards the identically named output: [StoreQueue.scala:228](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:228), [StoreQueue.scala:1451](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1451). `LSQWrapper` joins the two paths.
+
+## 5. Parameterized Ports and Static Resources
+
+The current defaults are `LoadPipelineWidth = 3`, `StorePipelineWidth = 2`, `VecLoadPipelineWidth = 2`, and `VecStorePipelineWidth = 2`: [Parameters.scala:214](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214). The resulting counts are **configuration-elaborated port counts**, not dynamically variable capacities.
+
+| Module | Formula | Current default | Port partitioning |
+| --- | --- | ---: | --- |
+| `LqExceptionBuffer` | `LoadPipelineWidth + VecLoadPipelineWidth + 1` | 6 | 3 scalar loads + 2 vector-load feedback ports + 1 load-MMIO non-data-error port |
+| `StoreExceptionBuffer` | `StorePipelineWidth * 2 + VecStorePipelineWidth + 1` | 7 | 2 scalar S1 non-AF ports + 2 delayed scalar S2 AF ports + 2 vector-store ports + 1 SoC non-data-error port |
+
+The Store port partition is documented directly in the source comment: [StoreQueue.scala:74](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:74). The final Load port is likewise identified by its class comment as the MMIO-bus non-data-error port: [LoadExceptionBuffer.scala:35](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:35).
+
+## 6. Interface Contract: Provider, Reason, and Destination
+
+| Buffer | From | Input condition | Buffer action | To | Consumer meaning |
+| --- | --- | --- | --- | --- | --- |
+| Load | `LoadQueue.io.ldu.ldin` | scalar `valid && !isvec` | Captures the bundle in s1, delays it to s2, and filters exception bits with `LduCfg` | `LoadQueue.io.exceptionAddr` | Lets LSQWrapper select an address during a load exception |
+| Load | Vector-load feedback | `valid && feedback(FLUSH)` | Retains `fullva`, `gpaddr`, `robIdx`, `uopIdx`, `vstart`, `vl`, and related fields | Same as above | Vector exception-address information |
+| Load | `LoadQueueUncache` | Uncache response writes back an exception | Enters the final port | Same as above | Address for load-MMIO `denied`/`corrupt`-class errors |
+| Store | Scalar `storeAddrIn` | A non-AF exception from S1 or a one-cycle-delayed S2 AF | Filters with `StaCfg`; delays s2 | `StoreQueue.io.exceptionAddr` | Lets LSQWrapper select an address during a store exception |
+| Store | Vector-store feedback | `valid && feedback(FLUSH)` | Retains the complete `LsPipelineBundle` | Same as above | Vector-store exception-address information |
+| Store | MMIO-store writeback | `io.mmioStout.fire`, then `StaCfg` filtering | Enters the final port | Same as above | Address for MMIO store access faults or hardware errors |
+
+The Load scalar, vector, and uncache connections appear at [LoadQueue.scala:263](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:263), [LoadQueue.scala:269](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:269), and [LoadQueue.scala:285](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:285). The Store scalar S1/S2 writeback, vector, and MMIO sources are at [StoreQueue.scala:507](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:507), [StoreQueue.scala:565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:565), [StoreQueue.scala:232](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:232), and [StoreQueue.scala:1098](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1098).
+
+### 6.1 It Is a Valid-Only Sideband Interface
+
+Both inputs are `Flipped(Valid(...))`; `ExceptionAddrIO` has no output `valid`, no `ready`, and no `fire`. Its minimal implementation skeleton is preserved in the commented original above:
+
+```scala
+val req_valid = RegInit(false.B)
+val req = Reg(new LqWriteBundle)
+val s1_req = VecInit(io.req.map(_.bits))
+val s1_valid = VecInit(io.req.map(x => x.valid))
+```
+
+This code is from [LoadExceptionBuffer.scala:38](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:38). Upstream cannot receive a "not accepted" indication through `ready=0`; downstream does not consume an item by reading and popping it. The context that makes the address meaningful comes from ROB exception/commit timing, rather than a handshake carried by `exceptionAddr` itself.
+
+<!--
 ## 7. 两条数据路径的阶段划分
 
 ### 7.1. Load 路径
+-->
+
+## 7. Pipeline Staging of the Two Data Paths
+
+### 7.1 Load Path
 
 ```mermaid
 flowchart LR
-  A[io.req: Valid LqWriteBundle] --> B[s1: 直接观察 bits/valid]
+  A[io.req: Valid LqWriteBundle] --> B[s1: directly observe bits/valid]
   B --> C[s2: RegEnable payload + RegNext valid]
-  C --> D{LduCfg 选择出的 exceptionVec 是否非零?}
-  D -- 否 --> X[丢弃此候选]
-  D -- 是 --> E[递归 selectOldest]
-  R[当前 req_valid/req] --> E
-  E --> F[req_valid/req 寄存器]
+  C --> D{Is exceptionVec selected by LduCfg nonzero?}
+  D -- No --> X[discard this candidate]
+  D -- Yes --> E[recursive selectOldest]
+  R[current req_valid/req] --> E
+  E --> F[req_valid/req register]
   F --> G[fullva, vaNeedExt, isHyper, vstart, vl, gpaddr]
 ```
 
+<!--
 Load 在 s2 对两个时点的 `redirect` 做过滤：保存的包既不能需要冲刷 `RegNext(io.redirect)`，也不能需要冲刷当前 `io.redirect` [LoadExceptionBuffer.scala:52](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:52)。然后仅当 `ExceptionNO.selectByFu(..., LduCfg)` 非零才成为候选 [LoadExceptionBuffer.scala:60](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:60)。
 
 ### 7.2. Store 路径
+-->
+
+Load filters `redirect` at two time points in s2: the saved bundle must require neither the delayed `RegNext(io.redirect)` flush nor the current `io.redirect` flush: [LoadExceptionBuffer.scala:52](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:52). It becomes a candidate only when `ExceptionNO.selectByFu(..., LduCfg)` is nonzero: [LoadExceptionBuffer.scala:60](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:60).
+
+### 7.2 Store Path
 
 ```mermaid
 flowchart LR
   A[io.storeAddrIn: Valid LsPipelineBundle] --> B[s1: valid + !needFlush + StaCfg exception filter]
   B --> C[s2: RegEnable payload + RegNext valid]
-  C --> D[递归 selectOldest]
-  R[当前 req_valid/req] --> D
-  D --> E[req_valid/req 寄存器]
-  E --> F[ExceptionAddrIO 地址元数据]
+  C --> D[recursive selectOldest]
+  R[current req_valid/req] --> D
+  D --> E[req_valid/req register]
+  E --> F[ExceptionAddrIO address metadata]
 ```
 
+<!--
 Store 在 s1 就把 `valid`、当前 `redirect` 和 `StaCfg` exception filter 合在一起 [StoreQueue.scala:91](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:91)，s2 再延迟一拍并复查当前 redirect [StoreQueue.scala:96](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:96)。这两个版本的 redirect 检查位置不完全对称；这是源码结构事实，本文不进一步臆测其设计动机。
 
 ## 8. “最老”怎样定义
@@ -398,3 +504,275 @@ assert(!(req_valid && req.uop.robIdx.needFlush(redirect)) || !reqValid)
 ## 23. 总结
 
 Kunminghu-v2 的 Load/Store ExceptionBuffer 是访存异常地址的**年龄仲裁与单槽保持点**。它通过 `robIdx`、`uopIdx` 在多条 load/store、向量和 MMIO 反馈中选取最老异常候选，以 redirect 去除错误路径，并将虚拟地址、扩展、虚拟化和向量元数据传到 LSQWrapper/MemBlock。它不承担异常 cause 优先级、ROB 提交、CSR 写入或缓存事务管理。理解这一职责边界，才能在出现 trap 地址错误时同时检查上游异常产生、缓冲年龄选择、ROB 的 load/store 选择和 MemBlock/CSR 的地址格式化，而不会把问题错误归结为一个传统 FIFO 队列。
+-->
+
+Store combines `valid`, the current `redirect`, and the `StaCfg` exception filter in s1: [StoreQueue.scala:91](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:91). It then delays the result by one cycle in s2 and checks the current redirect again: [StoreQueue.scala:96](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:96). The placement of redirect checks is not fully symmetric between the Load and Store implementations; that is a source-structure fact, and no design motivation is inferred here.
+
+## 8. How "Oldest" Is Defined
+
+The two implementations use isomorphic binary comparisons. When both inputs are valid, `isAfter(a.robIdx, b.robIdx)` selects `b`; when the ROB pointers match, the smaller `uopIdx` wins.
+
+```scala
+val oldest = Mux(valid(0) && valid(1),
+  Mux(isAfter(bits(0).uop.robIdx, bits(1).uop.robIdx) ||
+    (bits(0).uop.robIdx === bits(1).uop.robIdx &&
+      bits(0).uop.uopIdx > bits(1).uop.uopIdx), res(1), res(0)),
+  Mux(valid(0) && !valid(1), res(0), res(1)))
+```
+
+The code is at [LoadExceptionBuffer.scala:67](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:67). `RobPtr` is a circular pointer carrying a wrap flag; its comparison relation is defined by [CircularQueuePtr.scala:65](/home/yanyusong/xs-memory-env/XiangShan/utility/src/main/scala/utility/CircularQueuePtr.scala:65). `robIdx` must therefore not be treated as an ordinary non-wrapping integer.
+
+For six or seven ports, `selectOldest` recursively divides the candidates into left and right halves, derives a local oldest candidate in each half, and then merges the two: [LoadExceptionBuffer.scala:82](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:82). This is a combinational arbitration tree, not a multi-entry queue sorted by age.
+
+## 9. Single-Slot Retention State and Replacement Rules
+
+Both buffers contain only the following state:
+
+| State element | Reset value | Write condition | Invalidation condition | Externally visible use |
+| --- | --- | --- | --- | --- |
+| `req_valid` | `false` | The `selectOldest` result is valid | The current `req.uop.robIdx.needFlush(io.redirect)` is true and no more suitable candidate exists | Internal selection and performance counting only |
+| `req` | Not reset | `reqSel` writes it every cycle | Its bits may be treated as meaningless after `req_valid` deasserts | Fields such as `fullva` remain connected to `exceptionAddr` |
+
+The essential operation appends the currently retained item to the new s2 candidates and arbitrates again:
+
+```scala
+val reqValid = req_valid && !req.uop.robIdx.needFlush(io.redirect)
+val reqSel = selectOldest(s2_enqueue :+ reqValid, s2_req :+ req)
+req_valid := reqSel._1(0)
+req := reqSel._2(0)
+```
+
+See [LoadExceptionBuffer.scala:89](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:89) and [StoreQueue.scala:130](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:130). This gives four directly verifiable outcomes:
+
+| New s2 candidates versus retained item | Result |
+| --- | --- |
+| No new candidate; retained item is not flushed | Retain the current item |
+| A new item is older | The new item replaces the current item |
+| The current item is older | Continue retaining the current item |
+| The current item is flushed by redirect and no valid new item exists | `req_valid` becomes 0 |
+
+An important limitation is that younger same-cycle candidates are not stored after they lose selection. Since this module has no backpressure, its behavior can only be described as retaining the oldest candidate for a precise exception address, not as accepting and queueing all exceptions.
+
+## 10. Division of Responsibility: Exception Filtering, Cause, and Address
+
+### 10.1 ExceptionBuffer Only Filters FU-Visible Exceptions
+
+`ExceptionNO.selectByFu(x.uop.exceptionVec, LduCfg/StaCfg).asUInt.orR` uses the OR of exception bits visible to the configured functional unit as the candidate condition: [package.scala:942](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/package.scala:942). It neither chooses a final cause among multiple exception bits nor creates a new exception bit.
+
+LoadUnit and StoreUnit construct and carry `uop.exceptionVec` through their execution, TLB, cache, or writeback paths. For example, the load LSQ writeback bundle comes from the s3 output: [LoadUnit.scala:1582](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1582); store address exceptions enter `storeAddrIn` from S1/S2: [StoreQueue.scala:507](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:507).
+
+### 10.2 The Final Cause Remains a ROB/CSR Responsibility
+
+The ROB maintains exception writeback and head-exception detection: [Rob.scala:140](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:140), [Rob.scala:555](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:555). CSR selects the ordinary cause from the exception set using `ExceptionNO.priorities.foldRight`; the priority table is defined in [package.scala:890](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/package.scala:890), and the selection is at [CSR.scala:1296](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:1296).
+
+The following claims are therefore incorrect:
+
+* "ExceptionBuffer decides priority between a page fault and an access fault."
+* "ExceptionBuffer drives ROB exception valid."
+* "ExceptionBuffer is cleared and dequeued when a trap occurs."
+
+It retains the address payload of the correctly aged candidate; ROB and CSR handle the architectural exception with separate state and timing.
+
+## 11. Output Fields and Address Semantics
+
+Both modules directly drive fields from the retained bundle:
+
+| `ExceptionAddrIO` field | Source | Later use |
+| --- | --- | --- |
+| `vaddr` | `req.fullva` | Exception virtual-address input to MemBlock |
+| `vaNeedExt` | `req.vaNeedExt` | Indicates whether extension follows the current address-translation mode |
+| `isHyper` | `req.isHyper` | Helps select virtualization/Hyper behavior |
+| `vstart`, `vl` | `req.uop.vpu` | Additional vector-exception context |
+| `gpaddr` | `req.gpaddr` | Guest-physical-address sideband value |
+| `isForVSnonLeafPTE` | Request bundle | Sideband value for special VS non-leaf PTE handling |
+
+The direct connections are at [LoadExceptionBuffer.scala:95](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:95) and [StoreQueue.scala:136](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:136). The output contains neither a PC nor a physical cache location. Although the retained complete bundle includes `uop`, only the fields listed above are explicitly exported downstream.
+
+## 12. LSQWrapper and MemBlock: From Load/Store Address to Final Exception Address
+
+`LSQWrapper` uses `RegNext(io.exceptionAddr.isStore)` to select the LoadQueue or StoreQueue output:
+
+```scala
+io.exceptionAddr.vaddr := Mux(RegNext(io.exceptionAddr.isStore),
+  storeQueue.io.exceptionAddr.vaddr, loadQueue.io.exceptionAddr.vaddr)
+```
+
+The complete field selection is at [LSQWrapper.scala:251](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:251). `isStore` enters LSQ from MemBlock's `ooo_to_mem.isStoreException`: [MemBlock.scala:1861](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1861); that value is derived from the backend ROB commit type: [Backend.scala:838](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/Backend.scala:838).
+
+The LSQWrapper source describes the timing as s0 commit, s1 exception find, s2 exception triggered, s3 pointer and new-address update, and use of the address on the cycle after triggering: [LSQWrapper.scala:245](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:245). This is a comment about the overall ROB/LSQ address-use protocol, not proof that ExceptionBuffer itself has a fixed s0-to-s3 latency.
+
+MemBlock prioritizes address sources as atomics, misalignment overwrite, vSegment, and finally `lsq.io.exceptionAddr.vaddr`: [MemBlock.scala:1904](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1904). It then uses `GenExceptionVa` with Bare/Sv39/Sv48/Sv39x4/Sv48x4 and `vaNeedExt` to construct the address, registers it, and forwards it through `io.mem_to_ooo.lsqio.vaddr`: [MemBlock.scala:1925](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1925), [MemBlock.scala:1983](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1983).
+
+## 13. Timing, Throughput, and Observable Waveforms
+
+### 13.1 Timing Established by the Source
+
+* The input payload crosses a register boundary through `RegEnable`, while valid crosses through `RegNext`; it therefore reaches an s2 candidate at least one register boundary after observation.
+* The s2 candidates and retained `req` arbitrate combinationally, and the result updates the `req_valid`/`req` registers.
+* The address output is driven directly from `req`, but Load/Store selection and MemBlock address generation have their own registers and ROB timing.
+* The complete architectural latency of a memory exception is not a constant this module can establish alone: it also depends on TLB/cache/MMIO response, ROB head arrival, redirect, and CSR state.
+
+### 13.2 Throughput Boundary
+
+Under the default configuration, up to six Load or seven Store sources can be observed and enter the combinational arbitration in the same cycle. **Retention capacity is still one candidate.** The following "1" is the final-selection capacity of single-slot state, not normal load/store datapath issue throughput.
+
+| Metric | Load | Store |
+| --- | ---: | ---: |
+| Simultaneously observed ports in the current configuration | 6 | 7 |
+| Exception-candidate register slots | 1 | 1 |
+| `ready` backpressure channels | 0 | 0 |
+| Candidates retained in one cycle | At most 1 | At most 1 |
+
+### 13.3 Valid-Only Timing Sketch
+
+The following expresses the relationship rather than an FST-measured cycle trace. `req_valid` rises only after the s2 candidate-arbitration result is written into the register; there is no `ready` waveform.
+
+```wavedrom
+{ "signal": [
+  { "name": "clk",             "wave": "p...." },
+  { "name": "io.req[0].valid", "wave": "01000" },
+  { "name": "s2_valid[0]",     "wave": "00100" },
+  { "name": "s2_enqueue[0]",   "wave": "00100" },
+  { "name": "req_valid",       "wave": "00010" },
+  { "name": "redirect.valid",  "wave": "00000" }
+], "config": { "hscale": 1 } }
+```
+
+When `redirect.valid` causes `robIdx.needFlush` to be true for the candidate, either the s2 candidate or the current retained item becomes invalid. A high `req_valid` in the sketch must not be read as an independent "address consumed" handshake.
+
+## 14. Redirect, Wrong Paths, and State Safety
+
+`RobPtr.needFlush` is defined from the redirect ROB pointer and flush condition: [RobBundles.scala:204](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/RobBundles.scala:204). Before a retained item enters the next arbitration round, both ExceptionBuffers compute:
+
+```scala
+val reqValid = req_valid && !req.uop.robIdx.needFlush(io.redirect)
+```
+
+A retained candidate on a flushed path therefore cannot remain an address source. The Load version also checks the delayed redirect in s2; the Store version filters at its own s1 and s2 check points. `req` itself is not reset, but that is not an uninitialized-visibility issue because `req_valid` resets to 0 and the outer ROB exception protocol controls whether the address is used.
+
+The source does not express trap consumption as `clear` or `deq`. Its natural lifecycle is retain, retain/replace by an older candidate, then redirect invalidation, rather than a FIFO dequeue lifecycle.
+
+## 15. Page, Cache-Line, and MMIO Boundaries
+
+### 15.1 Cross-Page and Misaligned Accesses
+
+ExceptionBuffer does not split accesses, perform a second-page translation, or assemble a PPN. It only retains fields such as `fullva` already produced by the execution path. MemBlock does have a `misalignBufExceptionOverwrite` priority input: [MemBlock.scala:1871](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1871), but the two MisalignBuffers in this commit hardwire `overwriteExpBuf.valid` to `false.B`: [LoadMisalignBuffer.scala:641](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:641), [StoreMisalignBuffer.scala:669](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreMisalignBuffer.scala:669).
+
+Thus, "a misaligned cross-page address overwrites ExceptionBuffer" is a discoverable potential branch in this version, but its effective output is disabled and must not be described as active behavior. Effective LSQ address candidates still come from the Load/Store ExceptionBuffers unless higher-priority atomic or vSegment sources take effect.
+
+### 15.2 Cross-Cache-Line Accesses
+
+This module has no cache-line offset, set, way, bank, tag comparison, or physical-address request port. Cross-line access, cache miss/replay, and split handling belong to LoadUnit, StoreUnit, MisalignBuffer, and the DCache/Uncache path; they must not be attributed to ExceptionBuffer. It retains only the virtual-address metadata eventually needed for reporting.
+
+### 15.3 MMIO and Non-Data Errors
+
+The final Load port comes from `LoadQueueUncache.io.exception`: [LoadQueue.scala:285](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:285). `LoadQueueUncache` is itself a stateful request/response entry; it captures `denied`/`corrupt` in the response stage and forms an exception vector at writeback: [LoadQueueUncache.scala:114](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:114), [LoadQueueUncache.scala:205](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:205). That responsibility differs from the single-slot ExceptionBuffer.
+
+The Store MMIO path sets store access fault on response `denied`, and hardware error on `corrupt && !denied`: [StoreQueue.scala:873](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:873). On `mmioStout.fire`, it sends the result to the final ExceptionBuffer port: [StoreQueue.scala:1056](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1056), [StoreQueue.scala:1098](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:1098).
+
+## 16. CSR, Privilege, and Virtualization Information
+
+The fields `vaNeedExt`, `isHyper`, `gpaddr`, and `isForVSnonLeafPTE` show that the buffer is not a simple XLEN address register. MemBlock uses `satp`, `vsatp`, `hgatp`, and permission/virtualization state from CSR/TLB to determine how to extend `fullva`: [MemBlock.scala:1925](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1925).
+
+On the CSR side, memory-exception address and GPA sideband inputs are received at [CSR.scala:108](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:108). Trap handling then updates `mtval`, `stval`, `vstval`, and potentially `mtval2`/`htval` according to exception and privilege state: [CSR.scala:1363](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:1363). Therefore:
+
+* The buffer's `vaddr` is not a final formatted CSR trap value.
+* The buffer neither reads CSR state nor decides which trap CSR to write.
+* `isHyper` and GPA preserve virtualization semantics for downstream logic; they do not make this module perform two-stage translation.
+
+## 17. Debugging, Performance Counters, and Difftest Coverage
+
+The Load version has a performance event, `XSPerfAccumulate("exception", !RegNext(req_valid) && req_valid)`: [LoadExceptionBuffer.scala:103](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:103). It counts a rising edge of `req_valid`; it cannot simply be interpreted as a count of every load exception in the system or matched one-to-one with architectural traps. No symmetric identically named counter appears in the Store class scope.
+
+| Observation point | Directly covers ExceptionBuffer? | Purpose |
+| --- | --- | --- |
+| `LqExceptionBuffer` perf `exception` | Partially, and Load only | Observes creation of a newly retained address candidate |
+| ROB `DiffInstrCommit` | No | Architectural commit sequence: [Rob.scala:1543](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:1543) |
+| ROB `DiffLoadEvent` | No | Committed load event, not internal buffer state: [Rob.scala:1585](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:1585) |
+| ROB `DiffTrapEvent` | No | Architecturally visible trap event: [Rob.scala:1604](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:1604) |
+| CSR `DiffArchEvent` | No | Architectural event when CSR exposes an exception: [CSR.scala:1565](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:1565) |
+
+The current source has no reference-model comparison point named "ExceptionBuffer difftest event." During debugging, observe microarchitectural `req_valid`/`req.robIdx`/`fullva` separately from commit-level ROB exception and CSR/Difftest trap. The former can appear on a wrong path and then be flushed; only the latter is architecturally visible.
+
+## 18. End-to-End Sequence
+
+```mermaid
+sequenceDiagram
+  participant EX as LoadUnit/StoreUnit
+  participant Q as LoadQueue/StoreQueue
+  participant EB as ExceptionBuffer
+  participant W as LSQWrapper
+  participant M as MemBlock
+  participant R as ROB
+  participant C as CSR
+
+  EX->>Q: Valid bundle, uop.exceptionVec, fullva
+  Q->>EB: source-port candidate
+  EB->>EB: s2 filtering, oldest arbitration, retention
+  R->>W: exception context, isStore
+  EB->>W: load/store exception-address metadata
+  W->>M: selected address metadata
+  M->>R: formatted vaddr/gpaddr sideband
+  R->>C: exception cause and memory-address context
+```
+
+`R -> W` and `EB -> W` are cooperative relationships, not an ordinary request/response pair: the ROB supplies the context of when and what kind of memory exception is being handled, while ExceptionBuffer supplies the address of the corresponding age-selected item. If a redirect flushes the candidate before use, EB's internal filtering prevents it from remaining retained.
+
+## 19. Scenario Matrix
+
+| Scenario | Input/condition | ExceptionBuffer behavior | Downstream point to observe |
+| --- | --- | --- | --- |
+| Ordinary non-exception load/store | `Valid`, but FU-selected exceptionVec is 0 | Does not become an s2 candidate | No new `req_valid` rising edge |
+| Multiple source exceptions in one cycle | Multiple s2 ports valid | Binary tree retains only the oldest `robIdx/uopIdx` | Relationship of `req.robIdx/uopIdx` to input ages |
+| New candidate is younger than current | Both valid; retained item is older | Retain current item | `req` must not be overwritten by younger candidate |
+| New candidate is older than current | Both valid; new item is older | Replace with new item | `req.fullva` matches new item |
+| Wrong-path candidate | `needFlush(redirect)` | Invalidated at the applicable s1/s2/re-arbitration check point | `req_valid` must not continue representing that ROB item |
+| Scalar load late error | LoadUnit writes `ldin` | LQ scalar port filters with `LduCfg` | `LqExceptionBuffer.req` |
+| Vector load/store | Feedback is `FLUSH` | Uses vector-specific port and carries `vstart/vl` | `exceptionAddr.vstart/vl` |
+| Load MMIO error | Uncache response creates exception | Final Load port participates in age arbitration | `LoadQueueUncache` state and LQ `req` |
+| Store MMIO denied/corrupt | `mmioStout.fire` and cause is visible to `StaCfg` | Final Store port participates in arbitration | StoreQueue writeback and `req.fullva` |
+| Misaligned cross-page overwrite | MisalignBuffer computes a candidate | Current version has `overwriteExpBuf.valid=false`; no effective overwrite | Confirm that valid remains 0 |
+
+## 20. Source Checks and Suggested Assertions
+
+The following checks suit simulation debugging. The first two directly correspond to current RTL's combinational selection:
+
+```scala
+// Pseudo-assertion: with two same-cycle valid exception candidates,
+// the output must not select the younger one.
+assert(!(candA && candB && older(A, B)) || selected.robIdx === A.robIdx)
+
+// Pseudo-assertion: a retained item flushed by redirect cannot remain
+// as reqValid in the next arbitration round.
+assert(!(req_valid && req.uop.robIdx.needFlush(redirect)) || !reqValid)
+
+// Waveform focus: show s2_enqueue[*], req_valid, req.robIdx,
+// req.uopIdx, and redirect together.
+```
+
+Real Chisel assertions should use the project's existing pointer-comparison helpers rather than converting `robIdx` to an ordinary integer. To diagnose an address error, also display `fullva`, `vaNeedExt`, `isHyper`, `gpaddr`, and external `isStoreException`; `exceptionVec` alone cannot determine which address side LSQ selected.
+
+## 21. Traceability to Design Documentation and Open Questions
+
+| Topic | Design-document status | Source location | Treatment here |
+| --- | --- | --- | --- |
+| Specific ExceptionBuffer ports, stages, and arbitration | No independent Design-Doc consulted; none exists locally | `LoadExceptionBuffer.scala`, `StoreQueue.scala` | Conclusions use RTL only |
+| Conceptual background for precise exceptions | Course material used | `14_LoadStore.md`, `13_ROB.md` | Theory context only; does not override RTL detail |
+| Load/store address-selection timing | No separate design document found | `LSQWrapper.scala:245` | Uses source comment and states its scope |
+| Cross-page overwrite | No separate design document found | MisalignBuffer `valid := false.B` | Marked as an inactive branch in this version |
+
+ExceptionBuffer source alone cannot answer which exact cycle a concrete program triggers a particular TLB/cache exception, when the ROB promotes it to an architectural trap, or whether a configuration changes the `LduCfg`/`StaCfg` exception set. Those questions require the concrete configuration, waveforms, and upstream execution-unit state; they cannot be inferred from this single-slot address arbiter.
+
+## 22. Verification Notes
+
+1. Track each exception by `robIdx + uopIdx`, not PC alone; one PC can have multiple speculative instances.
+2. Do not infer `fire` from `Valid` alone: this interface has no `ready`. Record input valid, s2 valid, `s2_enqueue`, `req_valid`, and redirect together.
+3. For simultaneous-exception cases, verify that the winner is truly oldest; do not expect a FIFO queue or backpressure for younger losers.
+4. For redirect cases, verify that both the retained item and delayed s2 item cannot leak into a later exception address.
+5. For vector cases, verify `vstart/vl`; for virtualization cases, check `vaNeedExt/isHyper/gpaddr/isForVSnonLeafPTE` together with CSR outputs.
+6. For MMIO errors, follow the path from the Uncache/StoreQueue response to the final port; do not assume the bus error has already been formed correctly just because it appears at the ExceptionBuffer input.
+7. For misaligned cross-page waveforms, first confirm the hardwired zero on `overwriteExpBuf.valid`; otherwise an inactive implementation branch may be misreported as a real address overwrite.
+
+## 23. Summary
+
+Kunminghu-v2's Load/Store ExceptionBuffer is an **age arbiter and single-slot retention point** for memory-exception addresses. It uses `robIdx` and `uopIdx` to select the oldest exceptional candidate among multiple load/store, vector, and MMIO feedback paths, removes wrong-path items through redirect, and forwards virtual-address, extension, virtualization, and vector metadata to LSQWrapper/MemBlock. It does not own exception-cause priority, ROB commit, CSR writes, or cache-transaction management. This ownership boundary is essential when diagnosing a trap-address error: inspect upstream exception production, buffer age selection, ROB load/store selection, and MemBlock/CSR address formatting together rather than misclassifying the buffer as a conventional FIFO queue.

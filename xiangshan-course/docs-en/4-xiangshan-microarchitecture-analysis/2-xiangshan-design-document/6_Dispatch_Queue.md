@@ -1,3 +1,4 @@
+<!--
 # 6. Dispatch Queue
 
 :::info
@@ -139,7 +140,7 @@ val compareMatrix = Wire(Vec(iqNum, Vec(iqNum, Bool())))
 for (i <- 0 until iqNum) {
   for (j <- 0 until iqNum) {
     if (i == j) compareMatrix(i)(j) := false.B
-    else if (i < j) compareMatrix(i)(j) := 
+    else if (i < j) compareMatrix(i)(j) :=
       issueQueueCountAddEnq(exuidx(i)) < issueQueueCountAddEnq(exuidx(j))
     else compareMatrix(i)(j) := !compareMatrix(j)(i)
   }
@@ -155,7 +156,7 @@ for (i <- 0 until iqNum) {
 ```scala
 // Dispatch.scala
 // i=0 → 最空, i=iqNum-1 → 最满
-IQSortWire(i) := compareMatrix.map(x => 
+IQSortWire(i) := compareMatrix.map(x =>
   PopCount(x) === (iqNum - 1 - i).U)
 ```
 
@@ -213,7 +214,7 @@ uopSelIQ.zipWithIndex.map{ case (u, i) => {
 从源码（Dispatch.scala）可以看到完整的 ready 信号：
 
 ```scala
-fromRenameUpdate(i).valid := fromRename(i).valid 
+fromRenameUpdate(i).valid := fromRename(i).valid
 && allowDispatch(i)        // LSQ 有空间
 && !uopBlockByIQ(i)        // 目标 IQ 有空闲入队口
 && thisCanActualOut(i)     // 前方无阻塞、ROB 可接收
@@ -222,9 +223,9 @@ fromRenameUpdate(i).valid := fromRename(i).valid
 && !fromRename(i).bits.hasException   // 无异常（异常直接走ROB）
 && !fromRenameUpdate(i).bits.singleStep
 
-fromRename(i).ready := allowDispatch(i) 
-&& !uopBlockByIQ(i) 
-&& thisCanActualOut(i) 
+fromRename(i).ready := allowDispatch(i)
+&& !uopBlockByIQ(i)
+&& thisCanActualOut(i)
 && lsqCanAccept
 ```
 
@@ -254,7 +255,7 @@ val isVStoreVec = VecInit(fromRename.map(x => x.valid && FuType.isVStore(x.bits.
 
 ```scala
 // Dispatch.scala
-val conserveFlows = VecInit(isVlsType.zip(isLSType).zipWithIndex.map { 
+val conserveFlows = VecInit(isVlsType.zip(isLSType).zipWithIndex.map {
   case ((isVlsTypeItem, isLSTypeItem), index) =>
     Mux(
       isVlsTypeItem,
@@ -300,7 +301,7 @@ val lsStructBlockVec  = VecInit(...)  // 三者任一超限则阻塞
 val uopBlockMatrix = Wire(Vec(renameWidth, Vec(issueQueueNum, Bool())))
 val uopBlockMatrixForAssign = allIssueParams.zipWithIndex.map { case (issue, iqidx) => {
   // uopSelIQMatrix(_)(iqidx) = 分配到该 IQ 的 uop 累计数量
-  val result = uopSelIQMatrix.map(_(iqidx)).map(x => 
+  val result = uopSelIQMatrix.map(_(iqidx)).map(x =>
     Mux(io.toIssueQueues(temp).ready,
       x > issue.numEnq.U,   // IQ ready：超过入队口数才阻塞
       x.orR                   // IQ not ready：有任何uop要入队就阻塞
@@ -309,7 +310,7 @@ val uopBlockMatrixForAssign = allIssueParams.zipWithIndex.map { case (issue, iqi
   temp = temp + issue.numEnq
   result
 }}.transpose
- 
+
 uopBlockMatrix.zip(uopBlockMatrixForAssign).map(x => x._1 := VecInit(x._2))
 uopBlockByIQ := uopBlockMatrix.map(_.reduce(_ || _))  // 任一IQ阻塞则整体阻塞
 ```
@@ -336,7 +337,7 @@ uopBlockByIQ := uopBlockMatrix.map(_.reduce(_ || _))  // 任一IQ阻塞则整体
 ### 6.4.1 thisCanActualOut 三要素
 
 ```scala
-thisCanActualOut(i) := 
+thisCanActualOut(i) :=
   !blockedByWaitForward(i)    // ① 没有被 waitForward 阻塞
   && notBlockedByPrevious(i)  // ② 没有被前方的 blockBackward 阻塞
   && io.enqRob.canAccept      // ③ ROB 有空间
@@ -351,8 +352,8 @@ thisCanActualOut(i) :=
 ```scala
 // Dispatch.scala
 blockedByWaitForward(0) := !io.enqRob.isEmpty && isWaitForward(0)
-blockedByWaitForward(i) := blockedByWaitForward(i-1) 
-  || (!io.enqRob.isEmpty || Cat(fromRename.take(i).map(_.valid)).orR) 
+blockedByWaitForward(i) := blockedByWaitForward(i-1)
+  || (!io.enqRob.isEmpty || Cat(fromRename.take(i).map(_.valid)).orR)
   && isWaitForward(i)
 ```
 
@@ -370,8 +371,8 @@ blockedByWaitForward(i) := blockedByWaitForward(i-1)
 ```scala
 // Dispatch.scala
 val nextCanOut = VecInit((0 until RenameWidth).map(i => !isBlockBackward(i)))
-val notBlockedByPrevious = VecInit((0 until RenameWidth).map(i => 
-  if (i == 0) true.B  
+val notBlockedByPrevious = VecInit((0 until RenameWidth).map(i =>
+  if (i == 0) true.B
   else Cat((0 until i).map(j => nextCanOut(j))).andR  // 所有前序都不阻塞
 ))
 ```
@@ -422,24 +423,24 @@ IQ 排序是时序最紧张的路径之一。如果每周期都重新排序所�
 val IQSortUpdate = Wire(Vec(iqNum, Vec(iqNum, Bool())))
 val updateInterval = 3  // 每段最多处理 3 个 IQ 的排序
 val segmentNum = (iqNum - 1) / updateInterval + 1
- 
+
 for (segIdx <- 0 until segmentNum) {
   val realNum = Seq(iqNum - segIdx * updateInterval, updateInterval).min
   val startNum = segIdx * updateInterval
   val endNum   = startNum + realNum
- 
+
   // 只在当前段内做局部比较（基于上一拍的 IQSort 排序结果）
   val compareMatrixNew = Wire(Vec(realNum, Vec(realNum, Bool())))
   for (i <- 0 until realNum) {
     for (j <- 0 until realNum) {
       if (i == j) compareMatrixNew(i)(j) := false.B
-      else if (i < j) compareMatrixNew(i)(j) := 
+      else if (i < j) compareMatrixNew(i)(j) :=
         IQSortValidCnt(startNum+i) + IQSortValidCntAddEnq(startNum+i) <
         IQSortValidCnt(startNum+j) + IQSortValidCntAddEnq(startNum+j)
       else compareMatrixNew(i)(j) := !compareMatrixNew(j)(i)
     }
   }
- 
+
   // 段内重新排序，映射回原始 IQ 索引
   val newIQSort = Wire(Vec(realNum, Vec(realNum, Bool())))
   for (i <- 0 until realNum) {
@@ -455,9 +456,9 @@ for (segIdx <- 0 until segmentNum) {
 
 ```scala
 // Dispatch.scala
-val minIQSel_ith = (if (enableDispatchIQBalanceOpt) 
+val minIQSel_ith = (if (enableDispatchIQBalanceOpt)
   IQSortUpdate(i % iqNum)   // 优化开启：用分段更新结果
-else 
+else
   IQSort(i % iqNum)          // 优化关闭：用上一拍寄存器值
 )
 ```
@@ -473,17 +474,17 @@ IQ 的有效条目数从 Issue Queue 传到 Dispatch 需要经过 RegNext，存�
 ```scala
 // Dispatch.scala
 val needAppendIQValidNumVec = Wire(Vec(exuNum, UInt(RenameWidth.U.getWidth.W)))
- 
+
 allExuParams.zipWithIndex.map { case (exuParams, iqDeqIdx) => {
   val iqidx = allIssueParams.indexWhere(_.exuBlockParams.contains(exuParams))
   // 本周期被选中要入该 IQ 的 uop 数
-  val selIQNum = PopCount(uopSelIQ.zipWithIndex.map { case (u, i) => 
+  val selIQNum = PopCount(uopSelIQ.zipWithIndex.map { case (u, i) =>
     u(iqidx) && FuType.FuTypeOrR(fromRename(i).bits.fuType, exuParams.fuConfigs.map(_.fuType))
   })
   // 开启优化时才计入
   needAppendIQValidNumVec(iqDeqIdx) := (if (enableDispatchIQBalanceOpt) selIQNum else 0.U)
 }}
- 
+
 // IQ 计数 = 上拍的实际计数 + 本拍预估入队数
 val issueQueueCount = VecInit(io.IQValidNumVec.zip(needAppendIQValidNumVec)
   .map(x => RegNext(x._1 + x._2)))
@@ -537,5 +538,248 @@ XSPerfAccumulate("stall_cycle_blockbk",...)                    // blockBackward 
 * **Timing Pressure**：通过分段排序更新（updateInterval=3，每段最多 3 个 IQ 同时更新，每周期所有段并行）和入队预估补偿（needAppendIQValidNumVec 提前计入本拍入队数 + maxIQSize 预留 +6 余量），在精度与时序间取得平衡
 
 
-> 更新: 2026-07-01 15:05:53  
+> 更新: 2026-07-01 15:05:53
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/veqhs3fuui2mwdxq>
+-->
+
+# 6. Dispatch Queue
+
+:::info
+## Learning Objectives
+
+* Understand Dispatch's role and overall structure in the pipeline.
+* Identify the admission conditions for a uop entering an Issue Queue.
+* Follow the complete dispatch-decision logic.
+* Recognize the main timing-pressure sources and their optimizations.
+
+:::
+
+## 6.1 Overall Position: What Is Dispatch?
+
+Dispatch is the traffic controller between Rename and the backend scheduling structures:
+
+* **Decode** unpacks an architectural instruction into micro-operations (uops).
+* **Rename** assigns physical-register numbers to operands.
+* **Dispatch** sends each renamed uop to the correct Issue Queue (IQ) according to its FU type and currently available resources.
+
+It answers three questions.
+
+### 1. May the uop proceed?
+
+The uop needs source/readiness information and capacity in the downstream structures:
+
+```scala
+val canDispatch = lsqCanAccept && !uopBlockByIQ(i) && thisCanActualOut(i)
+```
+
+### 2. Which queue should receive it?
+
+`fuType` routes a uop to an IQ that contains a compatible execution unit:
+
+```scala
+val targetIQ = Mux(uopSelIQSingle, singleIQSel, minIQSelAll)
+```
+
+### 3. When may it proceed?
+
+Backpressure from ROB, LSQ, IQs, and older uops controls the actual output handshake:
+
+```scala
+fromRename(i).ready := thisCanActualOut(i) && !uopBlockByIQ(i)
+```
+
+### Dispatch I/O
+
+| **Direction** | **I/O** | **Meaning** |
+| --- | --- | --- |
+| Upstream from Rename | `fromRename` | Receives renamed uops |
+| Downstream to IQs | `toIssueQueues` | Sends uops to Issue Queues |
+| Downstream to ROB | `enqRob` | Allocates ROB entries |
+| Downstream to LSQ | `lsqEnqIO` | Enqueues memory instructions in LSQ |
+| Writeback feedback | `wbPregsInt/Fp/Vec/V0/Vl` | Clears BusyTable state |
+| Wakeup feedback | `wakeUpInt/Fp/Vec` | Performs fast BusyTable wakeup |
+| IQ-capacity feedback | `IQValidNumVec` | Reports remaining/used IQ capacity |
+
+## 6.2 Dispatch Structure
+
+### 6.2.1 High-Level Data Flow
+
+```plain
+Rename uops
+    ↓
+BusyTable / RegCache tag lookup / LSQ capacity checks
+    ↓
+FU-type routing and IQ load balancing
+    ↓
+IQ enqueue + ROB enqueue + LSQ enqueue
+```
+
+### 6.2.2 Main Submodules
+
+| **Module** | **Responsibility** |
+| --- | --- |
+| BusyTable x4 plus VlBusyTable | Track busy/ready state for integer, FP, vector, V0, and VL physical registers |
+| RegCacheTagTable | Tracks integer RegCache tags to accelerate source selection |
+| LSQ enqueue control | Admits memory uops to Load/Store Queue resources |
+| IQ load balancer | Chooses the least loaded compatible IQ for replicated FUs |
+
+### 6.2.3 IQ Selection and Load Balancing
+
+For a singleton FU type such as division, `uopSelIQSingle` chooses the one compatible IQ. For a replicated type such as ALU, `minIQSelAll` chooses a least-loaded compatible IQ and rotates ties to avoid concentrating traffic:
+
+```scala
+val minIQSelAll = PriorityEncoderOH(minIQValidNum)
+val uopSelIQ = Mux(uopSelIQSingle, uopSelIQSingleOH, minIQSelAll)
+```
+
+:::warning
+Load balancing is not just capacity selection. It protects issue bandwidth by spreading independent uops across replicated execution paths.
+
+:::
+
+## 6.3 Dispatch Enqueue Conditions
+
+### 6.3.1 Overview
+
+An incoming uop must clear all three admission gates:
+
+```scala
+val allowEnqueue = allowDispatch(i) && lsqCanAccept &&
+  !uopBlockByIQ(i) && thisCanActualOut(i)
+```
+
+| **Gate** | **Condition** | **Meaning** |
+| --- | --- | --- |
+| LSQ capacity | `allowDispatch(i)` and `lsqCanAccept` | LSQ has enough capacity for this memory uop |
+| IQ capacity | `!uopBlockByIQ(i)` | The selected IQ has an enqueue port/capacity |
+| Downstream flow | `thisCanActualOut(i)` | No older block and downstream may accept it |
+
+### 6.3.2 `allowDispatch`: Conservative LSQ Flow Accounting
+
+`allowDispatch` is a chained capacity calculation, not a simple one-bit “LSQ has space” test. It conservatively accumulates the `flow` consumption of every uop in the dispatch group:
+
+```scala
+allowDispatch(i) := previousAllow &&
+  (accumulatedFlow + currentFlow <= lsqFreeEntries)
+```
+
+| **Instruction type** | **Conservative flow count** | **Reason** |
+| --- | ---: | --- |
+| Non-memory instruction | 0 | Does not occupy LSQ |
+| Scalar Load/Store | 1 | Uses one known flow |
+| Vector unit-stride memory operation | 2 | Actual split is known only after address generation |
+| Other vector memory operation | 16 | Worst-case full split |
+
+Unit-stride vector operations use 2 rather than 1 because Dispatch cannot know whether they will split until their address is known; the source code explicitly documents this conservative policy.
+
+### 6.3.3 `uopBlockByIQ`
+
+```scala
+uopBlockByIQ(i) := Mux(iqReady,
+  accumulatedEnqueues > numEnq,
+  hasUopForThisIQ)
+```
+
+When an IQ is ready, it blocks only when accumulated arrivals exceed its enqueue capacity. When it is not ready, any uop targeting that IQ blocks, because the queue may be full or backpressured.
+
+### 6.3.4 `thisCanActualOut`
+
+This signal combines wait-forward handling, older-uop ordering, and ROB acceptance. It guards the real output handshake rather than just a local queue decision.
+
+## 6.4 Dispatch Conditions
+
+### 6.4.1 The Three Terms of `thisCanActualOut`
+
+```scala
+thisCanActualOut(i) := !blockedByWaitForward(i) &&
+  notBlockedByPrevious(i) && enqRob.canAccept
+```
+
+#### 1. `blockedByWaitForward`
+
+`waitForward` uops are conservatively held when the ROB is nonempty. This is not literally “wait until everything ahead is cleared”; it means that a uop must wait for relevant older writebacks before dispatch can safely continue. The `!io.enqRob.isEmpty` test is a conservative fast test that avoids an unsafe out-of-order dispatch.
+
+```scala
+blockedByWaitForward(0) := !io.enqRob.isEmpty && in(0).bits.waitForward
+blockedByWaitForward(i) := blockedByWaitForward(i - 1) ||
+  (hasOlderValid && in(i).bits.waitForward)
+```
+
+#### 2. `notBlockedByPrevious`
+
+The first lane is never blocked by an earlier lane. In every following lane, any earlier `blockBackward` uop blocks it:
+
+```scala
+notBlockedByPrevious(0) := true.B
+notBlockedByPrevious(i) := !VecInit(in.take(i).map(_.bits.blockBackward)).asUInt.orR
+```
+
+#### 3. `enqRob.canAccept`
+
+ROB allocation is a mandatory part of dispatch. If ROB cannot allocate the group, Dispatch does not emit uops to IQs even if IQ and LSQ have room.
+
+### 6.4.2 Decision Flow
+
+```plain
+Rename uop
+  ↓
+LSQ flow capacity sufficient?
+  ↓ yes
+Selected IQ has enqueue capacity?
+  ↓ yes
+No waitForward or older block?
+  ↓ yes
+ROB can allocate?
+  ↓ yes
+Dispatch to IQ / ROB / LSQ together
+```
+
+## 6.5 Timing Pressure
+
+### 6.5.1 Critical Paths
+
+| **Path** | **Description** | **Delay source** |
+| --- | --- | --- |
+| BusyTable lookup | Query readiness of all source operands | Parallel table reads and result aggregation |
+| IQ load balancing | Compare/sort valid counts across IQs | Comparator matrix and sorting network |
+| LSQ capacity lookup | Check available Load/Store Queue capacity | Cross-module communication |
+| `allowDispatch` chain | Chain of up to six uops | Combinational dependency from lane to lane |
+
+### 6.5.2 Load-Balancer Optimization
+
+Rather than recomputing a complete sort in one path, the IQ-load balancer updates a bounded subset in intervals. `updateInterval=3` limits each update segment to three IQs while all segments operate in parallel:
+
+```scala
+val updateInterval = 3
+val updatedIQValidNum = segmentUpdates(iqValidNum, updateInterval)
+```
+
+The rotation state breaks ties between equally loaded IQs and prevents one IQ from becoming a persistent hotspot.
+
+### 6.5.3 IQ Valid-Count Compensation
+
+Dispatch predicts its own current-cycle enqueues with `needAppendIQValidNumVec`, then includes a `maxIQSize` reserve and a +6 margin. This intentionally trades a small amount of capacity precision for a shorter, safer timing path.
+
+```scala
+val predictedIQValidNum = IQValidNumVec + needAppendIQValidNumVec
+val enoughSpace = predictedIQValidNum + 6.U <= maxIQSize.U
+```
+
+### 6.5.4 Performance Counters for Blocking
+
+Performance counters distinguish dispatch stalls caused by ROB, LSQ, IQ, `waitForward`, and previous-uop blocks. Those counters make it possible to determine whether a workload is capacity-limited or control-limited.
+
+:::warning
+The most sensitive logic is the combination of source readiness, LSQ flow accounting, IQ selection, and ROB backpressure. Each optimization must preserve the property that a uop is either admitted consistently to all required structures or held at Dispatch.
+
+:::
+
+## 6.6 Summary
+
+* **Structure**: Dispatch is the backend traffic controller. Its key blocks are five BusyTables, RegCacheTagTable, LSQ enqueue control, and the IQ load balancer.
+* **Admission**: A uop requires LSQ flow capacity, a free target-IQ enqueue path, and `thisCanActualOut = !blockedByWaitForward && notBlockedByPrevious && enqRob.canAccept`; it must also satisfy exception/move restrictions.
+* **`allowDispatch`**: Conservative chained flow accounting uses 0 for non-memory uops, 1 for scalar memory, 2 for vector unit-stride memory, and 16 for other vector memory operations.
+* **Timing**: Segmented load-balancer updates and enqueue-count compensation (`needAppendIQValidNumVec`, capacity reserve, and +6 margin) balance timing against capacity accuracy.
+
+> Updated: 2026-07-01 15:05:53
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/veqhs3fuui2mwdxq>

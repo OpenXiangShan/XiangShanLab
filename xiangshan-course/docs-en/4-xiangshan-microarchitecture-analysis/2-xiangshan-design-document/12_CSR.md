@@ -1,3 +1,4 @@
+<!--
 # 12. CSR
 
 在前面的章节里，我们关注的是处理器如何"计算"——加、减、乘、除、访存。但处理器还有另一面：**管理自身**——当前运行在什么特权级？中断有没有挂起？页表在哪？浮点舍入模式是什么？这些信息都存储在 CSR 中，而 CSR 指令就是读写它们的窗口。
@@ -126,10 +127,10 @@ CSR 指令的更新具有**原子性的读-改-写语义**：
 ```scala
 // FuType.scala — CSR 属于不确定延迟的功能单元
 def isUncertain(fuType: UInt): Bool = FuTypeOrR(fuType, csr, div, fDivSqrt, vidiv, vfdiv)
- 
+
 // FuConfig.scala — CSR 可能产生重定向
 def hasRedirect: Boolean = Seq(FuType.jmp, FuType.brh, FuType.csr).contains(fuType)
- 
+
 // FuConfig.scala — CSR 需要不确定延迟唤醒
 def needUncertainWakeupFuConfigs = Seq(CsrCfg, DivCfg, FdivCfg, VfdivCfg, VidivCfg)
 ```
@@ -299,5 +300,302 @@ CSR 子系统按 RISC-V 特权架构的层级，用 Scala Trait 混入（Mixin�
 核心原则：CSR 子系统的设计围绕\*\*"安全与顺序"\*\*展开——安全是指严格的特权级保护和异常检查，顺序是指 CSR 更新必须严格按程序顺序生效（通过非流水化执行和流水线冲刷保证）。这两点共同保证了处理器状态的一致性和可预测性。
 
 
-> 更新: 2026-07-02 10:21:04  
+> 更新: 2026-07-02 10:21:04
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/hmz9bmnxwd86u488>
+-->
+
+# 12. CSR
+
+Earlier chapters focused on how the processor computes: addition, subtraction, multiplication, division, and memory access. The processor also has to manage itself: the current privilege mode, pending interrupts, page-table location, floating-point rounding mode, and much more. These facts are stored in control and status registers (CSRs), and CSR instructions are the interface for reading and writing them.
+
+:::info
+**After this chapter, you will be able to:**
+
+* Understand when and how CSRs are updated and how privilege protection is enforced.
+* Understand the ordering constraints and rollback mechanism for CSR commit in an out-of-order core.
+* Follow the complete CSR exception-checking flow and its priority rules.
+
+:::
+
+***
+
+## 12.1 Overall Position: What Is the CSR Subsystem?
+
+The CSR subsystem can be viewed as the processor's management office:
+
+* **CSR registers** are filing cabinets that hold processor-state records.
+* **CSR instructions** are service windows; CSRRW, CSRRS, CSRRC, and related instructions access those records.
+* **Privilege levels** are access cards: M mode has the broadest access, S mode has partial access, and U mode is more restricted.
+* **Exceptions and interrupts** are emergency calls that can interrupt normal execution and enter a handler.
+
+The CSR subsystem is one of the largest and most complex functional areas in the processor because it covers almost the entire RISC-V privileged architecture.
+
+***
+
+## 12.2 CSR Update
+
+### 12.2.1 Sources That Update CSRs
+
+CSRs are not modified only by CSR instructions. They have several update sources:
+
+| **Source** | **Trigger** | **Example** |
+| --- | --- | --- |
+| **CSR instruction** | Execution of CSRRW/CSRRS/CSRRC | `csrw mstatus, t0` |
+| **Exception/interrupt trap** | An exception or interrupt occurs | Write `mepc`, `mcause`, and `mtval` |
+| **Privilege-level return** | MRET/SRET/DRET | Restore the previous privilege level in `mstatus` |
+| **Hardware event** | Timer, external interrupt, and so on | CLINT time update and interrupt-pending update |
+| **FENCE/VSET** | A special-purpose instruction | VSET writes `vl` and `vtype` |
+
+### 12.2.2 CSR Instruction Update Flow
+
+When a CSR instruction executes in an execution unit, the update flow is:
+
+```plain
+Issue Queue issues a CSR instruction
+       │
+       ▼
+CSR execution unit accepts it (piped=false, exclusive execution)
+       │
+       ├──→ 1. Permission check: may the current privilege level access this CSR?
+       ├──→ 2. Read the current CSR value (for CSRRS/CSRRC read-modify-write)
+       ├──→ 3. Compute the new value from the opcode (RW/RS/RC) and source operand
+       ├──→ 4. Exception check: insufficient privilege, missing CSR, write to read-only field, etc.
+       └──→ 5. Write the CSR and emit the result plus any redirect/exception signal
+```
+
+The CSR execution-unit configuration is:
+
+```scala
+// FuConfig.scala
+val CsrCfg = FuConfig(
+  name = "csr", fuType = FuType.csr,
+  srcData = Seq(Seq(IntData())),
+  piped = false,                        // non-pipelined: exclusive execution
+  writeIntRf = true,
+  latency = UncertainLatency(),         // latency is not fixed
+  exceptionOut = Seq(illegalInstr, virtualInstr, breakPoint,
+                     ecallU, ecallS, ecallVS, ecallM),
+  flushPipe = true,                     // flush the pipeline after execution
+)
+
+val FenceCfg = FuConfig(
+  name = "fence", fuType = FuType.fence,
+  srcData = Seq(Seq(IntData(), IntData())),
+  piped = false,
+  latency = UncertainLatency(),
+  flushPipe = true,
+)
+```
+
+### 12.2.3 Read-Modify-Write Semantics
+
+CSR updates have atomic read-modify-write semantics:
+
+| **Instruction** | **Semantics** | **Analogy** |
+| --- | --- | --- |
+| **CSRRW** | Read the old value, then write a new value | Replace the old form with a new form |
+| **CSRRS** | Read the old value, OR it with the source operand, then write it | Check additional boxes |
+| **CSRRC** | Read the old value, AND-NOT it with the source operand, then write it | Clear checked boxes |
+| **CSRRWI** | Immediate form of CSRRW | Same operation, with the operand encoded in the instruction |
+
+### 12.2.4 Privilege Protection
+
+Not every CSR can be accessed freely. RISC-V defines strict privilege protection:
+
+| **CSR address range** | **Minimum privilege** | **Description** |
+| --- | --- | --- |
+| `0x000-0x3FF` | U mode | User-level CSRs |
+| `0x400-0x7FF` | S mode | Supervisor-level CSRs |
+| `0x800-0xBFF` | M mode | Machine-level CSRs |
+
+An access from a lower privilege level to a higher-level CSR raises an illegal-instruction exception.
+
+***
+
+## 12.3 CSR Commit
+
+### 12.3.1 Why Is CSR Commit Special?
+
+Ordinary instructions may execute and write back out of order as long as they are confirmed in program order at commit. CSR instructions cannot do this: they change global processor state and must take effect strictly in program order. This is like changing company bylaws: the next proposal cannot be applied until all earlier proposals have been approved.
+
+### 12.3.2 Execution Constraints on CSR Instructions
+
+CSR instructions are subject to several pipeline constraints:
+
+| **Constraint** | **Mechanism** | **Purpose** |
+| --- | --- | --- |
+| Exclusive CSR execution unit | `piped=false` | Only one CSR instruction executes at a time, naturally serializing them |
+| Flush after execution | `flushPipe=true` | Ensure younger instructions start from the state after the CSR write |
+| Possible redirect | `hasRedirect=true` | Some CSR operations change control flow, such as MRET |
+| Possible exception | `exceptionOut` lists seven types | Report insufficient privilege or an illegal CSR |
+| Uncertain-latency wakeup | `UncertainLatency()` plus `needUncertainWakeup` | CSR execution time is not fixed |
+
+```scala
+// FuType.scala — CSR is an uncertain-latency functional unit
+def isUncertain(fuType: UInt): Bool = FuTypeOrR(fuType, csr, div, fDivSqrt, vidiv, vfdiv)
+
+// FuConfig.scala — CSR may redirect control flow
+def hasRedirect: Boolean = Seq(FuType.jmp, FuType.brh, FuType.csr).contains(fuType)
+
+// FuConfig.scala — CSR needs uncertain-latency wakeup
+def needUncertainWakeupFuConfigs = Seq(CsrCfg, DivCfg, FdivCfg, VfdivCfg, VidivCfg)
+```
+
+### 12.3.3 Commit and Rollback
+
+The CSR execution unit computes the operation, but the update becomes architecturally effective only at ROB commit. If a speculative flush occurs before commit, the pending CSR update is discarded:
+
+```plain
+CSR executes → result held temporarily → ROB confirms commit → CSR takes effect
+                         │
+                         └→ flush before commit → discard the temporary result; CSR unchanged
+```
+
+The ROB sends commit information to the CSR subsystem through the `RobCommitCSR` interface, including the faulting instruction information and commit pointer.
+
+### 12.3.4 CSR Writes That Require a Pipeline Flush
+
+| **Scenario** | **CSR** | **Reason** |
+| --- | --- | --- |
+| Switch page tables | `satp` | Address translation for younger instructions changes |
+| Change privilege level | `mstatus.MPP`, and related fields | Access permissions for younger instructions change |
+| Change interrupt enable | `mstatus.MIE` | Whether interrupts may be taken changes |
+| Change translation mode | `mstatus.MPRV` | Data-access translation mode changes |
+| FENCE instruction | No CSR write, but a flush is required | Enforce memory ordering |
+
+A pipeline flush costs on the order of a dozen cycles, but is necessary for correctness.
+
+***
+
+## 12.4 CSR Exception Check
+
+### 12.4.1 Levels of Checking
+
+CSR exception checking has three levels, ordered by time:
+
+| **Level** | **When** | **What is checked** | **Example** |
+| --- | --- | --- | --- |
+| **1. Permission** | During CSR execution | Whether the current privilege level may access the CSR | User mode reads or writes `mstatus` |
+| **2. Encoding** | During CSR execution | Whether the CSR address and operation are legal | Access an unimplemented CSR |
+| **3. Event handling** | When an exception/interrupt occurs | Whether a trap must be taken | Page fault, breakpoint, external interrupt |
+
+The CSR execution unit declares these possible exception outputs:
+
+```scala
+exceptionOut = Seq(
+  illegalInstr,    // privilege failure, missing CSR, or write to a read-only field
+  virtualInstr,    // virtual-instruction exception for restricted VS accesses
+  breakPoint,      // breakpoint exception
+  ecallU,          // system call from U mode
+  ecallS,          // system call from S mode
+  ecallVS,         // system call from VS mode
+  ecallM,          // system call from M mode
+)
+```
+
+### 12.4.2 Permission-Check Details
+
+| **Check** | **Exception** | **Description** |
+| --- | --- | --- |
+| Insufficient privilege | Illegal instruction (`EX_II`) | U mode accesses an S/M-level CSR |
+| Insufficient virtualization privilege | Virtual illegal instruction (`EX_VI`) | VS mode accesses a restricted HS-level CSR |
+| CSR does not exist | Illegal instruction (`EX_II`) | Access an unimplemented CSR address |
+| Write to a read-only CSR | Illegal instruction (`EX_II`) | Attempt to write a read-only field |
+
+### 12.4.3 Exception Priority
+
+When several exceptions are possible at once, the RISC-V rules define a strict priority order. CSR permission faults occupy the illegal-instruction position:
+
+```plain
+higher priority
+   │
+   │  1. Instruction-address misalignment / fetch exception
+   │  2. Fetch access fault
+   │  3. Illegal instruction  ← CSR permission exceptions are here
+   │  4. Breakpoint exception
+   │  5. Load/store exception
+   │  6. External interrupt
+   │
+lower priority
+```
+
+### 12.4.4 CSR Updates on an Exception
+
+Once an exception is taken, the CSR subsystem automatically updates the trap-state registers:
+
+| **CSR** | **Written value** | **Purpose** |
+| --- | --- | --- |
+| `mepc` / `sepc` | PC of the faulting instruction | Record where the fault occurred |
+| `mcause` / `scause` | Exception-cause code | Record what happened |
+| `mtval` / `stval` | Additional information, such as a bad address | Record the details |
+| `mstatus.MPP` | Privilege level before the trap | Save the previous mode |
+| `mstatus.MPIE` | Interrupt-enable state before the trap | Save the previous interrupt state |
+| `mstatus.MIE` | Interrupts disabled | Prevent interruption while entering the handler |
+
+The `CSREvents` modules perform these updates automatically; software does not need to write them. See the [CSREvents directory](https://github.com/OpenXiangShan/XiangShan/blob/master/src/main/scala/xiangshan/backend/fu/NewCSR/CSREvents/).
+
+### 12.4.5 Interrupt Filtering and Dispatch
+
+An interrupt is a special exception triggered asynchronously by an external event rather than by the current instruction. The CSR subsystem filters and dispatches it:
+
+| **Step** | **Module** | **Role** |
+| --- | --- | --- |
+| **1. Collect requests** | Interrupt sources | CLINT (software/timer), PLIC (external), and Debug |
+| **2. Filter** | `InterruptFilter` | Check privilege level and interrupt-enable bits |
+| **3. Dispatch** | `CSREvents` | Select the privilege level whose handler should run |
+| **4. Trap handling** | `TrapHandleModule` | Update `epc`, `cause`, `status`, and related CSRs |
+
+### 12.4.6 Privilege-Level Arbitration for Interrupts
+
+When more than one privilege level can accept an interrupt, the subsystem arbitrates which one handles it:
+
+| **Scenario** | **Result** |
+| --- | --- |
+| M-mode interrupts are enabled and have higher priority than S-mode interrupts | Handle in M mode |
+| M-mode interrupts are disabled (`mstatus.MIE=0`) while S-mode interrupts are enabled | Handle in S mode |
+| Virtualized execution | VS-mode interrupts are filtered through HS mode first |
+
+***
+
+## 12.5 Modular Organization of the CSR Subsystem
+
+The CSR subsystem is assembled with Scala trait mixins, following the hierarchy of the RISC-V privileged architecture:
+
+| **Trait** | **Coverage** | **Specification area** |
+| --- | --- | --- |
+| **MachineLevel** | `mstatus`, `mepc`, `mcause`, `mtvec`, `mip`, `mie`, ... | M mode |
+| **SupervisorLevel** | `sstatus`, `sepc`, `scause`, `stvec`, `sip`, `sie`, ... | S mode |
+| **HypervisorLevel** | `hstatus`, `hgatp`, `hgeip`, ... | H extension |
+| **VirtualSupervisorLevel** | `vsstatus`, `vsepc`, `vstval`, ... | VS mode |
+| **Unprivileged** | `fflags`, `frm`, `vstart`, `vtype`, `vl`, ... | U-level state |
+| **DebugLevel** | `dcsr`, `dpc`, `dscratch`, ... | Debug mode |
+| **CSRPMA** | Physical memory attributes | PMA |
+| **CSRPMP** | Physical memory protection | PMP |
+| **CSRAIA** | Advanced interrupt architecture | AIA extension |
+| **CSRIND** | Indirect CSR access | Smcsrind/Sscsrind |
+
+:::warning
+**Beginner's note**: Trait mixins allow the CSR subsystem to be composed as needed. If the Hypervisor extension is not required, omit `with HypervisorLevel`. This is one of the practical benefits of Scala in hardware design: object-oriented composition provides configurable hardware structure.
+
+:::
+
+***
+
+## 12.6 CSR and Pipeline Interaction
+
+![CSR and pipeline interaction](img/12-csr/figure-001-12-csr-2.svg)
+
+***
+
+## 12.7 Summary
+
+### Key points
+
+* **CSR update**: CSRs can be changed by CSR instructions, traps, privilege returns, and hardware events. CSR instructions use atomic read-modify-write semantics, and unauthorized accesses raise an illegal-instruction exception.
+* **CSR commit**: CSR instructions commit in program order. `piped=false` serializes execution and `flushPipe=true` protects younger instructions; CSR is in the `needUncertainWakeup` set. Page-table and privilege changes may require a pipeline flush, and updates can be rolled back before commit.
+* **CSR exception checking**: Permission, encoding, and event checks cover the full path. CSR execution can report seven exception types; trap entry updates `epc`, `cause`, `tval`, and `status`, while interrupts are filtered and arbitrated by privilege level.
+
+The design principle is **safety and ordering**: safety comes from strict privilege protection and exception checks, while ordering comes from making CSR updates take effect in program order through non-pipelined execution and pipeline flushes. Together these rules keep processor state consistent and predictable.
+
+> Updated: 2026-07-02 10:21:04
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/hmz9bmnxwd86u488>

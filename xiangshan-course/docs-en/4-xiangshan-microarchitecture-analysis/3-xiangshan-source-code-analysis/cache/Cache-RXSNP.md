@@ -1,3 +1,4 @@
+<!--
 # Cache-RXSNP：Kunminghu V2 CoupledL2 的 CHI Snoop 接收与一致性冲突控制
 
 > **结论先行。** Kunminghu V2 在 `WithCHI` 配置下选择 `TL2CHICoupledL2`；每个 L2 Slice 的 `RXSNP` 接收 CHI `rx.snp`，先经一个深度为 2、`flow = false` 的 Chisel `Queue`，再把 CHI Snoop 转成内部 `TaskBundle` 的 B 类任务，送入 `RequestArb.sinkB`。它不是“完成 Snoop”的数据通路：其核心职责是以 MSHR 状态快照判断同块 request、替换和 CMO 是否可嵌套；若不可嵌套，保持队首不出队并通过 `ready` 反压。目录查找、是否要 probe/forward、数据读取、响应编码和 CHI 输出分别由 `RequestArb`、`MainPipe`、`TXRSP`、`TXDAT` 完成。
@@ -58,19 +59,19 @@ else Some(LazyModule(new TL2TLCoupledL2()(new Config(config))))
 
 ```mermaid
 flowchart LR
-  XT[XSTile] --> LT[L2Top]
-  LT -->|EnableCHI| CL2[TL2CHICoupledL2]
-  CHI[CHI io_chi.rx.snp] --> LM[LinkMonitor]
-  LM --> DEMUX[按地址选择 Slice]
-  DEMUX --> RX[RXSNP]
-  MSHR[MSHRCtl.msInfo] --> RX
-  RX -->|TaskBundle, SinkB| RA[RequestArb s1/s2]
-  RA --> DIR[Directory]
-  DIR --> MP[MainPipe s3/s4/s5]
-  MP --> RSP[TXRSP]
-  MP --> DAT[TXDAT]
-  RSP --> CHI
-  DAT --> CHI
+  XT[XSTile] --&gt; LT[L2Top]
+  LT --&gt;|EnableCHI| CL2[TL2CHICoupledL2]
+  CHI[CHI io_chi.rx.snp] --&gt; LM[LinkMonitor]
+  LM --&gt; DEMUX[按地址选择 Slice]
+  DEMUX --&gt; RX[RXSNP]
+  MSHR[MSHRCtl.msInfo] --&gt; RX
+  RX --&gt;|TaskBundle, SinkB| RA[RequestArb s1/s2]
+  RA --&gt; DIR[Directory]
+  DIR --&gt; MP[MainPipe s3/s4/s5]
+  MP --&gt; RSP[TXRSP]
+  MP --&gt; DAT[TXDAT]
+  RSP --&gt; CHI
+  DAT --&gt; CHI
 ```
 
 `TL2CHICoupledL2` 先从 `LinkMonitor.io.in.rx.snp` 取得 Decoupled 的 Snoop，再以 `rxsnp.bits.addr` 的 bank 位选择一个 Slice；`ready` 仅由被选中 Slice 返回。随后 Slice 把该端口接到本地 `rxsnp.io.rxsnp`。[`TL2CHICoupledL2.scala:158`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:158) [`TL2CHICoupledL2.scala:267`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:267) [`Slice.scala:207`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:207)
@@ -486,21 +487,21 @@ RXSNP 没有异常/特权/CSR 状态机。其可见的错误路径是 Directory/
 
 ```mermaid
 flowchart TD
-  IN[io.rxsnp] --> ENQ[Queue enq]
-  ENQ --> HEAD[queue deq: rxsnp]
-  HEAD --> MAP[fromSnpToTaskBundle]
-  MINFO[MSHRCtl.msInfo] --> RB[reqBlockSnp]
-  MINFO --> REP[replaceBlockSnp]
-  MINFO --> CMO[cmoBlockSnp]
-  RB --> STALL[stall]
-  REP --> STALL
-  CMO --> STALL
-  STALL --> TV[io.task.valid = rxsnp.valid && !stall]
-  STALL --> RR[rxsnp.ready = io.task.ready && !stall]
-  MAP --> TB[TaskBundle]
-  TB --> TV
-  TV --> ARB[RequestArb.sinkB]
-  ARB --> RR
+  IN[io.rxsnp] --&gt; ENQ[Queue enq]
+  ENQ --&gt; HEAD[queue deq: rxsnp]
+  HEAD --&gt; MAP[fromSnpToTaskBundle]
+  MINFO[MSHRCtl.msInfo] --&gt; RB[reqBlockSnp]
+  MINFO --&gt; REP[replaceBlockSnp]
+  MINFO --&gt; CMO[cmoBlockSnp]
+  RB --&gt; STALL[stall]
+  REP --&gt; STALL
+  CMO --&gt; STALL
+  STALL --&gt; TV[io.task.valid = rxsnp.valid && !stall]
+  STALL --&gt; RR[rxsnp.ready = io.task.ready && !stall]
+  MAP --&gt; TB[TaskBundle]
+  TB --&gt; TV
+  TV --&gt; ARB[RequestArb.sinkB]
+  ARB --&gt; RR
 ```
 
 ### 16.2 Queue 入队、队首出队与局部 stall 的波形读法
@@ -563,3 +564,355 @@ flowchart TD
 RXSNP 是 Kunminghu V2 CHI CoupledL2 中一个很小但不能孤立理解的控制入口：它用 2-entry Queue 解耦上游 Snoop 到达，用 MSHR 的 request/replacement/CMO 快照精确决定何时停住队首或携带 nested-release 上下文前进。真正的一致性动作在后续 RequestArb、Directory、MainPipe、MSHR 和 TX 端共同完成。
 
 最容易造成误读的三点是：把独立 `huancun/SinkB` 当作 RXSNP、把 `rxsnp.fire` 当作外部 CHI 输入 fire、以及把任何同地址 MSHR 都当成无条件阻塞。按本 commit 的代码，三者都不成立。验证应优先覆盖 MSHR 状态窗口、C>B>A 仲裁、TX 前瞻容量以及嵌套 replacement 的唯一性断言。
+-->
+
+# Cache-RXSNP: CHI Snoop Reception and Coherence-Conflict Control in Kunminghu V2 CoupledL2
+
+> **Conclusion first.** With `WithCHI`, Kunminghu V2 selects `TL2CHICoupledL2`. Each L2 Slice uses `RXSNP` to receive CHI `rx.snp`, buffer it in a two-entry Chisel `Queue` with `flow = false`, convert the CHI Snoop into an internal B-channel `TaskBundle`, and send it to `RequestArb.sinkB`. RXSNP does not complete the Snoop data path itself. It decides, from MSHR-state snapshots, whether a request, replacement, or CMO for the same block can be nested. When it cannot, it retains the queue head and backpressures through `ready`. Directory lookup, probe/forward decisions, data reads, response encoding, and CHI output belong to `RequestArb`, `MainPipe`, `TXRSP`, and `TXDAT` respectively.
+
+This article uses the checked-out Scala sources under `/home/yanyusong/xs-memory-env/XiangShan` as behavioral evidence. The official Design Doc is used only to locate design intent and is not evidence for code-level conclusions.
+
+## 1. Scope, Version, and Evidence Rules
+
+| Item | Baseline used here | Evidence and boundary |
+| --- | --- | --- |
+| XiangShan main repository | `kunminghu-v2`, `e12436c7cba86b195deec24981976d78bc263661` | The worktree already contains `difftest` changes and untracked `src/main/resources/aia/` content; this is a read-only analysis. |
+| CoupledL2 submodule | `fb5469838c8902b6cb33992c0a30ee3d446e4453` | The active RXSNP implementation is `tl2chi/RXSNP.scala`. |
+| Stand-alone HuanCun repository | `huancun`, `65ef077373ecf398b4cecdea06b65ef9b8d79044` | Its `SinkB` receives TileLink `TLBundleB`, not CHI `CHISNP`; its logic is not projected onto RXSNP. |
+| Design Doc | `Kunminghu-v2`, `58d9e2ad11f044cb6f8887d9687d9e110696d1aa` | It differs from the source revision, so every document mapping is treated as intent or comparison, not RTL fact. |
+| Parameter interpretation | `KunminghuV2Config` | The configuration is 1 MiB, 8-way, and four-bank; elaboration remains the final authority for parameter values. |
+
+### 1.1 Naming Boundary Between `coupledL2` and `huancun`
+
+`L2Param.scala` imports parameter and field types such as `AliasKey`, `CacheParameters`, `IsHitKey`, and `PrefetchKey` from `huancun`. That is a type-level dependency; it does not put the RXSNP implementation in HuanCun. [`L2Param.scala:26`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/L2Param.scala:26)
+
+Conversely, the stand-alone HuanCun `SinkB` explicitly receives `TLBundleB` and packages TileLink `address`, `opcode`, `param`, and `size` into an `MSHRRequest`. It is a different protocol and bundle path, so it cannot explain CHI RXSNP. [`huancun/SinkB.scala:28`](/home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkB.scala:28)
+
+The baseline contains no `RXSNP`, `CHISNP`, or `TL2CHICoupledL2` hit below `huancun/src/main/scala`. This is a scope-exclusion result for this revision, not a claim about other versions.
+
+### 1.2 Reading and Validation Conventions
+
+1. This article calls same-cycle `valid && ready` a `fire`, consistent with `rxsnp.fire` and `io.sinkB.fire` in the source.
+2. Two kinds of blocking must remain separate: RXSNP's local MSHR-conflict `stall`, and resource/arbitration backpressure from `RequestArb.sinkB.ready`.
+3. Names such as `s1`, `s2`, and `s3` are used only where the source establishes register boundaries; they are not compressed into an unproven fixed end-to-end latency.
+4. The Chisel `Queue` implementation, reset precedence, and simultaneous read/write details are outside RXSNP.scala. Only its instantiation parameters and connected handshakes are asserted here.
+
+## 2. Effective Instantiation Path from the Kunminghu Top Level
+
+`KunminghuV2Config` adds `L2CacheConfig("1MB", inclusive = true, banks = 4, tp = false)` and then `WithCHI`; the latter sets `EnableCHI` true. [`Configs.scala:477`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:477) [`Configs.scala:481`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:481)
+
+`L2Top` reads that switch, constructs `TL2CHICoupledL2` when `enableCHI` is true, and sets `BankBitsKey` to `log2Ceil(coreParams.L2NBanks)`. `XSTile` places `L2Top` beside the core and connects the L1 DCache, ICache, and PTW. [`L2Top.scala:111`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:111) [`XSTile.scala:40`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/XSTile.scala:40)
+
+On the CHI branch, `L2Top` directly connects external `io.chi` to the L2 `io_chi`. Therefore, the CHI input below is an L2 downstream-coherence port, not an interface driven directly from the CPU load/store pipeline. [`L2Top.scala:367`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:367)
+
+```mermaid
+flowchart LR
+  XT[XSTile] --> LT[L2Top]
+  LT -->|EnableCHI| CL2[TL2CHICoupledL2]
+  CHI[CHI io_chi.rx.snp] --> LM[LinkMonitor]
+  LM --> DEMUX[Address-selected Slice]
+  DEMUX --> RX[RXSNP]
+  MSHR[MSHRCtl.msInfo] --> RX
+  RX -->|TaskBundle, SinkB| RA[RequestArb s1/s2]
+  RA --> DIR[Directory]
+  DIR --> MP[MainPipe s3/s4/s5]
+  MP --> RSP[TXRSP]
+  MP --> DAT[TXDAT]
+  RSP --> CHI
+  DAT --> CHI
+```
+
+`TL2CHICoupledL2` obtains the Decoupled Snoop from `LinkMonitor.io.in.rx.snp`, selects a Slice from the bank bits of `rxsnp.bits.addr`, and receives `ready` only from the selected Slice. The Slice then connects that port to local `rxsnp.io.rxsnp`. [`TL2CHICoupledL2.scala:158`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:158) [`TL2CHICoupledL2.scala:267`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:267) [`Slice.scala:207`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:207)
+
+## 3. Parameters, Addressing, and Request Granularity
+
+### 3.1 Static Parameters Derivable from This Configuration
+
+| Parameter | Source value or formula | Result under `KunminghuV2Config` | RXSNP relevance |
+| --- | --- | --- | --- |
+| Total L2 capacity | `L2CacheConfig("1MB", ...)` | 1 MiB | A configuration premise, not one Slice's capacity. |
+| Ways | default `ways = 8` | 8 | Determines `wayMask` width. |
+| Banks | `banks = 4` | 4, `bankBits = log2Ceil(4) = 2` | CHI Snoops select a Slice by address bank bits. |
+| Sets per Slice | `nKB * 1024 / banks / ways / 64` | `1024*1024/(4*8*64)=512`, so `setBits=9` | `parseAddress` produces `task.set`. |
+| Line size | `blockBytes = 64` | 64 B, `offsetBits=6` | RXSNP sets `task.size = log2Up(blockBytes)=6`. |
+| CHI data beat | `channelBytes.d = 32` | 32 B, `beatSize=64/32=2` | TXDAT returns data in two beats. |
+| MSHRs per Slice | default `mshrs = 16`, `mshrsAll = cacheParams.mshrs` | 16 | RXSNP reads `Vec(mshrsAll, MSHRInfo)`. |
+
+The formulas and values come from [`Configs.scala:278`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:278), [`Configs.scala:295`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:295), [`L2Param.scala:65`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/L2Param.scala:65), [`CoupledL2.scala:47`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:47), and [`CoupledL2.scala:118`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:118). These are configuration-derived calculations, not a replacement for elaboration.
+
+### 3.2 Address Reconstruction and Slice / Set / Tag Meaning
+
+`CHISNP` carries fields including `addr`, `srcID`, `txnID`, `fwdNID`, `fwdTxnID`, `opcode`, `retToSrc`, and `traceTag`; its bundle has no `vaddr`, ASID, PMP, or MMIO-attribute field. [`Message.scala:479`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/chi/Message.scala:479)
+
+RXSNP appends three low zero bits to the CHI SNP address and invokes `parseAddress` to derive internal `tag`, `set`, and `off`.
+
+| Logical field | Full-address bit range | Evidence |
+| --- | --- | --- |
+| CHI `addr` | full address shifted right by 3 | `Cat(snp.addr, 0.U(3.W))` |
+| Block offset | `PA[5:0]` | `offsetBits=6` |
+| Slice bank | `PA[7:6]` | `rxsnp.bits.addr[4:3]` |
+| Set within Slice | `PA[16:8]` | 512 sets, `setBits=9`, after skipping offset and bank bits |
+| Tag | Slice-local representation of `PA[fullAddressBits-1:17]` | Width depends on elaborated `fullAddressBits` |
+
+`PA` is notation for the full address delivered to this module. RXSNP performs neither VA-to-PA translation nor any attribution to a particular CPU instruction.
+
+## 4. RXSNP Module Boundary and Interface Contract
+
+| Interface or state | Direction relative to RXSNP | Driver or consumer | Role and limit |
+| --- | --- | --- | --- |
+| `io.rxsnp: DecoupledIO[CHISNP]` | Input | Slice `io.out.rx.snp` | Receives LinkMonitor-processed, Slice-routed CHI Snoops. |
+| `io.task: DecoupledIO[TaskBundle]` | Output | `RequestArb.sinkB` | Emits an internal B task; `task.channel = b010`, therefore `TaskBundle.fromB` is true. |
+| `io.msInfo: Vec(mshrsAll, ValidIO[MSHRInfo])` | Input | `MSHRCtl` | Read-only snapshot used for stall and nesting decisions; RXSNP does not own MSHR state. |
+| Local `Queue(CHISNP, 2, flow=false)` | Internal | External Snoops enqueue; RXSNP dequeues its head | Buffers at most two entries; library-internal bypass timing is not inferred. |
+| `stallCnt` | Internal | Incremented and cleared by RXSNP | Observes and asserts sustained failure of the local queue head to progress; it is not a request ID. |
+
+`TaskBundle.channel(1)` is `fromB`. This B is a CoupledL2 internal upstream-channel marker, not the separate HuanCun module called `SinkB`. [`Common.scala:37`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Common.scala:37)
+
+## 5. Input Buffering, Handshakes, and Progress
+
+### 5.1 Two Decoupled Handshakes
+
+The connections must be read as two layers.
+
+1. External `io.rxsnp` handshakes with the Queue `enq`; this decides whether another CHI Snoop can be absorbed.
+2. `rxsnp` is the Queue `deq`. Only `rxsnp.fire` means the **queue head** entered the downstream path; it is not the original CHI input fire.
+3. With `stall=1`, RXSNP lowers both head `task.valid` and `rxsnp.ready`, retaining the head. More external inputs may enqueue until the two-entry Queue becomes full.
+4. With `stall=0` and `RequestArb.sinkB.ready=0`, `rxsnp.fire` also does not occur, but the cause is downstream resource or arbitration backpressure rather than one of the three RXSNP MSHR conflicts.
+
+### 5.2 `stallCnt` Is Progress Monitoring, Not a Protocol Credit
+
+`stallCnt` is cleared when the internal queue head fires, increments when its `valid` is high and `ready` low, and is asserted against an upper limit of 28000. It exposes prolonged lack of progress in simulation or formal work; it neither proves recovery within 28000 cycles nor represents CHI L-Credit capacity.
+
+`RXSNP(lCreditNum: Int = 4)` is not consumed elsewhere in this file, so it must not be described as Queue depth or a run-time credit limit. The CHI-link-to-Decoupled conversion is in LinkMonitor's `LCredit2Decoupled(io.out.rx.snp, io.in.rx.snp, ...)`, outside the RXSNP boundary. [`RXSNP.scala:28`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/RXSNP.scala:28) [`LinkLayer.scala:397`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/chi/LinkLayer.scala:397)
+
+## 6. Three MSHR Conflict Classes and Nesting Conditions
+
+RXSNP computes masks for every valid `msInfo` entry in parallel and reduces them with `orR` into three stalls. It does not select a preferred MSHR; these are existence checks.
+
+### 6.1 In-flight MSHR for the Same Request Address: `reqBlockSnp`
+
+`reqBlockSnpMask` compares incoming `task.set/tag` with the MSHR's **request** tag, `reqTag`. It blocks only when the MSHR is valid and same-set/same-request-tag, has observed the first grant or has an alias task still waiting for the final replacement-probe ACK, remains blocked on refill or ReleaseAck, and will not free this cycle. Thus, "a same-address Snoop always blocks" is false. The relevant window is the full Boolean expression over `w_grantfirst`, `blockRefill`, `w_releaseack`, and `willFree`, not just the address.
+
+### 6.2 CMO and Replacement-Target Blocks: `cmoBlockSnp` and `replaceBlockSnp`
+
+`cmoBlockSnpMask` does not compare `task.set/tag`; it is a global Snoop-entry constraint while an eligible directory-hit CMO has unfinished scheduling or waiting state. `replaceBlockSnpMask` compares the task with `metaTag`, the block about to be replaced rather than the MSHR's original request block. Both exclude an MSHR that will free in the current cycle.
+
+### 6.3 Permitted Nested Replacement Release
+
+When the replacement path meets its nesting conditions, `replaceNestSnpMask` carries old metadata, replacement-data presence, and the replacement-MSHR index into the `TaskBundle`.
+
+- `replaceNestSnpMask` does not itself enter `stall`; a hit marks the task and permits it to continue to RequestArb.
+- `PopCount(replaceNestSnpMask) <= 1` is an explicit uniqueness invariant supporting `PriorityEncoder` for `snpHitReleaseIdx` and `ParallelOR` for the corresponding `MetaEntry`.
+- `snpHitReleaseWithData` intersects the nesting mask with `replaceDataMask`, allowing RequestArb to read data from the correct ReleaseBuffer source.
+- The assertion is a guard against multiple independent MSHRs matching, not proof that such a condition can never arise.
+
+The fields are mirrored from the MSHR through `MSHRInfo`; RXSNP reads them and does not write them. [`Common.scala:236`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Common.scala:236) [`MSHR.scala:1341`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHR.scala:1341)
+
+## 7. RequestArb: The Second Gate After the Queue Head
+
+RXSNP's `io.task` connects to `RequestArb.sinkB`. RequestArb chooses channel tasks in fixed `C > B > A` order: `sinkValids` is ordered C, B, A, and `sinkB.ready` also requires that no eligible C task exists. This is a statement about actual ready logic, not an inference from module names. [`RequestArb.scala:132`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:132)
+
+### 7.1 Sources of SinkB Backpressure
+
+| Category | Effect on `sinkB.ready` |
+| --- | --- |
+| RXSNP local coherence conflict | `stall=1` drives `io.task.valid=0`, hiding the head from RequestArb. |
+| MSHR capacity | `MSHRCtl.blockB_s1 := mshrFull`; B may use the final MSHR, while A is constrained one entry earlier. |
+| MainPipe address conflict | s2/s3 compare sets; s4/s5 compare set plus tag. |
+| TXRSP/TXDAT capacity | Both `blockSinkBReqEntrance` signals contribute to `block_B`, reserving output capacity before s3/s5. |
+| Directory, reset, and MSHR task | `dirRead_s1.ready`, `resetFinish`, `!mshr_task_s1.valid`, and `s2_ready` are common prerequisites. |
+| Arbitration | An eligible SinkC task prevents B from becoming ready. |
+
+The B reservation means exactly that `a_mshrFull` blocks A at `mshrsAll-1` occupied entries while `mshrFull` blocks B only at `mshrsAll`. It does not give RXSNP a private set of 16 MSHRs. [`MSHRCtl.scala:106`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHRCtl.scala:106)
+
+## 8. Subsequent Snoop Handling in the Main Pipeline
+
+| Stage | Action | Reasons it may stop |
+| --- | --- | --- |
+| Link to Slice | LinkMonitor converts and routes `CHISNP` by address | The selected Slice returns `ready=0`. |
+| RXSNP ingress | Queue enqueues/dequeues two entries and constructs `TaskBundle` | Queue full, any RXSNP stall, or RequestArb not ready. |
+| RequestArb s1 | Arbitrates C/B/A and issues a Directory set/tag read | C priority, `block_B`, directory not ready, reset, MSHR task, or s2 conflict. |
+| RequestArb s2 | Holds `task_s2`; reads ReleaseBuffer when nested-release data is needed | `ds_mcp2_stall` and the selected data source. |
+| MainPipe s3 | Uses Directory result to decide probes, forwarding, data, metadata updates, and MSHR allocation | Required upstream pProbe or DCT forwarding prevents direct completion. |
+| MainPipe s4/s5 | Pipelines data responses to TXDAT; control responses may enter TXRSP | DataStorage, output channels, and upstream-stage state affect residence time. |
+| TXRSP / TXDAT | Converts to CHI RSP/DAT flits | CHI output not ready; queue occupancy propagates backpressure. |
+
+### 8.1 When a Snoop Allocates an MSHR
+
+`fromB` does not imply unconditional MSHR allocation. MainPipe allocates for B only when an upstream pProbe or DCT forwarding is needed. Typical `SnpOnce*`, `SnpQuery`, and `SnpStash*` cases require a `toT` pProbe for a directory hit in `TRUNK` with upstream clients. `SnpToB` and `SnpCleanShared` have similar `TRUNK`-and-clients conditions, while `SnpUnique*`, `SnpCleanInvalid`, and `SnpMakeInvalid*` require a `toN` pProbe when hit with clients. A hit tag error can also require pProbe. Forwarding additionally requires a nestable directory hit without tag or directory error. [`MainPipe.scala:258`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:258)
+
+### 8.2 Direct Responses Without an MSHR
+
+When `task_s3.valid && !mshr_req_s3 && !need_mshr_s3`, MainPipe emits `sink_resp_s3`. For `fromB`, it uses the incoming `srcID` as reply `tgtID`, preserves `txnID`, selects among `SnpResp`, `SnpRespFwded`, `SnpRespData`, and `SnpRespDataFwded` using `doFwd/doRespData`, and selects TXRSP or TXDAT with `txChannel`. [`MainPipe.scala:421`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:421)
+
+The source contains a TODO about the `srcID` mapping. This text describes the current assignment only and does not claim that it has been proven final protocol behavior. A data or forwarded-data response requests DataStorage, and a data response is latched through later stages because the directory-to-data decision path is long. [`MainPipe.scala:469`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:469) [`MainPipe.scala:626`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:626)
+
+## 9. Data, Control, and Response Paths
+
+| Task field | RXSNP assignment | Meaning |
+| --- | --- | --- |
+| `channel` | `b010` | Makes downstream `fromB` true. |
+| `tag/set/off` | `parseAddress(Cat(snp.addr, 0.U(3.W)))` | Parses the completed CHI address. |
+| `size` | `log2Up(blockBytes)` | One cache-line granularity. |
+| `wayMask` | All ones | Directory/replacement determines the concrete way. |
+| `mshrTask` | false | An initial Snoop is not an MSHR-return task. |
+| `snpHitRelease*` | Replacement-nest masks | Passes nested-release context to RequestArb and MainPipe. |
+| CHI identifiers and controls | Copied from `CHISNP` | Used by later CHI response, forwarding, and tracing. |
+| `tgtID/dbID/pCrdType` | Zero | Initialized by RXSNP; later stages assign values when needed. |
+| `alias/vaddr/isKeyword` | Zero or false | The initial Snoop has none of these upstream-L1 meanings. |
+
+RXSNP starts from a zeroed `TaskBundle`, so `denied/corrupt` initially are zero. It does not create a CHI error response at ingress. [`RXSNP.scala:131`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/RXSNP.scala:131)
+
+TXRSP uses an `mshrsAll`-deep `flow=false` response queue and predicts B/MSHR tasks that may reach TXRSP from s2 through s5. TXDAT similarly uses an `inflightCnt` gate, `mshrsAll`-deep task/data queues, and sends a 64 B block in `beatSize=2` beats. [`TXRSP.scala:47`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TXRSP.scala:47) [`TXDAT.scala:47`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TXDAT.scala:47)
+
+| Output | Input error bit | CHI `respErr` mapping |
+| --- | --- | --- |
+| TXRSP | `task.denied` | `true -> NDERR`, otherwise `OK` |
+| TXDAT | `task.corrupt` | `true -> DERR`, otherwise `OK` |
+
+Directory tag/data errors are merged in MainPipe before they become the channel error visible on this path; they are not generated by RXSNP. [`MainPipe.scala:616`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:616)
+
+## 10. State, Ownership, and Release Conditions
+
+| State or storage | Owner | RXSNP use | Update or release evidence |
+| --- | --- | --- | --- |
+| RXSNP Queue | Chisel `Queue` inside RXSNP | Enqueues CHI Snoops and dequeues the head for conversion | Only `entries=2`, `flow=false`, and enq/deq wiring are explicit here. |
+| `stallCnt` | RXSNP | Counts head stalls | Cleared by `rxsnp.fire`; incremented by `valid && !ready`. |
+| `TaskBundle` | Constructed by RXSNP, registered later | Carries address, CHI fields, and nested-release marks | RXSNP does not persist it; it is combinational from an available head. |
+| `MSHRInfo` | MSHR / MSHRCtl | Read-only conflict snapshot | `req_valid` controls validity; the MSHR clears when schedules and waits complete. |
+| `FSMState` | MSHR | RXSNP observes selected mirrored fields | `s_*` denotes work to schedule; `w_*` denotes a response/wait condition. |
+| ReleaseBuffer | Slice / RequestArb / MainPipe | Read later for `snpHitReleaseWithData` | It is not a buffer owned by RXSNP. |
+
+MSHR completion clears `req_valid` after all schedule and wait conditions are satisfied and exports same-cycle `will_free` through `MSHRInfo.willFree`; this is why every RXSNP conflict expression excludes `willFree`. [`MSHR.scala:1303`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHR.scala:1303)
+
+## 11. Timing, Throughput, and What Cannot Be Promised
+
+RXSNP has only an ingress Queue and combinational stall/conversion logic, not named `s0/s1` pipeline registers of its own. RequestArb selects a channel task in s1 and registers it as `task_s2`; MainPipe evaluates Snoop behavior from `task_s3`; data replies may traverse s4/s5 because `txdat_s3_latch=true`; TXDAT sends a 64 B line in two beats.
+
+End-to-end time depends on Queue occupancy, all three MSHR stalls, SinkC priority, Directory ready, `resetFinish`, s2 DataStorage availability, MainPipe set/tag protection, pProbe/DCT need, DataStorage read time, TX queue reservation, and CHI output ready. The sources provide no constant such as "RXSNP request fire is answered in N cycles," so this document intentionally does not invent one.
+
+The smallest observable throughput statement is that the external ingress has at most two buffered entries. Even while its head can advance, accepting a new input depends on Queue enqueue ready; when `sinkB` is blocked by C or another resource, the head stays and external backpressure eventually follows. There is no guarantee of one Snoop accepted every cycle.
+
+## 12. Cross-Boundary Interpretation
+
+| Boundary | RXSNP-visible input or action | Code-level conclusion | Not inferred here |
+| --- | --- | --- | --- |
+| Virtual page / translation | `CHISNP` lacks `vaddr`, ASID, and PMP; RXSNP concatenates and parses `addr` | No VA-to-PA conversion, page-crossing split, or permission check occurs in RXSNP. | Upstream TLB/PMP implementation or timing. |
+| Cache line | `task.size=log2Up(blockBytes)`, three address bits restored, `offsetBits=6` | Each task represents the current 64 B L2 block; no local state splits one Snoop into two line tasks. | Whether the CHI initiator guarantees alignment. |
+| Bank / Slice | The top level selects Slice by `addr`; `parseAddress` skips bank bits | Each RXSNP sees only tag/set within its selected Slice. | Equating `task.tag/set` with a whole-PA bit string that omits bank bits. |
+| MMIO / uncache | No `mmio`, `memAttr`, or `uncache` branch exists | RXSNP has no local MMIO bridge or uncache redirect. | Whole-system MMIO support; `L2Top` has a separate MMIO interface. |
+| CPU redirect / exception / privilege | IO contains only `rxsnp/task/msInfo` | No redirect, flush, CSR, trap, or interrupt input exists. | Projecting backend instruction-cancellation semantics onto an external coherent Snoop. |
+
+## 13. Reset, CMO, Errors, Difftest, and Recovery
+
+### 13.1 Reset
+
+The only explicitly initialized local RXSNP state is `stallCnt = RegInit(0.U(64.W))`. Queue reset behavior belongs to Chisel `Queue`, so RXSNP.scala alone does not establish same-cycle post-reset bypass. [`RXSNP.scala:117`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/RXSNP.scala:117)
+
+RequestArb counts down sets after reset and blocks channel requests using `resetFinish`; thus, `sinkB.ready` stays low during that phase even when RXSNP holds a valid head. MainPipe has a separate initialization sequence, but no RXSNP IO connects a MainPipe reset or flush control. [`RequestArb.scala:78`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:78) [`MainPipe.scala:127`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:127)
+
+### 13.2 CMO / Flush
+
+RXSNP has no independent cancel or flush input. Its direct CMO interactions are `cmoBlockSnp`, which observes CMO MSHR progress and may block RXSNP, and `snpBlockcmo`, which combines `rxsnp.io.task.valid` with MainPipe Snoop-in-flight state so CMO-all avoids overlap. This coordinates CMO with Snoop state; it is not a CMO flush of the RXSNP Queue. Reset/CMO overlap therefore needs waveform or generated-RTL validation.
+
+### 13.3 Errors and Exceptions
+
+RXSNP has no exception, privilege, or CSR state machine. Its visible error path is a Directory/metadata error converted by MainPipe to `denied/corrupt`, then encoded by TXRSP/TXDAT as `NDERR/DERR`. This must be validated separately from CPU traps or page faults.
+
+### 13.4 Difftest
+
+No direct `difftest` or `DiffTest` hit exists in the baseline under `coupledL2/src/main/scala/coupledL2`; therefore, no RXSNP-specific Difftest export or comparator is established from that directory. Validation should use CHI/Slice/Directory/MSHR waveforms, assertions, and coherence tests. A full-core Difftest mapping must be built from the system test harness rather than invented here.
+
+## 14. Design-Doc Traceability and Current-Code Comparison
+
+| Design intent | Current-code counterpart | Assessment | Boundary |
+| --- | --- | --- | --- |
+| Convert RX Snoop to an internal task for RequestArb | `fromSnpToTaskBundle`; Slice connects `reqArb.io.sinkB <> rxsnp.io.task` | Verified | The port is named `sinkB`, not a CHI module called SinkB. |
+| Same-request MSHR blocks a Snoop during selected refill/ACK windows | `reqBlockSnpMask` uses `w_grantfirst`, `blockRefill/w_releaseack`, and `willFree` | Verified | It cannot be reduced to waiting unconditionally from first CompData until MSHR completion. |
+| Replacement and CMO probe/release state influence Snoops | `replaceBlockSnpMask`, `cmoBlockSnpMask`, `replaceNestSnpMask` | Verified | The CMO mask is global; only replacement checks `metaTag` for address matching. |
+| Nested replacement release is allowed | `snpHitRelease*` and RequestArb's ReleaseBuffer index | Verified | Requires `PopCount(replaceNestSnpMask)<=1`. |
+| TXRSP/TXDAT apply ingress flow control | `blockSinkBReqEntrance` enters RequestArb | Verified | `inflightCnt` may conservatively produce false-positive backpressure. |
+| Default CHI E.b stated by the document | Current `CHIIssue` default is `Issue.B` | Version mismatch | Use current elaboration and source parameters. |
+| Overall document flow | LinkMonitor -> Slice -> RXSNP -> RequestArb -> MainPipe -> TX | Conceptual only | The diagram does not replace signal and priority evidence for this commit. |
+
+## 15. Mapping Theory to Source
+
+| Theory concept | Observable implementation | Do not overextend it |
+| --- | --- | --- |
+| Elastic pipeline / backpressure | Queue enq/deq and `task.valid/ready` form two Decoupled layers. | Depth two does not mean one acceptance per cycle or CHI-credit count. |
+| Non-blocking cache / MSHR | A 16-entry MSHR state vector enables parallel Snoop conflict checks. | Not all Snoops bypass MSHRs; probes and forwarding require one. |
+| Structural conflict | Directory, MainPipe, TX queues, MSHR full, and C > B > A arbitration lower `sinkB.ready`. | This is not a CPU RAW/WAW data-hazard explanation. |
+| Coherence serialization | MSHR schedule/wait fields define nesting windows for request, replacement, and CMO. | Opcode or address alone cannot decide the result. |
+| Progress monitoring | `stallCnt` and replacement-nest uniqueness assertion. | Assertion failure is a bug indicator, not a performance SLA. |
+
+## 16. Signal Relations and Timing Interpretation
+
+```mermaid
+flowchart TD
+  IN[io.rxsnp] --> ENQ[Queue enq]
+  ENQ --> HEAD[queue deq: rxsnp]
+  HEAD --> MAP[fromSnpToTaskBundle]
+  MINFO[MSHRCtl.msInfo] --> RB[reqBlockSnp]
+  MINFO --> REP[replaceBlockSnp]
+  MINFO --> CMO[cmoBlockSnp]
+  RB --> STALL[stall]
+  REP --> STALL
+  CMO --> STALL
+  STALL --> TV[io.task.valid = rxsnp.valid and not stall]
+  STALL --> RR[rxsnp.ready = io.task.ready and not stall]
+  MAP --> TB[TaskBundle]
+  TB --> TV
+  TV --> ARB[RequestArb.sinkB]
+  ARB --> RR
+```
+
+The WaveDrom source in the retained Chinese review copy is illustrative rather than a measured cycle trace. In its first valid-head window, `stall=1` forces both `io.task.valid` and `rxsnp.ready` low. A later head fire requires the conflict to disappear and the downstream to become ready. If `stall=0` but `io.task.ready=0`, the observable lack of a head fire is the same, but the root cause is RequestArb `block_B` or arbitration. The Queue's internal `full/empty` behavior must be checked in generated RTL or the Chisel Queue library.
+
+## 17. Scenario-Driven Reading and Validation
+
+| Scenario | Stimulus or precondition | Observe | Expected code-level conclusion |
+| --- | --- | --- | --- |
+| S1: first Snoop | Send conflict-free `rx.snp` after `resetFinish` | Queue enq/deq, `io.task.fire`, `sinkB.fire` | `channel=b010`; address is parsed after restoring three bits; no direct jump to TX. |
+| S2: same request block | Vary `w_grantfirst/blockRefill/w_releaseack` on same set/tag MSHR | `reqBlockSnpMask`, `stall` | Block only when the complete Boolean expression is true. |
+| S3: replacement conflict | Match `metaTag` and vary replacement states | `replaceBlockSnpMask`, `replaceNestSnpMask` | Either block or create `snpHitRelease*`; never two nest-mask hits. |
+| S4: CMO and Snoop | Progress an active CMO MSHR | `cmoBlockSnpMask`, `snpBlockcmo` | CMO constrains entry; do not expect a queue flush. |
+| S5: SinkC preemption | Present eligible B and C together | `sinkC.ready/sinkB.ready`, `sinkValids` | C enters first and B waits. |
+| S6: TX pressure | Fill queues and s2--s5 status | `inflightCnt`, `blockSinkBReqEntrance` | Ingress blocks early enough to reserve response capacity. |
+| S7: pProbe / forwarding | Exercise `SnpUnique*`, forward opcodes, hit plus clients | pProbe/DCT signals, MSHR allocation | The response is not necessarily direct from s3. |
+| S8: control versus data reply | Toggle `doRespData` | TXRSP/TXDAT, `chiOpcode`, TX output | Control uses TXRSP; data/forwarded data uses TXDAT. |
+| S9: error encoding | Inject Directory tag/data error | `denied/corrupt`, `respErr` | Tag error maps to TXRSP `NDERR`; data error maps to TXDAT `DERR`. |
+| S10: prolonged stall | Keep valid head with ready low | `stallCnt` | It increments and asserts at threshold; then decompose the local/downstream cause. |
+
+## 18. Verification Points
+
+| ID | Risk and property |
+| --- | --- |
+| `RXSNP_RESET_GATE` | While `RequestArb.resetFinish=0`, `sinkB.ready=0`; do not confuse external enqueue with a queue-head fire. |
+| `RXSNP_STALL_HOLD` | With any local conflict mask high, `io.task.valid=0`, internal `rxsnp.ready=0`, and no `rxsnp.fire`. |
+| `RXSNP_REQ_WINDOW` | `reqBlockSnpMask` must match its full source Boolean expression, not a PC- or address-only scoreboard. |
+| `RXSNP_REPL_UNIQUE` | `PopCount(replaceNestSnpMask)<=1`; PriorityEncoder must not silently hide multiple matches. |
+| `RXSNP_RELEASE_DATA` | `snpHitReleaseIdx` must match the unique replacement MSHR; data uses that ReleaseBuffer index. |
+| `RXSNP_PRIORITY_CBA` | An eligible C wins over simultaneous B; B continues after C clears. |
+| `RXSNP_MSHR_RESERVE` | A blocks at `mshrsAll-1`; B blocks only when full. |
+| `RXSNP_TX_CAPACITY` | `blockSinkBReqEntrance` lowers `sinkB.ready` before an unbufferable response, allowing conservative false positives. |
+| `RXSNP_ERR_ENCODE` | Tag/data errors map to `NDERR/DERR`, not CPU traps. |
+| `RXSNP_FORWARD_PROGRESS` | `stallCnt` grows during local or downstream stalls; restoring a necessary ready should let the head fire. |
+| `RXSNP_QUEUE_COLLISION` | Same-cycle enq/deq/reset behavior must be confirmed against generated Queue RTL or library tests. |
+
+## 19. Reproducible Source-Review Entry Points
+
+1. [`Configs.scala`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:278): Kunminghu V2 L2 parameters and `WithCHI`.
+2. [`L2Top.scala`](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:111): CHI CoupledL2 instantiation and top-level port connection.
+3. [`TL2CHICoupledL2.scala`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TL2CHICoupledL2.scala:158): `rx.snp` routing to a Slice.
+4. [`Slice.scala`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:39): RXSNP, RequestArb, MSHRCtl, MainPipe, and TX connections.
+5. [`RXSNP.scala`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/RXSNP.scala:28): ingress Queue, conflict masks, conversion, and progress assertion.
+6. [`RequestArb.scala`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:132): C/B/A priority and SinkB backpressure.
+7. [`MainPipe.scala`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:258): Snoop probe/forward, direct responses, errors, and TX split.
+8. [`MSHR.scala`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHR.scala:1303): MSHR release and `msInfo` state source.
+9. [`TXRSP.scala`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TXRSP.scala:47) and [`TXDAT.scala`](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TXDAT.scala:47): output buffers, ingress-capacity protection, and error encoding.
+
+## 20. Summary
+
+RXSNP is a small but non-isolated control ingress in the Kunminghu V2 CHI CoupledL2. Its two-entry Queue decouples Snoop arrival, while request/replacement/CMO MSHR snapshots decide precisely when to retain the head or advance it with nested-release context. Coherence actions themselves are completed jointly by RequestArb, Directory, MainPipe, MSHR, and TX.
+
+The three most common misreadings are treating stand-alone `huancun/SinkB` as RXSNP, treating `rxsnp.fire` as the external CHI-input fire, and treating every same-address MSHR as an unconditional stall. None follows from this commit. Validation should prioritize MSHR-state windows, C > B > A arbitration, TX look-ahead capacity, and the nested-replacement uniqueness assertion.

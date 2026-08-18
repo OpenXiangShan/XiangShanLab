@@ -1,8 +1,16 @@
+<!--
 # 香山昆明湖 V2 LoadQueue 源码分析
 
 > 结论先行：昆明湖 V2 的 `LoadQueue` 不是“保存 load 的一个 FIFO”。顶层把虚拟生命周期队列、RAW/RAR 检查表、Replay 队列、uncache 队列和异常地址缓冲组合在一起。真正控制 dispatch 资源的是 `VirtualLoadQueue` 与 `StoreQueue` 的联合可接受条件；RAW/RAR 满不会直接把 `lqFull` 拉高，而是让相应检查请求的 `ready` 变低，令 LoadUnit 走 replay。本文所有“实际行为”均以给定本地 V2 源码为准。
+-->
+# XiangShan Kunminghu V2 LoadQueue Source-Code Analysis
 
+> **Conclusion first:** The Kunminghu V2 `LoadQueue` is not a FIFO that merely stores loads. At the top level, it composes a virtual lifecycle queue, RAW/RAR check tables, a replay queue, an uncache queue, and an exception-address buffer. Dispatch resources are governed by the joint acceptance condition of `VirtualLoadQueue` and `StoreQueue`; a full RAW or RAR table does not directly assert `lqFull`. Instead, it deasserts `ready` for the corresponding check request and causes the LoadUnit to replay. Every statement of actual behavior in this document is based on the supplied local V2 source tree.
+
+<!--
 ## 1. 范围与证据
+-->
+## 1. Scope and Evidence
 
 ```text
 Branch/path:
@@ -10,7 +18,7 @@ Branch/path:
 Source commit:
   e12436c7cba86b195deec24981976d78bc263661
 Design Doc baseline:
-  not consulted；/home/yanyusong/XiangShanLab/XiangShan-Design-Doc 在本环境不存在
+  not consulted; /home/yanyusong/XiangShanLab/XiangShan-Design-Doc is not present in this environment
 XiangShan source baseline:
   https://github.com/OpenXiangShan/XiangShan.git, branch kunminghu-v2, commit e12436c7...
 Comparison:
@@ -22,8 +30,8 @@ Files/modules read:
   LoadExceptionBuffer.scala, LoadMisalignBuffer.scala, LoadQueueData.scala,
   FreeList.scala, StoreQueue.scala, DCacheWrapper.scala, TLB.scala, Rob.scala
 Theory/course/design docs read:
-  14_LoadStore.md；本目录 README；skill 的 memory/queue/exception/difftest/
-  cross-boundary/verification 参考资料
+  14_LoadStore.md; this directory's README; the skill's memory/queue/exception/difftest/
+  cross-boundary/verification reference material
 Effective instantiation path:
   MemBlock -> LsqWrapper -> LoadQueue -> {VirtualLoadQueue, RAW, RAR,
   Replay, Uncache, LqExceptionBuffer}
@@ -34,13 +42,23 @@ Special paths covered:
   16B misalignment, page/cache-line/MMIO boundary, queue capacity, difftest
 ```
 
+<!--
 - 本文按用户明确给出的本地源码路径分析。源码工作树本来就有与本任务无关的 `difftest` 修改和未跟踪 `src/main/resources/aia/`；本文引用的 LoadQueue 相关 Scala 文件没有未提交 diff，未修改源码。
 - 已按 skill 运行 weekly sync；本次结果为“距上次同步不足 7 天，跳过”。课程仓库也保留原有未跟踪内容，未做 pull、清理或覆盖。
 - 证据等级：**[代码]** 表示该 commit 中的实例化/连接/状态更新已追到；**[课程意图]** 是课程材料对设计动机的说明；**[推断/待验证]** 明确标出，不能作为已证实的时序或功能。
 - 当前目录已有的 `memory/mdp-ref.md` 标题写明 KunMingHu v3、提交也不同；它和 `Mem-MDP.md` 只可作背景，**不能**作为本文 V2 行为证据。
+-->
+- This analysis uses the local source path explicitly supplied by the user. The source worktree already contained unrelated `difftest` modifications and an untracked `src/main/resources/aia/` directory; the LoadQueue-related Scala files cited here had no uncommitted diff, and no source code was modified.
+- The skill's weekly synchronization was run and reported: "less than seven days since the previous synchronization; skipped." Existing untracked course-repository content was preserved; no pull, cleanup, or overwrite was performed.
+- Evidence levels: **[Code]** means that instantiation, wiring, or state update has been traced in this commit; **[Course intent]** describes the design motivation given in the course material; **[Inference / to be verified]** is explicitly identified and must not be treated as established timing or functionality.
+- The `memory/mdp-ref.md` file in this directory identifies itself as KunMingHu v3 and uses a different commit. It and `Mem-MDP.md` are background material only and **cannot** serve as evidence for V2 behavior in this document.
 
+<!--
 ## 2. 关键源码证据
+-->
+## 2. Key Source-Code Evidence
 
+<!--
 | 主题 | V2 源码证据 | 短 Chisel 片段 | 证明的事实 |
 | --- | --- | --- | --- |
 | 容量与端口 | [Parameters.scala:167–175](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:167>)、[214–216](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214>) | `VirtualLoadQueueSize = 72` | VLQ=72、RAR=72、RAW=32、Replay=72、uncache=16；标量 LoadUnit=3、StoreUnit=2。 |
@@ -53,8 +71,24 @@ Special paths covered:
 | LoadUnit 写回 LQ | [LoadUnit.scala:1582–1631](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1582>) | `io.lsq.ldin.valid := ...` | S3 将结果、异常、地址有效位、重放原因写入 LQ；非对齐路径被单独送入 MAB。 |
 | 全局恢复 | [MemBlock.scala:1424–1443](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1424>) | `selectOldestRedirect` | LDU、Hybrid、RAW nuke 和 uncache nack 多个恢复源竞争时，MemBlock 按 ROB 年龄只输出最老 redirect。 |
 | 架构可见事件 | [Rob.scala:1533–1595](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:1533>) | `DiffInstrCommit / DiffLoadEvent` | LQ 内部 allocate、replay、flush 本身不是 Difftest load event；事件在 ROB commit 才产生。 |
+-->
+| Topic | V2 source evidence | Short Chisel excerpt | Established fact |
+| --- | --- | --- | --- |
+| Capacity and ports | [Parameters.scala:167–175](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:167>), [214–216](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214>) | `VirtualLoadQueueSize = 72` | VLQ=72, RAR=72, RAW=32, Replay=72, uncache=16; scalar LoadUnit=3 and StoreUnit=2. |
+| LQ composition | [LoadQueue.scala:214–219](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:214>) | `Module(new LoadQueueRAW)` | The top level explicitly instantiates RAR, RAW, Replay, VLQ, an exception buffer, and an uncache buffer. No individual subtable is therefore equivalent to the complete LQ. |
+| Joint dispatch admission | [LSQWrapper.scala:155–184](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:155>) | `lq.canAccept && sq.canAccept` | The LSQ's dispatch-facing `canAccept` is the conjunction of LQ and SQ acceptance; the same slot's `lqIdx/sqIdx` are completed crosswise. |
+| VLQ lifecycle | [VirtualLoadQueue.scala:69–73](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:69>), [93–201](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:93>) | `allocated / committed / enqPtrExt` | VLQ owns the primary state for LQ allocation, completion, contiguous dequeue, circular pointers, and redirect cancellation. |
+| RAW detection | [LoadQueueRAW.scala:76–122](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:76>), [211–362](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:211>) | `hasAddrInvalidStore` | Entries are created only for loads that may still be affected by an older store whose address is unresolved; when the store address arrives, the table checks address, mask, and age and selects the oldest violation. |
+| RAR detection | [LoadQueueRAR.scala:95–109](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:95>), [224–268](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:224>) | `released(i)` | RAR stores partial physical addresses for loads awaiting release; release and the source-defined ROB-age predicate jointly determine `rep_frm_fetch`. |
+| Replay | [LoadQueueReplay.scala:218–270](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:218>), [491–730](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:491>) | `scheduled(enqIndex) := false.B` | It records the replay cause and blocking conditions, selects the oldest entry, reads its address, constructs an `LsPipelineBundle`, and returns it to the LoadUnit. |
+| LoadUnit writeback to LQ | [LoadUnit.scala:1582–1631](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1582>) | `io.lsq.ldin.valid := ...` | S3 writes results, exceptions, address-valid information, and replay causes to the LQ; the misaligned path is sent separately to the MAB. |
+| Global recovery | [MemBlock.scala:1424–1443](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1424>) | `selectOldestRedirect` | When recovery sources from LDU, Hybrid, RAW nuke, and uncache nack compete, MemBlock emits only the oldest redirect by ROB age. |
+| Architecturally visible events | [Rob.scala:1533–1595](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:1533>) | `DiffInstrCommit / DiffLoadEvent` | Internal LQ allocation, replay, and flush are not themselves Difftest load events; the event is produced only at ROB commit. |
 
+<!--
 下面这个顶层片段是整篇分析的边界依据：
+-->
+The following top-level excerpt defines the scope of this analysis:
 
 ```scala
 val loadQueueRAR     = Module(new LoadQueueRAR)
@@ -65,10 +99,17 @@ val exceptionBuffer  = Module(new LqExceptionBuffer)
 val uncacheBuffer    = Module(new LoadQueueUncache)
 ```
 
+<!--
 以上是 [LoadQueue.scala:214–219](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:214>) 的原始结构，不是概念图。
+-->
+This is the literal structure of [LoadQueue.scala:214–219](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:214>), not a conceptual diagram.
 
+<!--
 ## 3. 理论、课程意图与有效代码
+-->
+## 3. Theory, Course Intent, and Effective Code
 
+<!--
 | 层次 | 本文采用的内容 | 不能越界的结论 |
 | --- | --- | --- |
 | 理论 | LSQ 允许 load 在未知旧 Store 地址时推测执行，再用地址比较、重放/redirect 保证 memory ordering；队列需在 redirect、异常、资源满时保持年龄关系。 | 这解释“为何有 RAW/RAR/Replay”，但不自动给出昆明湖的容量、端口或固定周期。 |
@@ -113,6 +154,52 @@ val uncacheBuffer    = Module(new LoadQueueUncache)
 ## 5. 顶层连接、接口与握手
 
 ### 5.1 Top-Level Module Connectivity（有效层次与主要边）
+-->
+
+| Layer | Material used here | Boundary on conclusions |
+| --- | --- | --- |
+| Theory | An LSQ permits a load to speculate past older stores with unknown addresses, then uses address comparison plus replay/redirect to preserve memory ordering. Queues must retain age relationships through redirect, exception, and resource exhaustion. | This explains why RAW/RAR/Replay exist; it does not establish Kunminghu capacities, ports, or fixed timing. |
+| Course intent | [14_LoadStore.md:311-397](</home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:311>) presents LQ as cooperating structures and describes joint LQ/SQ allocation and recovery. | Course text must be checked against wiring, registers, and parameters of this commit. |
+| Effective V2 code | `LoadQueue` instantiation/wiring, VLQ `allocated/committed`, RAW/RAR CAMs, Replay FreeList, LoadUnit S0-S3, and MemBlock oldest redirect. | Only instantiated V2 entities with live wiring are called "actual behavior." |
+
+### 3.1 Traceability Matrix: Course Intent to V2 Source
+
+No readable local Design Doc is available, so no Design-Doc sentence is presented as a behavioral conclusion. The following maps **course material** to source, rather than substituting for a Design Doc.
+
+| ID | Atomic course claim | V2 source / relationship | Status |
+| --- | --- | --- | --- |
+| C1 | LQ is several cooperating structures, not one FIFO. | [LoadQueue.scala:214-345](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:214>) instantiates and connects six kinds of submodule. | Verified |
+| C2 | LQ/SQ allocation must succeed together and provide one another's indices. | Conjoined `canAccept` and crossed `lqIdx/sqIdx` in [LSQWrapper.scala:158-184](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:158>). | Verified |
+| C3 | VLQ manages lifecycle, completion order, and capacity. | Arrays, pointers, contiguous dequeue, and redirect clear in [VirtualLoadQueue.scala:69-282](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:69>). | Verified |
+| C4 | RAW tracks only loads possibly affected by an unresolved older-store address. | `stAddrReadySqPtr`, demand FreeList allocation, and release in [LoadQueueRAW.scala:115-205](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:115>). | Verified |
+| C5 | RAW selects the oldest violation and recovers. | CAM/mask/ROB comparisons and selection tree: [LoadQueueRAW.scala:211-362](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:211>); MemBlock arbitrates globally: [MemBlock.scala:1424-1443](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1424>). | Verified |
+| C6 | RAR uses release plus load-load age checking to decide whether to recover from fetch. | `rep_frm_fetch` in [LoadQueueRAR.scala:224-266](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:224>), consumed into `flushAfter` by [LoadUnit.scala:1606-1685](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1606>). | Verified |
+| C7 | Replay waits for different events depending on its cause. | Cause plus Store/TLB/TL-D dependencies in [LoadQueueReplay.scala:275-370](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:275>) and [635-719](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:635>). | Verified |
+| C8 | MMIO is constrained by ROB order and NC uses a special path. | `pendingPtr` gating and FSM in [LoadQueueUncache.scala:122-161](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122>). | Verified |
+| C9 | V3 MDP parameters/timing directly apply to V2 LQ. | `memory/mdp-ref.md` identifies V3/a different commit and this analysis has not traced its V3 `NewLoadUnit` path. | Version mismatch; excluded as V2 evidence |
+| C10 | Cross-page exception-address overwrite for a misaligned access is always effective. | [LoadMisalignBuffer.scala:625-645](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:625>) computes a candidate, but this commit uses `overwriteExpBuf.valid := false.B`. | Partial; must not claim the overwrite path is enabled |
+
+### 3.2 Design-Document Differences and Version Risks
+
+* **No Design Doc:** there is no locally verifiable baseline, so it is recorded as `not consulted` rather than reconstructed from memory.
+* **Risk of V3 contamination:** `mdp-ref.md` and `Mem-MDP.md` describe `NewLoadUnit`, seven-bit indices, and waveform-nanosecond values from a different baseline. They can clarify the general prediction/detection/replay idea but cannot prove V2 interfaces here.
+* **Risk in the name `committed`:** VLQ sets this bit when LoadUnit S3 has no replay and the address is valid, then frees a contiguous LQ prefix. It is an **in-queue completion/dequeue-eligibility state**, not ROB ISA commit merely because of its name. Architectural visibility still follows the ROB/Difftest path.
+
+## 4. Module Contract: Who / Why / How / From / To
+
+| Entity | Who owns it | Why | How | From | To |
+| --- | --- | --- | --- | --- | --- |
+| `LsqEnqCtrl + LsqWrapper` | The former maintains dispatch pointers/credits; the latter sends requests to LQ/SQ. | Prevents a half allocation where LQ has space but SQ does not. | `canAccept` is the conjunction of queue acceptance; requests are delayed one cycle to inner LSQ; each slot receives the other queue's returned index. | Dispatch `ValidIO[DynInst]`, `needAlloc(0/1)`, `iqAccept`. | `LoadQueue.enq`, `StoreQueue.enq`, and dispatch-side `LSIdx`. |
+| `VirtualLoadQueue` | Primary lifecycle owner of LQ. | Lets loads that complete at different times release in LQ/ROB age order. | Circular `enqPtrExt/deqPtr`, `allocated/committed`, and redirect-cancel counting. | Dispatch allocation, LDU S3 `ldin`, vector feedback, redirect. | `lqFull/lqDeq/lqCancelCnt/ldWbPtr` for dispatch, RAR/Replay, and LSQ control. |
+| `LoadQueueRAW` | Store S1 drives detection; LDU S1 queries; MemBlock consumes rollback. | Detects a younger load that passed an older store with unresolved address. | Partial physical-address plus byte-mask CAM; selects oldest by ROB age; outputs `flush` redirect. | `storeIn`, `stAddrReadySqPtr`, LDU `stld_nuke_query`. | `rollback`, LDU query `ready`, Replay `rawFull`. |
+| `LoadQueueRAR` | DCache release updates entries; LDU queries. | Handles source-defined load-load/release timing risk. | Holds partial paddr and `released`; a same-address query meeting its ROB predicate gets `rep_frm_fetch`. | `release`, `ldWbPtr`, `ldld_nuke_query`. | LoadUnit S3 `flushAfter` path and Replay `rarFull` input. |
+| `LoadQueueReplay` | Written by LDU S3, selected by internal scheduler, received by LDU S0. | Reissues temporarily incomplete accesses after their specific blocker clears instead of permanently blocking the pipeline. | FreeList plus cause/blocking/scheduled/VAddr storage, age selection, two register stages, and `Decoupled` replay output. | `LqWriteBundle.rep_info`, Store ready, TL-D, TLB/L2 hints, ROB dequeue. | `io.replay(i)` to LoadUnit, or entry release/redirect clear. |
+| `LoadQueueUncache` | Written by LDU S3; shares bus with LSQWrapper and StoreQueue. | Separates NC/MMIO from cacheable flow and lets MMIO issue only at visible ordering points. | Per-entry FSM; NC may issue, MMIO must match `pendingPtr`; LQ/SQ arbitration and `is2lq` return. | `ldin`, ROB pending pointer, uncache req/resp, redirect. | `ldout/ncOut`, exception buffer, uncache rollback. |
+| `LqExceptionBuffer` | Collected by LoadQueue; address consumed by MemBlock/ROB. | Retains oldest when scalar/vector/MMIO exceptions arrive together. | Filters redirect, recursively selects oldest by `robIdx/uopIdx`, and retains one item. | Scalar `ldin`, vector feedback, uncache error. | `exceptionAddr` and upper-level exception selection. |
+
+## 5. Top-Level Connectivity, Interfaces, and Handshakes
+
+### 5.1 Top-Level Module Connectivity (Effective Hierarchy and Major Edges)
 
 ```mermaid
 flowchart LR
@@ -136,6 +223,7 @@ flowchart LR
   MB -->|memoryViolation| Backend[Backend / CtrlBlock]
 ```
 
+<!--
 图中每条边均有源码连接：LQ 子模块 wiring 见 [LoadQueue.scala:223–345](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:223>)，LQ/SQ wrapper wiring 见 [LSQWrapper.scala:171–243](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:171>)，LoadUnit 与 DTLB/DCache 的接口见 [LoadUnit.scala:383–423](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383>)。
 
 ### 5.2 关键接口表
@@ -263,6 +351,135 @@ io.lqDeq := GatedRegNext(lastCommitCount)
 见 [VirtualLoadQueue.scala:134–159](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:134>)。这说明只有从 `deqPtr` 开始的一段连续 ready/committed prefix 才能释放；一个更年轻 load 即使早完成，也不能跨过尚未完成的旧 entry。`lqDeq` 又经过寄存器延迟，LsqEnqCtrl 以它回收 dispatch 侧 credit。
 
 ### 7.4 VLQ 状态图
+-->
+
+Every edge in the diagram has source wiring: LoadQueue submodule wiring is at [LoadQueue.scala:223-345](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:223>), LQ/SQ Wrapper wiring at [LSQWrapper.scala:171-243](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:171>), and LoadUnit interfaces to DTLB/DCache at [LoadUnit.scala:383-423](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383>).
+
+### 5.2 Key Interface Table
+
+| Edge | Protocol and payload | Producer -> consumer | Advance/block condition | Must not be misread as |
+| --- | --- | --- | --- | --- |
+| Dispatch -> `LsqEnqCtrl` | `ValidIO[DynInst]` plus `needAlloc(2b)` and `iqAccept`, not per-slot `Decoupled` | Dispatch -> controller | Global `io.enq.canAccept` is registered LQ/SQ headroom plus redirect-recovery condition; actual send is `do_enq = valid && !redirect && canAccept` | `req.valid` alone proving allocation |
+| `LsqWrapper` -> LQ/SQ | `needAlloc(i)(0)` for LQ, `needAlloc(i)(1)` for SQ; `resp` carries two indices | Wrapper -> queues | `loadQueue.canAccept && storeQueue.canAccept` | LQ acceptance alone proving Store/AMO acceptance |
+| LoadUnit S1 -> RAW/RAR | `LoadNukeQueryIO`; `req` is `Decoupled`, response has `valid/rep_frm_fetch`, and `revoke` | LDU -> RAW/RAR | If an entry is needed, FreeList `canAllocate` controls req.ready; otherwise ready=1 | RAR/RAW full being dispatch `lqFull` |
+| LoadUnit S3 -> LQ | `Decoupled[LqWriteBundle]` with paddr/vaddr, mask, exception, `updateAddrValid`, `rep_info`, etc. | LDU -> VLQ/Replay/Uncache/exception sideband | VLQ uses `ready := true`; Replay also uses `ready := true` plus an overflow assertion | `ldin.valid` being architectural writeback |
+| StoreUnit -> LQ | S1 `Valid[LsPipelineBundle]` address plus S0 `Valid[MemExuOutput]` data | STU -> RAW/Replay | No `ready` backpressure; consumers use register/CAM timing | A committed Store |
+| `LoadQueueReplay` -> LDU S0 | `Decoupled[LsPipelineBundle]` | Replay -> LoadUnit | Replay waits for LoadUnit ready and competes with other S0 sources by priority | Enqueued replay immediately reaching DCache next cycle |
+| Redirect / release | `Valid[Redirect]`, `Valid[Release]`, no ready | Backend/DCache -> LQ structures | Each state-owning submodule filters `needFlush` or clears explicitly | Lack of ready removing the need to trace multi-cycle recovery |
+
+### 5.3 Actual Handshake for Joint Allocation
+
+The core [LSQWrapper.scala:155-184](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:155>) logic is:
+
+```scala
+io.enq.canAccept := loadQueue.io.enq.canAccept && storeQueue.io.enq.canAccept
+loadQueue.io.enq.req(i).valid := io.enq.needAlloc(i)(0) && io.enq.req(i).valid
+storeQueue.io.enq.req(i).valid := io.enq.needAlloc(i)(1) && io.enq.req(i).valid
+loadQueue.io.enq.req(i).bits.sqIdx := storeQueue.io.enq.resp(i)
+storeQueue.io.enq.req(i).bits.lqIdx := loadQueue.io.enq.resp(i)
+```
+
+`LsqEnqCtrl` at [LSQWrapper.scala:403-431](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:403>) uses `RegNext` to create `canAccept`, then delays `do_enq` one cycle into the inner LSQ. The correct observation sequence is:
+
+1. Dispatch considers its current bundle acceptable only while it observes `canAccept`.
+2. `LsqEnqCtrl` computes load/store element counts and predicted returned indices.
+3. On the next cycle, inner `LsqWrapper` receives locked `lqIdx/sqIdx` values.
+4. LQ and SQ each accept their own entries according to `needAlloc`.
+
+This is a combined eligibility plus registered control/data handoff, not a single-cycle `valid && ready` bus. Verification must distinguish dispatch acceptance from the inner one-cycle delay of `enqLsq.valid`.
+
+## 6. Parameters, Indices, and Capacity
+
+### 6.1 Parameters at This Commit
+
+| Parameter / derived quantity | Value or expression | Direct effect | Evidence |
+| --- | --- | --- | --- |
+| `RenameWidth / LSQEnqWidth` | 6 / `RenameWidth` | Maximum LSQ slots in one dispatch bundle | [Parameters.scala:149-151](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:149>), [783-785](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:783>) |
+| `LSQLdEnqWidth` | `min(RenameWidth, numLoadDp) = 6` | VLQ reservation capacity and maximum LQ dispatch reservation | `numLoadDp`: [BackendParams.scala:132](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/BackendParams.scala:132>); default LDU0/1/2 `numEnq=2`: [Parameters.scala:479-486](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:479>) |
+| `LoadPipelineWidth` | 3 | Number of LDU S0-S3, RAW/RAR query ports, and Replay output ports | [Parameters.scala:214](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214>) |
+| `VirtualLoadQueueSize` | 72 | VLQ circular-entry count | [Parameters.scala:167](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:167>) |
+| `LoadQueueRARSize / RAWSize / ReplaySize` | 72 / 32 / 72 | Independent capacities of the three auxiliary tables | [Parameters.scala:168-171](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:168>) |
+| `LoadUncacheBufferSize` | 16 | Number of uncache load entries | [Parameters.scala:172](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:172>) |
+| `LoadQueueNWriteBanks` | 8 | Multiwrite-bank organization for RAR/RAW/Replay address structures | [Parameters.scala:173](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:173>) |
+| `RollbackGroupSize` | 8 | Grouping granularity of RAW oldest-candidate selection tree | [Parameters.scala:170](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:170>), [790-791](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:790>) |
+| `CommitWidth` | 8 | Maximum contiguous VLQ dequeue progress observed/advanced in one step | [Parameters.scala:151-152](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:151>), [VirtualLoadQueue.scala:134-153](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:134>) |
+
+The direct parameter relationship to `KunminghuV2Config` was checked. It combines `DefaultConfig` with L2/CHI configuration but has no direct override for these LQ core parameters: [Configs.scala:460-485](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:460>). Recalculate derived widths if later elaboration uses `KunminghuV2MinimalConfig` or another override.
+
+**Key distinction:** `LSQLdEnqWidth=6` is dispatch/allocation width, while `LoadPipelineWidth=3` is scalar execution-pipeline count. "Up to six LQ elements reserved per cycle" does not mean six scalar loads can complete a DCache access per cycle.
+
+### 6.2 `lqIdx`, `sqIdx`, and Pointers
+
+| Index/pointer | Source and wrap | Allocation/update | Consumers | Conflict/recovery |
+| --- | --- | --- | --- | --- |
+| `LqPtr / lqIdx` | `LqPtr` is a circular pointer of length `VirtualLoadQueueSize`, with value/flag semantics | LsqEnqCtrl predicts index for dispatch; VLQ rechecks by `enqPtrExt + prefix offset` and returns `resp` | LoadUnit, VLQ, RAR, Replay, and RAW uop metadata | Redirect applies a two-stage `redirectCancelCount` rollback; an incorrect same-cycle index has `XSError` |
+| `SqPtr / sqIdx` | StoreQueue circular pointer | Allocated by LsqEnqCtrl/StoreQueue; returned `sqIdx` enters the LQ request bits for the same DynInst | RAW check of whether an older Store address is ready; SQ forwarding | LsqEnqCtrl corrects with `sqCancelCnt` after redirect; it must not be assumed to identify a committed store |
+| `enqPtrExt` | VLQ holds `LSQEnqWidth` extended pointers | Adds all valid `numLsElem` normally; subtracts cancel count on redirect | Dispatch `lqIdx`, `deqPtr` valid-count calculation | `deqPtrNext+i` prevents enqueue pointer from falling behind dequeue |
+| `deqPtr / ldWbPtr` | VLQ circular dequeue pointer | Only a contiguous prefix of `allocated && committed` can advance; `ldWbPtr` exposes current dequeue | RAR checks whether older load has not finished; LsqEnqCtrl recovers resources | A same-cycle redirect-cancelled entry is excluded from dequeue mask |
+| Replay `schedIndex` | Replay FreeList slot | New replay allocates a slot; a reexecuted replay releases it if no longer required, otherwise clears `scheduled` | LoadQueueReplay updates the same table entry | Redirect clears the slot; it is not a dispatch LQ index |
+
+Circular/occupancy behavior appears at [LoadQueue.scala:37-49](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:37>), [CircularQueuePtr.scala:23-59](</home/yanyusong/xs-memory-env/XiangShan/utility/src/main/scala/utility/CircularQueuePtr.scala:23>), and [94-118](</home/yanyusong/xs-memory-env/XiangShan/utility/src/main/scala/utility/CircularQueuePtr.scala:94>). Because 72 is not a power of two, verification must cover value wrap and flag inversion rather than only low-bit overflow.
+
+VLQ capacity is not simply `validCount == 72`:
+
+```scala
+val validCount = distanceBetween(enqPtrExt(0), deqPtr)
+val allowEnqueue = validCount <= (VirtualLoadQueueSize - LSQLdEnqWidth).U
+io.enq.canAccept := allowEnqueue
+io.lqFull := !allowEnqueue
+```
+
+See [VirtualLoadQueue.scala:93-95,167,279-282](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:93>). With defaults, occupancy must be at most 66 before accepting a dispatch bundle with up to six load elements; it may reach 72 after acceptance. This reservation prevents partial acceptance of a wide bundle; it does not reduce physical depth to 66.
+
+### 6.3 Three Different Meanings of "Full"
+
+| Signal | Source | Affects | Does not affect |
+| --- | --- | --- | --- |
+| `lqFull` | Connected only to `VirtualLoadQueue.io.lqFull` | LQ dispatch resource acceptance | It does not directly OR RAR, RAW, or Replay full |
+| `lq_rep_full` | `LoadQueueReplay.io.lqFull` | Important saturation signal for LDU/replay and performance observation | It is not VLQ dispatch backpressure |
+| `rarFull/rawFull` | RAR/RAW FreeList empty, supplied to Replay | When tracking is needed, corresponding query gets `ready=0`; LDU forms `C_RAR/C_RAW` replay | It cannot independently assert `LoadQueue.io.lqFull` |
+
+Actual wiring is at [LoadQueue.scala:248-258](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:248>) and [319-355](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:319>). LoadUnit converts query non-ready into RAR/RAW causes at [LoadUnit.scala:1276-1280](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1276>).
+
+## 7. VirtualLoadQueue: State, Updates, and In-Order Release
+
+### 7.1 Storage and Lifecycle
+
+| State/storage | Reset | Write/update | Clear | Reader/use |
+| --- | --- | --- | --- | --- |
+| `allocated(72)` | All zero | Set when dispatch hits entry boundary | Cleared by contiguous dequeue or redirect `needCancel` | `deqLookup`, capacity/perf, vector completion |
+| `robIdx/uopIdx/isvec` | Payload registers; `isvec` resets to 0 | Written from accepted `DynInst` | Payload need not be cleared; `allocated=0` hides stale payload | Age comparison, vector feedback, exception/debug |
+| `committed` | Not explicitly reset; written 0 on each allocation | Scalar: LDU S3 `valid && !need_rep && updateAddrValid && !isvec`; vector: matching feedback | Entry dequeue or next allocation overwrite | Allows only contiguous completed entry release |
+| `debug_mmio/debug_paddr` | mmio=0, paddr=0 | Written by successful scalar LDU S3 path | Initialized on next entry allocation | Debug/ROB context |
+| `enqPtrExt/deqPtr` | Pointers reset to 0 | Allocation adds elements; dequeue advances by delayed `commitCount` | Redirect fixes them with cancel count, not physical payload movement | Capacity, `lqIdx`, `lqDeq`, `ldWbPtr` |
+
+Definitions/allocation writes are at [VirtualLoadQueue.scala:61-85,172-201](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:61>); completion/clear is at [203-276](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:203>).
+
+### 7.2 Dispatch Writes and Redirect Recovery
+
+Each dispatch slot's `numLsElem` can exceed one, for example in a vector flow. VLQ computes a `validVLoadOffset` prefix sum, so one `DynInst` can cover contiguous LQ entries. It visits all 72 physical entries, uses boundary/flag logic to test whether an entry lies in `[lqIdx, lqIdx+numLsElem)`, and uses `ParallelPriorityMux` to choose that slot's payload: [VirtualLoadQueue.scala:112-123,168-192](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:112>).
+
+Redirect recovery is staged rather than a one-cycle pointer reset:
+
+1. The current cycle computes `needCancel` from existing `allocated` and counts newly dispatched elements that should be flushed.
+2. `lastCycleRedirect`/`lastLastCycleRedirect` retain two timing stages; `redirectCancelCount` registers the prior cycle's usable cancel count.
+3. When `lastLastCycleRedirect.valid`, `enqPtrExtNextVec := enqPtrExt - redirectCancelCount`.
+4. Cancelled entries clear `allocated`; the dequeue mask also excludes entries cancelled in the redirect cycle.
+
+Implementation is at [VirtualLoadQueue.scala:90-131](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:90>) and [230-236](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:230>). The source asserts that `lastCycleRedirect.valid && enqNumber != 0` cannot occur; waveforms and formal verification should cover that contract directly.
+
+### 7.3 Contiguous Release, Not Release on Arbitrary Completion
+
+```scala
+val deqLookup = VecInit(deqLookupVec.map(ptr =>
+  allocated(ptr.value) && committed(ptr.value) && ptr =/= enqPtrExt(0)))
+val commitCount = PopCount(PriorityEncoderOH(~deqCountMask) - 1.U)
+io.lqDeq := GatedRegNext(lastCommitCount)
+```
+
+See [VirtualLoadQueue.scala:134-159](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:134>). Only a contiguous ready/committed prefix starting at `deqPtr` can be released; a younger load cannot bypass an unfinished older entry merely by finishing earlier. `lqDeq` is itself delayed through a register, and LsqEnqCtrl uses it to recover dispatch-side credit.
+
+### 7.4 VLQ State Diagram
 
 ```mermaid
 stateDiagram-v2
@@ -278,6 +495,7 @@ stateDiagram-v2
   end note
 ```
 
+<!--
 这个状态图描述 [VirtualLoadQueue.scala:172–276](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:172>) 已实现的状态位转换；真正 ROB commit/Difftest 另见第 16 节。
 
 ## 8. 辅助表的存储、FreeList 与同拍冲突
@@ -547,6 +765,264 @@ when (io.uncache.resp.bits.is2lq) {
 
 见 [LSQWrapper.scala:265–329](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265>)。同拍 LQ/SQ 都有请求时，较老 ROB 的 LQ request 赢；response 由 `is2lq` 回送。该 wrapper 还断言 load/store response 不能同时有效。故“uncache buffer 有 16 项”不代表总线可以同时有 16 个普通 MMIO transaction。
 
+-->
+
+This state diagram describes the implemented state-bit transitions in [VirtualLoadQueue.scala:172-276](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:172>). Actual ROB commit/Difftest is covered separately in Section 16.
+
+## 8. Auxiliary-Table Storage, FreeList, and Same-Cycle Conflicts
+
+### 8.1 FreeList Is Not an Abstract "Free-Slot Counter"
+
+RAR, RAW, and Replay all use `FreeList`, but with different configurations:
+
+| Owner | Depth | Allocate width / free width | `enablePreAlloc` | Meaning |
+| --- | ---: | --- | --- | --- |
+| RAR | 72 | 3 / 4 | false | `allocateSlot` is derived from current head plus offset. |
+| RAW | 32 | 3 / 4 | true | Allocatable slots use the preallocation path. |
+| Replay | 72 | 3 / 4 | true | First replay allocates; repeated replay uses retained `schedIndex`. |
+
+Definitions are at [LoadQueueRAR.scala:115-122](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:115>), [LoadQueueRAW.scala:106-113](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:106>), and [LoadQueueReplay.scala:255-270](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:255>). Shared reset/allocation/reclamation behavior is in [FreeList.scala:43-132](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/FreeList.scala:43>):
+
+* Reset creates `freeList = 0..N-1`, head `(flag=0,value=0)`, tail `(flag=1,value=0)`, and N free slots.
+* Allocation takes slots FIFO from head; multiple ports use prefix offsets for distinct slots.
+* Reclamation groups `freeMask` by residue and uses `PriorityEncoderOH` to enqueue at most one per group per cycle. Remaining requests are retained for subsequent cycles, not silently discarded.
+* `empty` means zero free slots; `validCount` aids occupancy/performance observation but cannot replace the actual `canAllocate(offset)` qualification.
+
+### 8.2 Address/Mask Storage and CAM
+
+`LqRawDataModule` is `Reg(Vec)`, not an SRAM with automatic bypass. It reads through `RegEnable(data(raddr), ren)`, writes after configured `numWDelay`, and asserts if two write ports hit the same entry: [LoadQueueData.scala:62-132](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueData.scala:62>).
+
+| Risk | Effective source behavior | Verification conclusion |
+| --- | --- | --- |
+| Two writes to same address | `XSError` forbids two write ports to one entry | Use assertion/cover; do not assume a later port overrides an earlier port. |
+| Same-cycle read/write | No explicit read-after-write bypass | Exact old/new register timing requires elaborated Verilog/waveform; this document does not claim bypass. |
+| Bank organization | `UIntToOH(waddr)` divides contiguous entry ranges: 72/8 gives 9 entries per bank, 32/8 gives 4 | Do not draw it as low-index interleaved banks. |
+| RAW CAM | `LqPAddrModule` enables cache-line condition and `LqMaskModule` additionally requires byte-mask overlap | Equal address alone is not a violation; mask, age, valid, and non-flush conditions also apply. |
+| RAR CAM | RAR holds a 16-bit XOR-fold partial paddr and disables cache-line check | Hash/signature alias can at most cause extra replay; no full-PAddr compare appears in this table, so verify impact formally/performance-wise. |
+
+Address/release matching is at [LoadQueueData.scala:136-205](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueData.scala:136>), mask overlap at [210-240](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueData.scala:210>). These CAMs serve ordering/release checks; they do **not** implement split requests across cache lines.
+
+### 8.3 Actual Backpressure When an Auxiliary Table Is Full
+
+RAR/RAW use FreeList `canAllocate(offset)` only when the load **needs a tracking entry**. Otherwise source forces `ready=true`:
+
+```scala
+val canAccept = freeList.io.canAllocate(offset)
+enq.ready := Mux(needEnqueue(w), canAccept, true.B)
+```
+
+RAR uses this at [LoadQueueRAR.scala:146-183](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:146>), RAW at [LoadQueueRAW.scala:128-168](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:128>). Thus a full auxiliary table does not prohibit all later load issue. Only a load that would create that tracking entry is nacked, and LDU converts it to replay.
+
+## 9. LoadQueueRAR and LoadQueueRAW: Detection, Clearing, and Recovery
+
+### 9.1 RAR: Source-Defined Load-Load/Release Check
+
+RAR state is `allocated / uop / partial-PAddr / released`: [LoadQueueRAR.scala:84-109](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:84>). Its paddr signature XOR-folds several physical-address bits to 16 bits: [52-82](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:52>). Its source-defined rules are:
+
+1. If an LDU query is valid, its `lqIdx` is after `ldWbPtr`, and redirect does not kill it, `needEnqueue` is true. RAR takes a FreeList entry and writes uop and partial paddr: [134-183](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:134>).
+2. A new entry's `released` becomes true for `is_nc`, or for `data_valid` with a current/previous-cycle same-line DCache release; subsequent release-CAM hits also set it: [124-132](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:124>), [176-182](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:176>), [253-266](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:253>).
+3. Query response valid is `RegNext(query.req.valid)`. A match requires `allocated && partial-address match && isAfter(stored.robIdx, query.robIdx) && released`; `ParallelORR` then produces `rep_frm_fetch`: [224-250](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:224>).
+4. Because `isAfter(stored, query)` is the exact source age predicate, it is not simplified to an unverified generic "older-load check." It specifies the release-order relationship between current query and recorded load.
+5. RAR releases the entry when `ldWbPtr` passes its `lqIdx`, redirect kills it, or LDU S3 `revoke` hits the accepted item from the previous cycle: [190-223](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:190>).
+
+In LoadUnit S3, RAR `rep_frm_fetch` is ANDed with `csrCtrl.ldld_vio_check_enable`; the result can form `s3_flushPipe` at rollback level `flushAfter`: [LoadUnit.scala:1606-1612](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1606>), [1672-1685](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1672>). This differs from RAW's `flush` redirect.
+
+### 9.2 RAW: Track Only Loads with an Unknown Older Store Address
+
+RAW holds `allocated/uop/24-bit partial paddr/mask/datavalid`, enables `enableCacheLineCheck=true` in its PAddr CAM, and has two Store-pipeline CAM ports: [LoadQueueRAW.scala:57-113](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:57>). Its enqueue condition is:
+
+```scala
+val allAddrCheck = io.stIssuePtr === io.stAddrReadySqPtr
+val hasAddrInvalidStore = ... Mux(!allAddrCheck,
+  isBefore(io.stAddrReadySqPtr, sqIdx), false.B)
+val needEnqueue = query.valid && hasAddrInvalidStore && !cancelEnqueue
+```
+
+Thus, when every Store address is ready no RAW entry is needed. Otherwise, only loads whose `sqIdx` is after the address-ready pointer are tracked. Allocation writes the entry, partial paddr, mask, uop, and `datavalid`: [LoadQueueRAW.scala:115-168](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:115>).
+
+| Clear trigger | Condition | Result |
+| --- | --- | --- |
+| Store address catches up | `!isBefore(stAddrReadySqPtr, uop(i).sqIdx)` or all addresses ready | The load no longer faces an unknown older-store address; free entry. |
+| Redirect | `uop(i).robIdx.needFlush(io.redirect)` | Clear `allocated` and reclaim FreeList slot. |
+| LDU revoke | S3 has exception, replay, misalignment, and similar conditions; revoke hits prior-cycle allocation | Remove temporary tracking entry and prevent wrong-path contamination. |
+
+See [LoadQueueRAW.scala:175-208](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:175>) and [LoadUnit.scala:1691-1693](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1691>).
+
+### 9.3 RAW CAM and Oldest-Violation Selection
+
+Actual detection is triggered by Store S1 `storeIn`, not a generic LSQ allocation. The selection path is in [LoadQueueRAW.scala:211-362](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:211>):
+
+1. Store paddr/mask feeds PAddr and Mask CAMs.
+2. A candidate must be allocated, have a valid Store, represent a load younger than the Store, have `datavalid`, survive redirect, and overlap in address and byte mask.
+3. `selectPartialOldest` recursively selects the oldest candidate by `robIdx` in each group.
+4. Delayed group results form a redirect for that Store port at `RedirectLevel.flush`.
+
+With default RAW=32 and `RollbackGroupSize=8`, source gives `TotalSelectCycles = ceil(log2Ceil(32)/log2Ceil(8))+1 = 3`: [LoadQueueRAW.scala:241-287](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:241>). This is structural latency of the RAW selection tree, not end-to-end dispatch-to-architectural-recovery latency. Multiple Store-port rollbacks still go through MemBlock oldest-redirect arbitration.
+
+### 9.4 RAW/RAR Handshake Consequence in LDU
+
+LoadUnit S2 encodes `query.req.valid && !query.req.ready` for RAR/RAW as `rar_nack/raw_nack` and carries them alongside TLB miss, forwarding failure, DCache replay/miss, bank conflict, and other causes in `rep_info`: [LoadUnit.scala:1254-1280](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1254>), [1423-1447](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1423>). S3 selects a primary replay cause using `PriorityEncoderOH`: [LoadUnit.scala:1614-1631](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1614>).
+
+Therefore, insufficient auxiliary-table capacity makes this execution attempt retryable; it does not directly consume VLQ dispatch credit. This closes the execution-side causal loop for layered full signals in Section 6.3.
+
+## 10. LoadQueueReplay: Causes, Unblocking, Scheduling, and Progress
+
+### 10.1 What Each Replay Entry Stores
+
+Replay valid state is more than `allocated`:
+
+| Field group | Role | Later consumer |
+| --- | --- | --- |
+| `uop / VAddr / vecReplay` | Retains instruction, address, and vector metadata needed for reexecution | `replay_req` after address read |
+| `cause / blocking / strict` | States replay cause, whether waiting remains, and whether MA uses strict waiting | Unblock decision and top-down classification |
+| `blockSqIdx` | Store address/data location awaited by MA/FF | Store pointer/vector-ready unblock |
+| `missMSHRId / replayCarry / dataLastBeat` | DCache-miss return/last-beat information | TL-D and L2-hint paths |
+| `tlbHintId` | Identifier for reselection after TLB miss | `tlb_hint` match or `replay_all` |
+| `scheduled` | Entry selected but not yet completing a `replay.fire` | Prevents duplicate issue of one entry |
+
+Definitions/storage are at [LoadQueueReplay.scala:218-270](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:218>). The queue has 72 entries, a 3-read/3-write VAddr module, eight write banks, and write delay 2. Depth 72 does not imply all reads and writes unconditionally complete in one cycle.
+
+### 10.2 Causes and Unblocking
+
+V2 defines replay-cause order `C_MA, C_TM, C_FF, C_DR, C_DM, C_WF, C_BC, C_RAR, C_RAW, C_NK, C_MF`. Source comments warn that changing this order can deadlock: [LoadQueueReplay.scala:37-75](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:37>).
+
+| Cause | Recorded when | Effective condition to clear/retain `blocking` |
+| --- | --- | --- |
+| `C_MA` | Store-load address ambiguity; retains `addr_inv_sq_idx` and `loadWaitStrict` | Store address-ready pointer/vector reaches `blockSqIdx`; strict uses the more conservative condition. |
+| `C_TM` | TLB miss | Matching `tlb_hint.id` returns or `replay_all`; waits if `tlb_full`. |
+| `C_FF` | Store-forwarding data is incomplete | Store data-ready pointer/vector passes `data_inv_sq_idx`. |
+| `C_DM` | DCache miss accepted by an MSHR | Matching MSHR `tl_d_channel` arrives this/previous cycle, or data is already fully forwarded. |
+| `C_RAR/C_RAW` | Auxiliary-table query nacked | Corresponding table no longer full or related writeback/Store pointer progresses. |
+| `C_BC/C_NK/C_DR/C_WF` | Bank conflict, nuke/scheduling, DCache replay, WPU-prediction failure, and related causes | Enqueued with `blocking := false`, so later scheduling may retry. |
+| `C_MF` | Additional replay cause tied to ROB/front-end progress | Uses progress signals such as `robDeqPtr`. |
+
+The detailed logic is at [LoadQueueReplay.scala:293-370](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:293>) and [671-708](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:671>). `C_DM` does not mean DCache refill writes directly into LQ. The V2 direct-refill wiring is commented out; the effective path retains MSHR ID in Replay and reissues to LDU after TL-D forward: [LoadQueue.scala:323-335](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:323>), [LoadQueueReplay.scala:561-569](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:561>), [DCacheWrapper.scala:1544-1547](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1544>).
+
+### 10.3 Allocation, Reexecution, and Release
+
+First Replay entry allocation occurs when `needReplay && !isLoadReplay`. A reexecuted input retains `schedIndex`, so it does not allocate a second FreeList entry:
+
+```scala
+val enqIndex = Mux(enq.bits.isLoadReplay,
+  enq.bits.schedIndex, freeList.io.allocateSlot(offset))
+enq.ready := true.B
+...
+when (enq.valid && enq.bits.isLoadReplay) {
+  when (!needReplay(w)) { allocated(schedIndex) := false.B }
+  .otherwise { scheduled(schedIndex) := false.B }
+}
+```
+
+See [LoadQueueReplay.scala:617-730](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:617>). The source asserts that a new `ldin` always has at least one allocatable slot rather than applying normal `ready=0` backpressure: [604-610](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:604>). Verification must both keep the overflow assertion from firing and confirm that system recovery from `lq_rep_full` eventually lowers occupancy.
+
+### 10.4 Oldest Selection and Three-Stage Issue
+
+The process has two conceptual selection stages and one address-read stage:
+
+1. S0 distributes entries by `index % LoadPipelineWidth` across three replay ports; L2 hint, near-`ldWbPtr` items, cause priority, and `AgeDetector` select one-hot oldest: [LoadQueueReplay.scala:390-488](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:390>).
+2. A selected entry sets `scheduled` when `s0_can_go` and registers its index as `s1_oldestSel`.
+3. S1 reads VAddr; S2 constructs `LsPipelineBundle` from registered uop/cause/VAddr, sets `isLoadReplay=true`, and emits it through `Decoupled`: [491-573](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:491>).
+
+With default `EnableHybridUnitReplay=true`, the three `replay_req(i)` paths connect directly to three LoadUnits. Otherwise ports 1/2 additionally pass an RRArbiter: [575-588](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:575>). A 16-cycle cooldown counter also exists, so a nonempty Replay queue is not a promise of one replay issued per cycle.
+
+## 11. LoadUnit S0-S3: From Issue to LQ Writeback
+
+### 11.1 Real Inputs, Work, and Exit Conditions of Each Stage
+
+| Stage | Input/selection | Main work | Output and handshake | Flush/replay evidence |
+| --- | --- | --- | --- | --- |
+| S0 | Prioritized MAB split, super replay, fast replay, LSQ replay, prefetch, vector/integer issue, MMIO, NC, L2L forward, and other sources | Selects/computes VA; checks alignment and 16B crossing; requests DTLB when translation is needed; issues DCache read when cacheable and ready | `dcache.req` carries `lqIdx`; `tlb.req` carries `vaddr/fullva/size/lqIdx/robIdx` | [LoadUnit.scala:291-423](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:291>), [692-836](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:692>) |
+| S1 | Registered S0 result plus TLB response | Associates TLB paddr, PBMT, page/guest/access fault with DCache/SQ-forward queries; checks request index | Sends paddr/kill to DCache and forwarding queries to LSQ, SBuffer, UBuffer | [LoadUnit.scala:929-1036](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:929>) |
+| S2 | S1/DCache/forward responses | Decides cacheable/NC/MMIO, PMP/PBMT/exception; merges forwarding mask/data; collects replay causes | `s2_out.rep_info` carries MA/TM/FF/DR/DM/BC/WF/RAR/RAW/nuke, MSHR ID, TLB ID | [LoadUnit.scala:1202-1450](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1202>) |
+| S3 | Registered S2 result | Writes normal load output or fanouts LQ information/replay causes to `lsq.ldin`; produces redirect when recovery from fetch is required | `s3_ready = !s3_valid || s3_kill || io.ldout.ready`; `lsq.ldin.valid` when LSQ entry is possible | [LoadUnit.scala:1537-1711](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1537>) |
+
+S0 "crosses 16B" compares VA bit 4, not a DCache-line boundary: [LoadUnit.scala:711-734](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:711>). Cache lines are 64 B under this configuration; keep the two boundaries distinct.
+
+### 11.2 S0: Request Issue Conditions
+
+```scala
+io.tlb.req.valid := s0_tlb_valid
+io.tlb.req.bits.memidx.idx := s0_sel_src.uop.lqIdx.value
+io.dcache.req.valid := s0_valid && !s0_sel_src.prf_i && !s0_nc_with_data
+io.dcache.req.bits.lqIdx := s0_sel_src.uop.lqIdx
+```
+
+See [LoadUnit.scala:383-423](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383>). `s0_valid` requires `io.dcache.req.ready` for most cacheable sources; MAB/NC/MMIO have separate source/ready conditions. DCache-port competition therefore creates real S0 backpressure. LQ slot availability does not prove that an access enters DCache this cycle.
+
+### 11.3 S2: Forwarding Priority and Replay Information
+
+Data selection is byte-by-byte:
+
+```scala
+Mux(io.lsq.forward.forwardMask(i), io.lsq.forward.forwardData(i),
+  Mux(s2_nc_with_data, io.ubuffer.forwardData(i),
+    io.sbuffer.forwardData(i)))
+```
+
+Thus LSQ/StoreQueue forwarding has priority, then UncacheBuffer only for NC-with-data, then StoreBuffer: [LoadUnit.scala:1393-1399](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1393>). This is byte-lane priority, not a simple whole-queue priority.
+
+S2 records each failure cause separately in `rep_info`, including `mem_amb`, `tlb_miss`, `fwd_fail`, `dcache_miss`, `rar_nack`, and `raw_nack`: [LoadUnit.scala:1423-1447](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1423>). Multiple causes may coexist in an S2 cycle, but S3 prioritizes one primary replay cause. Verification must not observe one cause bit while ignoring the others.
+
+### 11.4 S3: LQ Update, MAB, and Rollback
+
+```scala
+val s3_can_enter_lsq_valid = s3_valid && ... && !s3_in.feedbacked
+io.lsq.ldin.valid := s3_can_enter_lsq_valid
+io.lsq.ldin.bits.updateAddrValid :=
+  !s3_mis_align && (!s3_frm_mabuf || s3_in.isFinalSplit) || s3_exception
+val s3_revoke = s3_exception || io.lsq.ldin.bits.rep_info.need_rep || s3_mis_align || ...
+```
+
+The source is [LoadUnit.scala:1582-1605](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1582>) and [1691-1693](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1691>). Consequently:
+
+* A normal hit can produce `ldout` and LQ S3 state update together.
+* Replay/misalignment/exception still fans sufficient metadata to LQ submodules but must not make VLQ set `committed` incorrectly.
+* `s3_rep_frm_fetch`, `s3_flushPipe`, or MAB-forced recovery drives `io.rollback.valid`; reason selects `flush` or `flushAfter`: [LoadUnit.scala:1672-1685](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1672>).
+* Scalar slow-feedback `hit` uses `!need_rep || io.lsq.ldin.ready`, which relates to Replay's assertion-based rather than ordinary ready-backpressure implementation: [LoadUnit.scala:1698-1711](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1698>).
+
+## 12. Uncache/MMIO, Exception Buffer, and Misaligned Load
+
+### 12.1 LoadQueueUncache: Per-Entry FSM and ROB Visibility
+
+`LoadQueueUncache` has 16 entries: [Parameters.scala:172](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:172>). Each `UncacheEntry` holds request, slave ID, and flush information and follows these states:
+
+| State | Entry | Request/response action | Exit |
+| --- | --- | --- | --- |
+| `s_idle` | Reset or prior writeback complete | Accepts valid entry; does not launch an external transaction when `needFlush` | Sendable request -> `s_req` |
+| `s_req` | Request prepared | Drives uncache `req` only when `canSendReq` | `req.fire` -> `s_resp` |
+| `s_resp` | Request sent | Waits for uncache response; flush can move toward wait/end | `resp.valid` -> `s_wait` or writeback path |
+| `s_wait` | Response arrived, awaiting upstream writeback acceptance | Emits result/exception on `mmioOut`/`ncOut` | Output fire or flush -> `s_idle` |
+
+FSM and flush handling are at [LoadQueueUncache.scala:63-161](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:63>). The crucial request qualification is:
+
+```scala
+val canSendReq = req_valid && !needFlush &&
+  Mux(req.nc, true.B, pendingld && req.uop.robIdx === pendingPtr)
+```
+
+This means:
+
+* **NC** (`req.nc`) may issue without matching `pendingPtr`.
+* **MMIO** needs ROB `pendingMMIOld`/`pendingld` permission and must be the instruction at `pendingPtr`, so a wrong-path or not-yet-visible MMIO cannot cause side effect merely by entering LQ.
+* Redirect/flush priority must still be filtered by the FSM; this predicate is not the sole protection.
+
+Bus `denied/corrupt` in the response becomes a load exception and reaches the LQ exception buffer through the `exception` port: [LoadQueueUncache.scala:188-241](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:188>). When no entry can be allocated, the module selects the oldest load and emits flush rollback: [528-591](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:528>). This saturation-recovery strategy differs from the Replay-queue overflow assertion.
+
+### 12.2 Shared LQ/SQ Uncache Port
+
+`LsqWrapper` arbitrates Load and Store uncache requests through `s_idle/s_load/s_store`:
+
+```scala
+val selectLq = (loadReq && !storeReq) ||
+  (loadReq && storeReq && load.robIdx < store.robIdx)
+...
+when (io.uncache.resp.bits.is2lq) {
+  io.uncache.resp <> loadQueue.io.uncache.resp
+}
+```
+
+See [LSQWrapper.scala:265-329](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265>). When LQ/SQ both request in one cycle, the older ROB request from LQ wins; response is routed by `is2lq`. Wrapper also asserts that Load/Store responses cannot both be valid. Hence 16 uncache entries does not mean 16 ordinary MMIO transactions can occupy the bus concurrently.
+
 ```mermaid
 stateDiagram-v2
   [*] --> idle
@@ -559,6 +1035,7 @@ stateDiagram-v2
   response --> idle: flush handling
 ```
 
+<!--
 这是 [LoadQueueUncache.scala:63–161](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:63>) 的 entry 生命周期图；外层 LQ/SQ 仲裁则是独立的 [LSQWrapper.scala:265–329](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265>) FSM。
 
 ### 12.3 异常地址：谁保存、谁选择最老
@@ -672,6 +1149,121 @@ io.memoryViolation := Mux1H(...)
 | MMIO/NC | LDU S3 写 uncache entry。 | uncache response 与 `ldout/ncOut` fire。 | entry FSM 和 LQ/SQ 外层 pending FSM。 | ROB head 许可（MMIO）、外设响应、redirect、仲裁。 | 16 entry 是排队容量，不是 16 个并发 MMIO bus request。 |
 
 ### 15.2 Backend Pipeline Stages（后端流水图）
+-->
+
+This is the entry lifecycle of [LoadQueueUncache.scala:63-161](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:63>); outer LQ/SQ arbitration is the separate FSM in [LSQWrapper.scala:265-329](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265>).
+
+### 12.3 Exception Addresses: Who Retains and Who Selects Oldest
+
+LoadQueue connects three source classes to `LqExceptionBuffer`:
+
+* Scalar LDU `ldin`.
+* Vector-feedback flushes.
+* Uncache non-data/bus errors.
+
+The connections are at [LoadQueue.scala:263-290](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:263>). `LqExceptionBuffer` has `LoadPipelineWidth + VecLoadPipelineWidth + 1` inputs. It delays one cycle, filters current and prior-cycle redirect, then selects the oldest among new and retained exceptions by `robIdx` and then `uopIdx`: [LoadExceptionBuffer.scala:35-101](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:35>).
+
+This is exception-address arbitration, not a deep queue containing all exceptions. Consecutive different exceptions should be checked against the single-slot oldest-retention invariant. LSQWrapper ultimately selects LoadQueue or StoreQueue exception address using delayed `isStore`: [LSQWrapper.scala:245-257](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:245>).
+
+### 12.4 LoadMisalignBuffer: A Two-Request Sequential Machine Across 16 B
+
+MAB is a special MemBlock bypass, not a bit inside a VLQ entry:
+
+| Item | Effective V2 behavior | Evidence |
+| --- | --- | --- |
+| Concurrency | One `req_valid`; multiple LDU inputs are priority-selected; `loadMisalignFull := req_valid` | [LoadMisalignBuffer.scala:143-163](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:143>) |
+| Maximum fragments | `maxSplitNum=2`, with `require(maxSplitNum == 2)` | [39-47](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:39>) |
+| Split unit | `cross16BytesBoundary` compares bit 4 of `vaddr` and `vaddr+size-1` | [292-320](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:292>) |
+| Issue/merge | `unSentLoads` and `curPtr` issue `splitLoadReq` one at a time; after two responses data merges by shift/width | [504-557](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:504>) |
+| Replay/flush | Fragment replay remains in `s_req/s_resp`; `robIdx.needFlush` immediately returns idle and clears temporary state | [207-289](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:207>), [610-623](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:610>) |
+| NC/MMIO fragment | If either fragment is uncache or exception, normal merge is skipped; unaligned NC/MMIO becomes software `loadAddrMisaligned` exception | [213-239](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:213>), [522-530](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:522>) |
+
+LoadUnit S3 sends only the initial access to MAB when `s3_mis_align && !s3_frm_mabuf`; `updateAddrValid` can become true only at the final split or exception: [LoadUnit.scala:1589-1601](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1589>). Observe MAB together with VLQ completion/replay; the first fragment result is not completion of the full load.
+
+MAB computes candidate exception-address information for a fault on the second page, but current source ties `io.overwriteExpBuf.valid := false.B`. This document therefore confirms candidate computation, not effective overwrite: [LoadMisalignBuffer.scala:625-645](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:625>).
+
+## 13. MemBlock, DTLB, DCache, and Global Redirect
+
+### 13.1 MemBlock Is the System Boundary of LQ
+
+`LoadQueue` does not directly emit one unique recovery signal to Backend. `MemBlock` connects LDU, LsqWrapper, DCache, TLB, MAB, and Store path:
+
+* End-to-end LDU issue/redirect wiring to DCache, LSQ/SBuffer/Uncache forwarding, and RAR/RAW query is at [MemBlock.scala:850-1033](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:850>).
+* MemBlock receives LoadUnit `ldin`, raw data, NC output, and MAB split request/response at [991-1029](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:991>).
+* An active VSegment lowers the corresponding LDU DCache `ready`, a system-level resource conflict rather than LQ internal full: [892-907](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:892>).
+
+Any LoadQueue throughput claim must therefore state the influence of DCache ready, TLB, LDU source arbitration, and Replay.
+
+### 13.2 DTLB/DCache Requests and Returns
+
+| Path | Effective V2 wiring | Meaning for LQ |
+| --- | --- | --- |
+| DTLB request | LoadUnit S0 sends `vaddr/fullva/size/memidx(lqIdx)/robIdx`: [LoadUnit.scala:383-405](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383>) | Maps LQ entry to translation response by `lqIdx`; TLB fault/miss enters `rep_info`/exception metadata. |
+| DTLB response | S1 captures miss/hit, paddr/gpaddr/PBMT, then carries fault fields into S2/S3: [LoadUnit.scala:929-1036](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:929>) | `C_TM` enters Replay; exceptions use age-managed LQ ExceptionBuffer. |
+| DCache request | S0 `dcache.req` carries `mask`, `lqIdx`, ROB debug, and replay carry: [LoadUnit.scala:406-423](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:406>) | Hit/conflict/miss change S2 `rep_info`. |
+| DCache miss return | Default DCache block is 64 B: [DCacheWrapper.scala:53](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:53>). MissQueue/MSHR returns TL-D forwarding to LDU: [1475-1545](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1475>) | Replay retains MSHR ID and resumes on matching `tl_d_channel`; it is not direct refill writing LQ. |
+| DCache release | `release` passes through MemBlock/LSQ to LoadQueueRAR: [LoadQueue.scala:223-230](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:223>) | Updates RAR `released` for release-order checking. |
+
+MemBlock creates `TLBNonBlock(LduCnt + HyuCnt + 1, 2, ...)` and broadcasts sfence/CSR/redirect/ROB pending pointer: [MemBlock.scala:687-713](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:687>). TLB has its own `fullva` split-load cross-page support: [TLB.scala:397-410](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:397>). That is a different layer from MAB's 16B split.
+
+### 13.3 Global Oldest-Redirect Arbitration
+
+Each RAW Store pipeline may produce `rollback`; LoadUnit may produce `flush/flushAfter`; a full uncache entry may create nack rollback. MemBlock collects all memory redirect sources and selects the oldest:
+
+```scala
+val allRedirect = ...
+val redirect = selectOldestRedirect(allRedirect)
+io.memoryViolation := Mux1H(...)
+```
+
+This is implemented at [MemBlock.scala:1424-1443](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1424>), then connects to the redirect generator via [Backend.scala:262](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/Backend.scala:262) and [CtrlBlock.scala:213,315-329](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/CtrlBlock.scala:213>).
+
+Consequences:
+
+1. "Oldest load per Store port" inside RAW does not mean the system can commit multiple simultaneous flushes. System level uses only oldest memory redirect.
+2. Verification must create same-cycle LDU RAR/RAW, uncache nack, and Store RAW rollback cases; check ROB age of the winner and that a winner's redirect subsequently clears losers, rather than checking only local module `valid`.
+
+### 13.4 Boundary of Commented DCache Refill Wires
+
+`LoadQueue.scala` and `DCacheWrapper.scala` contain commented direct-`refill` wiring traces: [LoadQueue.scala:187-188](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:187>), [DCacheWrapper.scala:1547](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:1547>). That does not mean a load miss lacks recovery. The effective implementation reissues LoadUnit through `LoadQueueReplay` based on cause/MSHR ID/`tl_d_channel`. For analysis and waveforms, prioritize `replay`, `mshrid`, and `forward_tlDchannel`, not a commented `refill -> LQ` port.
+
+## 14. Cross-Boundary Code Analysis
+
+Only cross-boundary behavior proved by current V2 source is stated here. Where request split/merge wiring is not explicit, status is Partial rather than filled in by generic cache knowledge.
+
+| Boundary | Trigger and address/index | Proven path | Exception, cancellation, visibility | Unproven / verification focus |
+| --- | --- | --- | --- | --- |
+| **Virtual page** | LoadUnit S0 carries `vaddr` and `fullva` to DTLB; each MAB fragment carries `fullva` | TLB uses `fullva` for split-load cross-page handling and returns paddr/gpaddr; each split remains on LDU/DTLB: [LoadUnit.scala:383-405](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383>), [TLB.scala:397-410](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:397>), [LoadMisalignBuffer.scala:510-520](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:510>) | Fragment fault enters MAB/LQ exception path; redirect clears MAB/Replay/VLQ state | MAB computes second-page overwrite address but `overwriteExpBuf.valid=0`; current effective exception-vaddr overwrite is Partial and needs waveforms. |
+| **16B access fragments** | `(vaddr+size-1)[4] != vaddr[4]` | MAB splits at most two pieces, issues them one by one, and merges them; real scalar-misalignment split point: [LoadMisalignBuffer.scala:39-47](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:39>), [292-320](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:292>) | Before final fragment, `updateAddrValid` must not make VLQ complete; NC/MMIO fragment becomes `loadAddrMisaligned` | Test each fragment's TLB miss/replay, first success with second fault, and redirect between fragments. |
+| **64B cache line** | Default DCache block is 64B; physical-line compare also serves RAW CAM/release | DCache/MissQueue/MSHR handles cache request; RAW line check only affects ordering CAM and RAR release compares line: [DCacheWrapper.scala:53](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:53>), [LoadQueueData.scala:149-181](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueData.scala:149>) | Miss recovers through Replay plus MSHR/TL-D forward; wrong path produces no ROB commit event | **No LQ implementation was found that automatically splits requests at 64B.** Do not call 16B MAB split or CAM line match a cache-line splitter. |
+| **MMIO/uncache** | S2 determines `mmio/nc` from TLB/PMP/PBMT; S3 sends metadata to LoadQueueUncache | NC can issue; MMIO needs `pendingld && robIdx==pendingPtr`; shared LQ/SQ port chooses older ROB and routes reply by `is2lq`: [LoadUnit.scala:1202-1253](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1202>), [LoadQueueUncache.scala:122-161](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122>), [LSQWrapper.scala:265-329](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265>) | FSM cancels/suppresses external effects on redirect/flush; denied/corrupt goes to ExceptionBuffer; misaligned NC/MMIO becomes software misalignment exception | Cover MMIO at/not at ROB head, redirect after req fire, concurrent load/store request, 16-entry full, and response routing. |
+
+### 14.1 Three Address Granularities That Must Not Be Confused
+
+| Granularity | User | Role | Is not |
+| --- | --- | --- | --- |
+| 16B | LoadUnit `s0_rs_cross16Bytes` and MAB | Hardware misalignment fragmentation and data merge | DCache line size |
+| 64B (DCache block in this configuration) | DCache/MissQueue/MSHR, RAW/RAR release-line comparison | Cache-line hit/miss/refill and coarse CAM matching | An inevitable LQ-internal request-split unit |
+| Page | DTLB `vaddr/fullva` | Translation, PMP/PBMT, page/access/guest fault | A 16B-boundary test based only on VA low bits |
+
+This layering prevents code that appears to cross an address boundary from being misattributed to LQ. For cache-line crossing, the current conclusion is that LQ preserves replay/ordering metadata while DCache/MAB/TLB each own different access boundaries; the complete number of split transactions cannot be asserted without elaborated DCache request waveforms.
+
+## 15. Timing, Pipeline, and Throughput: What Is Known and What Must Not Be Assumed
+
+### 15.1 Path-Level Timing Table
+
+| Path/category | Start event | End event | Source-proven fixed structure | Variable factors | Throughput/bottleneck evidence |
+| --- | --- | --- | --- | --- | --- |
+| Dispatch allocation | Dispatch `req.valid` and upper `canAccept` | Inner `enqLsq.valid` reaches LQ/SQ | `LsqEnqCtrl` `canAccept` and `do_enq` both use `RegNext`; inner handoff is registered | IQ acceptance, LQ/SQ credit, redirect t2/t3 recovery, `numLsElem` | At most 6 load elements reserved; no bundle acceptance if either LQ/SQ lacks room: [LSQWrapper.scala:403-431](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:403>) |
+| Ordinary L1 hit | LoadUnit S0 source chosen | S3 `ldout`/`lsq.ldin` | Real S0/S1/S2/S3 register stages exist | DCache ready, TLB hit, forwarding, bank conflict, writeback ready | Three LDU pipes are an upper bound, not proof that every workload completes three each cycle |
+| RAR query | LDU S1/S2 query valid | `query.resp.valid` | Response is `RegNext(query.req.valid)`, an explicit one-cycle response register | Need for entry allocation, FreeList empty, release/redirect overlap | Three query ports: [LoadQueueRAR.scala:235-250](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:235>) |
+| RAW detection | Store S1 `storeIn.valid` | RAW rollback produced | Parameterized selection tree; RAW=32/group=8 yields `TotalSelectCycles=3` | Candidate count, redirect filter, global oldest arbitration | Two Store-pipeline detection ports, but global redirect takes only oldest |
+| Replay | LDU S3 enqueues `need_rep` | Replay `fire` accepted by LDU S0 | S0 selection, S1 VAddr read, S2 `replay_req` structure | Cause unblock, AgeDetector, cooldown, LoadUnit ready, redirect | At most three logical replay outputs, not stable II=1 |
+| VLQ contiguous release | `committed` prefix exists | `lqDeq`/credit recovery | At most `CommitWidth=8`; register relationship among `commitCount`, `lastCommitCount`, `lqDeq` | Oldest entry unfinished, redirect cancel | Only contiguous prefix releases; a hole blocks younger completed entries |
+| MAB misalignment | S3 sends MAB | Two fragments complete and merge/write back | One active request, at most two fragments, explicit sequential FSM | Two TLB/DCache actions, fragment replay/fault, writeback ready | MAB full can backpressure/create misalignment replay; not comparable with ordinary-LDU throughput |
+| MMIO/NC | LDU S3 writes uncache entry | Uncache response and `ldout/ncOut` fire | Entry FSM plus outer LQ/SQ pending FSM | ROB-head permission for MMIO, device response, redirect, arbitration | 16 entries are queue capacity, not 16 concurrent MMIO bus requests |
+
+### 15.2 Backend Pipeline Stages
 
 ```mermaid
 flowchart LR
@@ -691,6 +1283,7 @@ flowchart LR
   Q --> EC
 ```
 
+<!--
 图是已证实的阶段/连接关系；箭头长度**不是**周期刻度。LoadUnit 的实际 source arbitration 和 stage registers 见 [LoadUnit.scala:291–423](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:291>)、[1532–1711](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1532>)，LQ 的 completion/deq 见 [VirtualLoadQueue.scala:134–159](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:134>)。
 
 ### 15.3 能给出的吞吐结论
@@ -739,8 +1332,60 @@ flowchart LR
 第 5.1 节的 `flowchart LR` 已给出顶层模块连接。其应作为源码阅读的起点：先确认 `LsqWrapper -> LoadQueue` 的联合资源边界，再分别进入 VLQ、RAW、RAR、Replay、Uncache 和异常缓冲。不要把图中的一条边理解为自动原子事务；具体 `Valid/Decoupled/ready` 的资格见第 5.2 节。
 
 ### 17.2 Backend Pipeline Stages and Data Path
+-->
 
+The diagram shows source-confirmed stage/connectivity relationships; arrow length is **not** a cycle scale. Actual LoadUnit source arbitration and stage registers are at [LoadUnit.scala:291-423](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:291>) and [1532-1711](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1532>); LQ completion/dequeue is at [VirtualLoadQueue.scala:134-159](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:134>).
+
+### 15.3 Supported Throughput Conclusions
+
+* **Verified ceilings:** three default LDU pipelines, three RAR/RAW query ports, three directly connected Replay ports, dispatch reservation of up to six load elements, and VLQ contiguous dequeue width up to eight.
+* **No single source-proven latency:** exact dispatch-to-commit cycles must not be fixed. TLB miss, DCache miss, bank conflict, invalid SQ data, RAR/RAW nack, MAB, MMIO, and `ldout.ready` all alter the path.
+* **Forward-progress risks:** Replay cause priority, unblock conditions, and cooldown determine whether reissue can occur; auxiliary-table FreeLists, VLQ prefix, and uncache ROB gate determine whether resources can recover. All require forward-progress coverage.
+
+## 16. Exceptions, Permissions, Architectural Visibility, and Difftest
+
+### 16.1 Where Exceptions/Permissions Arise and Propagate
+
+| Category | Origin/encoding | LQ-related propagation | Architectural visibility boundary |
+| --- | --- | --- | --- |
+| TLB miss | Detected in S1; S2 sets `rep_info.tlb_miss` | Replay `C_TM` and TLB hint; not an immediate trap | May reissue after miss clears; produces no commit exception |
+| Page/access/guest fault | TLB/S1/S2 carries `uop.exceptionVec`, `gpaddr`, `isHyper`, `fullva` | S3 `ldin` -> `LqExceptionBuffer`, which selects oldest exception address | ROB/exception handling decides trap; LQ does not commit ISA trap |
+| PMP/PBMT/NC/MMIO | S2 uses TLB/PMP/PBMT to decide `mmio/nc` | Enters Uncache; MMIO is constrained by `pendingPtr` | Device side effect only after a valid MMIO request fire |
+| DCache delayed error | S3 encodes access/hardware error under `cache_error_enable` | Exception metadata follows `ldin` | ROB selects it as visible exception |
+| Misalignment | Classified in S0/S3 and optionally split by MAB | Ordinary unaligned load can enter MAB; uncache fragment becomes `loadAddrMisaligned` | Use effective MAB/LQ exception path for final exception address |
+| RAR load-load protection | `ldld_vio_check_enable` gates `s3_flushPipe` | Can cause `flushAfter` redirect | Speculative recovery, not architectural exception |
+
+Relevant source is [LoadUnit.scala:1022-1036](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1022>), [1202-1253](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1202>), [1606-1649](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1606>), plus the exception/uncache evidence in Section 12.
+
+### 16.2 Difftest Signal Coverage
+
+The directly inspected `LoadQueue.scala`, `VirtualLoadQueue.scala`, RAW/RAR/Replay/Uncache/MAB files do not export internal slots as `DiffTest` events. That matches the architectural boundary:
+
+* [Rob.scala:1533-1595](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:1533>) emits `DiffInstrCommit` and `DiffLoadEvent` only at ROB commit.
+* `DiffLoadEvent` paddr comes from ROB-held EXU debug output, not immediate allocation/replay state of one LQ entry.
+* A redirected LQ entry must be cleared by VLQ/Replay/RAW/RAR `needFlush`, so it must not produce a commit Difftest load event.
+
+| Coverage layer | Signals/events to observe | Success criterion |
+| --- | --- | --- |
+| LQ internal | `allocated/committed`, `lqFull/lqDeq/lqCancelCnt`, `needCancel`, FreeList counts, `rep_info` | No ghost entry after replay/redirect, correct pointer age, eventual progress |
+| Bus/cache | `dcache.req/resp`, `tl_d_channel`, uncache `req/resp`, `release` | Consistent MSHR wakeup, MMIO fires only with ROB permission, error response enters exception path |
+| Architecture | ROB `DiffInstrCommit/DiffLoadEvent` plus trap/redirect | Correct path commits once; wrong-path/flushed load has no commit event |
+
+This is why observing `ldin.valid` cannot substitute for observing a Difftest-visible load.
+
+## 17. Interface, Data, and Handshake Diagrams
+
+### 17.1 Top-Level Module Connectivity
+
+The Section 5.1 `flowchart LR` is the source-reading starting point: first confirm the joint resource boundary from `LsqWrapper` to `LoadQueue`, then inspect VLQ, RAW, RAR, Replay, Uncache, and ExceptionBuffer. A graph edge is not automatically an atomic transaction; the `Valid`/`Decoupled`/`ready` qualification is in Section 5.2.
+
+### 17.2 Backend Pipeline Stages and Data Path
+
+<!--
 第 15.2 节的图给出真实 Backend memory chain。下面用 payload 角度重画一次数据流，特别标明同一 `LqWriteBundle` 的扇出：
+-->
+
+The Section 15.2 diagram gives the actual Backend memory chain. The following redraws the data flow from the payload perspective and highlights the fanout of one `LqWriteBundle`:
 
 ```mermaid
 flowchart LR
@@ -758,6 +1403,7 @@ flowchart LR
   F --> K[lqDeq / credit return]
 ```
 
+<!--
 这是 [LoadQueue.scala:247–345](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:247>) 和 [LoadUnit.scala:1582–1711](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1582>) 的数据关系。`LqWriteBundle` 是多个消费者的 source；不要把任何一个 consumer（例如 Replay）理解为唯一的“出队”。
 
 ### 17.3 空闲 L1-hit 路径的示意 WaveDrom
@@ -888,3 +1534,135 @@ flowchart LR
 | `EXCEPTION_OLDEST` | 多源异常只将最老 `robIdx/uopIdx` 地址导出。 | 同拍 scalar/vector/uncache exception、随后 redirect。 | `exceptionAddr` 对应最老存活项，flush 后不引用 killed entry。 | Age-order assertion。 | [LoadExceptionBuffer.scala:47–101](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:47>) |
 | `DIFFTEST_NO_FLUSH_EVENT` | 被 redirect/replay 的错误路径 load 绝不产生 commit `DiffLoadEvent`。 | RAW/RAR/uncache redirect 后让错误路径达到原本写回点。 | 只有重执行并 ROB commit 的正确 load 产生一条 event。 | Architectural commit scoreboard。 | [Rob.scala:1533–1595](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:1533>) |
 | `LQ_CAPACITY_RECOVERY` | fill/drain 后各 full/credit 信号最终恢复，系统无 livelock。 | 分别打满 VLQ、RAR、RAW、Replay、uncache，再逐步给完成/Store/TLB/TL-D/ROB 事件。 | `lqFull`、query-ready、`lq_rep_full`、uncache entry 都能有对应解除路径。 | Forward-progress + high-water coverage。 | 第 6.3、10、12 节引用的实现。 |
+-->
+
+The diagram above expresses the data relationship in [LoadQueue.scala:247-345](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:247>) and [LoadUnit.scala:1582-1711](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1582>). One `LqWriteBundle` fans out to several consumers; no consumer, including Replay, is the sole "dequeue."
+
+### 17.3 Illustrative WaveDrom for an Idle L1-Hit Path
+
+This is a **teaching sketch**, not a fixed-cycle claim extracted from an FST. It shows the relative visibility of the internal dispatch handoff, an uncongested LDU S0-S3 pass, and VLQ state. Actual issue, TLB/DCache ready, and response can stretch or reorder the timeline.
+
+```waveform-draw
+{
+  "signal": [
+    {"name": "clk", "wave": "p........"},
+    {"name": "dispatch.req.valid", "wave": "010000000"},
+    {"name": "lsq.canAccept", "wave": "011111111"},
+    {"name": "enqLsq.valid", "wave": "001000000"},
+    {"name": "vlq.allocated(A)", "wave": "000100000"},
+    {"name": "ldu.s0.fire(A)", "wave": "000010000"},
+    {"name": "ldu.s1.valid(A)", "wave": "000001000"},
+    {"name": "ldu.s2.valid(A)", "wave": "000000100"},
+    {"name": "ldu.s3.lsq.ldin.valid(A)", "wave": "000000010"},
+    {"name": "vlq.committed(A)", "wave": "000000001"}
+  ]
+}
+```
+
+The corresponding source is LsqEnqCtrl's registered handoff: [LSQWrapper.scala:403-431](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:403>); LoadUnit S3 `ldin`: [LoadUnit.scala:1582-1605](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1582>); and VLQ `committed` update: [VirtualLoadQueue.scala:247-263](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:247>). When this sketch disagrees with elaborated RTL or FST observation, RTL/FST wins and the illustration must be updated.
+
+## 18. Algorithm and Scenario Matrix
+
+### 18.1 Core Algorithms
+
+| Algorithm | Owner | Input/state | Selection/priority | Output | Boundary evidence |
+| --- | --- | --- | --- | --- | --- |
+| Joint allocation | LsqEnqCtrl + LsqWrapper | Dispatch valid, `needAlloc`, LQ/SQ credit, `iqAccept` | Conjoined queue `canAccept`; per-slot load/store prefix count computes index | Registered `enqLsq` with `lqIdx/sqIdx` | [LSQWrapper.scala:155-184,355-431](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:155>) |
+| VLQ range allocation | VLQ | `lqIdx/numLsElem`, `enqPtrExt`, `needAlloc` | `ParallelPriorityMux` resolves multiple range hits for one physical entry | `allocated/robIdx/uopIdx/isvec`, returned/checked `lqIdx` | [VirtualLoadQueue.scala:161-201](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:161>) |
+| Contiguous completed release | VLQ | `allocated/committed`, `deqPtr` | `PriorityEncoderOH` counts only leading consecutive ones | `lqDeq/deqPtr/ldWbPtr` | [VirtualLoadQueue.scala:134-159](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:134>) |
+| RAW violation | RAW | Store S1 paddr/mask, RAW CAM entries, ROB/flush | Address plus mask plus age plus valid; recursive oldest per group | `flush` redirect per Store port | [LoadQueueRAW.scala:211-362](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:211>) |
+| RAR release check | RAR | LDU query, partial paddr, `released`, ROB age | Whole-table mask OR to `rep_frm_fetch` | One-cycle-late query response, S3 `flushAfter` | [LoadQueueRAR.scala:224-266](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:224>) |
+| Replay oldest scheduling | Replay | `allocated/blocking/scheduled`, cause, hint, age matrix | L2 hint/near-head/priority plus AgeDetector, one-hot per port | `replay_req` to LDU | [LoadQueueReplay.scala:390-573](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueReplay.scala:390>) |
+| Uncache issue | Uncache entry + wrapper | `req.nc`, ROB `pendingPtr`, LQ/SQ request | NC bypasses head gate; MMIO requires exact ROB head; older ROB wins LQ/SQ tie | Uncache req/resp, writeback/exception | [LoadQueueUncache.scala:122-161](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122>), [LSQWrapper.scala:265-329](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265>) |
+| Global redirect | MemBlock | LDU/hybrid/RAW/uncache redirects | `selectOldestRedirect` | `memoryViolation` to Backend/CtrlBlock | [MemBlock.scala:1424-1443](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1424>) |
+
+### 18.2 Scenario Matrix
+
+| Scenario | Trigger | Winner/loser or state update | Retry/redirect | Final consumer | Evidence to inspect |
+| --- | --- | --- | --- | --- | --- |
+| First load after reset | Arrays reset, first dispatch valid | VLQ allocates entry and clears `committed`; FreeList allocates from initial head | With no replay, becomes dequeue prefix after S3 | LDU writeback, LsqEnqCtrl credit | No stale payload/valid; first slot index |
+| LQ or SQ lacks capacity | `lqCanAccept=0` or `sqCanAccept=0` | Global `canAccept=0`; neither may half-allocate | Dispatch waits | Dispatch/IQ | No partial `lqIdx/sqIdx` allocation |
+| VLQ full/nearly full | Occupancy beyond `72-6` reservation threshold | `lqFull=1`; current LDU/Replay table state remains independent | Clears after contiguous completion/dequeue | Dispatch backpressure | Wrap, credit return, no deadlock |
+| Real RAW violation | Younger load executes before older Store S1 paddr/mask hits | RAW chooses oldest load per Store port; MemBlock chooses global oldest | `flush` redirect clears all affected state | Backend redirect generator | Age correctness across concurrent store/load/RAR sources |
+| RAR release relation | Query matches `released` entry and source age predicate | `rep_frm_fetch`, then `flushAfter` if CSR gate permits | Recover from fetch | LoadUnit rollback -> MemBlock | No ghost entry with same-cycle release/query/revoke |
+| TLB miss | S2 `C_TM` | Replay holds TLB hint ID and blocks | LDU reissues after hint/replay-all | DTLB/Replay/LDU | Replay neither early issues nor blocks forever |
+| DCache miss | `C_DM` with MSHR ID | Replay waits for `tl_d_channel`/forward | Reissues without using commented refill port | DCache -> LDU | Matching MSHR ID, wrong path does not commit |
+| Incomplete Store forwarding | `C_FF` | Replay retains data-invalid `sqIdx` | Retry after Store data ready | SQ forwarding/LoadUnit | Byte-lane mask/priority |
+| Cross-16B misalignment | S3 MAB request | One MAB entry, two fragments serially | Fragment replay/fault or merge/writeback | MAB/LDU/exception | First/second fragment and cancel/merge |
+| MMIO waits for ROB head | MMIO entry differs from pending pointer | `canSendReq=0`, no bus request | Issues at ROB head; redirect cancels | Uncache bus/ROB | No wrong-path device side effect |
+| Multiple redirect sources | LDU/RAW/uncache all valid | MemBlock takes oldest | Losers clear after winner or later resolution | CtrlBlock redirect | `selectOldestRedirect` age and uniqueness |
+
+## 19. Dynamic Operation Examples
+
+### 19.1 Normal Scalar L1 Hit: Dispatch to Architectural Visibility
+
+For one scalar load A with LQ/SQ credit, TLB hit, DCache hit, and no forwarding/replay:
+
+1. Dispatch supplies A as `ValidIO` to `LsqEnqCtrl`. Only joint LQ/SQ `canAccept` lets the controller latch A's `do_enq`; the control path then sends an inner-LsqWrapper entry with `lqIdx/sqIdx`: [LSQWrapper.scala:403-431](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:403>).
+2. VLQ writes A's range into `allocated/robIdx/uopIdx/isvec/committed=0`. A now occupies an LQ lifecycle entry but is not architecturally committed: [VirtualLoadQueue.scala:172-201](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:172>).
+3. The selected LoadUnit S0 issues DTLB and DCache with `lqIdx`; S1 gets translation and queries SQ/SBuffer/UBuffer; S2 receives DCache/forward data with all `rep_info` causes zero: [LoadUnit.scala:383-423](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:383>), [1393-1447](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1393>).
+4. S3 produces `ldout` and `lsq.ldin`. Since `!need_rep && updateAddrValid && !isvec`, VLQ sets its internal `committed` for A: [LoadUnit.scala:1582-1605](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1582>), [VirtualLoadQueue.scala:247-263](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:247>).
+5. If A is in the contiguous completed prefix at `deqPtr`, VLQ releases it, emits `lqDeq`, and LsqEnqCtrl recovers credit: [VirtualLoadQueue.scala:134-159](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/VirtualLoadQueue.scala:134>).
+6. Only final ROB commit produces `DiffInstrCommit/DiffLoadEvent`. `ldout`, LQ dequeue, and ROB/Difftest commit can therefore occur at different times.
+
+### 19.2 RAW Violation: Speculation, Detection, Oldest Recovery, Retry
+
+Assume older Store S has unresolved address while younger Load L has issued:
+
+1. At LDU query, `stAddrReadySqPtr` is behind L's `sqIdx`, so RAW allocates an entry recording paddr/mask/uop/datavalid: [LoadQueueRAW.scala:115-168](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:115>).
+2. L may proceed through DCache/forwarding, which is a performance-oriented speculation rather than an initial wait for every Store.
+3. When S reaches Store S1, RAW CAM searches affected loads by S paddr/mask. Only candidates satisfying address, byte mask, age, `datavalid`, and flush conditions qualify; the tree chooses the **oldest**: [LoadQueueRAW.scala:289-362](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:289>).
+4. RAW `flush` then competes with other memory redirects in MemBlock. A RAW-local winner is not necessarily system winner if another older source exists in the same cycle: [MemBlock.scala:1424-1443](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1424>).
+5. After the winner redirect, VLQ, RAW, RAR, Replay, MAB, and Uncache clear wrong-path state through their `needFlush` handling. VLQ additionally restores enqueue pointers with two-stage cancel counting. L is fetched, allocated, and executed again until the ordering risk is gone.
+
+### 19.3 A Blocked Rather Than Flushed Example: TLB-Miss Replay
+
+When LDU S2 has primary cause `C_TM`:
+
+1. S3 writes `rep_info`, TLB hint ID, and VAddr into Replay rather than normal VLQ completion.
+2. Replay `blocking` remains until matching `tlb_hint` or `replay_all`, then oldest scheduler sends it back to LDU.
+3. If reexecution succeeds with `needReplay=0`, Replay frees the entry using the original `schedIndex`; otherwise it only clears `scheduled` and continues to wait/select.
+4. No memory-order `flush` is implied unless an independent recovery source is detected.
+
+This differs from RAW correctness recovery, MMIO waiting for ROB head, and MAB's two-fragment serialization: all are different meanings of temporary incompletion.
+
+## 20. Conclusions and Open Verification Points
+
+Verified at `kunminghu-v2@e12436c7cba86b195deec24981976d78bc263661`:
+
+* LoadQueue composes `VirtualLoadQueue + RAW + RAR + Replay + Uncache + ExceptionBuffer`. VLQ owns allocation, completion prefix, dequeue, capacity, and redirect-pointer recovery.
+* Dispatch admission is the LQ/SQ joint condition. Defaults provide six load-allocation reservation slots, three scalar LDU pipelines, 72 VLQ entries, 32 RAW entries, 72 RAR/Replay entries, and 16 uncache entries.
+* `lqFull`, `lq_rep_full`, and `rarFull/rawFull` have different backpressure semantics. Only VLQ full directly blocks dispatch; auxiliary-table full forms replay through an LDU query non-ready.
+* RAW performs address/mask/age CAM when Store S1 address arrives, selects a local oldest load, and MemBlock selects global oldest among memory redirect sources. RAR release query has its own `rep_frm_fetch/flushAfter` path.
+* Replay is not a simple FIFO. Each entry has cause, blocking dependency, and `schedIndex`, waits for Store/TLB/MSHR/ROB events, then reexecutes from LDU S0.
+* MMIO/NC, exception, misalignment, cross page, and cache line are not one path: MMIO has ROB gating; MAB is an at-most-two-fragment 16B state machine; TLB handles `fullva` cross page; an LQ CAM cache-line comparison is not cache-line request splitting.
+* Difftest load visibility occurs at ROB commit, not LQ allocation, `ldin`, replay, or dequeue.
+
+Items requiring elaborated RTL, FST waveforms, or directed tests:
+
+1. Exact read-old/read-new behavior of same-cycle `LqRawDataModule` read/write in target synthesis/simulation.
+2. Effective behavior left by MAB second-page exception-address override with `overwriteExpBuf.valid=0`.
+3. How DCache/MissQueue actually splits a cache-line crossing transaction and interacts with MAB's 16B split.
+4. Alias/replay cost of RAR's 16-bit partial-paddr signature under real pressure.
+5. Timing relation among multiple redirects, queue wrap, auxiliary-table exhaustion, uncache response, and Difftest commit.
+
+## Verification Notes
+
+| ID | Invariant | Directed stimulus | Expected observation | Checker / coverage |
+| --- | --- | --- | --- | --- |
+| `LQ_RESET_FIRST_ALLOC` | After reset an entry is valid only after this allocation; first `committed=0` | Immediately dispatch one- and multi-element loads after reset release | `allocated` moves 0 to 1; stale payload cannot affect dequeue/exception; FreeList slot unique | Reset/storage-valid assertion; cover first allocation |
+| `LQ_JOINT_ALLOC` | LQ/SQ cannot half-allocate | Same-cycle load/store/AMO/mixed `needAlloc`, while either queue is nearly full | `canAccept=0` means no inner `do_enq`; accepted entries have valid unique `lqIdx/sqIdx` | Handshake plus allocation scoreboard |
+| `VLQ_WRAP_REDIRECT` | Value/flag/occupancy of non-power-of-two 72-entry ring preserves age through wrap and redirect | Fill/drain through wrap; overlap redirect with dispatch/commit | `enqPtrExt/deqPtr` never crosses a live entry backward; `lqCancelCnt` equals flushed element count | Pointer-age assertion and wrap cover |
+| `VLQ_PREFIX_DEQ` | Only contiguous completed prefix from `deqPtr` releases | Finish younger A before older B, then finish B; include cancelled entry | A cannot dequeue past B; count rises together after B; cancel does not block prefix | Occupancy plus ordered-dequeue property |
+| `RAR_RELEASE_QUERY_REVOKE` | Concurrent release/query/revoke/redirect cannot create ghost `rep_frm_fetch` | Same-line release, three queries, one S3 revoke, plus redirect | Response valid is one cycle after request; revoked/flushed entry does not match; CSR disabled means no `flushAfter` | Flush/replay assertion plus CAM scoreboard |
+| `RAW_MULTI_ENQ_CAM_OLDEST` | RAW tracks only unresolved-store-address window and chooses oldest legal load | Three LDU queries, two Store S1 ports, same/different addresses and partial byte-mask overlap | FreeList offsets unique; only address+mask+age+datavalid candidates participate; rollback points oldest | Storage-conflict plus oldest-selection reference model |
+| `RAW_REDIRECT_PRIORITY` | Multiple local RAW rollbacks plus other memory redirects produce one global oldest winner | Two Store-port hits plus LDU/uncache redirect | `memoryViolation` has oldest ROB; other sources clear or disappear later | Global-age arbitration assertion |
+| `REPLAY_CAUSE_PROGRESS` | Each cause reissues only after proper wakeup; non-flush entry eventually progresses | Inject MA/TM/FF/DM/RAR/RAW and supply Store/TLB/TL-D/FreeList wakeups | Correct `blocking` transition, no duplicate `scheduled`, eventually fire or redirect | Forward-progress cover and cause-specific assertions |
+| `REPLAY_CAPACITY_ASSERT` | Normal Replay ingress does not drop/block a new LDU result by `ready=0` | Fill 72 entries with consecutive misses/replays | Overflow assertion stays inactive; recovery drains rather than silently overwrites | Assertion hit=0 and occupancy high-water coverage |
+| `FWD_BYTE_PRIORITY` | LSQ/SQ, UBuffer, SBuffer byte priority and masks agree | Three sources valid on different/same byte lanes, including data-invalid Store | Priority is LSQ/SQ > NC UBuffer > SBuffer; FF cause matches missing data | Byte-lane scoreboard |
+| `UNCACHE_MMIO_COMMIT_FLUSH` | MMIO cannot issue before `pendingPtr`; NC/MMIO response cannot leak side effect under redirect | MMIO at/not at ROB head, redirect around req fire, mixed NC and Store uncache | MMIO `canSendReq=0` until permitted; response routes by `is2lq`; error response enters exception | Handshake plus side-effect-exclusion checker |
+| `MISALIGN_16B_PAGE_BOUNDARY` | Both fragments maintain one ROB/uop identity across translation, replay, exception, merge, cancel | 16B-boundary/cross-page access: first hit, second fault/miss/NC | At most two fragments; NC/MMIO fragment causes software misalign; second-page override follows current `valid=0` rather than assumption | Fragment scoreboard plus architectural-exception cover |
+| `CACHELINE_NOT_CAM_SPLIT` | Cache-line CAM match must not be mistaken for request split/merge | Aligned/unaligned loads crossing 64B line with RAW line match | Inspect actual DCache/MissQueue transaction; LQ CAM affects ordering only | Cross-boundary waveform review |
+| `EXCEPTION_OLDEST` | Multiple source exceptions export only oldest `robIdx/uopIdx` address | Same-cycle scalar/vector/uncache exception, then redirect | `exceptionAddr` corresponds to oldest live item and never a killed entry after flush | Age-order assertion |
+| `DIFFTEST_NO_FLUSH_EVENT` | Redirected/replayed wrong-path load never produces commit `DiffLoadEvent` | Let wrong path reach prior writeback point after RAW/RAR/uncache redirect | Only reexecuted and ROB-committed correct load produces one event | Architectural-commit scoreboard |
+| `LQ_CAPACITY_RECOVERY` | After fill/drain, full/credit signals recover and system avoids livelock | Fill VLQ, RAR, RAW, Replay, Uncache separately, then release completion/Store/TLB/TL-D/ROB events | `lqFull`, query-ready, `lq_rep_full`, and uncache entries each have a release path | Forward-progress and high-water coverage |

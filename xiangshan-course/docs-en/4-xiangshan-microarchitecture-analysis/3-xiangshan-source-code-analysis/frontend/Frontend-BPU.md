@@ -1,19 +1,24 @@
-# Frontend BPU 分支预测器深入分析
+<!-- # Frontend BPU 分支预测器深入分析 -->
+# In-Depth Analysis of the Frontend BPU Branch Predictor
 
 <!-- regenerated-by-analyze-xiangshan-kunminghu -->
 > Regenerated from `OpenXiangShan/XiangShan` branch `kunminghu-v2`, source commit `52262f303fc06daf84cdab7011d59b7df65ce7e8` using the updated Frontend graph/stage rules.
 
 
 
-> 官方源码：`https://github.com/OpenXiangShan/XiangShan.git`；分支 `kunminghu-v2`；分析 commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`。论文解释算法原理，源码决定香山的有效参数、流水、更新与恢复。
+<!-- > 官方源码：`https://github.com/OpenXiangShan/XiangShan.git`；分支 `kunminghu-v2`；分析 commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`。论文解释算法原理，源码决定香山的有效参数、流水、更新与恢复。 -->
+> Official source: `https://github.com/OpenXiangShan/XiangShan.git`; branch `kunminghu-v2`; analysis commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`. Papers explain the algorithmic principles, while the source determines XiangShan's effective parameters, pipeline, update behavior, and recovery behavior.
 
 <!-- frontend-tutorial-generated-by-analyze-xiangshan-kunminghu -->
-> 所有实现结论均限定在 `kunminghu-v2` commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`；Design Doc 结论必须回到第 18 节的源码追溯矩阵。
+<!-- > 所有实现结论均限定在 `kunminghu-v2` commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`；Design Doc 结论必须回到第 18 节的源码追溯矩阵。 -->
+> Every implementation conclusion is limited to `kunminghu-v2` commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`; Design Doc conclusions must be checked against the source traceability matrix in Section 18.
 
 ## 1. Scope
 
-本节保留模块职责、分析基线、范围和统一五问，明确本文只以当前源码证据为准。
+<!-- 本节保留模块职责、分析基线、范围和统一五问，明确本文只以当前源码证据为准。 -->
+This section records the module responsibilities, analysis baseline, scope, and the common five questions, making clear that this document relies only on evidence from the current source.
 
+<!--
 ### 1.1. 统一五问导读
 | 问题 | 回答 |
 | --- | --- |
@@ -22,26 +27,47 @@
 | **How** | 早级先追求低延迟，晚级比较方向、CFI、target、fall-through 和 multi-hit；不一致时产生 S2/S3 redirect，并修复历史。 |
 | **From what** | 输入来自 reset vector、CSR 控制、FTQ ready、后端 redirect、FTQ commit update。 |
 | **To what** | 输出到 FTQ；历史/恢复控制广播到 Composer 中所有预测器；redirect 反馈给 FTQ/IFU/ICache。 |
+-->
+### 1.1. Five-Question Guide
+| Question | Answer |
+| --- | --- |
+| **Who** | `Predictor`/BPU centrally controls all subpredictors, global history, the next PC, redirects, and the FTQ handshake. |
+| **What** | It organizes multi-level S0-S3 overriding prediction and turns the composed `FauFTB -> Tage_SC -> FTB -> ITTAGE -> RAS` result into an FTQ prediction block. |
+| **How** | Early stages prioritize latency; later stages compare direction, CFI, target, fall-through, and multi-hit information. A mismatch produces an S2/S3 redirect and repairs history. |
+| **From what** | Inputs come from the reset vector, CSR control, FTQ `ready`, backend redirects, and FTQ commit updates. |
+| **To what** | Outputs go to the FTQ; history/recovery control is broadcast to every predictor in `Composer`; redirects feed back to the FTQ/IFU/ICache. |
 
-### 1.2. 分析范围
+<!-- ### 1.2. 分析范围 -->
+### 1.2. Analysis Scope
 - Source: OpenXiangShan/XiangShan `kunminghu-v2`, commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`.
 - Source root used in citations: `src/main/scala/xiangshan`.
 - Files read: [Parameters.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala), [frontend/BPU.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala), [frontend/Composer.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala), [frontend/FTB.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FTB.scala), [frontend/FauFTB.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala), [frontend/Tage.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala), [frontend/SC.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/SC.scala), [frontend/ITTAGE.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/ITTAGE.scala), [frontend/newRAS.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/newRAS.scala), [frontend/Bim.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Bim.scala).
 - Weekly sync: skipped by helper because last sync was 2.24 days old.
 - Design docs: local `XiangShan-Design-Doc` checkout was not found under `xiangshanlab_home`; theory context uses local XiangShanLab course docs, effective behavior uses source.
 
-## 2. 关键源码证据
+<!-- ## 2. 关键源码证据 -->
+## 2. Key Source Evidence
 
-本节直接列出 `BPU / Predictor` 的有效源码入口、关键代码骨架和行为解释，避免只保存文件名或行号。
+<!-- 本节直接列出 `BPU / Predictor` 的有效源码入口、关键代码骨架和行为解释，避免只保存文件名或行号。 -->
+This section lists the effective source entry points, key code skeletons, and behavioral explanations for `BPU / Predictor`, rather than retaining only filenames or line numbers.
 
+<!--
 ### 2.1. 源码入口和行号
 | 源码文件 | 本文使用它证明什么 | 行号证据 |
 | --- | --- | --- |
 | `Parameters.scala` | 预测器链配置和 enable 参数 | [Parameters.scala#L124-L143](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L124-L143) |
 | `frontend/BPU.scala` | S0-S3 valid/ready、预测输出、S2/S3 redirect、后端 redirect 恢复 | [frontend/BPU.scala#L381-L455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455); [frontend/BPU.scala#L606-L635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635); [frontend/BPU.scala#L827-L854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854); [frontend/BPU.scala#L915-L1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050) |
 | `frontend/Composer.scala` | 把 FauFTB/TAGE_SC/FTB/ITTAGE/RAS 串成有效预测器链 | [frontend/Composer.scala#L22-L77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L22-L77) |
+-->
+### 2.1. Source Entry Points and Line References
+| Source file | What it proves here | Line evidence |
+| --- | --- | --- |
+| `Parameters.scala` | Predictor-chain configuration and enable parameters. | [Parameters.scala#L124-L143](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L124-L143) |
+| `frontend/BPU.scala` | S0-S3 valid/ready, prediction output, S2/S3 redirects, and backend redirect recovery. | [frontend/BPU.scala#L381-L455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455); [frontend/BPU.scala#L606-L635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635); [frontend/BPU.scala#L827-L854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854); [frontend/BPU.scala#L915-L1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050) |
+| `frontend/Composer.scala` | Composition of FauFTB/TAGE_SC/FTB/ITTAGE/RAS into the effective predictor chain. | [frontend/Composer.scala#L22-L77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L22-L77) |
 
-### 2.2. 核心代码骨架
+<!-- ### 2.2. 核心代码骨架 -->
+### 2.2. Core Code Skeleton
 ```scala
 val s1_ready = io.bpu_to_ftq.resp.ready && components_ready
 val s2_redirect = s2_valid && (takenDiff || targetDiff || lastBrPosOHDiff)
@@ -49,36 +75,58 @@ val s3_redirect = s3_valid && (targetDiff || jalrTargetDiff || ftbMultiHit)
 io.out := composer.io.out
 ```
 
-### 2.3. 代码解析
-BPU 是前端预测总控：它把 PC/history 送入 Composer，按 S0-S3 保持预测块，比较晚级预测与早级预测差异，必要时生成 S2/S3 redirect，并把最终 prediction block 发给 FTQ。
+<!-- ### 2.3. 代码解析 -->
+### 2.3. Code Walkthrough
+<!-- BPU 是前端预测总控：它把 PC/history 送入 Composer，按 S0-S3 保持预测块，比较晚级预测与早级预测差异，必要时生成 S2/S3 redirect，并把最终 prediction block 发给 FTQ。 -->
+BPU is the frontend prediction controller: it sends the PC/history context to `Composer`, carries prediction blocks through S0-S3, compares later-stage and early-stage predictions, generates S2/S3 redirects when needed, and sends the final prediction block to the FTQ.
 ## 3. Theory-to-Code Mapping
 
-本节把理论概念直接绑定到 `BPU / Predictor` 的源码对象、控制/数据状态和下游消费者。
+<!-- 本节把理论概念直接绑定到 `BPU / Predictor` 的源码对象、控制/数据状态和下游消费者。 -->
+This section binds theoretical concepts directly to `BPU / Predictor` source objects, control/data state, and downstream consumers.
 
+<!--
 ### 3.1. 理论到代码映射表
 | 理论概念 | 代码对象 | 为什么需要它 | 消费者/后续影响 |
 | --- | --- | --- | --- |
 | 多级预测覆盖 | `s1/s2/s3` valid、`s2_redirect`、`s3_redirect` | 晚级预测发现方向、CFI 或 target 不一致时覆盖早级路径 | FTQ、IFU、ICache flush/recover |
 | 全局历史恢复 | global history / folded history redirect update | 错误路径不能继续污染预测历史 | Composer 中所有预测器 |
 | 组件化预测器链 | `Composer` components 和 `last_stage_meta` | 各预测器共享 PC/history 但负责不同信息 | FTQ update 和 predictor training |
+-->
+### 3.1. Theory-to-Code Mapping Table
+| Theory concept | Code object | Why it is needed | Consumer / downstream effect |
+| --- | --- | --- | --- |
+| Multi-level prediction overriding | `s1/s2/s3` valid, `s2_redirect`, `s3_redirect` | A later predictor can override the early path when direction, CFI, or target differs. | FTQ, IFU, and ICache flush/recovery |
+| Global-history recovery | Global-history/folded-history redirect update | Wrong-path outcomes must not continue to contaminate prediction history. | Every predictor in `Composer` |
+| Componentized predictor chain | `Composer` components and `last_stage_meta` | Predictors share PC/history context while supplying different information. | FTQ update and predictor training |
 
-### 3.2. 阅读顺序
-先按第 2 节定位源码对象，再顺着本表检查信号从哪里来、状态在哪里保存、何时更新、谁消费结果。若本篇只引用相邻模块拥有的状态，则以相邻 Frontend 分文档的源码分析为准。
-## 4. 论文原则和有效代码
+<!-- ### 3.2. 阅读顺序 -->
+### 3.2. Reading Order
+<!-- 先按第 2 节定位源码对象，再顺着本表检查信号从哪里来、状态在哪里保存、何时更新、谁消费结果。若本篇只引用相邻模块拥有的状态，则以相邻 Frontend 分文档的源码分析为准。 -->
+First locate source objects through Section 2, then use this table to check where signals originate, where state is stored, when it is updated, and who consumes the result. When this document cites state owned by an adjacent module, use the source analysis in the corresponding Frontend document as the authority.
+<!-- ## 4. 论文原则和有效代码 -->
+## 4. Paper Principles and Effective Code
 
 
-### 4.1. 状态机与论文理论
-BPU 没有单一 `Enum` FSM，而由 S0/S1/S2/S3 valid、ready、fire、redirect 和历史指针构成隐式流水状态机。理论上属于 decoupled/elastic instruction fetching：快速预测先维持带宽，较慢但准确的预测在后级覆盖，错误代价由局部 redirect 限制。Design Doc 引用 Reinman 等人的 scalable frontend 与 Perais 等人的 elastic instruction fetching；香山实际覆盖条件以代码比较向量为准。
+<!-- ### 4.1. 状态机与论文理论 -->
+### 4.1. State Machine and Paper Theory
+<!-- BPU 没有单一 `Enum` FSM，而由 S0/S1/S2/S3 valid、ready、fire、redirect 和历史指针构成隐式流水状态机。理论上属于 decoupled/elastic instruction fetching：快速预测先维持带宽，较慢但准确的预测在后级覆盖，错误代价由局部 redirect 限制。Design Doc 引用 Reinman 等人的 scalable frontend 与 Perais 等人的 elastic instruction fetching；香山实际覆盖条件以代码比较向量为准。 -->
+BPU has no single `Enum` FSM; its implicit pipeline state machine is formed by S0/S1/S2/S3 valid, ready, fire, redirect, and history-pointer state. In theory it is a decoupled/elastic instruction-fetching design: fast prediction maintains bandwidth first, slower but more accurate prediction overrides it later, and local redirects bound the cost of an error. The Design Doc cites Reinman et al. for a scalable frontend and Perais et al. for elastic instruction fetching; XiangShan's actual override conditions are defined by the source comparison vectors.
 
 ## 5. Microarchitecture Parameters
 
 
-### 5.1. 容量与边界补充
+<!-- ### 5.1. 容量与边界补充
 - BPU 本身不保存无限 prediction block；FTQ 满时 `io.bpu_to_ftq.resp.ready=0`，S1/S2 前进条件被阻止，payload 必须保持。
 - 这属于下游队列 overflow 的反压传播；underflow 表现为没有有效 S0/S1 请求，而不是读取不存在的预测项。
 - 子预测器任一 SRAM reset/update 冲突导致 Composer ready 下降，BPU 必须整体停住，防止各预测器 stage 失配。
+-->
+### 5.1. Capacity and Boundary Notes
+- BPU does not store an unbounded number of prediction blocks. When the FTQ is full, `io.bpu_to_ftq.resp.ready=0`, S1/S2 advancement is blocked, and the payload must remain stable.
+- This is backpressure propagated from a downstream queue overflow. Underflow appears as the absence of a valid S0/S1 request, not as a read of a nonexistent prediction entry.
+- If an SRAM reset/update conflict lowers `Composer` ready for any subpredictor, BPU must stop as a whole to prevent predictor-stage skew.
 
-## 6. 模块边界和接口
+<!-- ## 6. 模块边界和接口 -->
+## 6. Module Boundaries and Interfaces
 
 
 ### 6.1. Role and Boundary
@@ -86,9 +134,12 @@ BPU 没有单一 `Enum` FSM，而由 S0/S1/S2/S3 valid、ready、fire、redirect
 
 [Bim.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Bim.scala) is not in this chain; its content is commented out and is not effective in this commit.
 
-### 6.2. 控制信号逐项解释：Who / From / To / How / Why
-> 下表覆盖本文讲解中出现的查询、流水推进、选择、训练、替换和恢复控制。`为什么存在` 不以信号命名猜测，而以当前 `kunminghu-v2` 数据依赖、资源限制和恢复要求为依据。
+<!-- ### 6.2. 控制信号逐项解释：Who / From / To / How / Why -->
+### 6.2. Control Signals: Who / From / To / How / Why
+<!-- > 下表覆盖本文讲解中出现的查询、流水推进、选择、训练、替换和恢复控制。`为什么存在` 不以信号命名猜测，而以当前 `kunminghu-v2` 数据依赖、资源限制和恢复要求为依据。 -->
+> The table covers lookup, pipeline advancement, selection, training, replacement, and recovery controls used in this document. The “why” column is derived from `kunminghu-v2` data dependencies, resource limits, and recovery requirements, rather than guessed from signal names.
 
+<!--
 | 控制信号 / 状态 | 谁产生 / 从哪里来 | 谁消费 / 到哪里去 | 何时、如何生效 | 为什么存在；缺失会怎样 | 代码证据 |
 | --- | --- | --- | --- | --- | --- |
 | `io.in.valid / io.in.ready` | FTQ 请求端 | Predictor/Composer | 在所有组件 ready 时接受新 PC。 | 预测器链由多个组件组成，AND-ready 保证同一请求不会只进入部分组件而造成 metadata 错位。 | [frontend/BPU.scala:141-170](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L141-L170) |
@@ -103,6 +154,21 @@ BPU 没有单一 `Enum` FSM，而由 S0/S1/S2/S3 valid、ready、fire、redirect
 | `io.redirect / do_redirect` | 后端或 FTQ 恢复 | PC、全局历史、折叠历史 | 后端解析错误时恢复正确目标和历史快照。 | 分支预测状态是投机的；后端 redirect 是最终真值，必须压过前端内部预测并清除错误路径历史。 | [frontend/BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050) |
 | `io.update.valid` | FTQ/提交侧 | Composer 中各预测器训练口 | 携带真实分支结果和预测时 metadata。 | 查询阶段只知道猜测，update 把最终结果归因回同一 FTQ entry，使各表可训练且不串项。 | [frontend/BPU.scala:141-170](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L141-L170) |
 | `last_stage_meta` | 各预测组件 | FTQ 保存并在 update 时反向拆分 | 串联保存 provider、way、counter、RAS 快照等训练信息。 | 仅凭 PC/结果无法重建当时命中的表项；metadata 保证延迟训练更新原预测实例。 | [frontend/Composer.scala:58-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L58-L77) |
+-->
+| Control signal / state | Producer / source | Consumer / destination | When and how it takes effect | Why it exists; what breaks without it | Source evidence |
+| --- | --- | --- | --- | --- | --- |
+| `io.in.valid / io.in.ready` | FTQ request side | Predictor/Composer | Accepts a new PC when every component is ready. | The chain has multiple components; ANDing ready prevents one request from entering only part of the chain and misaligning metadata. | [frontend/BPU.scala:141-170](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L141-L170) |
+| `s0_fire` | Input handshake | PC/history generation and all predictor components | Marks actual acceptance of an S0 request. | Valid may persist for several cycles; fire ensures PC, history, and table reads advance exactly once. | [frontend/BPU.scala:381-405](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L405) |
+| `s1_fire` | S1 valid/ready | S1-to-S2 registers and history update | Latches the fast prediction and permits pipeline advancement. | Decouples the low-latency uFTB result from slower tables, preserving throughput without duplicate advancement under backpressure. | [frontend/BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) |
+| `s2_fire` | S2 valid/ready | S2-to-S3 path and S2 redirect generation | Accepts the more complete TAGE/FTB result. | S2 can overturn S1; a separate fire makes comparison, redirect, and metadata apply once to the same transaction. | [frontend/BPU.scala:606-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L725) |
+| `s3_fire` | S3 valid/ready | Final response and ITTAGE/RAS correction | Commits the final prediction to the FTQ. | The latest components can change indirect/return targets; the S3 acceptance boundary prevents target/FTQ-entry mismatch. | [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854) |
+| `s1_valid_dup / s2_valid_dup / s3_valid_dup` | Stage pipeline registers | Replicated ready/valid fanout to components | Stores and replicates inter-stage valid bits. | Long high-fanout control paths hurt timing; duplication improves physical implementation and gives components a consistent transaction identity. | [frontend/BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) |
+| `io.out.ready / resp.valid` | FTQ capacity | BPU final output | Holds the final payload while FTQ is full and fires after capacity is released. | A prediction carries PC, target, history, and metadata; backpressure must not drop it or recompute a different version. | [frontend/BPU.scala:425-455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L425-L455) |
+| `s2_redirect` | S1/S2 difference comparison | Next PC and FTQ/IFU flush | Performs early correction when direction, target, or CFI position changes. | Fast prediction trades accuracy for latency; S2 redirect repairs the wrong path with a more accurate result instead of waiting for the backend. | [frontend/BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725) |
+| `s3_redirect` | S2/S3 difference comparison | Next PC and FTQ/IFU flush | Corrects late changes such as ITTAGE/RAS results or multi-hit state. | Indirect and return targets often arrive later, so a second overriding mechanism is required for frontend accuracy. | [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854) |
+| `io.redirect / do_redirect` | Backend or FTQ recovery | PC, global history, and folded history | Restores the correct target and history snapshot after backend resolution. | Prediction state is speculative; backend redirect is final truth and must override internal prediction while clearing wrong-path history. | [frontend/BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050) |
+| `io.update.valid` | FTQ/commit side | Predictor training ports in Composer | Carries the true branch outcome and prediction-time metadata. | Lookup sees only a guess; update attributes the final outcome to the same FTQ entry so tables train without cross-entry contamination. | [frontend/BPU.scala:141-170](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L141-L170) |
+| `last_stage_meta` | Predictor components | FTQ storage and reverse split during update | Carries provider, way, counter, RAS snapshot, and other training context through the chain. | PC/result alone cannot reconstruct the entry that hit; metadata lets delayed training update the original prediction instance. | [frontend/Composer.scala:58-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L58-L77) |
 
 #### 6.2.1. Top-Level Module Connectivity
 
@@ -181,12 +247,15 @@ The stage graph keeps chronological forward edges separate from the bundled reco
 }
 ```
 
-## 7. 为什么模块存在
+<!-- ## 7. 为什么模块存在 -->
+## 7. Why the Module Exists
 
 
-把模块放回 Frontend 全链路理解：它解决的是预测带宽、取指正确性、存储层次延迟、投机恢复或上下游速率不匹配中的至少一个问题。
+<!-- 把模块放回 Frontend 全链路理解：它解决的是预测带宽、取指正确性、存储层次延迟、投机恢复或上下游速率不匹配中的至少一个问题。 -->
+Place the module back into the complete frontend path: it addresses at least one of prediction bandwidth, fetch correctness, memory-hierarchy latency, speculative recovery, or a rate mismatch between upstream and downstream stages.
 
-## 8. 有效动态路径
+<!-- ## 8. 有效动态路径 -->
+## 8. Effective Dynamic Path
 
 
 ### 8.1. Pipeline and Handshake
@@ -194,12 +263,15 @@ The stage graph keeps chronological forward edges separate from the bundled reco
 
 `io.bpu_to_ftq.resp.valid` is asserted for normal S1->S2 output or override redirects from S2/S3 ([frontend/BPU.scala:452-456](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L452-L456)). Therefore, the FTQ sees both ordinary prediction blocks and correction events through one response channel.
 
-## 9. Index 和地址/历史计算
+<!-- ## 9. Index 和地址/历史计算 -->
+## 9. Index and Address/History Computation
 
 
-地址、PC、折叠历史、tag、set/way、line offset 和 FTQ offset 都必须追到源码表达式；索引冲突、回绕和跨边界情况在算法和验证章节中继续展开。
+<!-- 地址、PC、折叠历史、tag、set/way、line offset 和 FTQ offset 都必须追到源码表达式；索引冲突、回绕和跨边界情况在算法和验证章节中继续展开。 -->
+Addresses, PCs, folded history, tags, sets/ways, line offsets, and FTQ offsets must all be traced to source expressions; index conflicts, wraparound, and boundary-crossing cases are developed further in the algorithm and verification sections.
 
-## 10. 核心算法
+<!-- ## 10. 核心算法 -->
+## 10. Core Algorithms
 
 
 ### 10.1. Algorithms
@@ -215,7 +287,8 @@ S2 redirect compares S1's previous prediction against S2's richer prediction: ta
 
 `ghv` is a circular vector. Prediction stages calculate possible next pointers for `0..numBr` branches and select by `lastBrPosOH` ([frontend/BPU.scala:530-544](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L530-L544), [frontend/BPU.scala:639-654](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L639-L654), [frontend/BPU.scala:741-756](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L741-L756)). Each stage produces write enables/data for the bits it speculatively shifts ([frontend/BPU.scala:561-595](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L561-L595), [frontend/BPU.scala:671-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L671-L725), [frontend/BPU.scala:773-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L773-L883)). Backend redirect recomputes folded history from the saved `histPtr` and resolved CFI update ([frontend/BPU.scala:939-963](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L939-L963)) and writes corrected history bits ([frontend/BPU.scala:964-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L964-L1050)).
 
-### 10.2. 算法示例推演
+<!-- ### 10.2. 算法示例推演 -->
+### 10.2. Worked Algorithm Example
 Example input: S0 fetch PC is `0x8000_1000`, current global-history pointer is `H`, and the predictor chain first emits a fast S1 target `0x8000_1040`. One cycle later S2 computes a richer target `0x8000_1080` from FTB/TAGE metadata.
 
 1. Component chain setup: [Parameters.scala:126-143](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L126-L143) instantiates `FauFTB`, `Tage_SC`, `FTB`, `ITTage`, and `RAS`, then wires each component's `resp_in(0)` from the previous component. In this example, `FauFTB` creates the early S1 guess, `Tage_SC` may change direction, `FTB` may change target/branch-slot metadata, `ITTAGE` may change indirect target, and `RAS` may change return target.
@@ -226,7 +299,8 @@ Example input: S0 fetch PC is `0x8000_1000`, current global-history pointer is `
 
 Downstream effect: FTQ receives either a normal prediction block or an override event through `io.bpu_to_ftq.resp` ([frontend/BPU.scala:452-458](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L452-L458)). The example changes both `resp.bits.s2.hasRedirect` and the next fetch PC.
 
-### 10.3. 逐流水级算法
+<!-- ### 10.3. 逐流水级算法 -->
+### 10.3. Per-Stage Algorithm
 | Stage | Inputs | Algorithm and state | Ready/stall | Output | Source lines |
 | --- | --- | --- | --- | --- | --- |
 | S0 | Generated PC, folded history, global history pointer | Drives `predictors.io.in.bits.s0_pc`, `folded_hist`, `s1_folded_hist`, and `ghist`; `getHist(ptr)` reads `ghv` by circular pointer. | `s0_fire := s1_components_ready && s1_ready`. | Component lookup requests and S1 PC/history registers. | [frontend/BPU.scala:336-369](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L336-L369), [frontend/BPU.scala:391-397](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L391-L397) |
@@ -236,20 +310,25 @@ Downstream effect: FTQ receives either a normal prediction block or an override 
 | Update | FTQ update | Sends update to Composer; recomputes update PC with segmented address register; supplies true history from `histPtr`. | Component-local ready can block S1 through Composer. | Predictor table training. | [frontend/BPU.scala:905-913](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L905-L913), [frontend/Composer.scala:72-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L72-L77) |
 | Redirect/recovery | FTQ/backend redirect | Reconstructs corrected pointer/folded history from `cfiUpdate`, writes global-history bits, and registers redirect target. | Redirect flushes S1/S2/S3 valid bits. | Next S0 PC/history becomes resolved redirect state. | [frontend/BPU.scala:378-389](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L378-L389), [frontend/BPU.scala:915-1075](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1075) |
 
-## 11. 状态和存储结构
+<!-- ## 11. 状态和存储结构 -->
+## 11. State and Storage Structures
 
 
-把每个表、栈、FIFO、MSHR、uncache entry 和 pipeline register 记录为 `valid/full/empty/ready` 可观察状态，并说明谁写入、谁读取、何时清空以及满/空时谁被反压。
+<!-- 把每个表、栈、FIFO、MSHR、uncache entry 和 pipeline register 记录为 `valid/full/empty/ready` 可观察状态，并说明谁写入、谁读取、何时清空以及满/空时谁被反压。 -->
+Record each table, stack, FIFO, MSHR, uncache entry, and pipeline register as observable `valid/full/empty/ready` state, and explain who writes it, who reads it, when it is cleared, and who is backpressured when it is full or empty.
 
-## 12. Pipeline stage 分析
+<!-- ## 12. Pipeline stage 分析 -->
+## 12. Pipeline Stage Analysis
 
 
-阶段说明只使用源码中的寄存器、valid/ready 和 fire 条件；对 Frontend 使用 F0/F1/F2/F3，对 Backend 使用实际 Decode/Rename/Dispatch/Issue/Execute/Writeback/ROB 边界。
+<!-- 阶段说明只使用源码中的寄存器、valid/ready 和 fire 条件；对 Frontend 使用 F0/F1/F2/F3，对 Backend 使用实际 Decode/Rename/Dispatch/Issue/Execute/Writeback/ROB 边界。 -->
+Stage descriptions use only registers and valid/ready/fire conditions present in the source: F0/F1/F2/F3 for the frontend, and the actual Decode/Rename/Dispatch/Issue/Execute/Writeback/ROB boundaries for the backend.
 
 ## 13. Control path rationale
 
 
-### 13.1. Redirect 信号生成
+<!-- ### 13.1. Redirect 信号生成 -->
+### 13.1. Redirect Signal Generation
 | Signal | Producer and condition | Stage | Repaired state | Consumer/effect | Source lines |
 | --- | --- | --- | --- | --- | --- |
 | `s2_redirect_dup` | `preds_needs_redirect_vec_dup(previous_s1_pred_info, resp.s2)` detects target, branch-position, taken, or CFI-index mismatch. | S2 | PC, folded history, global-history pointer, history bits. | Flushes younger stage and sends S2 override to FTQ. | [frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635), [frontend/BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725) |
@@ -259,24 +338,33 @@ Downstream effect: FTQ receives either a normal prediction block or an override 
 
 Example: if S1 predicts target `0x1040` and S2 predicts `0x1080`, `targetDiff` in `preds_needs_redirect_vec_dup` is true, so `s2_redirect_dup(0)` is asserted. The S2 target is registered into `npcGen`, and `s1_flush` becomes true through the flush chain.
 
-## 14. Data path 与跨边界
+<!-- ## 14. Data path 与跨边界 -->
+## 14. Data Path and Boundary Crossing
 
 
-### 14.1. 跨边界代码解析
-BPU 的预测块边界不能替代实际取指边界。对于跨虚拟页的块，BPU 只保存 PC/历史/预测元数据；IFU 必须对第二页重新翻译并重新检查权限，第二片段的 fault 或 flush 会取消旧的预测上下文。对于跨 Cache Line 的块，第一 Line 的预测可以先进入 FTQ，但下一 Line 的 miss/refill 或半指令合并结果可能改变 fall-through、CFI index 或 target，BPU 在 S2/S3 重新比较并通过 `s2_redirect`/`s3_redirect` 收敛，[frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635) 和 [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854)。
+<!-- ### 14.1. 跨边界代码解析 -->
+### 14.1. Boundary-Crossing Code Walkthrough
+<!-- BPU 的预测块边界不能替代实际取指边界。对于跨虚拟页的块，BPU 只保存 PC/历史/预测元数据；IFU 必须对第二页重新翻译并重新检查权限，第二片段的 fault 或 flush 会取消旧的预测上下文。对于跨 Cache Line 的块，第一 Line 的预测可以先进入 FTQ，但下一 Line 的 miss/refill 或半指令合并结果可能改变 fall-through、CFI index 或 target，BPU 在 S2/S3 重新比较并通过 `s2_redirect`/`s3_redirect` 收敛，[frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635) 和 [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854)。 -->
+The BPU prediction-block boundary cannot replace the actual fetch boundary. For a block crossing a virtual page, BPU stores only the PC/history/prediction metadata; IFU must translate the second page again and recheck permissions, and a fault or flush in the second fragment cancels the old prediction context. For a block crossing a cache line, the first-line prediction may enter the FTQ first, but a miss/refill on the next line or half-instruction merge can change the fall-through, CFI index, or target. BPU compares again in S2/S3 and converges through `s2_redirect`/`s3_redirect`, as shown by [frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635) and [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854).
 
-MMIO/uncache 地址不能因为 BPU 给出 target 就进入普通 ICache 快路径；IFU/InstrUncache 负责 PMA/PBMT 分类、非投机请求、响应等待和 redirect cancel。预测器的恢复只修复历史、RAS 和 FTQ 元数据，不能撤销已产生的 MMIO 副作用。
+<!-- MMIO/uncache 地址不能因为 BPU 给出 target 就进入普通 ICache 快路径；IFU/InstrUncache 负责 PMA/PBMT 分类、非投机请求、响应等待和 redirect cancel。预测器的恢复只修复历史、RAS 和 FTQ 元数据，不能撤销已产生的 MMIO 副作用。 -->
+An MMIO/uncache address must not enter the ordinary ICache fast path merely because BPU supplied a target. IFU/InstrUncache handles PMA/PBMT classification, non-speculative requests, response waiting, and redirect cancellation. Predictor recovery repairs only history, RAS, and FTQ metadata; it cannot undo an MMIO side effect that has already occurred.
 
-## 15. 异常、debug、privilege
-
-
-区分预测错误、replay、page/access/guest fault、MMIO side effect、debug redirect 和架构异常；说明异常产生者、优先级、清理对象、恢复入口和提交可见性。
-
-## 16. CSR 控制
+<!-- ## 15. 异常、debug、privilege -->
+## 15. Exceptions, Debug, and Privilege
 
 
-前端分支预测器的使能控制来自 CSR 模块生成的 `CustomCSRCtrlIO.bp_ctrl`，不是各预测器本地私有 CSR。有效链路是：`sbpctl` CSR 字段 -> `io.status.custom.bp_ctrl` -> Backend `frontendCsrCtrl` -> XSCore `frontend.io.csrCtrl` -> Frontend `bpu.io.ctrl` -> BPU 内各子预测器 `io.enable`。
+<!-- 区分预测错误、replay、page/access/guest fault、MMIO side effect、debug redirect 和架构异常；说明异常产生者、优先级、清理对象、恢复入口和提交可见性。 -->
+Distinguish misprediction, replay, page/access/guest faults, MMIO side effects, debug redirects, and architectural exceptions; identify each producer, priority, cleanup target, recovery entry, and commit visibility.
 
+<!-- ## 16. CSR 控制 -->
+## 16. CSR Control
+
+
+<!-- 前端分支预测器的使能控制来自 CSR 模块生成的 `CustomCSRCtrlIO.bp_ctrl`，不是各预测器本地私有 CSR。有效链路是：`sbpctl` CSR 字段 -> `io.status.custom.bp_ctrl` -> Backend `frontendCsrCtrl` -> XSCore `frontend.io.csrCtrl` -> Frontend `bpu.io.ctrl` -> BPU 内各子预测器 `io.enable`。 -->
+Frontend predictor enable control comes from the CSR-generated `CustomCSRCtrlIO.bp_ctrl`, not from private CSR state in each predictor. The effective path is `sbpctl` CSR fields -> `io.status.custom.bp_ctrl` -> backend `frontendCsrCtrl` -> XSCore `frontend.io.csrCtrl` -> frontend `bpu.io.ctrl` -> each BPU subpredictor's `io.enable`.
+
+<!--
 ### 16.1. CSR 字段到 BPU 控制信号
 | 控制位 | CSR 源字段 | Frontend/BPU 消费者 | 有效作用 | 源码证据 |
 | --- | --- | --- | --- | --- |
@@ -287,8 +375,20 @@ MMIO/uncache 地址不能因为 BPU 给出 target 就进入普通 ICache 快路�
 | `bp_ctrl.scEnable` | `sbpctl.regOut.SC_ENABLE` | `sc.io.enable` | 控制 statistical corrector 是否修正 TAGE/基础方向结果。 | [NewCSR.scala:1382](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1382), [Bpu.scala:100](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L100), [Bpu.scala:109](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L109) |
 | `bp_ctrl.ittageEnable` | `sbpctl.regOut.ITTAGE_ENABLE` | `ittage.io.enable` | 控制间接跳转/JALR target 覆盖预测是否有效。 | [NewCSR.scala:1383](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1383), [Bpu.scala:101](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L101), [Bpu.scala:110](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L110) |
 | `bp_ctrl.rasEnable` | `sbpctl.regOut.RAS_ENABLE` | `ras.io.enable` | 控制 return address stack 是否给 RET/JALR 返回目标提供覆盖。 | [NewCSR.scala:1384](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1384), [Bpu.scala:102](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L102), [Bpu.scala:111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L111) |
+-->
+### 16.1. CSR Fields to BPU Control Signals
+| Control bit | CSR source field | Frontend/BPU consumer | Effective behavior | Source evidence |
+| --- | --- | --- | --- | --- |
+| `bp_ctrl.ubtbEnable` | `sbpctl.regOut.UBTB_ENABLE` | `ubtb.io.enable` | Enables or disables S1 fast uBTB/MicroBtb results in the predictor chain; the fall-through baseline remains when disabled. | [NewCSR.scala:1378](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1378), [Bpu.scala:96](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L96), [Bpu.scala:105](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L105) |
+| `bp_ctrl.abtbEnable` | `sbpctl.regOut.ABTB_ENABLE` | `abtb.io.enable` | Controls whether AheadBtb target/attribute prediction participates in early prediction. | [NewCSR.scala:1379](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1379), [Bpu.scala:97](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L97), [Bpu.scala:106](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L106) |
+| `bp_ctrl.mbtbEnable` | `sbpctl.regOut.MBTB_ENABLE` | `mbtb.io.enable` | Controls whether MainBtb supplies main-BTB hits, direct branch/JAL targets, and fall-through information. | [NewCSR.scala:1380](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1380), [Bpu.scala:98](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L98), [Bpu.scala:107](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L107) |
+| `bp_ctrl.tageEnable` | `sbpctl.regOut.TAGE_ENABLE` | `tage.io.enable` | Controls whether TAGE conditional-branch direction prediction is active; when disabled, TAGE provider output cannot override direction. | [NewCSR.scala:1381](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1381), [Bpu.scala:99](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L99), [Bpu.scala:108](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L108) |
+| `bp_ctrl.scEnable` | `sbpctl.regOut.SC_ENABLE` | `sc.io.enable` | Controls whether the statistical corrector modifies TAGE/base direction results. | [NewCSR.scala:1382](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1382), [Bpu.scala:100](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L100), [Bpu.scala:109](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L109) |
+| `bp_ctrl.ittageEnable` | `sbpctl.regOut.ITTAGE_ENABLE` | `ittage.io.enable` | Controls whether indirect/JALR target override prediction is active. | [NewCSR.scala:1383](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1383), [Bpu.scala:101](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L101), [Bpu.scala:110](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L110) |
+| `bp_ctrl.rasEnable` | `sbpctl.regOut.RAS_ENABLE` | `ras.io.enable` | Controls whether the return-address stack supplies an override target for RET/JALR returns. | [NewCSR.scala:1384](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1384), [Bpu.scala:102](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L102), [Bpu.scala:111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L111) |
 
-### 16.2. 有效代码骨架
+<!-- ### 16.2. 有效代码骨架 -->
+### 16.2. Effective Code Skeleton
 ```scala
 // backend/fu/NewCSR/NewCSR.scala
 io.status.custom.bp_ctrl.ubtbEnable   := sbpctl.regOut.UBTB_ENABLE.asBool
@@ -317,10 +417,13 @@ ittage.io.enable      := ctrl.ittageEnable
 ras.io.enable         := ctrl.rasEnable
 ```
 
-### 16.3. 代码解析
-`BpuCtrl` bundle 明确定义了 `ubtbEnable`、`abtbEnable`、`mbtbEnable`、`tageEnable`、`scEnable`、`ittageEnable`、`rasEnable` 七个 Bool 控制位：[Bundles.scala:179-189](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bundles.scala#L179-L189)。`CustomCSRCtrlIO` 将 `bp_ctrl` 作为 CSR 输出的一部分：[Bundle.scala:586-596](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Bundle.scala#L586-L596)。Backend 把 `csrio.customCtrl` 暴露为 `frontendCsrCtrl`，XSCore 再连到 Frontend：[Backend.scala:526-527](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/Backend.scala#L526-L527), [XSCore.scala:138](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/XSCore.scala#L138)。Frontend 先用 `CsrCtrlPortDelay` 延迟 CSR 控制，再把 `csrCtrl.bp_ctrl` 送进 BPU：[Frontend.scala:143-153](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Frontend.scala#L143-L153)。BPU 内部再延迟 2 拍以满足时序，随后分发给各子预测器：[Bpu.scala:89-111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L89-L111)。
+<!-- ### 16.3. 代码解析 -->
+### 16.3. Code Walkthrough
+<!-- `BpuCtrl` bundle 明确定义了 `ubtbEnable`、`abtbEnable`、`mbtbEnable`、`tageEnable`、`scEnable`、`ittageEnable`、`rasEnable` 七个 Bool 控制位：[Bundles.scala:179-189](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bundles.scala#L179-L189)。`CustomCSRCtrlIO` 将 `bp_ctrl` 作为 CSR 输出的一部分：[Bundle.scala:586-596](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Bundle.scala#L586-L596)。Backend 把 `csrio.customCtrl` 暴露为 `frontendCsrCtrl`，XSCore 再连到 Frontend：[Backend.scala:526-527](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/Backend.scala#L526-L527), [XSCore.scala:138](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/XSCore.scala#L138)。Frontend 先用 `CsrCtrlPortDelay` 延迟 CSR 控制，再把 `csrCtrl.bp_ctrl` 送进 BPU：[Frontend.scala:143-153](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Frontend.scala#L143-L153)。BPU 内部再延迟 2 拍以满足时序，随后分发给各子预测器：[Bpu.scala:89-111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L89-L111)。 -->
+The `BpuCtrl` bundle defines seven Bool controls: `ubtbEnable`, `abtbEnable`, `mbtbEnable`, `tageEnable`, `scEnable`, `ittageEnable`, and `rasEnable` ([Bundles.scala:179-189](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bundles.scala#L179-L189)). `CustomCSRCtrlIO` exposes `bp_ctrl` as part of the CSR output ([Bundle.scala:586-596](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Bundle.scala#L586-L596)). The backend exposes `csrio.customCtrl` as `frontendCsrCtrl`, and XSCore connects it to the frontend ([Backend.scala:526-527](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/Backend.scala#L526-L527), [XSCore.scala:138](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/XSCore.scala#L138)). The frontend first delays CSR control with `CsrCtrlPortDelay` and sends `csrCtrl.bp_ctrl` into BPU ([Frontend.scala:143-153](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Frontend.scala#L143-L153)); BPU then delays it by two cycles for timing and distributes it to the subpredictors ([Bpu.scala:89-111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L89-L111)).
 
-需要注意两点：第一，`fallThrough` 基线预测器始终 `enable := true.B`，`MicroTage` 和 `MicroRas` 当前也固定使能，源码中 `utageEnable` 仍是注释项，不应写成已由 CSR 控制；第二，在 `EnableConstantin && !FPGAPlatform` 配置下，`constCtrl` 可覆盖 CSR 位，否则直接使用 CSR 位，因此验证时要同时覆盖 Constantin override 和普通 CSR 控制两条路径。
+<!-- 需要注意两点：第一，`fallThrough` 基线预测器始终 `enable := true.B`，`MicroTage` 和 `MicroRas` 当前也固定使能，源码中 `utageEnable` 仍是注释项，不应写成已由 CSR 控制；第二，在 `EnableConstantin && !FPGAPlatform` 配置下，`constCtrl` 可覆盖 CSR 位，否则直接使用 CSR 位，因此验证时要同时覆盖 Constantin override 和普通 CSR 控制两条路径。 -->
+Two details matter. First, the `fallThrough` baseline always has `enable := true.B`; `MicroTage` and `MicroRas` are also permanently enabled in the current source, while `utageEnable` remains commented out and must not be described as CSR-controlled. Second, under `EnableConstantin && !FPGAPlatform`, `constCtrl` can override CSR bits; otherwise the CSR bits are used directly. Verification must therefore cover both the Constantin override path and the ordinary CSR-control path.
 
 ## 17. Diagrams
 
@@ -369,20 +472,29 @@ flowchart LR
 }
 ```
 
-## 18. 有效行为和 Design Doc 差异
+<!-- ## 18. 有效行为和 Design Doc 差异 -->
+## 18. Effective Behavior and Design Doc Differences
 
 
 ### 18.1. Design Doc to Source Traceability
+<!--
 | Design Doc location | Atomic claim | XiangShan source evidence | Relationship | Status | Discrepancy |
 | --- | --- | --- | --- | --- | --- |
 | [docs/en/frontend/BPU/index.md:15](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L15) | BPU 产生预测块并通过多级流水逐步覆盖预测结果 | [frontend/BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) | 预测请求进入组件并形成阶段性 response | **Verified** | 无 |
 | [docs/en/frontend/BPU/index.md:17](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L17) | 后级预测可以覆盖早期结果并影响 FTQ | [frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635) | 阶段比较、覆盖和 redirect 生成 | **Verified** | 无 |
 | [docs/en/frontend/BPU/mbtb.md:1](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/mbtb.md#L1) | 组件由 Composer 按配置组装 | [frontend/Composer.scala:22-77](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/Composer.scala#L22-L77) | 参数化 predictor composition | **Partially verified** | Design Doc component names and current configuration are not identical in every build. |
+-->
+| Design Doc location | Atomic claim | XiangShan source evidence | Relationship | Status | Discrepancy |
+| --- | --- | --- | --- | --- | --- |
+| [docs/en/frontend/BPU/index.md:15](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L15) | BPU generates prediction blocks and progressively overrides them through multiple pipeline stages. | [frontend/BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) | The prediction request enters the components and becomes a staged response. | **Verified** | None |
+| [docs/en/frontend/BPU/index.md:17](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L17) | Later-stage prediction can override the early result and affect the FTQ. | [frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635) | Stage comparison, override, and redirect generation. | **Verified** | None |
+| [docs/en/frontend/BPU/mbtb.md:1](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/mbtb.md#L1) | Components are assembled by `Composer` according to configuration. | [frontend/Composer.scala:22-77](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/Composer.scala#L22-L77) | Parameterized predictor composition. | **Partially verified** | Design Doc component names and the current configuration are not identical in every build. |
 
 ### 18.2. Design Doc Baseline
 - Design Doc: `OpenXiangShan/XiangShan-Design-Doc`, branch `kunminghu-v3`, commit `f8e258dc2d9c02c0616764856e1d18feedb91b81`.
 - XiangShan source: `OpenXiangShan/XiangShan`, branch `kunminghu-v2`, commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`.
-- 设计文档是意图和接口假设；以下矩阵只把能在该源码 commit 的有效 Chisel 中定位到的内容作为实现事实。
+<!-- - 设计文档是意图和接口假设；以下矩阵只把能在该源码 commit 的有效 Chisel 中定位到的内容作为实现事实。 -->
+- The Design Doc expresses intent and interface assumptions; the matrix below treats as implementation facts only items that can be located in effective Chisel at this source commit.
 
 ### 18.3. Design Doc Line-by-Line Mapping
 1. `frontend/BPU.scala:381-455` accepts the frontend request and computes component prediction results; valid/ready controls make the result a pipeline transaction rather than a combinational textbook lookup.
@@ -393,13 +505,17 @@ flowchart LR
 - `Partially verified`: the Design Doc presents a conceptual predictor composition; source line evidence verifies the active handshake and recovery path, while exact component selection is parameter-dependent.
 - `Version mismatch`: Design Doc baseline is `kunminghu-v3`, source baseline is `kunminghu-v2`; names and stage timing must not be assumed identical.
 
-## 19. 动态场景示例
+<!-- ## 19. 动态场景示例 -->
+## 19. Dynamic Scenario Examples
 
 
-### 19.1. 示例讲解
-FauFTB 在 S1 预测顺序执行；TAGE 在 S2 发现 slot0 taken，FTB 同时给出目标。BPU 比较 S1/S2 的 taken mask、最后 taken 分支和 target，产生 S2 redirect。若 S3 的 ITTAGE 又把 JALR target 改成另一地址，则再产生 S3 redirect；FTQ 只保留最终正确的年轻边界。
+<!-- ### 19.1. 示例讲解 -->
+### 19.1. Walkthrough
+<!-- FauFTB 在 S1 预测顺序执行；TAGE 在 S2 发现 slot0 taken，FTB 同时给出目标。BPU 比较 S1/S2 的 taken mask、最后 taken 分支和 target，产生 S2 redirect。若 S3 的 ITTAGE 又把 JALR target 改成另一地址，则再产生 S3 redirect；FTQ 只保留最终正确的年轻边界。 -->
+FauFTB predicts fall-through in S1; in S2, TAGE identifies slot 0 as taken while FTB supplies the target. BPU compares the S1/S2 taken masks, last-taken branch, and target and generates an S2 redirect. If S3 ITTAGE changes the JALR target again, BPU generates an S3 redirect; the FTQ retains only the final correct younger boundary.
 
-### 19.2. 典型场景
+<!-- ### 19.2. 典型场景 -->
+### 19.2. Typical Scenarios
 | Scenario | Trigger | Code | Winner/effect | Blocked/loser |
 | --- | --- | --- | --- | --- |
 | FTQ full | `!io.bpu_to_ftq.resp.ready` | [frontend/BPU.scala:405](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L405), [frontend/BPU.scala:1093-1156](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L1093-L1156) | S1 cannot advance; topdown marks FTQ full stall | New prediction blocks held in earlier stages |
@@ -408,10 +524,12 @@ FauFTB 在 S1 预测顺序执行；TAGE 在 S2 发现 slot0 taken，FTB 同时�
 | Backend redirect | `io.ftq_to_bpu.redirect.valid` | [frontend/BPU.scala:378-389](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L378-L389), [frontend/BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050) | Redirect target and resolved history win | S1/S2/S3 valid bits flushed |
 | Predictor write/read conflict | Component SRAM write blocks local read ready | e.g. [frontend/Tage.scala:1004-1006](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L1004-L1006) | Component ready drops | BPU `s1_ready` drops through Composer |
 
-## 20. 结论
+<!-- ## 20. 结论 -->
+## 20. Conclusion
 
 
-### 20.1. 预测器关系
+<!-- ### 20.1. 预测器关系 -->
+### 20.1. Predictor Relationships
 The effective Kunminghu frontend predictor chain is not a set of independent predictors voting in parallel. [Parameters.scala:124-143](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L124-L143) constructs `FauFTB`, `Tage_SC`, `FTB`, `ITTage`, and `RAS`, connects them as `resp_in -> uftb -> tage -> ftb -> ittage -> ras`, and returns `ras.io.out` as the final composed prediction. [Bim.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Bim.scala) is not part of this chain in this commit; its effective role is replaced by the `TageBTable` base table inside [Tage.scala:143-270](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L143-L270).
 
 | Component | Relationship to the chain | What it contributes | How disagreement is handled | Source lines |
@@ -429,13 +547,18 @@ Metadata and training are also chained. `Composer` concatenates each component's
 Cross-predictor example: suppose uFTB predicts fall-through for PC `0x8000_1000`, but TAGE later marks branch slot 0 taken and FTB supplies target `0x8000_1080`. The chain first carries the uFTB result into `Tage_SC` and `FTB` ([Parameters.scala:136-140](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L136-L140)). BPU records the earlier S1 prediction, compares it with the richer S2 composed response, and detects direction/target/CFI-index differences ([frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635), [frontend/BPU.scala:698-705](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L705)). It then registers the S2 target, folded history, and global-history pointer into the next-PC/history generators ([frontend/BPU.scala:707-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L707-L725)). If an even later RAS or ITTAGE target differs in S3, the S3 comparison checks branch-taken mask, target, JALR target, fall-through error, and FTB multi-hit before generating `s3_redirect` ([frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854)).
 
 
-## 21. 验证特别注意
+<!-- ## 21. 验证特别注意 -->
+## 21. Verification Notes
 
-本节保留原文的验证矩阵和通用判定原则；验证要求仍以当前 `kunminghu-v2` 有效源码为准。
+<!-- 本节保留原文的验证矩阵和通用判定原则；验证要求仍以当前 `kunminghu-v2` 有效源码为准。 -->
+This section preserves the original verification matrix and general decision rules; verification requirements remain grounded in effective `kunminghu-v2` source.
 
-### 21.1. 验证矩阵与通用判定原则
-> 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。每个期望必须以当前 `kunminghu-v2` 有效 Chisel 为准。
+<!-- ### 21.1. 验证矩阵与通用判定原则 -->
+### 21.1. Verification Matrix and General Decision Rules
+<!-- > 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。每个期望必须以当前 `kunminghu-v2` 有效 Chisel 为准。 -->
+> This section follows the FSM, conflict, forward-progress, index/hash, cache-structure, exception/virtualization, and performance-bottleneck rules in `tools/verification-driver/skills`. Every expected result must be grounded in effective Chisel at the current `kunminghu-v2` commit.
 
+<!--
 | Verification ID | 风险 / 不变量 | 定向激励 | 期望观察 | Checker / Coverage |
 | --- | --- | --- | --- | --- |
 | `F_HOLD_BACKPRESSURE` | FTQ full 时 S0-S3 stage skew | 拉低 `io.bpu_to_ftq.resp.ready` 并保持查询 | PC/history/prediction payload 稳定，stage 不误推进；证据 [frontend/BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) | Handshake checker；stage-valid scoreboard |
@@ -445,20 +568,42 @@ Cross-predictor example: suppose uFTB predicts fall-through for PC `0x8000_1000`
 | `P_LIVELOCK_REPLAY_LOOP` | 连续 S2/S3 覆盖导致无前进 | 交替制造早晚级方向/target 差异 | 在稳定控制流后有限周期产生可接受 prediction block | Forward-progress checker；redirect-loop cover |
 | `PB_BACKPRESSURE_AMPLIFICATION` | FTQ 阻塞向预测器链放大 | 逐步阻塞 FTQ、释放并测量各 stage | 定位反压边界，释放后恢复无陈旧 payload | Performance checker；stall propagation trace |
 | `PB_RECOVERY_THROUGHPUT` | redirect 后预测吞吐恢复 | 饱和流中注入 backend redirect | 目标路径首块和稳定吞吐延迟符合流水 | Recovery latency checker；throughput cover |
+-->
+| Verification ID | Risk / invariant | Directed stimulus | Expected observation | Checker / coverage |
+| --- | --- | --- | --- | --- |
+| `F_HOLD_BACKPRESSURE` | S0-S3 stage skew while FTQ is full | Deassert `io.bpu_to_ftq.resp.ready` and keep the lookup asserted. | PC/history/prediction payload remains stable and stages do not advance spuriously; evidence: [frontend/BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455). | Handshake checker; stage-valid scoreboard |
+| `C_REDIRECT_REDIRECT` | S2, S3, and backend redirects contend in one window | Create a late-stage target difference and a same-cycle backend redirect. | A single winner repairs target and history according to priority; evidence: [frontend/BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883). | Redirect-arbiter checker; history-recovery checker |
+| `F_REQ_AND_FLUSH` | New prediction acceptance and flush occur in one cycle | Apply a redirect in the cycle of a candidate `resp.fire`. | The killed block does not enter FTQ and history is not updated twice. | Flush checker; FTQ-allocation scoreboard |
+| `BPU_COMPONENT_STALL` | A low `ready` from one predictor misaligns Composer | Create a TAGE/FTB update-read conflict. | All components stop together and metadata concatenation order does not drift. | Composer-ready checker; metadata scoreboard |
+| `P_LIVELOCK_REPLAY_LOOP` | Consecutive S2/S3 overrides prevent forward progress | Alternate early/late direction or target differences. | After control flow stabilizes, an acceptable prediction block appears within a bounded number of cycles. | Forward-progress checker; redirect-loop cover |
+| `PB_BACKPRESSURE_AMPLIFICATION` | FTQ blockage amplifies through the predictor chain | Progressively block and release FTQ while measuring all stages. | Locate the backpressure boundary; after release, recovery contains no stale payload. | Performance checker; stall-propagation trace |
+| `PB_RECOVERY_THROUGHPUT` | Prediction throughput recovers after redirect | Inject a backend redirect into saturated traffic. | First target-path block and steady-state throughput latency conform to the pipeline. | Recovery-latency checker; throughput cover |
 
-#### 21.1.1. 通用判定原则
+<!-- #### 21.1.1. 通用判定原则 -->
+#### 21.1.1. General Decision Rules
 
+<!--
 - `valid && !ready` 期间 payload 必须稳定；只有 `fire` 才能推进指针、状态或训练一次。
 - flush/redirect/replay 的胜负关系必须按代码优先级检查；错误路径不得提交、写表、训练预测器或暴露异常/数据。
 - 资源填满后必须验证可排空；重复冲突、retry 或 redirect 不得形成 deadlock/livelock，并检查低优先级旧请求是否饥饿。
 - 环形指针必须覆盖最大值到零的 wrap；表索引必须构造 same-index/different-tag 和同拍 read/write 冲突组。
 - 性能覆盖至少记录占用率、反压周期、redirect 恢复延迟、重试次数和恢复后的持续吞吐。
+-->
+- Payload must remain stable while `valid && !ready`; only `fire` may advance a pointer, state, or training action once.
+- The winner among flush/redirect/replay events must be checked against source priority; wrong-path work must not commit, write a table, train a predictor, or expose an exception/data.
+- Once resources are full, verification must prove that they can drain. Repeated conflicts, retries, or redirects must not form deadlock/livelock, and old low-priority requests must be checked for starvation.
+- Circular pointers must cover wraparound from the maximum value to zero; table-index tests must construct same-index/different-tag and same-cycle read/write conflict groups.
+- Performance coverage must at least record occupancy, backpressure cycles, redirect-recovery latency, retry count, and sustained post-recovery throughput.
 
-## `bpu-doc.md` 补充：顶层、历史和互联
-本节吸收 `bpu-doc.md` 的 BPU 顶层、预测流水、flush/override、训练/提交、PHR/CommonHR 描述，并映射到当前 `kunminghu-v2` 源码。需要注意：`bpu-doc.md` 使用 Kunminghu-v3 术语，例如 `uBTB/aBTB/mBTB/uTAGE/PHR/CommonHR`；本文当前源码链路是 `FauFTB -> Tage_SC -> FTB -> ITTAGE -> RAS`，因此以下按“职责等价”解释，而不把 v3 模块名误写成 v2 有效模块。
+<!-- ## `bpu-doc.md` 补充：顶层、历史和互联 -->
+## Supplement from `bpu-doc.md`: Top Level, History, and Connectivity
+<!-- 本节吸收 `bpu-doc.md` 的 BPU 顶层、预测流水、flush/override、训练/提交、PHR/CommonHR 描述，并映射到当前 `kunminghu-v2` 源码。需要注意：`bpu-doc.md` 使用 Kunminghu-v3 术语，例如 `uBTB/aBTB/mBTB/uTAGE/PHR/CommonHR`；本文当前源码链路是 `FauFTB -> Tage_SC -> FTB -> ITTAGE -> RAS`，因此以下按“职责等价”解释，而不把 v3 模块名误写成 v2 有效模块。 -->
+This section incorporates the BPU top-level, prediction pipeline, flush/override, training/commit, and PHR/CommonHR descriptions from `bpu-doc.md` and maps them to the current `kunminghu-v2` source. Note that `bpu-doc.md` uses Kunminghu-v3 terminology such as `uBTB/aBTB/mBTB/uTAGE/PHR/CommonHR`; the current source chain here is `FauFTB -> Tage_SC -> FTB -> ITTAGE -> RAS`, so the mapping below is by equivalent responsibility and does not present v3 names as effective v2 modules.
 
-### 22.1. v3 术语到当前源码模块的对应
+<!-- ### 22.1. v3 术语到当前源码模块的对应 -->
+### 22.1. Mapping v3 Terms to Current Source Modules
 
+<!--
 | `bpu-doc.md` 术语 | 当前 `Frontend-*.md` / v2 源码中的对应 | 说明 | 代码证据 |
 | --- | --- | --- | --- |
 | BPU 顶层 | `Predictor` / `BPU.scala` + `Composer.scala` | 负责 PC 选择、S0-S3 valid/ready、redirect、history、FTQ response 和 update 分发。 | [BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455), [Composer.scala:22-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L22-L77) |
@@ -468,32 +613,63 @@ Cross-predictor example: suppose uFTB predicts fall-through for PC `0x8000_1000`
 | ITTAGE | `ITTAGE.scala` | 负责间接跳转/JALR target 覆盖。 | [ITTAGE.scala:418-470](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/ITTAGE.scala#L418-L470) |
 | RAS / uRAS | `newRAS.scala` | v2 中 RAS 在 Composer 链尾输出 return target 和恢复 meta。 | [newRAS.scala:696-706](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/newRAS.scala#L696-L706) |
 | PHR / CommonHR | BPU 内 global history / folded history / FTQ redirect snapshot | v2 没有按该文档命名的独立 `PHR`、`CommonHR` 模块；相关职责在 BPU 历史维护、Composer meta 和 FTQ redirect SRAM 中实现。 | [BPU.scala:707-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L707-L725), [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050), [Composer.scala:58-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L58-L77) |
+-->
+| `bpu-doc.md` term | Current `Frontend-*.md` / v2 source counterpart | Description | Code evidence |
+| --- | --- | --- | --- |
+| BPU top level | `Predictor` / `BPU.scala` + `Composer.scala` | Selects the PC; controls S0-S3 valid/ready, redirects, history, FTQ response, and update distribution. | [BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455), [Composer.scala:22-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L22-L77) |
+| uBTB / fast BTB | `FauFTB` | In v2, fully associative uFTB/FauFTB supplies fast S1 prediction. | [FauFTB.scala:76-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128) |
+| mBTB / MainBTB | `FTB` | The v2 FTB is the larger-capacity, set-associative fetch target buffer used in S2. | [FTB.scala:683-811](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FTB.scala#L683-L811) |
+| TAGE + SC | `Tage.scala` + `SC.scala` | TAGE provides conditional-branch direction provider/alternate information, and SC corrects it in a later stage. | [Tage.scala:778-846](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L778-L846), [SC.scala:259-372](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/SC.scala#L259-L372) |
+| ITTAGE | `ITTAGE.scala` | Overrides indirect/JALR targets. | [ITTAGE.scala:418-470](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/ITTAGE.scala#L418-L470) |
+| RAS / uRAS | `newRAS.scala` | In v2, RAS is the tail of the Composer chain and outputs the return target and recovery metadata. | [newRAS.scala:696-706](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/newRAS.scala#L696-L706) |
+| PHR / CommonHR | BPU global history / folded history / FTQ redirect snapshot | v2 has no separate modules named `PHR` or `CommonHR`; the responsibilities are implemented by BPU history maintenance, Composer metadata, and FTQ redirect SRAM. | [BPU.scala:707-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L707-L725), [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050), [Composer.scala:58-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L58-L77) |
 
-### 22.2. 顶层工作机制补充
+<!-- ### 22.2. 顶层工作机制补充 -->
+### 22.2. Additional Top-Level Mechanism
 
-`bpu-doc.md` 把 BPU 顶层概括为四类职责：预测聚合、流水控制、训练/重定向管理、元数据输出。当前源码中这四类职责可以分别落到以下路径：
+<!-- `bpu-doc.md` 把 BPU 顶层概括为四类职责：预测聚合、流水控制、训练/重定向管理、元数据输出。当前源码中这四类职责可以分别落到以下路径： -->
+`bpu-doc.md` summarizes four top-level BPU responsibilities: prediction aggregation, pipeline control, training/redirect management, and metadata output. In the current source these map to the following paths:
 
+<!--
 1. 预测聚合：`Parameters.scala` 配置 `FauFTB -> Tage_SC -> FTB -> ITTAGE -> RAS`，`Composer` 将上游 `resp_in` 串给下游并返回最终 `out`。这说明当前实现不是多个预测器并行投票，而是统一接口下的链式 refinement。
 2. 流水控制：`BPU.scala` 维护 S1/S2/S3 的 `valid/ready/fire`，FTQ ready 和任一组件 ready 都会形成反压；redirect 会清除对应 stage 的 valid。
 3. 训练/重定向：FTQ redirect 进入 BPU 后恢复 PC/history/RAS 等投机状态；FTQ update 进入 Composer 后按组件 meta 反向拆分给各 predictor。
 4. 元数据输出：每个 predictor 在预测时产生 `last_stage_meta`，Composer 拼接后由 FTQ 保存，训练时再拆回对应组件。
+-->
+1. Prediction aggregation: `Parameters.scala` configures `FauFTB -> Tage_SC -> FTB -> ITTAGE -> RAS`; `Composer` connects each upstream `resp_in` to the downstream component and returns the final `out`. The implementation is therefore chained refinement behind a common interface, not parallel voting among independent predictors.
+2. Pipeline control: `BPU.scala` maintains S1/S2/S3 `valid/ready/fire`; FTQ ready and any component ready can create backpressure, and a redirect clears the corresponding stage valid bit.
+3. Training/redirect: an FTQ redirect entering BPU restores speculative PC/history/RAS state; an FTQ update entering Composer is split in reverse order to each predictor using component metadata.
+4. Metadata output: each predictor produces `last_stage_meta` during prediction; Composer concatenates it for FTQ storage and splits it back to the corresponding component during training.
 
-### 22.3. 四级预测流水和覆盖关系
+<!-- ### 22.3. 四级预测流水和覆盖关系 -->
+### 22.3. Four-Level Prediction Pipeline and Override Relationship
 
+<!--
 | 阶段 | `bpu-doc.md` 描述 | 当前源码中的有效含义 | 代码证据 |
 | --- | --- | --- | --- |
 | S0 | 选择 `startPc`、广播 PC/history | BPU 根据保持 PC、S1 target、S2/S3 redirect target、FTQ redirect target 选择下一次查询 PC，并把 history/folded history 给 Composer。 | [BPU.scala:707-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L707-L725), [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050) |
 | S1 | 快速粗预测，优先保证取指吞吐 | v2 中主要由 `FauFTB` 给出低延迟 entry/target/fall-through 结果，最早送 FTQ。 | [FauFTB.scala:76-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128), [BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) |
 | S2 | 中间缓冲和更完整预测 | v2 中 TAGE/FTB 等结果可在 S2 改变 taken mask、CFI slot、target，并生成 S2 redirect。 | [Tage.scala:778-846](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L778-L846), [FTB.scala:683-811](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FTB.scala#L683-L811), [BPU.scala:606-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L725) |
 | S3 | 精确预测、最终覆盖和 meta 输出 | v2 中 SC/ITTAGE/RAS/multi-hit/fall-through error 继续修正，BPU 判断是否 S3 redirect，并把最终 meta 交给 FTQ。 | [SC.scala:259-372](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/SC.scala#L259-L372), [ITTAGE.scala:418-470](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/ITTAGE.scala#L418-L470), [BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883) |
+-->
+| Stage | `bpu-doc.md` description | Effective meaning in the current source | Code evidence |
+| --- | --- | --- | --- |
+| S0 | Select `startPc` and broadcast PC/history. | BPU selects the next lookup PC from the held PC, S1 target, S2/S3 redirect target, or FTQ redirect target, and sends history/folded history to Composer. | [BPU.scala:707-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L707-L725), [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050) |
+| S1 | Fast coarse prediction prioritizing fetch throughput. | In v2, `FauFTB` primarily supplies low-latency entry/target/fall-through information and sends it to the FTQ first. | [FauFTB.scala:76-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128), [BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) |
+| S2 | Intermediate buffering and more complete prediction. | In v2, TAGE/FTB results can change the taken mask, CFI slot, or target in S2 and generate an S2 redirect. | [Tage.scala:778-846](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L778-L846), [FTB.scala:683-811](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FTB.scala#L683-L811), [BPU.scala:606-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L725) |
+| S3 | Precise prediction, final override, and metadata output. | In v2, SC/ITTAGE/RAS, multi-hit, and fall-through errors are corrected further; BPU decides whether to issue an S3 redirect and gives final metadata to FTQ. | [SC.scala:259-372](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/SC.scala#L259-L372), [ITTAGE.scala:418-470](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/ITTAGE.scala#L418-L470), [BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883) |
 
-### 22.4. Flush、Override、Train、Commit
+<!-- ### 22.4. Flush、Override、Train、Commit -->
+### 22.4. Flush, Override, Train, and Commit
 
-`bpu-doc.md` 的 flush 级联可以用当前 BPU 的三类事件统一理解：外部 FTQ redirect、内部 S2 redirect、内部 S3 redirect。外部 redirect 优先级最高，因为它来自后端或 IFU/FTQ 已确认的错误路径；内部 S2/S3 redirect 是 BPU 自己的 overriding。源码证据是 [BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883) 和 [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050)。
+<!-- `bpu-doc.md` 的 flush 级联可以用当前 BPU 的三类事件统一理解：外部 FTQ redirect、内部 S2 redirect、内部 S3 redirect。外部 redirect 优先级最高，因为它来自后端或 IFU/FTQ 已确认的错误路径；内部 S2/S3 redirect 是 BPU 自己的 overriding。源码证据是 [BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883) 和 [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050)。 -->
+The `bpu-doc.md` flush cascade can be understood through three events in the current BPU: external FTQ redirect, internal S2 redirect, and internal S3 redirect. External redirect has the highest priority because it comes from a backend or IFU/FTQ-confirmed wrong path; internal S2/S3 redirects are BPU's own overrides. Evidence: [BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883) and [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050).
 
-训练与 commit 的闭环不在单个预测器内部完成：FTQ 根据 ROB 提交信息选择 prediction block 做 update，读出 PC、FTB entry、redirect/history snapshot 和 predictor meta，再通过 Composer 分发给各子预测器。`Composer` 拼接和拆分 meta 的代码在 [Composer.scala:58-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L58-L77)。
+<!-- 训练与 commit 的闭环不在单个预测器内部完成：FTQ 根据 ROB 提交信息选择 prediction block 做 update，读出 PC、FTB entry、redirect/history snapshot 和 predictor meta，再通过 Composer 分发给各子预测器。`Composer` 拼接和拆分 meta 的代码在 [Composer.scala:58-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L58-L77)。 -->
+The training/commit loop is not completed inside one predictor: FTQ selects a prediction block for update using ROB commit information, reads its PC, FTB entry, redirect/history snapshot, and predictor metadata, then dispatches the update to each subpredictor through Composer. The `Composer` metadata concatenation and split are implemented at [Composer.scala:58-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L58-L77).
 
-### 22.5. 模块互联 Mermaid 图
+<!-- ### 22.5. 模块互联 Mermaid 图 -->
+### 22.5. Module Connectivity Mermaid Diagram
 
 ```mermaid
 flowchart LR
@@ -521,31 +697,48 @@ flowchart LR
   BPU -->|history/folded history| Composer
 ```
 
-## `Fold History` 算法实现与例子
-Folded history 是把很长的全局分支历史压缩成较短的 index/tag hash 输入。TAGE/ITTAGE 的每张表需要不同历史长度和不同压缩宽度；如果每次查询都从完整历史重新 XOR，硬件代价会很高。因此 BPU 维护一组可增量更新的 folded history 寄存器，预测、override 和 redirect 时都必须同步修正。
+<!-- ## `Fold History` 算法实现与例子 -->
+## Implementation and Examples of the `Fold History` Algorithm
 
-### 23.1. 源码落点
+<!-- Folded history 是把很长的全局分支历史压缩成较短的 index/tag hash 输入。TAGE/ITTAGE 的每张表需要不同历史长度和不同压缩宽度；如果每次查询都从完整历史重新 XOR，硬件代价会很高。因此 BPU 维护一组可增量更新的 folded history 寄存器，预测、override 和 redirect 时都必须同步修正。 -->
+Folded history compresses a long global branch history into shorter inputs for index and tag hashing. Each TAGE/ITTAGE table needs a different history length and compression width; recomputing an XOR over the complete history on every lookup would be expensive. BPU therefore maintains incrementally updated folded-history registers and keeps them synchronized during prediction, overrides, and redirects.
 
+<!-- ### 23.1. 源码落点 -->
+### 23.1. Source Locations
+
+<!--
 | 职责 | 源码证据 | 说明 |
 | --- | --- | --- |
 | BPU 维护全局历史和 folded history | [BPU.scala:530-595](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L530-L595), [BPU.scala:638-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L638-L725), [BPU.scala:740-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L740-L883) | S1/S2/S3 根据各自预测结果推测更新历史；若晚级 override，需要用晚级预测对应的历史覆盖早级历史。 |
 | 后端/FTQ redirect 恢复 folded history | [BPU.scala:939-963](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L939-L963), [BPU.scala:964-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L964-L1050) | redirect 使用 FTQ 保存的 `histPtr` 和真实 `cfiUpdate` 重建正确路径的 folded history 和 global-history bits。 |
 | TAGE 消费 folded history | [Tage.scala:311-340](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L311-L340), [Tage.scala:778-846](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L778-L846) | TAGE 用 PC 与 folded history 计算 `idx`、`tag`、`alt tag`，再选择 provider/alternate。 |
 | ITTAGE 消费 folded history | [ITTAGE.scala:418-470](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/ITTAGE.scala#L418-L470) | ITTAGE 用相同思想为间接跳转目标表生成历史相关索引和 tag。 |
+-->
+| Responsibility | Source evidence | Description |
+| --- | --- | --- |
+| BPU maintains global and folded history | [BPU.scala:530-595](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L530-L595), [BPU.scala:638-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L638-L725), [BPU.scala:740-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L740-L883) | S1/S2/S3 speculatively update history from their respective predictions; a later-stage override replaces the earlier-stage history with the history corresponding to the later prediction. |
+| Backend/FTQ redirect restores folded history | [BPU.scala:939-963](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L939-L963), [BPU.scala:964-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L964-L1050) | A redirect uses the `histPtr` saved by FTQ and the real `cfiUpdate` to rebuild folded history and global-history bits for the correct path. |
+| TAGE consumes folded history | [Tage.scala:311-340](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L311-L340), [Tage.scala:778-846](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L778-L846) | TAGE combines the PC with folded history to compute `idx`, `tag`, and `alt tag`, then selects the provider or alternate. |
+| ITTAGE consumes folded history | [ITTAGE.scala:418-470](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/ITTAGE.scala#L418-L470) | ITTAGE applies the same idea to generate history-dependent indices and tags for the indirect-target tables. |
 
-### 23.2. 静态折叠定义
+<!-- ### 23.2. 静态折叠定义 -->
+### 23.2. Static Folding Definition
 
-设完整历史长度为 `L`，目标 folded width 为 `W`，完整历史位为 `H[0] ... H[L-1]`，其中 `H[0]` 表示最新进入的分支结果。静态折叠可以定义为：
+<!-- 设完整历史长度为 `L`，目标 folded width 为 `W`，完整历史位为 `H[0] ... H[L-1]`，其中 `H[0]` 表示最新进入的分支结果。静态折叠可以定义为： -->
+Let the full history length be `L`, the target folded width be `W`, and the history bits be `H[0] ... H[L-1]`, where `H[0]` is the most recently inserted branch outcome. Static folding is defined as:
 
 ```text
 C[j] = XOR(H[j], H[j + W], H[j + 2W], ...), 0 <= j < W
 ```
 
-也就是把长历史按 `W` 位切成多段，再按列异或。这样得到的 `C[W-1:0]` 就是给 index/tag hash 使用的短历史。它保留的是长历史的混合特征，不是可逆压缩；多个长历史可能折叠成同一个短值，所以 TAGE 还需要 tag 来降低 alias。
+<!-- 也就是把长历史按 `W` 位切成多段，再按列异或。这样得到的 `C[W-1:0]` 就是给 index/tag hash 使用的短历史。它保留的是长历史的混合特征，不是可逆压缩；多个长历史可能折叠成同一个短值，所以 TAGE 还需要 tag 来降低 alias。 -->
+In other words, the long history is divided into `W`-bit columns and XORed by column. The resulting `C[W-1:0]` is the short history used by the index/tag hash. It preserves mixed features of the long history rather than an invertible encoding; multiple long histories can fold to the same short value, so TAGE also uses tags to reduce aliasing.
 
-### 23.3. 硬件增量更新算法
+<!-- ### 23.3. 硬件增量更新算法 -->
+### 23.3. Hardware Incremental-Update Algorithm
 
-每次预测一个分支后，历史等价于整体左移一位：新结果 `in` 进入 `H[0]`，最老的 `out = H[L-1]` 被挤出。为了避免重新 XOR 全部 `L` 位，folded history 用下面的增量更新：
+<!-- 每次预测一个分支后，历史等价于整体左移一位：新结果 `in` 进入 `H[0]`，最老的 `out = H[L-1]` 被挤出。为了避免重新 XOR 全部 `L` 位，folded history 用下面的增量更新： -->
+After predicting a branch, the history is equivalent to shifting by one position: the new outcome `in` enters `H[0]`, and the oldest bit `out = H[L-1]` is evicted. To avoid XORing all `L` bits again, folded history uses this incremental update:
 
 ```text
 mask = (1 << W) - 1
@@ -554,23 +747,34 @@ next = next ^ (out << (L % W))
 next = (next & mask) ^ (next >> W)
 ```
 
-含义如下：
+<!-- 含义如下：
 
 - `(old << 1) | in` 对应历史整体移位并加入新 bit。
 - `out << (L % W)` 把被移出的最老 bit 从它原本贡献的折叠列中抵消掉。
 - `(next & mask) ^ (next >> W)` 把左移后溢出 `W` 位的那一位折回低位，保持循环移位寄存器和静态列 XOR 等价。
 
 若一个 prediction block 内有多条条件分支，BPU 会为 `0..numBr` 个可能 shift 数计算候选历史，再根据最后一条实际参与预测的分支位置选择正确候选。这个选择关系对应 [BPU.scala:530-544](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L530-L544)、[BPU.scala:639-654](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L639-L654) 和 [BPU.scala:741-756](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L741-L756)。
+-->
+The operations mean:
 
-### 23.4. 等价性例子：8-bit 历史折到 3-bit
+- `(old << 1) | in` shifts the history and inserts the new bit.
+- `out << (L % W)` removes the evicted oldest bit from the folded column it originally contributed to.
+- `(next & mask) ^ (next >> W)` folds the bit that overflowed `W` positions back into the low bits, preserving equivalence with the circular shift register and the static column XOR.
 
-假设完整历史长度 `L=8`，folded width `W=3`。历史位从新到旧为：
+When a prediction block contains multiple conditional branches, BPU computes candidate histories for every possible shift count from `0..numBr`, then selects the candidate corresponding to the last branch that actually participates in the prediction. This selection is implemented at [BPU.scala:530-544](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L530-L544), [BPU.scala:639-654](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L639-L654), and [BPU.scala:741-756](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L741-L756).
+
+<!-- ### 23.4. 等价性例子：8-bit 历史折到 3-bit -->
+### 23.4. Equivalence Example: Folding 8-Bit History to 3 Bits
+
+<!-- 假设完整历史长度 `L=8`，folded width `W=3`。历史位从新到旧为： -->
+Assume a full history length of `L=8` and a folded width of `W=3`. From newest to oldest, the history bits are:
 
 ```text
 H[0..7] = 0, 1, 1, 0, 1, 0, 1, 1
 ```
 
-按静态折叠：
+<!-- 按静态折叠： -->
+Using static folding:
 
 ```text
 C[0] = H[0] ^ H[3] ^ H[6] = 0 ^ 0 ^ 1 = 1
@@ -579,7 +783,8 @@ C[2] = H[2] ^ H[5]        = 1 ^ 0     = 1
 C = 0b111
 ```
 
-现在新分支结果 `in=1` 进入，最老位 `out=H[7]=1` 被移出。用硬件增量公式：
+<!-- 现在新分支结果 `in=1` 进入，最老位 `out=H[7]=1` 被移出。用硬件增量公式： -->
+Now the new branch outcome `in=1` enters and the oldest bit `out=H[7]=1` is evicted. Applying the hardware incremental formula:
 
 ```text
 old  = 0b111
@@ -590,13 +795,15 @@ next = (next & 0b111) ^ (next >> 3)
      = 0b010
 ```
 
-再用静态折叠验证。更新后的历史为：
+<!-- 再用静态折叠验证。更新后的历史为： -->
+Verify the result with static folding. The updated history is:
 
 ```text
 H'[0..7] = 1, 0, 1, 1, 0, 1, 0, 1
 ```
 
-静态折叠得到：
+<!-- 静态折叠得到： -->
+Static folding gives:
 
 ```text
 C'[0] = H'[0] ^ H'[3] ^ H'[6] = 1 ^ 1 ^ 0 = 0
@@ -605,11 +812,14 @@ C'[2] = H'[2] ^ H'[5]         = 1 ^ 1     = 0
 C' = 0b010
 ```
 
-增量更新结果和重新静态折叠完全一致。硬件维护 folded history 的价值就在这里：每次只需要移位、少量 XOR 和一个溢出折回，而不需要读完整长历史并重算所有列。
+<!-- 增量更新结果和重新静态折叠完全一致。硬件维护 folded history 的价值就在这里：每次只需要移位、少量 XOR 和一个溢出折回，而不需要读完整长历史并重算所有列。 -->
+The incremental result exactly matches recomputing the static fold. This is the value of maintaining folded history in hardware: each update needs only a shift, a few XORs, and an overflow fold-back instead of reading the complete history and recomputing every column.
 
-### 23.5. 在 TAGE/ITTAGE 中如何使用
+<!-- ### 23.5. 在 TAGE/ITTAGE 中如何使用 -->
+### 23.5. Use in TAGE/ITTAGE
 
-TAGE 不直接把 folded history 当最终预测，而是把它和 PC 混合：
+<!-- TAGE 不直接把 folded history 当最终预测，而是把它和 PC 混合： -->
+TAGE does not treat folded history as the final prediction; it mixes it with the PC:
 
 ```text
 unhashed_idx = pc >> instOffsetBits
@@ -617,17 +827,25 @@ idx = low_bits(unhashed_idx ^ idx_folded_history)
 tag = low_bits(unhashed_idx ^ tag_folded_history ^ (alt_tag_folded_history << 1))
 ```
 
-这对应 [Tage.scala:317-325](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L317-L325) 和 [Tage.scala:338-340](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L338-L340)。同一个 PC 在不同历史路径下会访问不同 index/tag 组合，因此 TAGE 可以区分“同一分支在不同路径上下文下行为不同”的情况。ITTAGE 对间接跳转目标做类似处理：history 决定 provider target 来自哪个上下文。
+<!-- 这对应 [Tage.scala:317-325](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L317-L325) 和 [Tage.scala:338-340](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L338-L340)。同一个 PC 在不同历史路径下会访问不同 index/tag 组合，因此 TAGE 可以区分“同一分支在不同路径上下文下行为不同”的情况。ITTAGE 对间接跳转目标做类似处理：history 决定 provider target 来自哪个上下文。 -->
+This corresponds to [Tage.scala:317-325](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L317-L325) and [Tage.scala:338-340](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L338-L340). The same PC accesses different index/tag combinations on different history paths, allowing TAGE to distinguish a branch whose behavior changes with its path context. ITTAGE applies the same principle to indirect targets: history determines which context supplies the provider target.
 
-### 23.6. Redirect 为什么必须恢复 folded history
+<!-- ### 23.6. Redirect 为什么必须恢复 folded history -->
+### 23.6. Why a Redirect Must Restore Folded History
 
-folded history 是投机状态。若 S1/S2/S3 或后端发现早先预测错了，仅恢复 PC 不够；错误路径上推入的 taken/not-taken 位也会改变 TAGE/ITTAGE 的 index/tag，使之后的查询落到错误表项。BPU 因此在 S2/S3 override 和 FTQ/backend redirect 时同时注册 target、global-history pointer、folded history 和待写历史位，源码路径见 [BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725)、[BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883)、[BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050)。
+<!-- folded history 是投机状态。若 S1/S2/S3 或后端发现早先预测错了，仅恢复 PC 不够；错误路径上推入的 taken/not-taken 位也会改变 TAGE/ITTAGE 的 index/tag，使之后的查询落到错误表项。BPU 因此在 S2/S3 override 和 FTQ/backend redirect 时同时注册 target、global-history pointer、folded history 和待写历史位，源码路径见 [BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725)、[BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883)、[BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050)。 -->
+Folded history is speculative state. If S1/S2/S3 or the backend discovers an earlier misprediction, restoring only the PC is insufficient: taken/not-taken bits inserted on the wrong path also change TAGE/ITTAGE indices and tags, causing later lookups to hit the wrong entries. BPU therefore records the target, global-history pointer, folded history, and pending history writes together for S2/S3 overrides and FTQ/backend redirects. See [BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725), [BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883), and [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050).
 
-## `History Update` 算法实现与例子
-BPU 的历史更新不是 commit 后才发生，而是在预测阶段进行推测更新。原因是后续预测必须立刻看到“当前 prediction block 如果正确”之后的历史；否则连续分支会一直用旧历史查询 TAGE/ITTAGE。实现上需要同时维护两类状态：完整全局历史 `ghv` / 历史指针，以及给 TAGE/ITTAGE index/tag 使用的 folded history。
+<!-- ## `History Update` 算法实现与例子 -->
+## Implementation and Examples of the `History Update` Algorithm
 
-### 24.1. 源码落点
+<!-- BPU 的历史更新不是 commit 后才发生，而是在预测阶段进行推测更新。原因是后续预测必须立刻看到“当前 prediction block 如果正确”之后的历史；否则连续分支会一直用旧历史查询 TAGE/ITTAGE。实现上需要同时维护两类状态：完整全局历史 `ghv` / 历史指针，以及给 TAGE/ITTAGE index/tag 使用的 folded history。 -->
+BPU updates history speculatively during prediction rather than waiting for commit. Later predictions must immediately see the history that would follow the current prediction block if it were correct; otherwise a sequence of branches would keep querying TAGE/ITTAGE with stale history. The implementation maintains both the complete global history (`ghv` and its history pointer) and the folded history used by TAGE/ITTAGE indices and tags.
 
+<!-- ### 24.1. 源码落点 -->
+### 24.1. Source Locations
+
+<!--
 | 职责 | 源码证据 | 说明 |
 | --- | --- | --- |
 | 读取环形全局历史 | [BPU.scala:336-369](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L336-L369) | BPU 从当前历史指针读取一段全局历史，作为 Composer/TAGE/ITTAGE 的查询上下文。 |
@@ -636,12 +854,24 @@ BPU 的历史更新不是 commit 后才发生，而是在预测阶段进行推�
 | S3 推测历史更新 / override | [BPU.scala:740-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L740-L883) | S3 用最终预测继续修正 history，处理 SC/ITTAGE/RAS/FTB multi-hit 等晚级变化。 |
 | 后端/FTQ redirect 恢复 | [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050) | 后端真实结果到来时，根据 FTQ 保存的 `histPtr`、真实 taken 和分支位置恢复正确历史。 |
 | meta 保存与训练回传 | [Composer.scala:58-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L58-L77) | 预测时的历史相关 meta 被 FTQ 保存，训练/update 时再分发给各 predictor。 |
+-->
+| Responsibility | Source evidence | Description |
+| --- | --- | --- |
+| Read the circular global history | [BPU.scala:336-369](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L336-L369) | BPU reads a history segment from the current history pointer as the Composer/TAGE/ITTAGE lookup context. |
+| S1 speculative history update | [BPU.scala:530-595](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L530-L595) | S1 computes possible shift counts, the next history pointer, and pending history writes from the fast prediction. |
+| S2 speculative update/override | [BPU.scala:638-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L638-L725) | S2 recomputes history using the more accurate prediction; if it differs from S1, it registers the S2 target/history and flushes the younger path. |
+| S3 speculative update/override | [BPU.scala:740-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L740-L883) | S3 continues correcting history with the final prediction and handles late SC/ITTAGE/RAS/FTB multi-hit changes. |
+| Backend/FTQ redirect recovery | [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050) | When the backend's true result arrives, BPU restores the correct history from the FTQ-saved `histPtr`, actual taken result, and branch position. |
+| Metadata storage and training return path | [Composer.scala:58-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L58-L77) | FTQ saves history-related metadata produced during prediction and dispatches it back to each predictor during training/update. |
 
-### 24.2. 全局历史环形缓冲算法
+<!-- ### 24.2. 全局历史环形缓冲算法 -->
+### 24.2. Global-History Circular-Buffer Algorithm
 
-抽象地看，BPU 维护一个长度为 `N` 的环形历史数组 `GHV` 和一个指针 `ptr`。`ptr` 指向“下一次写入最新历史位”的位置，读取历史时从 `ptr` 往回按时间顺序取位。
+<!-- 抽象地看，BPU 维护一个长度为 `N` 的环形历史数组 `GHV` 和一个指针 `ptr`。`ptr` 指向“下一次写入最新历史位”的位置，读取历史时从 `ptr` 往回按时间顺序取位。 -->
+At an abstract level, BPU maintains a circular history array `GHV` of length `N` and a pointer `ptr`. `ptr` identifies the position for the next newest history bit; history is read by walking backward from `ptr` in temporal order.
 
-单个分支的推测更新可以写成：
+<!-- 单个分支的推测更新可以写成： -->
+The speculative update for one branch can be written as:
 
 ```text
 input : ptr, GHV, taken
@@ -649,7 +879,8 @@ write : GHV[ptr] = taken
 next  : ptr = (ptr + 1) mod N
 ```
 
-一个 prediction block 内可能有多条条件分支，因此硬件不会只算一种更新，而是为 `shift = 0..numBr` 预先计算候选：
+<!-- 一个 prediction block 内可能有多条条件分支，因此硬件不会只算一种更新，而是为 `shift = 0..numBr` 预先计算候选： -->
+A prediction block can contain several conditional branches. Instead of computing only one update, hardware precomputes candidates for `shift = 0..numBr`:
 
 ```text
 for shift in 0..numBr:
@@ -661,11 +892,14 @@ nextPtr = candPtr[selectedShift]
 write candWrites[selectedShift] into GHV
 ```
 
-其中 `selectedShift` 由预测结果决定：如果预测块没有 taken 分支，就包含整个块内参与历史的条件分支；如果某条分支被预测 taken，则只更新到这条分支为止，后面的分支属于未取到的路径，不能进入历史。源码中 S1/S2/S3 分别计算 `0..numBr` 候选并按最后控制流位置选择，见 [BPU.scala:530-544](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L530-L544)、[BPU.scala:639-654](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L639-L654)、[BPU.scala:741-756](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L741-L756)。
+<!-- 其中 `selectedShift` 由预测结果决定：如果预测块没有 taken 分支，就包含整个块内参与历史的条件分支；如果某条分支被预测 taken，则只更新到这条分支为止，后面的分支属于未取到的路径，不能进入历史。源码中 S1/S2/S3 分别计算 `0..numBr` 候选并按最后控制流位置选择，见 [BPU.scala:530-544](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L530-L544)、[BPU.scala:639-654](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L639-L654)、[BPU.scala:741-756](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L741-L756)。 -->
+`selectedShift` is determined by the prediction. If the block has no taken branch, it includes every conditional branch in the block that contributes to history. If a branch is predicted taken, the update stops at that branch; later branches are on an un-fetched path and must not enter history. In the source, S1/S2/S3 each compute candidates for `0..numBr` and select one based on the last control-flow position. See [BPU.scala:530-544](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L530-L544), [BPU.scala:639-654](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L639-L654), and [BPU.scala:741-756](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L741-L756).
 
-### 24.3. 与 folded history 的同步更新
+<!-- ### 24.3. 与 folded history 的同步更新 -->
+### 24.3. Synchronized Folded-History Update
 
-全局历史写入 `GHV` 后，folded history 也要得到等价更新。若本次 shift 为 `k`，可以理解为连续执行 `k` 次单 bit 更新：
+<!-- 全局历史写入 `GHV` 后，folded history 也要得到等价更新。若本次 shift 为 `k`，可以理解为连续执行 `k` 次单 bit 更新： -->
+After writing the global history to `GHV`, folded history must receive the equivalent update. If the current shift is `k`, this is equivalent to applying `k` single-bit updates in sequence:
 
 ```text
 for each new outcome in selected branch outcomes:
@@ -673,7 +907,8 @@ for each new outcome in selected branch outcomes:
   folded = updateFolded(folded, in = new outcome, out = out)
 ```
 
-`updateFolded` 的公式见上一节 “`Fold History` 算法实现与例子”：
+<!-- `updateFolded` 的公式见上一节 “`Fold History` 算法实现与例子”： -->
+The `updateFolded` formula is given in the preceding “`Fold History` Algorithm” section:
 
 ```text
 next = (old << 1) | in
@@ -681,17 +916,27 @@ next = next ^ (out << (L % W))
 next = (next & ((1 << W) - 1)) ^ (next >> W)
 ```
 
-因此，历史更新的关键不只是“写 taken bit”，而是三件事必须同拍一致：
+<!-- 因此，历史更新的关键不只是“写 taken bit”，而是三件事必须同拍一致：
 
 1. `GHV` 中写入哪些 bit。
 2. `GHPtr` 前进多少。
 3. 所有 folded history 寄存器按同一批 bit 更新到同一路径上下文。
 
 如果这三者任意一个错拍，TAGE/ITTAGE 的 index/tag 就会和 BPU 保存的完整历史不一致。
+-->
+The important part of a history update is not merely writing a taken bit; three operations must stay aligned in the same cycle:
 
-### 24.4. S1/S2/S3 override 下的优先级
+1. Which bits are written into `GHV`.
+2. How far `GHPtr` advances.
+3. Updating every folded-history register with the same batch of bits for the same path context.
 
-早级预测先更新历史，晚级预测如果不同，需要覆盖早级历史。可以抽象成优先级写入器：
+If any of these three becomes misaligned, the TAGE/ITTAGE index or tag no longer matches the complete history stored by BPU.
+
+<!-- ### 24.4. S1/S2/S3 override 下的优先级 -->
+### 24.4. Priority Under S1/S2/S3 Overrides
+
+<!-- 早级预测先更新历史，晚级预测如果不同，需要覆盖早级历史。可以抽象成优先级写入器： -->
+An earlier-stage prediction updates history first; if a later-stage prediction differs, it must override the earlier history. This can be modeled as a priority writer:
 
 ```text
 candidates, low to high priority:
@@ -707,33 +952,40 @@ GHV writes = winner.historyWrites
 nextPC = winner.target
 ```
 
-这解释了为什么 S2/S3 redirect 不只是改 PC：它们还要把 `GHPtr`、folded history 和 GHV 写位一起注册。对应代码路径是 [BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725)、[BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883)。后端/FTQ redirect 优先级最高，对应 [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050)。
+<!-- 这解释了为什么 S2/S3 redirect 不只是改 PC：它们还要把 `GHPtr`、folded history 和 GHV 写位一起注册。对应代码路径是 [BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725)、[BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883)。后端/FTQ redirect 优先级最高，对应 [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050)。 -->
+This is why an S2/S3 redirect changes more than the PC: it also registers `GHPtr`, folded history, and GHV write bits. The relevant paths are [BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725) and [BPU.scala:827-883](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L883). A backend/FTQ redirect has the highest priority, as shown at [BPU.scala:915-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L915-L1050).
 
-### 24.5. 示例一：同一预测块内两条条件分支
+<!-- ### 24.5. 示例一：同一预测块内两条条件分支 -->
+### 24.5. Example 1: Two Conditional Branches in One Prediction Block
 
-假设全局历史长度 `N=8`，当前 `ptr=3`，`GHV` 逻辑历史从新到旧为：
+<!-- 假设全局历史长度 `N=8`，当前 `ptr=3`，`GHV` 逻辑历史从新到旧为： -->
+Assume a global history length of `N=8`, a current `ptr=3`, and the logical `GHV` history from newest to oldest:
 
 ```text
 oldHist = [1, 0, 1, 1, 0, 0, 1, 0]
 ```
 
-一个 fetch block 内按程序顺序有两条条件分支：
+<!-- 一个 fetch block 内按程序顺序有两条条件分支： -->
+One fetch block contains two conditional branches in program order:
 
 ```text
 br0 predicted not-taken = 0
 br1 predicted taken     = 1
 ```
 
-因为 `br1` 是第一个 taken CFI，历史要更新两位，`selectedShift = 2`：
+<!-- 因为 `br1` 是第一个 taken CFI，历史要更新两位，`selectedShift = 2`： -->
+Because `br1` is the first taken CFI, history advances by two bits and `selectedShift = 2`:
 
+<!-- newHist = [1, 0, 1, 0, 1, 1, 0, 0]  // 从新到旧观察时，br1/br0 成为最新两位 -->
 ```text
 write GHV[3] = 0    // br0
 write GHV[4] = 1    // br1
 nextPtr = (3 + 2) mod 8 = 5
-newHist = [1, 0, 1, 0, 1, 1, 0, 0]  // 从新到旧观察时，br1/br0 成为最新两位
+newHist = [1, 0, 1, 0, 1, 1, 0, 0]  // viewed newest-to-oldest, br1/br0 are the newest two bits
 ```
 
-若后续 S2 发现其实 `br0` 应该 taken，则 `selectedShift` 变为 1，而且历史只应包含 `br0=1`，不能保留 S1 写入的 `br1=1`：
+<!-- 若后续 S2 发现其实 `br0` 应该 taken，则 `selectedShift` 变为 1，而且历史只应包含 `br0=1`，不能保留 S1 写入的 `br1=1`： -->
+If S2 later discovers that `br0` should actually be taken, `selectedShift` becomes 1. The history must contain only `br0=1` and must discard the `br1=1` written by S1:
 
 ```text
 S2 override:
@@ -742,30 +994,37 @@ nextPtr = (3 + 1) mod 8 = 4
 correctHist = [1, 1, 0, 1, 1, 0, 0, 1]
 ```
 
-这个例子说明：override 必须恢复“分支数量”和“分支结果”两件事。只改 target 而不改 history，会让下一次 TAGE 查询误以为已经经过了 `br1`。
+<!-- 这个例子说明：override 必须恢复“分支数量”和“分支结果”两件事。只改 target 而不改 history，会让下一次 TAGE 查询误以为已经经过了 `br1`。 -->
+This example shows that an override must restore both the number of branches and their outcomes. Changing only the target while leaving history unchanged would make the next TAGE lookup incorrectly assume that it has already passed `br1`.
 
-### 24.6. 示例二：后端 redirect 恢复
+<!-- ### 24.6. 示例二：后端 redirect 恢复 -->
+### 24.6. Example 2: Backend Redirect Recovery
 
-假设某预测块进入 FTQ 时保存了预测前历史指针：
+<!-- 假设某预测块进入 FTQ 时保存了预测前历史指针： -->
+Assume that FTQ saved the pre-prediction history pointer when a prediction block entered the queue:
 
 ```text
 savedHistPtr = 3
 oldHist      = [1, 0, 1, 1, 0, 0, 1, 0]
 ```
 
-BPU 当时预测：
+<!-- BPU 当时预测： -->
+At that time, BPU predicted:
 
 ```text
 br0 not-taken, br1 taken
 ```
 
-所以推测历史前进两位。但后端最终解析发现真实情况是：
+<!-- 所以推测历史前进两位。但后端最终解析发现真实情况是： -->
+The speculative history therefore advanced by two bits. The backend later resolved the actual situation as:
 
+<!-- br0 taken, br1 不在真实路径上 -->
 ```text
-br0 taken, br1 不在真实路径上
+br0 taken, br1 is not on the actual path
 ```
 
-FTQ redirect 会携带 `savedHistPtr` 和真实 `cfiUpdate` 返回 BPU。BPU 从 `savedHistPtr` 对应的旧历史快照出发，只重放真实路径上的结果：
+<!-- FTQ redirect 会携带 `savedHistPtr` 和真实 `cfiUpdate` 返回 BPU。BPU 从 `savedHistPtr` 对应的旧历史快照出发，只重放真实路径上的结果： -->
+The FTQ redirect returns to BPU with `savedHistPtr` and the real `cfiUpdate`. BPU starts from the old history snapshot at `savedHistPtr` and replays only outcomes on the actual path:
 
 ```text
 restore base = oldHist at savedHistPtr
@@ -773,9 +1032,11 @@ apply br0 taken = 1
 newPtr = (savedHistPtr + 1) mod 8 = 4
 ```
 
-恢复后，下一次 S0 查询使用 `br0 taken` 之后的 history/folded history，而不是错误路径上的 `br0 not-taken, br1 taken`。这正是 [BPU.scala:939-963](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L939-L963) 和 [BPU.scala:964-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L964-L1050) 要做的事情。
+<!-- 恢复后，下一次 S0 查询使用 `br0 taken` 之后的 history/folded history，而不是错误路径上的 `br0 not-taken, br1 taken`。这正是 [BPU.scala:939-963](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L939-L963) 和 [BPU.scala:964-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L964-L1050) 要做的事情。 -->
+After recovery, the next S0 lookup uses the history/folded history after `br0 taken`, rather than the wrong-path `br0 not-taken, br1 taken`. This is the behavior implemented at [BPU.scala:939-963](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L939-L963) and [BPU.scala:964-1050](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L964-L1050).
 
-### 24.7. Mermaid：历史更新与恢复路径
+<!-- ### 24.7. Mermaid：历史更新与恢复路径 -->
+### 24.7. Mermaid: History Update and Recovery Path
 
 ```mermaid
 flowchart LR

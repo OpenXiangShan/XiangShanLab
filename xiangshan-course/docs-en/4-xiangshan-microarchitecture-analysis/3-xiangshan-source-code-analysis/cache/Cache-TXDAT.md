@@ -1,3 +1,4 @@
+<!--
 # 香山昆明湖 V2：CoupledL2 的 TXDAT 源码分析
 
 > 本文分析的是 Kunminghu V2 在 CHI 模式下、每个 CoupledL2 Slice 内的 <code>TXDAT</code> 子模块。它不是 Tag/Data SRAM，也不是 L2 的 MSHR；它负责把 MainPipe 已经形成的 <code>TaskWithData</code> 缓冲、按 CHI DAT 拍宽拆分，并向下游 CHI TXDAT 通道发送。
@@ -61,18 +62,18 @@ XiangShan 的 [L2Top.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/sca
 
 ~~~mermaid
 flowchart LR
-  B["RXSNP / Sink B"] --> RA["RequestArb"]
-  M["MSHRCtl 的 mshrTask"] --> RA
-  RA --> MP["MainPipe (s3/s4/s5)"]
-  RB["ReleaseBuf / RefillBuf"] --> MP
-  DS["DataStorage"] --> MP
-  MP -->|"TaskWithData<br/>valid/ready"| TD["TXDAT<br/>每 Slice 一份"]
+  B["RXSNP / Sink B"] --&gt; RA["RequestArb"]
+  M["MSHRCtl 的 mshrTask"] --&gt; RA
+  RA --&gt; MP["MainPipe (s3/s4/s5)"]
+  RB["ReleaseBuf / RefillBuf"] --&gt; MP
+  DS["DataStorage"] --&gt; MP
+  MP --&gt;|"TaskWithData<br/>valid/ready"| TD["TXDAT<br/>每 Slice 一份"]
   TD -. "blockMSHRReqEntrance<br/>blockSinkBReqEntrance" .-> RA
-  TD -->|"CHIDAT"| SO["Slice.io.out.tx.dat"]
-  SO --> FA["fastArb<br/>Slice 0...N + MMIO"]
-  MM["MMIOBridge.tx.dat"] --> FA
-  FA --> LM["LinkMonitor"]
-  LM -->|"CHI TXDAT flit"| HN["OpenLLC 或外部 LLC"]
+  TD --&gt;|"CHIDAT"| SO["Slice.io.out.tx.dat"]
+  SO --&gt; FA["fastArb<br/>Slice 0...N + MMIO"]
+  MM["MMIOBridge.tx.dat"] --&gt; FA
+  FA --&gt; LM["LinkMonitor"]
+  LM --&gt;|"CHI TXDAT flit"| HN["OpenLLC 或外部 LLC"]
 ~~~
 
 图中实线是代码连接，虚线是资源回压。MSHRCtl 不直接连 TXDAT：它先把每项 <code>tasks.mainpipe</code> 经 [MSHRCtl.scala](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHRCtl.scala:168) 送入 RequestArb，再经 MainPipe 形成发送任务。
@@ -182,11 +183,11 @@ TXDAT 没有 <code>Enum</code> 状态寄存器。状态由 <code>beatValids</cod
 
 ~~~mermaid
 stateDiagram-v2
-  [*] --> Idle: reset / beatValids = 0
-  Idle --> Resident: queue.io.deq.fire\n所有 beatValids 置 1，锁存 taskR
-  Resident --> Resident: io.out.valid && !io.out.ready\n保持 taskR 与 beatValids
-  Resident --> Resident: io.out.fire 且仍有 beat\n清除 PriorityEncoderOH 选择的一个 bit
-  Resident --> Idle: io.out.fire 清除最后一个 beat
+  [*] --&gt; Idle: reset / beatValids = 0
+  Idle --&gt; Resident: queue.io.deq.fire\n所有 beatValids 置 1，锁存 taskR
+  Resident --&gt; Resident: io.out.valid && !io.out.ready\n保持 taskR 与 beatValids
+  Resident --&gt; Resident: io.out.fire 且仍有 beat\n清除 PriorityEncoderOH 选择的一个 bit
+  Resident --&gt; Idle: io.out.fire 清除最后一个 beat
 ~~~
 
 对应代码在 [TXDAT.scala](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TXDAT.scala:82)：
@@ -482,3 +483,282 @@ TXDAT 的核心职责很窄但位于关键边界：它把 MainPipe 已经决定�
 - 三 FIFO ready 是否在所有生成配置下严格同步；
 - l2FlushDone 与 TXDAT FIFO 清空的严格关系；
 - 在真实链路 credit、外层仲裁竞争下的端到端吞吐与最大等待。
+-->
+
+# XiangShan Kunminghu V2: CoupledL2 TXDAT Source Analysis
+
+> This page analyzes the per-Slice `TXDAT` block in Kunminghu V2's CHI CoupledL2. It is neither a tag/data SRAM nor an L2 MSHR. It buffers a `TaskWithData`, serializes its cache line into CHI DAT beats, and transmits those beats on the downstream CHI TXDAT channel.
+
+## 1. Scope, Source Baseline, and Conclusion
+
+### 1.1 Questions answered here
+
+| Question | Code-grounded answer |
+| --- | --- |
+| Who? | Each CHI Slice instantiates one TXDAT. MainPipe is its only intra-Slice input; RequestArb receives its resource-pressure feedback. |
+| Why? | CHI DAT carries cache-line data, error information, and transaction metadata. Buffering prevents an externally stalled link from holding MainPipe pipeline stages indefinitely. |
+| How? | One task FIFO and two data-beat FIFOs accept a `TaskWithData`; `beatValids` then controls conversion of the resident line into CHIDAT beats. |
+| From? | `MainPipe.io.toTXDAT`, produced for data-bearing RXSNP responses or MSHR-dispatched CopyBack, SnpRespData, CompData, and related tasks. |
+| To? | `Slice.io.out.tx.dat`, then outer Slice/MMIO arbitration and LinkMonitor, finally a physical CHI TXDAT flit. |
+
+Only the actual code path is treated as behavioral evidence. HuanCun is not drawn as TXDAT's direct consumer in this CHI configuration.
+
+### 1.2 Fixed source baseline
+
+| Item | Value |
+| --- | --- |
+| XiangShan root | `/home/yanyusong/xs-memory-env/XiangShan` |
+| Parent checkout | `kunminghu-v2 @ e12436c7cba86b195deec24981976d78bc263661` |
+| `coupledL2` checkout | `fb5469838c8902b6cb33992c0a30ee3d446e4453` |
+| `huancun` checkout | `65ef077373ecf398b4cecdea06b65ef9b8d79044` |
+| Configuration | [KunminghuV2Config](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:481>): 1 MiB, four banks, inclusive, CHI enabled |
+| Design Doc reference | `/home/yanyusong/XiangShan-Design-Doc`, `kunminghu-v2 @ 58d9e2ad11f044cb6f8887d9687d9e110696d1aa` |
+
+### 1.3 Verifiable conclusions first
+
+1. TXDAT is a **per-Slice CHI-DAT transmit buffer and beat serializer**. It does not access tag/data arrays, own coherence state, or allocate/free MSHRs.
+2. Under this configuration a line is 64 B and a downstream data beat is 32 B, so one line produces two TXDAT output beats. This is a parameter derivation, not a TXDAT hard-coded constant.
+3. A dequeued task remains resident under `beatValids`; only `io.out.fire` removes a beat. While ready is low, valid, task metadata, data, and pending-beat state hold.
+4. TXDAT pressure considers both local FIFO occupancy and requests potentially about to enter through MainPipe/RequestArb. It blocks Sink B and MSHR entrances at thresholds `mshrsAll` and `mshrsAll - 2`; comments explicitly allow conservative false positives.
+5. CHI configuration makes `L3CacheParamsOpt` and `OpenLLCParamsOpt` mutually exclusive. TXDAT leads to OpenLLC or an external LLC link, not directly to HuanCun.
+6. TXDAT exposes no flush, redirect, or cancellation input. Code alone does not prove that its queues are empty when an L2 flush completes.
+
+## 2. Mapping Theory to Code Objects
+
+| Concept | TXDAT implementation | What cannot be inferred here |
+| --- | --- | --- |
+| Resource reservation in a non-blocking cache | `inflightCnt` adds queued work and potentially TXDAT-bound s2--s5 work, then backpressures two RequestArb entrances. | TXDAT is not an MSHR and does not reveal a full MSHR lifetime. |
+| Decoupled handshake | Both input and output are `DecoupledIO`; input admission is `io.in.ready`, and a beat is consumed only at `io.out.fire`. | `valid` alone is not a transfer. |
+| Cache-line beat serialization | `DSBlock` becomes `Vec(beatSize, DSBeat)` and `PriorityEncoderOH` chooses one resident beat at a time. | No cross-line assembly or virtual-to-physical translation occurs here. |
+| Transaction protocol fields | `TaskBundle` already contains TxnID, DBID, opcode, response, and related fields; TXDAT maps them to CHIDAT. | It does not decide which opcode or DBID upstream chose. |
+| Link-level stall | Outer arbitration and LinkMonitor's link status, credit, or source-ready can stall the path after Slice output. | TXDAT alone cannot establish fixed end-to-end latency. |
+
+## 3. Effective Hierarchy and the Actual Data Path
+
+### 3.1 Why this path is CHI TXDAT
+
+When `EnableCHI` is true, [L2Top.scala](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:120>) selects `TL2CHICoupledL2`; `KunminghuV2Config` enables that branch with `WithCHI`. CHI mode creates a `tl2chi.Slice` per bank, and each Slice instantiates its own TXDAT. The TileLink (`tl2tl`) implementation must not be mixed into this timing discussion.
+
+```mermaid
+flowchart LR
+  B[RXSNP / Sink B] --> RA[RequestArb]
+  M[MSHRCtl mshrTask] --> RA
+  RA --> MP[MainPipe s3/s4/s5]
+  RB[ReleaseBuf / RefillBuf] --> MP
+  DS[DataStorage] --> MP
+  MP -->|TaskWithData valid/ready| TD[TXDAT per Slice]
+  TD -. blockMSHRReqEntrance and blockSinkBReqEntrance .-> RA
+  TD -->|CHIDAT| SO[Slice io.out.tx.dat]
+  SO --> FA[fastArb: Slices plus MMIO]
+  MM[MMIOBridge tx.dat] --> FA
+  FA --> LM[LinkMonitor]
+  LM --> HN[OpenLLC or external LLC]
+```
+
+MainPipe is the direct TXDAT producer. MSHRCtl sends per-MSHR work first to RequestArb and then through MainPipe; it does not directly drive TXDAT.
+
+### 3.2 Connections and boundary inside a Slice
+
+```scala
+val status_vec_toTX = reqArb.io.status_vec_toTX.get ++ mainPipe.io.status_vec_toTX
+txdat.io.in <> mainPipe.io.toTXDAT
+txdat.io.pipeStatusVec := status_vec_toTX
+reqArb.io.fromTXDAT.foreach(_ := txdat.io.toReqArb)
+```
+
+This establishes that MainPipe is the sole active input source, that TXDAT sees the five pipeline status stages formed from RequestArb s1/s2 and MainPipe s3/s4/s5, and that resource feedback goes to RequestArb rather than directly deasserting a MainPipe output. Slice connects `txdat.io.out` to `io.out.tx.dat`; TXDAT has no knowledge of other Slices or MMIO.
+
+### 3.3 HuanCun, OpenLLC, and this module
+
+`L2Param.scala` imports HuanCun parameter types because the project shares cache parameters and Bundles. That import does not identify TXDAT's downstream block. Configuration makes HuanCun `L3CacheParamsOpt` mutually exclusive with CHI's `OpenLLCParamsOpt`; in CHI/non-external-LLC mode, top-level code creates OpenLLC. The correct downstream label is therefore ``CHI LinkMonitor then OpenLLC/external LLC``.
+
+## 4. Parameters, Capacity, and Interface
+
+### 4.1 Current-configuration dimensions
+
+The set formula is `l2sets = capacity bytes / banks / ways / 64`. With 1 MiB, four banks, and eight ways, each Slice has 512 sets. TXDAT does not perform set/way lookup, but its tasks originate in that L2 data path.
+
+| Parameter | Value | TXDAT effect |
+| --- | ---: | --- |
+| `blockBytes` | 64 B | One `TaskWithData.data` is one cache line. |
+| `beatBytes` | 32 B | CHIDAT data is 256 bits per beat. |
+| `beatSize` | 2 | TXDAT emits two beats for one resident task. |
+| `mshrsAll` | 16 | Task FIFO and both data FIFOs have 16 entries; resource thresholds are 16 and 14. |
+
+These values are static derivations for the selected configuration only. A different Config/YAML/command-line override can change them.
+
+### 4.2 TXDAT I/O and task payload
+
+| Port | Direction | Type/key fields | Meaning |
+| --- | --- | --- | --- |
+| `io.in` | Input | `DecoupledIO[TaskWithData]` | MainPipe transaction metadata plus a whole line. |
+| `io.out` | Output | `DecoupledIO[CHIDAT]` | One current CHI DAT beat. |
+| `pipeStatusVec` | Input | Five `Valid[PipeStatusWithCHI]` values | Estimates pipeline-resident work that can enter TXDAT. |
+| `toReqArb` | Output | Two block bits | Limits Sink B and MSHR admission in RequestArb. |
+
+`TaskWithData` combines `TaskBundle` with a `DSBlock`. Task fields already carry `set/tag/off`, MSHR identity, and optional CHI fields. TXDAT does not repeat a directory lookup. `CHIDAT` includes target/source node IDs, TxnID, HomeNID, opcode, response/error, DBID, CCID, DataID, byte enables, data, data check, and poison.
+
+## 5. TXDAT Internal Structure and Implicit State Machine
+
+### 5.1 Three lock-step FIFOs
+
+TXDAT constructs one task Queue and two `DSBeat` Queues, each with `entries = mshrsAll` and `flow = true`. Input valid feeds all three enqueue paths, while `io.in.ready` is driven from the task FIFO's enqueue-ready. The line is split into beat 0 and beat 1 for the data FIFOs; dequeue readiness is shared to preserve lock-step operation.
+
+The intended design is synchronized enqueue/dequeue, but distinguish intent from explicitly asserted fact:
+
+- task-FIFO `enq.ready` alone drives `io.in.ready`;
+- no local assertion proves the two data FIFO enqueue-readies always equal task-FIFO ready;
+- their type, depth, valid, and dequeue-ready are structurally identical;
+- readiness equivalence across generated configurations is therefore a verification property, not an unqualified source proof.
+
+### 5.2 Not an explicit enum, but two states can be reconstructed
+
+`beatValids` represents an implicit two-state machine:
+
+| Reconstructed state | `beatValids` | Event and effect |
+| --- | --- | --- |
+| Idle | all bits clear | A queue dequeue transfers a task/data line into resident registers and initializes pending beats. |
+| Resident | one or more bits set | CHIDAT presents the selected beat; `io.out.fire` clears exactly that beat. Clearing the final bit returns to Idle. |
+
+The resident task and data must remain stable while `io.out.valid && !io.out.ready`. This is the relevant protocol meaning of a stalled outgoing beat.
+
+### 5.3 Beat choice, order, and one complete cache line
+
+The `DSBlock` is divided according to parameterized `beatSize`. `PriorityEncoderOH(beatValids)` chooses a pending beat, and a successful output handshake clears its bit. Under the current 64-B/32-B parameters, a full line emits two 32-B CHIDAT beats. This is serialization within one cache line, not cross-cache-line processing.
+
+## 6. Resource Backpressure: Why a Non-full FIFO Can Reject Work
+
+### 6.1 Estimation formula
+
+TXDAT adds local queued count to a view of status-vector work that could soon enter. That conservative `inflightCnt` protects an always-ready input assertion. It controls two gates:
+
+| Gate | Threshold | Practical purpose |
+| --- | --- | --- |
+| `blockSinkBReqEntrance` | `mshrsAll` | Prevent more Sink B admission when estimated TXDAT demand consumes all entries. |
+| `blockMSHRReqEntrance` | `mshrsAll - 2` | Reserve capacity earlier for MSHR-side demand. |
+
+Comments identify the accounting as potentially inaccurate and capable of false-positive blocking. The correct claim is conservative protection against overflow, not exact queue occupancy.
+
+### 6.2 Backpressure scenario matrix
+
+| Scenario | Local observation | Required interpretation |
+| --- | --- | --- |
+| FIFO nearly empty, multiple tasks in s2--s5 | `inflightCnt` can still reach a gate threshold. | Rejection is conservative future-reservation pressure, not local FIFO full. |
+| Output CHI link blocked | Resident `beatValids` holds; local queues fill; gates eventually assert. | Backpressure propagates via RequestArb toward ingress. |
+| Count estimate overstates future work | A block bit may assert although the queue would not physically overflow. | Expected performance cost; verify no functional loss. |
+| Count estimate understates demand | The always-ready input invariant would be at risk. | Target with assertions and generated-RTL tests. |
+
+## 7. How MainPipe Produces TXDAT Tasks
+
+### 7.1 Task classes allowed into TXDAT
+
+Data-bearing tasks include RXSNP response flows and MSHR-directed CHI operations such as CopyBack, SnpRespData, CompData, and related response/writeback forms. Upstream task construction decides coherence opcode, DBID, TxnID, and response fields; TXDAT only buffers and maps them.
+
+### 7.2 s3/s4/s5 and MainPipe convergence
+
+RequestArb supplies selected work to MainPipe. MainPipe combines directory results, RefillBuffer/ReleaseBuffer data, and DataStorage results across s3/s4/s5, then emits `TaskWithData` when the required data and CHI fields are available. TXDAT's pipeline-status view contains those stages specifically so it can reserve capacity before its visible input fires.
+
+### 7.3 Boundary between TXDAT and GrantBuffer
+
+GrantBuffer is an upstream-facing response-side store governed by its own handshake/lifetime. TXDAT is a downstream CHI DAT serializer. Although both may carry complete cache-line data, they differ in interface direction, ownership, and the transaction acknowledgement semantics; neither should be described as the other's queue.
+
+## 8. Field Conversion from `TaskWithData` to `CHIDAT`
+
+### 8.1 Ownership and fill rules
+
+| CHIDAT field family | TXDAT source/behavior |
+| --- | --- |
+| Transaction routing (`TxnID`, `DBID`, target/source/HomeNID, CCID) | Copied or selected from task fields prepared upstream. |
+| Operation and response (`opcode`, `resp`, `respErr`) | Derived from task CHI fields; TXDAT does not invent coherence meaning. |
+| Beat identity (`DataID`) | Encodes the selected cache-line beat according to CHI mapping. |
+| Data and byte enables | Current `DSBeat` plus opcode-dependent BE behavior. |
+| Data integrity (`dataCheck`, `poison`) | Produced by the configured code/check path when applicable. |
+
+### 8.2 Error, check, and poison behavior
+
+TXDAT maps task corruption/error state into the CHI DERR/poison/data-check behavior implemented in its source. For operations such as CopyBackWrData and WriteDataCancel, data and byte-enable handling follows the specific opcode path. This establishes local field conversion, not an architectural exception or software-visible error outcome.
+
+## 9. Beyond a Slice: Arbitration and Link-level Backpressure
+
+### 9.1 Multiple Slices and MMIO aggregation
+
+Each Slice produces its own `io.out.tx.dat`. At the parent level, fast arbitration combines all Slice outputs with `MMIOBridge.tx.dat`. Only one producer receives ready in a given arbitration decision; fairness and exact tie behavior must be tested at that outer layer rather than inferred from one TXDAT instance.
+
+### 9.2 The two LinkMonitor send contracts
+
+LinkMonitor applies CHI link-level availability conditions such as L-credit and source-ready. A TXDAT beat can be valid at Slice output yet be stalled downstream. Such a stall eventually holds resident state, fills queues, and causes TXDAT feedback to restrict RequestArb ingress.
+
+## 10. Latency, Throughput, and Handshake Illustration
+
+### 10.1 Bounds established by source
+
+| Quantity | Established result | Not established |
+| --- | --- | --- |
+| Line serialization | Two successful `out.fire` events for a 64-B line at 32-B beats. | A fixed wall-clock interval between the fires. |
+| Resident beat progress | Exactly one selected beat clears per output handshake. | That the link is ready every cycle. |
+| Queue capacity | 16 task/data entries per Slice under this configuration. | Exact usable throughput after conservative pipeline reservation. |
+| Admission control | Gates can assert before local FIFO full. | Exact count equivalence under all traffic and generated configurations. |
+
+### 10.2 Signal-based waveform scenario
+
+The waveform-draw examples in the Chinese source are code-derived illustrations. In a normal two-beat transfer, one queued task becomes resident, `beatValids` starts with both bits set, the priority encoder chooses one beat, and each `out.fire` clears a single bit. If `out.ready` falls, selected beat, task metadata, and data must remain stable until the handshake succeeds.
+
+## 11. Cross-boundary Reading: Address, Cache Line, MMIO, and Flush
+
+### 11.1 Address and page boundary
+
+Address translation and page-boundary classification occur before this TXDAT interface. Tasks arrive with the needed physical/coherence metadata. TXDAT does not perform a translation, PMP/PMA/PBMT check, or page-crossing decision.
+
+### 11.2 Cache-line boundary
+
+TXDAT serializes one `DSBlock` according to `beatSize`. It neither merges two lines nor detects a cross-line address. In this configuration, two beats mean two 32-B portions of one 64-B cache line.
+
+### 11.3 MMIO/uncache boundary
+
+MMIO data writes construct their own TXDAT traffic in `MMIOBridge` and meet Slice TXDAT only in outer `fastArb`. TXDAT therefore does not classify MMIO/uncache requests, allocate MMIO entries, or select MMIO DBID/non-cacheable opcodes.
+
+### 11.4 CMO/flush boundary
+
+CoupledL2 sends `l2Flush` to each Slice and Slice uses it for SinkA's CMO-all flow. TXDAT I/O contains no flush signal and source shows no branch clearing its queues or `beatValids`. Tests must therefore check the ordering of flush start, flush done, and TXDAT drain; this module alone cannot prove `l2FlushDone` implies TXDAT empty.
+
+## 12. Design Doc Traceability and Differences
+
+| Design Doc topic | Repository evidence | Conclusion |
+| --- | --- | --- |
+| TXDAT has transmit buffering | [TXDAT.scala:49](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TXDAT.scala:49>) and resident-task logic | Verified as one task FIFO plus two data FIFOs. |
+| Pipeline-state feedback blocks MSHR/Sink B | [TXDAT.scala:61](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TXDAT.scala:61>), [RequestArb.scala:112](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:112>) | Verified; source warns the estimate is deliberately conservative/inexact. |
+| 64-B line and 32-B CHI beat | [L2Param.scala:65](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/L2Param.scala:65>) | Two beats in this configuration, not an eternal constant. |
+| Corrupt-to-CHI error/poison | [TXDAT.scala:102](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TXDAT.scala:102>) | Verified local DERR and optional poison/dataCheck conversion. |
+
+Important limitations are that capacity control is not exact occupancy, MainPipe's TX status also carries an accuracy caveat, and HuanCun must not be drawn as this CHI TXDAT's receiver.
+
+## 13. Verification Priorities
+
+| ID | Scenario | Check | Purpose |
+| --- | --- | --- | --- |
+| V1 | First item after reset | `beatValids == 0`, then all bits set after first dequeue. | Validate implicit Idle-to-Resident transition. |
+| V2 | Long output backpressure | `taskR`, CHIDAT bits, and `beatValids` stable while `out.valid && !out.ready`; no new dequeue. | Prevent duplicate, lost, or misordered beats. |
+| V3 | Normal two-beat line | Exactly two `out.fire` events, correct DataID order, then Idle. | Validate line split without replay. |
+| V4 | Three FIFO lock-step | Every input fire enqueues all three; every dequeue advances all three. | Cover readiness equivalence not locally asserted. |
+| V5 | 14/16 thresholds | Observe MSHR/Sink B block bits and RequestArb admission. | Validate conservative reservation, not merely FIFO full. |
+| V6 | Simultaneous s3/s4/s5 candidates | Compare MainPipe granted source with generated RTL arbitration. | Resolve arbiter priority uncertainty. |
+| V7 | Many Slices plus MMIO valid | One `ready` per fastArb choice; check rotation after fires. | Cover aggregation fairness/no loss. |
+| V8 | Corrupt, CopyBackWrData, WriteDataCancel | Check DERR, poison/dataCheck, BE/data rules. | Validate CHIDAT field conversion. |
+| V9 | Credit/source-ready stall and recovery | Propagate pressure and eventually drain after restoration. | Cover LinkMonitor-level stall. |
+| V10 | CMO flush with queued DAT | Record flush start/done, queue count, and `out.fire`. | Establish system-level convergence. |
+
+Use transaction identity (`TxnID`, `DBID`, opcode, `DataID`) to correlate waveforms across `Slice.txdat.io.in`, queue count, `beatValids`, `Slice.io.out.tx.dat`, outer TXDAT, LinkMonitor, and `lcrdy.dat` where enabled. Do not search only by PC or valid.
+
+## 14. Summary and Open Items
+
+TXDAT has a narrow but important role: it retains a MainPipe-selected cache-coherence data task as a complete L2 line, then sends the line as CHI DAT fields and beats. Conservative ``FIFO occupancy plus pipeline prediction`` blocks future Sink B and MSHR admission before the always-ready input contract is endangered.
+
+Verified by repository source are the per-Slice instance, MainPipe input, three FIFOs, `beatValids` state, field mapping, corrupt/BE handling, RequestArb feedback, outer Slice/MMIO aggregation, and LinkMonitor downstream connection.
+
+The following remain simulation/generated-RTL questions rather than facts to invent in the course text:
+
+- exact standard-Chisel Arbiter tie breaking when s3/s4/s5 are all valid;
+- first-item and adjacent-task cycle timing introduced by `Queue(flow = true)`;
+- strict three-FIFO ready equivalence in all generated configurations;
+- exact relationship between `l2FlushDone` and TXDAT queue drain;
+- end-to-end throughput and maximum wait under real link credit and outer-arbiter contention.

@@ -1,3 +1,4 @@
+<!--
 # 香山昆明湖 V2：访存单元 UncacheBuffer 源码分析
 
 > 结论先行：昆明湖 V2 的数据非缓存访问不是通过 L1 DCache 主数据通路完成。物理 UncacheBuffer 是 [Uncache.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:207) 中的 UncacheImp：它把 LSQ 发来的一个 XLEN 宽度请求保存在物理条目中，按物理条目号作为 TileLink source ID 发往 data-MMIO 端口，并在 TileLink D 响应后再回送 LSQ。LoadQueueUncache 是上游的逻辑 load buffer；二者通过 mid（逻辑条目号）到 sid（物理 UncacheBuffer 条目号）的确认映射连接，不能混为同一个队列。
@@ -64,19 +65,19 @@ val states = RegInit(VecInit(Seq.fill(UncacheBufferSize)(
 
 ~~~mermaid
 flowchart LR
-  LDU[LoadUnit] -->|分类后的 mmio/nc load| LQU[LoadQueueUncache]
-  SQ[StoreQueue] -->|提交/条件满足的 mmio/nc store| LSQ[LSQWrapper]
-  LQU --> LSQ
-  LSQ -->|UncacheWordReq: mid| MB[MemBlock pipe register]
-  MB -->|UncacheWordReq| UB[UncacheImp physical entries]
-  UB -->|TileLink A: source=sid| DMMIO[data-MMIO TL port]
-  DMMIO -->|TileLink D: source=sid| UB
-  UB -->|UncacheWordResp: id=sid| MB
-  MB --> LSQ
-  LSQ -->|is2lq route| LQU
-  LQU -->|mmioOut or ncOut| LDU
-  LSQ -->|store response| SQ
-  UB -->|store data forwarding| LDU
+  LDU[LoadUnit] --&gt;|分类后的 mmio/nc load| LQU[LoadQueueUncache]
+  SQ[StoreQueue] --&gt;|提交/条件满足的 mmio/nc store| LSQ[LSQWrapper]
+  LQU --&gt; LSQ
+  LSQ --&gt;|UncacheWordReq: mid| MB[MemBlock pipe register]
+  MB --&gt;|UncacheWordReq| UB[UncacheImp physical entries]
+  UB --&gt;|TileLink A: source=sid| DMMIO[data-MMIO TL port]
+  DMMIO --&gt;|TileLink D: source=sid| UB
+  UB --&gt;|UncacheWordResp: id=sid| MB
+  MB --&gt; LSQ
+  LSQ --&gt;|is2lq route| LQU
+  LQU --&gt;|mmioOut or ncOut| LDU
+  LSQ --&gt;|store response| SQ
+  UB --&gt;|store data forwarding| LDU
 ~~~
 
 这个图中的 L1D 没有位于 Uncache 主路径上。MemBlock 分别例化 DCacheWrapper 与 Uncache；Uncache client 经 uncache_xbar、TLBuffer 到 uncache_port，而 XSTile 将该端口连接到 d_mmio_port。L1D client 另接 l1d_to_l2_buffer。[MemBlock.scala:257](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:257) [MemBlock.scala:286](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:286) [XSTile.scala:65](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/XSTile.scala:65) [XSTile.scala:99](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/XSTile.scala:99)
@@ -165,6 +166,390 @@ when(e.io.slaveId.valid &&
 }
 ~~~
 
+## 4. Request Path: Classification to Physical Entry
+
+### 4.1 LoadUnit and StoreUnit Classify Actual Physical Attributes First
+
+When the relevant TLB/PMP/PBMT conditions are available in LoadUnit S2, it combines PMA/MMIO, input NC, and input MMIO to derive <code>s2_actually_uncache</code>. It then suppresses the expected DCache response and asserts DCache <code>s2_kill</code>. The boolean precedence is the Scala/Chisel expression itself, so it must not be reduced to one generic MMIO bit. [LoadUnit.scala:1206](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1206>) [LoadUnit.scala:1306](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1306>) [LoadUnit.scala:1523](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1523>)
+
+~~~scala
+val s2_actually_uncache =
+  !s2_in.tlbMiss && !s2_un_access_exception &&
+  Pbmt.isPMA(s2_pbmt) && (s2_pmp.mmio && !s2_pmp.ld) ||
+  s2_in.nc || s2_in.mmio
+val s2_dcache_should_resp =
+  !(s2_in.tlbMiss || s2_exception || s2_in.delayedLoadError ||
+    s2_uncache || s2_prf)
+io.dcache.s2_kill := s2_pmp.ld || s2_pmp.st ||
+  s2_actually_uncache || s2_kill
+~~~
+
+StoreUnit has corresponding store classification and also kills DCache write intent. In some uncached vector or misaligned cases it directly forms an access or address-misaligned exception. Thus, reaching an Uncache address range does not necessarily produce a physical bus request. [StoreUnit.scala:469](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:469>) [StoreUnit.scala:494](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:494>) [StoreUnit.scala:504](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala:504>)
+
+### 4.2 LoadQueueUncache Retains Load Ordering, Exception, and Writeback Semantics
+
+LoadQueueUncache sorts <code>LoadPipelineWidth</code> input lanes by ROB age, then on the following cycle removes redirect, exception, and replay cases before allocating FreeList entries only for MMIO or NC requests. The request slot for a FreeList allocation is offset by PopCount of earlier lanes. If insufficient logical slots exist, the load cannot enter the logical buffer and later produces rollback; physical UncacheImp does not overwrite an entry that remains valid. [LoadQueueUncache.scala:345](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:345>) [LoadQueueUncache.scala:353](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:353>) [LoadQueueUncache.scala:379](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:379>) [LoadQueueUncache.scala:561](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:561>)
+
+Each logical UncacheEntry has four states: <code>s_idle</code>, <code>s_req</code>, <code>s_resp</code>, and <code>s_wait</code>. An MMIO load may transition from idle to request only when <code>pendingld</code> is set and its <code>robIdx</code> equals <code>pendingPtr</code>. An NC load can be ready to send immediately when <code>needFlush</code> is false. This ROB-head gate is a load-side ordering policy, not an inherent rule of physical UncacheImp. [LoadQueueUncache.scala:68](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:68>) [LoadQueueUncache.scala:122](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122>)
+
+~~~scala
+val canSendReq = req_valid && !needFlush && Mux(
+  req.nc, true.B,
+  pendingld && req.uop.robIdx === pendingPtr
+)
+~~~
+
+The logical load request is fixed to <code>M_XRD</code> and carries paddr, vaddr, its logical entryIndex as mid, NC, and <code>memBackTypeMM</code>. After the physical response, NC writeback uses <code>ncOut</code> while MMIO writeback uses <code>mmioOut</code>. Denied becomes <code>loadAccessFault</code>; corrupt without denied becomes <code>hardwareError</code>. [LoadQueueUncache.scala:173](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:173>) [LoadQueueUncache.scala:188](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:188>) [LoadQueueUncache.scala:205](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:205>)
+
+### 4.3 LSQWrapper: Load/Store Arbitration and Return Routing
+
+With <code>pendingstate=s_idle</code>, LSQWrapper selects a load or store request. If both are valid, load wins only when <code>load.robIdx < store.robIdx</code>; equality makes the expression false, so store wins. When outstanding is disabled, <code>req.fire</code> records <code>s_load</code> or <code>s_store</code> until <code>resp.fire</code> returns the wrapper to idle. With outstanding enabled, an NC request may leave the state idle. [LSQWrapper.scala:265](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:265>)
+
+~~~scala
+val selectLq = (loadQueue.io.uncache.req.valid &&
+  !storeQueue.io.uncache.req.valid) || (
+  loadQueue.io.uncache.req.valid &&
+  storeQueue.io.uncache.req.valid &&
+  loadQueue.io.uncache.req.bits.robIdx <
+    storeQueue.io.uncache.req.bits.robIdx
+)
+~~~
+
+Response and idResp are not routed using <code>pendingstate</code>; they use <code>is2lq</code> returned by the physical layer. This lets a physical-entry response return to the right logical subsystem based on stored command. [LSQWrapper.scala:302](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:302>) [LSQWrapper.scala:312](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LSQWrapper.scala:312>)
+
+MemBlock inserts an <code>AddPipelineReg</code> on both sides of physical UncacheImp. It holds a valid bit: out.fire clears valid, in.fire sets it, isFlush clears it, and in.ready is <code>!valid || out.ready</code>. This is an elastic register that can be stalled by sink backpressure, not a mechanically fixed extra end-to-end cycle. [MemCommon.scala:99](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemCommon.scala:99>) [MemBlock.scala:1505](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1505>)
+
+## 5. Physical UncacheImp Entry State and Lifetime
+
+### 5.1 Entry Contents and Sendability Predicates
+
+Each physical entry stores the request command, physical/virtual address, data, mask, NC, <code>memBackTypeMM</code>, and D-response <code>nderr</code>/<code>denied</code>/<code>corrupt</code>. A read response overwrites data; a write response does not. When forming <code>UncacheWordResp</code>, id is sid, <code>is2lq</code> is true exactly for <code>M_XRD</code>, and miss/replay/tag_error/error are fixed false. [Uncache.scala:57](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:57>) [Uncache.scala:100](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:100>) [Uncache.scala:114](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:114>)
+
+State is not one enum; it is four bits. The diagram below is the lifetime derived from those predicates. <code>waitSame</code> blocks an entry when an earlier request for the same 8-byte word exists and can coexist with valid.
+
+~~~mermaid
+stateDiagram-v2
+  [*] --&gt; Free
+  Free --&gt; Ready: req.fire and allocate
+  Ready --&gt; Ready: req.fire and merge
+  Ready --&gt; WaitSame: earlier same-word entry sends A
+  WaitSame --&gt; Ready: earlier same-word D fire
+  Ready --&gt; Inflight: TileLink A fire
+  Inflight --&gt; WaitReturn: TileLink D fire
+  WaitReturn --&gt; Free: LSQ resp.fire
+  WaitSame --&gt; Free: response path then LSQ resp.fire
+~~~
+
+| Predicate | Exact definition | Consumer | Meaning |
+|---|---|---|---|
+| isValid | valid | Allocation, empty, forwarding | Physical entry is occupied. |
+| can2Bus | valid and not inflight/waitSame/waitReturn | q0 issue arbitration | May generate an A request. |
+| canMerge | valid and not inflight | e0 merge decision | Has not issued yet, so data/mask can merge. |
+| can2Lsq | valid and waitReturn | r0 return arbitration | D response has arrived and it can return upstream. |
+| isFwdOld | valid and inflight or waitReturn | Store-to-load forwarding | An older store was issued or has a response awaiting pickup. |
+| isFwdNew | valid, not inflight, not waitReturn, and waitSame | Store-to-load forwarding | A newer store waits for an old same-word store. |
+
+The definitions and D-handling assertion are in [Uncache.scala:136](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:136>).
+
+~~~scala
+def can2Bus() = valid && !inflight && !waitSame && !waitReturn
+def can2Lsq() = valid && waitReturn
+def canMerge() = valid && !inflight
+def updateUncacheResp() = {
+  assert(inflight)
+  inflight := false.B
+  waitReturn := true.B
+}
+~~~
+
+### 5.2 Reset, First Request, and Empty
+
+<code>states</code> reset to all zeros, <code>uState</code> resets to <code>s_idle</code>, and every <code>noPending</code> bit resets true. <code>entries</code> is a non-initialized Reg(Vec(...)); correctness depends on <code>states.valid</code> being false so its payload is not read as valid. The first legal <code>req.fire</code> calls entry.set in an empty slot and sets valid; the Valid idResp announces the sid only in the following cycle. Verification must not require reset entries to have zero data/address. [Uncache.scala:241](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:241>) [Uncache.scala:366](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:366>)
+
+<code>empty</code> is the inverse OR of all <code>states.isValid</code>. Thus <code>flush.empty</code> says all physical entries are released, not merely that no transaction is waiting for TileLink D. [Uncache.scala:495](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:495>)
+
+## 6. e0: Allocation, Merge, Rejection, and ID Acknowledgement
+
+### 6.1 Merge Eligibility and Conflict Semantics
+
+For every physical entry, e0 computes reject, merge, and allocWaitSame vectors simultaneously. A primary merge requires all of the following:
+
+1. The request vaddr and existing entry vaddr belong to the same 8-byte word.
+2. Commands match.
+3. Both old and new accesses are NC.
+4. <code>memBackTypeMM</code> matches.
+5. ORing both masks still creates a contiguous, naturally aligned legal size.
+6. The entry receives no matching D response in this cycle and is not in <code>waitReturn</code>.
+
+A secondary merge additionally requires the existing entry to satisfy <code>canMerge</code> and not be selected for q0 A issue in this cycle. If a same-word entry exists but fails the primary condition, <code>e0_rejectVec</code> rejects the request rather than opening an erroneous second same-word entry. [Uncache.scala:289](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:289>) [Uncache.scala:299](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:299>) [Uncache.scala:343](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:343>)
+
+~~~scala
+e0_rejectVec(i) := valid && isAddrMatch && !canMerge1
+e0_mergeVec(i) := valid && isAddrMatch && canMerge1 && canMerge2
+e0_allocWaitSameVec(i) := valid && isAddrMatch &&
+  canMerge1 && !canMerge2
+assert(PopCount(e0_mergeVec) <= 1.U)
+~~~
+
+### 6.2 Priority, Full State, and Ready
+
+Empty entries and mergeable entries are selected using <code>PriorityEncoderWithFlag</code>. That helper recursively prioritizes the head of the input sequence, so a vector created through <code>in.zipWithIndex</code> favors lower valid indices; it is not round-robin. Uncache e0 has no fairness-rotation state. A system-observable starvation result under sustained traffic still requires simulation. [PriorityMuxDefault.scala:38](</home/yanyusong/xs-memory-env/XiangShan/utility/src/main/scala/utility/PriorityMuxDefault.scala:38>) [PriorityMuxDefault.scala:52](</home/yanyusong/xs-memory-env/XiangShan/utility/src/main/scala/utility/PriorityMuxDefault.scala:52>) [Uncache.scala:357](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:357>)
+
+~~~scala
+val (e0_mergeIdx, e0_canMerge) = PriorityEncoderWithFlag(e0_mergeVec)
+val (e0_allocIdx, e0_canAlloc) = PriorityEncoderWithFlag(e0_invalidVec)
+val e0_reject = do_uarch_drain ||
+  (!e0_canMerge && !e0_invalidVec.asUInt.orR) ||
+  e0_rejectVec.reduce(_ || _)
+req_ready := !e0_reject
+~~~
+
+The actual acceptance event is <code>req.fire</code>, not <code>req.valid</code>. With valid asserted but ready low, physical entries, states, and idResp must remain unchanged. When no mergeable or invalid entry exists, ready becomes low and applies physical backpressure. The load side additionally has rollback for insufficient LoadQueueUncache capacity; the two kinds of full state must not be confused. [Uncache.scala:338](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:338>) [LoadQueueUncache.scala:587](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:587>)
+
+### 6.3 Same-Word Send Order
+
+When a q0 entry performs A.fire, every other valid, non-waitReturn entry for the same 8-byte word is marked <code>waitSame</code>. On D.fire, waitSame is cleared for same-word followers. A follower for the same word therefore cannot reach the bus in parallel; it waits for the earlier D response. This is not global serialization of unrelated addresses. [Uncache.scala:433](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:433>) [Uncache.scala:463](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:463>)
+
+## 7. q0/r0: TileLink A/D and LSQ Return
+
+### 7.1 q0 Issue and Command Construction
+
+q0 chooses one <code>can2Bus</code> entry with lower sid priority. With <code>enableOutstanding</code> true, it may select any can2Bus entry; with it false, it can select only when <code>uState=s_idle</code>, forming a conservative one-at-a-time A to D to LSQ transaction mode. The uState in this mode tracks only the non-outstanding serial policy; it does not replace per-entry flags. [Uncache.scala:308](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:308>) [Uncache.scala:395](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:395>)
+
+~~~scala
+val q0_canSentVec = sizeMap(i =>
+  (io.enableOutstanding || uState === s_idle) &&
+  states(i).can2Bus()
+)
+mem_acquire.valid := q0_canSent && !io.wfi.wfiReq
+mem_acquire.bits := Mux(q0_isStore, q0_store, q0_load)
+~~~
+
+Loads use edge.Get and stores use edge.Put; <code>fromSource</code> is directly q0_canSentIdx, namely sid. A.fire marks the entry inflight and sets <code>noPending[sid]</code> false. <code>mem_acquire.valid</code> is suppressed by a WFI request, so WFI pauses at the A interface rather than deleting entries. [Uncache.scala:413](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:413>) [Uncache.scala:419](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:419>) [Uncache.scala:429](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:429>)
+
+### 7.2 TileLink D Response and One-Beat Assumption
+
+The D channel is always ready. At D.fire it uses <code>mem_grant.bits.source</code> to recover sid, updates data/error fields, clears inflight, sets waitReturn, and restores <code>noPending[sid]</code> true. Source requires <code>refill_done</code> and directly asserts that the Uncache response is one beat. A multi-beat downstream response would trigger the assertion rather than being assembled by this implementation. [Uncache.scala:456](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:456>)
+
+~~~scala
+mem_grant.ready := true.B
+when (mem_grant.fire) {
+  val id = mem_grant.bits.source
+  entries(id).update(mem_grant.bits)
+  states(id).updateUncacheResp()
+  noPending(id) := true.B
+  assert(refill_done)
+}
+~~~
+
+Only when this sid belongs to a store and denied or corrupt is set does UncacheImp assert <code>busError.ecc_error.valid</code>. Load denied/corrupt remains in UncacheWordResp and is mapped to exceptions by LoadQueueUncache. This output named ecc_error is not the sole error channel for all loads and stores. [Uncache.scala:477](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:477>) [LoadQueueUncache.scala:238](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:238>)
+
+### 7.3 r0 Return and Physical-Entry Release
+
+r0 likewise selects a can2Lsq entry with lower sid priority. <code>resp.valid</code> is high when an entry waits for return, but only <code>resp.fire</code> invokes <code>updateReturn</code> to clear valid, inflight, waitSame, and waitReturn. If the LSQ response pipe or its consumer backpressures, the entry remains waitReturn and consumes physical capacity even though its D response has arrived. [Uncache.scala:486](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:486>)
+
+~~~scala
+resp.valid := r0_canSent
+resp.bits := entries(r0_canSentIdx).toUncacheWordResp(r0_canSentIdx)
+when(resp.fire) {
+  states(r0_canSentIdx).updateReturn()
+}
+~~~
+
+## 8. Store-to-Load Forwarding and Alias Protection
+
+UncacheImp provides <code>LoadPipelineWidth</code> lanes of LoadForwardQueryIO. Candidates include only valid store entries. f0 uses a vaddr 8-byte-word CAM for a fast mask; f1 registers paddr and verifies physical-address matching. In f1, old inflight/waitReturn stores and new waitSame stores merge byte data through <code>doMerge</code>, so a load can observe the newest byte-overwrite relationship while same-word stores are serialized. [Uncache.scala:503](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:503>) [Uncache.scala:524](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:524>) [Uncache.scala:538](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:538>)
+
+~~~mermaid
+flowchart LR
+  Q[LoadForwardQueryIO valid vaddr] --&gt; F0[f0 vaddr word CAM]
+  S1[valid store entries] --&gt; F0
+  F0 --&gt;|old: inflight or waitReturn| O[old mask/data]
+  F0 --&gt;|new: waitSame| N[new mask/data]
+  O --&gt; M[byte-wise doMerge]
+  N --&gt; M
+  P[DTLB paddr] --&gt; F1[f1 paddr word CAM]
+  F1 --&gt;|same match set| R[forwardData and forwardMask]
+  F1 --&gt;|vaddr/paddr mismatch| D[set matchInvalid and request drain]
+~~~
+
+<code>f1_tagMismatch</code> means the f0 virtual-word match set differs from the f1 physical-word match set. It sets <code>forward.matchInvalid</code> and, while nonempty, sets <code>f1_needDrain</code>. <code>do_uarch_drain</code> then rejects new e0 requests until empty. This drain protects against using a wrong forwarding candidate under virtual-address aliasing; it does not directly clear the buffer. [Uncache.scala:249](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:249>) [Uncache.scala:251](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:251>) [Uncache.scala:515](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:515>) [Uncache.scala:550](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:550>)
+
+~~~scala
+f1_needDrain := f1_tagMismatchVec.asUInt.orR && !empty
+when((f1_needDrain || io.flush.valid) && !empty) {
+  do_uarch_drain := true.B
+}
+forward.matchInvalid := f1_tagMismatchVec(i)
+~~~
+
+No explicit assertion for one-hot forwarding candidates was found before this Mux1H. The e0 PopCount assertion applies to mergeVec, not forwarding-candidate uniqueness. Generated RTL or simulation should check old/new selection constraints and byte-coverage semantics for one forwarding query.
+
+## 9. Timing, Throughput, and Backpressure
+
+### 9.1 Effective Handshake Boundaries
+
+| Segment | Start | End | Fixed register boundary | Variable factors |
+|---|---|---|---|---|
+| LSQ to UncacheImp request | LSQ <code>io.uncache.req.fire</code> | UncacheImp <code>req.fire</code> | MemBlock AddPipelineReg | Upstream arbitration, pipeline-register occupancy, e0 req_ready |
+| Physical acceptance to ID acknowledgement | UncacheImp <code>req.fire</code> | <code>idResp.valid</code> | <code>RegNext(e0_fire)</code> | idResp has no ready; downstream must sample valid |
+| A request | Entry can2Bus | <code>mem_acquire.fire</code> | No fixed wait-cycle promise | q0 priority, enableOutstanding, uState, WFI, A.ready |
+| Bus wait | A.fire | D.fire | None | Downstream TL response time; source requires one D beat |
+| D to LSQ response | D.fire | LSQ <code>resp.fire</code> | MemBlock response AddPipelineReg | r0 priority and downstream ready |
+| Logical load writeback | Logical entry receives resp.fire | <code>mmioOut.fire</code> or <code>ncOut.fire</code> | AddPipelineReg | LDU writeback backpressure and redirect |
+
+Both q0 and r0 selection use <code>PriorityEncoderWithFlag</code>, so the physical layer has no round-robin policy. A best-case issue rate must not be presented as a fairness guarantee. With default <code>outstanding=false</code>, uState permits the next q0 only after the A.fire to D.fire to resp.fire loop completes. The best steady-state request-start interval is therefore constrained by completion of those three events; source does not fix actual D latency. [Uncache.scala:308](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:308>) [Uncache.scala:395](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:395>)
+
+### 9.2 Two Important Timing Sketches
+
+#### Ordinary NC/MMIO Physical Transaction
+
+~~~waveform-draw
+{
+  "signal": [
+    { "name": "clk", "wave": "p......" },
+    { "name": "lsq.req.valid", "wave": "01....." },
+    { "name": "lsq.req.ready", "wave": "01....." },
+    { "name": "req.fire/e0_fire", "wave": "010...." },
+    { "name": "idResp.valid", "wave": "0010..." },
+    { "name": "tl.a.valid", "wave": "0001..." },
+    { "name": "tl.a.ready", "wave": "1111111" },
+    { "name": "tl.a.fire", "wave": "00010.." },
+    { "name": "state.inflight", "wave": "0001110" },
+    { "name": "tl.d.valid", "wave": "0000010" },
+    { "name": "tl.d.ready", "wave": "1111111" },
+    { "name": "lsq.resp.valid", "wave": "0000001" }
+  ],
+  "head": { "text": "Illustration: A-to-D delay varies; idResp is Valid in the cycle after e0_fire" }
+}
+~~~
+
+#### Serial Gate in Non-Outstanding Mode
+
+~~~waveform-draw
+{
+  "signal": [
+    { "name": "clk", "wave": "p........" },
+    { "name": "enableOutstanding", "wave": "0........" },
+    { "name": "entry0 can2Bus", "wave": "01......." },
+    { "name": "entry1 can2Bus", "wave": "001......." },
+    { "name": "uState idle", "wave": "1......11" },
+    { "name": "A(entry0).fire", "wave": "010......" },
+    { "name": "D(entry0).fire", "wave": "00010...." },
+    { "name": "LSQ resp(entry0).fire", "wave": "0000010.." },
+    { "name": "A(entry1).fire", "wave": "000000010" }
+  ],
+  "head": { "text": "Illustration: entry1 waits for uState to return idle even when ready" }
+}
+~~~
+
+The first diagram does not state that D arrives in any fixed cycle. The second depicts causal gating, not an actual two-cycle D latency.
+
+## 10. Exceptions, WFI, Flush, Commit Visibility, and Difftest
+
+### 10.1 Layers of Error Propagation
+
+| Source | Physical UncacheImp | Logical/architectural continuation |
+|---|---|---|
+| TileLink D.denied | Records <code>resp_denied</code> and returns <code>UncacheWordResp.denied</code> | LoadQueueUncache sets loadAccessFault; StoreQueue MMIO sets storeAccessFault. |
+| TileLink D.corrupt | Records <code>resp_corrupt</code> | Without denied, load sets hardwareError; store follows the corresponding behavior. |
+| Store denied/corrupt | Also sets <code>busError.ecc_error</code> | This output covers only the store condition. |
+| Address/translation/PMP and related faults | Upstream LoadUnit/StoreUnit already classify and may raise an exception and kill DCache | They are not D-bus errors and must not be reclassified after entering Uncache. |
+
+LoadQueueUncache's exception output is valid at writeback and connects to the LoadQueue exceptionBuffer. Thus denied/corrupt architectural exceptions do not remain only in physical-buffer registers. [LoadQueueUncache.scala:238](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:238>) [LoadQueue.scala:284](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:284>)
+
+### 10.2 WFI and Flush
+
+<code>noPending</code> becomes false for a sid on A.fire and true on D.fire. <code>wfiSafe</code> requires all noPending bits true and <code>wfiReq</code> true, then passes through <code>GatedValidRegNext</code>. It proves only that no physical bus D response is in flight; it does not prove every waitReturn or waitSame entry has been released. MemBlock's final <code>wfiSafe</code> also ANDs DCache, LSQ, and PTW wfiSafe, so Uncache wfiSafe alone cannot prove the core may enter WFI. [Uncache.scala:433](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:433>) [Uncache.scala:481](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:481>) [MemBlock.scala:678](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:678>)
+
+<code>flush.valid</code> reaches Uncache through the SBuffer flush chain, and <code>empty</code> joins SBuffer empty to form <code>sbIsEmpty</code>. On flush, physical Uncache prevents new intake through <code>do_uarch_drain</code> and waits for empty; source does not iterate over entries/states and clear them directly on <code>flush.valid</code>. For already-issued side-effecting MMIO, correct behavior is drain, not speculative discard. [MemBlock.scala:1768](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1768>) [MemBlock.scala:1778](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1778>) [Uncache.scala:247](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:247>)
+
+LoadQueueUncache handles redirect more finely: idle/request can flush immediately; in <code>s_resp</code>, <code>needFlushReg</code> delays flush until a response arrives; <code>s_wait</code> returns idle on needFlush or writeback. It does not silently reuse a logical entry before a load response already in the physical layer returns. [LoadQueueUncache.scala:78](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:78>) [LoadQueueUncache.scala:128](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:128>)
+
+### 10.3 MMIO Ordering and Commit
+
+ROB records notifications from LoadQueue/StoreQueue in <code>robEntries(...).mmio</code>; it then derives <code>pendingMMIOld</code>, <code>pendingld</code>, <code>pendingst</code>, and <code>pendingPtr</code> from the commit head. An ordinary MMIO load in LoadQueueUncache is gated by <code>pendingld/pendingPtr</code>. StoreQueue's MMIO state reaches <code>s_req</code> only after <code>pendingst</code>, current deqPtr, allocated, data-valid, address-valid, and no-exception conditions. This confirms that MMIO execution is not the freely speculative path used by normal cacheable loads. [Rob.scala:556](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:556>) [Rob.scala:838](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:838>) [LoadQueueUncache.scala:122](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:122>) [StoreQueue.scala:845](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:845>)
+
+NC stores follow another path: they require committed, allocated, unfinished, address/data-valid, non-vector, no exception, and non-MMIO conditions. After slave acknowledgement in idResp, an enabled outstanding mode may return them to <code>nc_idle</code>; otherwise they wait for response. This acknowledgement is essential because source comments say an NC store first needs assurance that Uncache has accepted it so store-data forwarding can operate. [StoreQueue.scala:917](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:917>) [StoreQueue.scala:929](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:929>) [StoreQueue.scala:939](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:939>)
+
+### 10.4 Outstanding Control and Difftest
+
+CSR <code>smblockctl</code> bit 7 is <code>uncache_write_outstanding_enable</code>. It drives both UncacheImp <code>enableOutstanding</code> and LSQWrapper <code>uncacheOutstanding</code>; reset comes from EnableUncacheWriteOutstanding, whose default parameter is false. A software change to this CSR simultaneously changes physical q0 gating, LSQ pendingstate, and NC-store behavior, so validation must cover both settings. [CSR.scala:538](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:538>) [CSR.scala:554](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:554>) [MemBlock.scala:1398](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1398>)
+
+When <code>env.EnableDifftest</code> is enabled, UncacheImp emits <code>DiffUncacheMMStoreEvent</code> only for a store A.fire with <code>memBackTypeMM</code> true. This is an observation anchor for physical MMIO-store issue. The file contains no equivalent generic uncached-load Difftest event, so it cannot establish all architectural load-retirement comparison behavior. [Uncache.scala:445](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:445>)
+
+## 11. Cross-Boundary Code Analysis
+
+| Boundary | First fragment/stage | Second fragment/stage | Independent checks | Merge/order state | Fault and recovery |
+|---|---|---|---|---|---|
+| Virtual page | Load/Store Unit has vaddr plus TLB/PMP/PBMT results | Physical classification creates a paddr request | TLB miss, PMP, PBMT/PMA/MMIO, and existing exceptions | UncacheEntry keeps vaddr for forwarding and paddr for TileLink | Redirect records needFlush in LoadQueueUncache; forwarding vaddr/paddr-set mismatch drains. |
+| 8-byte word | Low-address byte mask | Later/merged mask for same word | Same word, command, NC, memBackTypeMM, legal mask | <code>doMerge</code> overwrites bytes; waitSame waits for earlier D before follower A | Illegal/nonmergeable same word drives e0 ready low; it is not automatic packet splitting. |
+| Cache line | No DCache tag/data/miss/refill main path | No second cache-line transaction | Not applicable: getBlockAddr uses an 8-byte word | No cache-line assembler or MSHR | DCache line-cross behavior must not be projected onto this module. |
+| MMIO/NC | LoadUnit/StoreUnit classify MMIO/NC | LoadQueueUncache/StoreQueue creates request | Load ROB-head gate; store commit/address/data checks | mid to sid mapping; sid is TL source; LSQ uses is2lq on return | denied/corrupt become exceptions; flush drains; full logical buffer rolls back. |
+| Misaligned and uncache | LoadMisalignBuffer receives the split access MMIO/NC flag | It does not send multiple fragments to physical Uncache and reassemble them | globalUncache is captured | Direct exception semantics, no uncache-fragment assembly | Address-misaligned exception path; not multiple freely split MMIO operations. |
+
+The last row has direct evidence: when either split load is marked uncache, LoadMisalignBuffer enters <code>s_wb</code>; comments delegate it to software <code>loadAddrMisaligned</code>, and writeback deasserts rfWen. Although the file retains cross-page exception-address overwrite registers, <code>overwriteExpBuf.valid</code> is hardwired false, so retained logic must not be described as a currently active cross-page exception overwrite function. [LoadMisalignBuffer.scala:183](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:183>) [LoadMisalignBuffer.scala:213](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:213>) [LoadMisalignBuffer.scala:561](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:561>) [LoadMisalignBuffer.scala:641](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadMisalignBuffer.scala:641>)
+
+For combined scenarios, check in this order: first per-fragment virtual address plus translation/permissions, then PMA/PBMT/MMIO/NC classification, then whether Uncache entry is allowed. For a split uncache load, current LoadMisalignBuffer behavior is an exception, not multiple-fragment convergence in physical UncacheImp.
+
+## 12. Verification Points Requiring Special Attention
+
+| Verification ID | Risk/invariant | Directed stimulus | Expected observation | Required checker/coverage |
+|---|---|---|---|---|
+| UB_RESET_FIRST | states reset to zero while entries do not; first req must not read stale payload | Legal first M_XRD, then first M_XWR after reset | Only the req.fire sid becomes valid; idResp valid arrives next cycle; invalid entries do not affect q0/r0 | FSM and occupancy checkers; e0_alloc_simple coverage |
+| UB_HOLD_REQ | req.valid with e0_reject must not be accepted | Fill all 16 physical entries, or make a same-word nonmergeable request; hold req.valid | req.ready=0, e0_fire=0, entries/states/idResp unchanged | Handshake and storage-conflict checkers |
+| UB_MERGE_MASK | Merge cannot lose bytes or create illegal lgSize | Same-word, same-cmd, same-NC, same-memBackTypeMM partial-byte stores; cover 1/2/4/8-byte masks | New mask overwrites data, masks OR, address aligns to low set byte, A lgSize matches PopCount | Data scoreboard, assertions, e0_merge coverage |
+| UB_SAMEWORD_ORDER | A follower for one word must not A.fire before the earlier D.fire | Issue a store, then create a mergeable/following same-word entry while it is inflight | Follower waitSame=1; earlier D.fire clears it; only then follower A.fire | FSM checker, ordering scoreboard, progress checker |
+| UB_A_D_SID | TL source and D source identify exactly one sid | Multiple different words, outstanding=1, D responses returned out of order | A.fromSource=sid; D.source updates same entry; one-beat assertion holds; every sid enters waitReturn once | ID scoreboard, TL protocol checker, C_SAME_ENTRY_RW |
+| UB_RESP_BACKPRESSURE | D-to-LSQ backpressure cannot release early | Hold r0 downstream ready low while multiple D responses return | waitReturn entry stays valid; only resp.fire frees it; no duplicate resp | Handshake/occupancy checkers, PB_BACKPRESSURE_AMPLIFICATION |
+| UB_FWD_ALIAS_DRAIN | A virtual-to-physical CAM mismatch must prohibit wrong forwarding and drain | f0 virtual same-word but f1 physical mismatch, with nonempty buffer | matchInvalid=1; f1_needDrain=1; new e0 rejected until empty | Alias, flush/drain, and P_DEADLOCK_ALL_STALL checkers |
+| UB_FLUSH_INFLIGHT | Flush drains rather than clears in-flight side effects | Assert flush.valid after A.fire but before D, while upstream holds req.valid | do_uarch_drain blocks new acceptance; in-flight D reaches r0; drain ends after empty | Flush/replay and progress checkers |
+| UB_WFI | wfiSafe means noPending all true, not necessarily buffer empty | Create a waitReturn entry after D, then assert wfiReq | Observe difference between noPending and states.valid; system wfiSafe still depends on DCache/LSQ/PTW | WFI property, cross-module scoreboard |
+| LQU_MMIO_HEAD | MMIO load cannot issue before ROB head | Two MMIO loads, younger ready first; vary pendingPtr | Only robIdx==pendingPtr logical entry enters s_req; NC may differ | ROB-order and arbiter checkers |
+| LQU_FULL_ROLLBACK | Full logical load buffer must recover the oldest unchecked load | Fill LoadUncacheBufferSize and submit multiple MMIO/NC lanes | reqNeedCheck selects oldest by ROB age; requests already flushed by redirect do not emit rollback | Rollback checker, age scoreboard, PB_RECOVERY_THROUGHPUT |
+| UB_OUTSTANDING_MODE | CSR bit 7 changes serialization and return timing | Cover smblockctl bit7=0/1, NC stores, multiple different words | 0 enforces uState serial loop; 1 permits several A in flight and LSQWrapper may remain idle for NC | Configuration coverage, throughput checker, ID scoreboard |
+
+Implementation anchors are [Uncache.scala:338](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:338>), [Uncache.scala:395](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:395>), [Uncache.scala:456](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:456>), [Uncache.scala:503](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:503>), [LoadQueueUncache.scala:552](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:552>), and [CSR.scala:568](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:568>).
+
+## 13. Two Complete Operation Paths
+
+### 13.1 Ordinary NC Load with a Successful Physical Response
+
+1. LoadUnit completes relevant address-attribute checks in S2, derives <code>s2_uncache</code>, and suppresses expected DCache response/activity.
+2. LoadQueueUncache receives the MMIO/NC load in S2 and allocates a logical entry when no exception/replay/redirect applies. An NC request does not wait for <code>pendingPtr</code>.
+3. LSQWrapper arbitrates it with StoreQueue and sends the request into the MemBlock request elastic register.
+4. On <code>req.fire</code>, UncacheImp e0 allocates or merges a physical sid; a Valid idResp in the following cycle lets the logical entry record <code>slaveId=sid</code>.
+5. q0 selects the can2Bus entry. A.fire marks it inflight; other entries for the same 8-byte word become waitSame.
+6. D.fire returns data/error with <code>source=sid</code>, moves the entry to waitReturn, and clears waitSame on same-word followers.
+7. Only r0 <code>resp.fire</code> releases physical sid. LSQWrapper uses is2lq to send it to LoadQueueUncache, which enters s_wait and writes data/possible exception through ncOut.
+8. <code>ncOut.fire</code> releases the logical entry. Physical sid and logical mid need not be released in the same cycle.
+
+### 13.2 Same-Word Store-Forwarding Alias Protection and Drain
+
+1. An NC store has been accepted by physical UncacheImp and is a valid forwarding candidate, possibly inflight or waitReturn.
+2. LoadForwardQueryIO uses a virtual-address word CAM in f0 to obtain a fast candidate mask.
+3. f1 receives DTLB paddr and rechecks with a physical-address CAM. If its candidate set differs from f0, matchInvalid is asserted.
+4. <code>f1_needDrain</code> raises <code>do_uarch_drain</code> while nonempty; e0 rejects new requests while existing entries drain through A/D/r0.
+5. After empty, do_uarch_drain deasserts and new requests may resume. This protects forwarding correctness, but source does not specify its maximum duration because it depends on bus D timing and r0 consumer ready.
+
+## 14. Summary and Open Verification Questions
+
+Confirmed active behavior:
+
+- UncacheImp is an independent 16-entry TileLink client through <code>d_mmio_port</code>, not the L1D main pipeline.
+- The physical layer uses sid both as TileLink source and <code>UncacheWordResp.id</code>; the logical load layer uses mid for uop/ROB/exception state, and idResp establishes mid-to-sid.
+- Merge and same-address ordering use an 8-byte XLEN word. Mask merge has explicit contiguous-aligned constraints, and same-word followers wait for the earlier D through waitSame.
+- Outstanding defaults false and is controlled at runtime by smblockctl bit 7; the bit affects physical q0, LSQWrapper, and NC-store behavior together.
+- Flush drains instead of clearing in-flight transactions; noPending for WFI does not equal physical buffer empty.
+- Load denied/corrupt becomes loadAccessFault/hardwareError in LoadQueueUncache; corresponding store errors also trigger physical busError output.
+
+Questions still requiring elaboration, generated RTL, or waveforms:
+
+1. Source has no dedicated assertion for Mux1H forwarding-candidate uniqueness. Cover multiple same-word store candidates.
+2. Fixed lower-sid priority is confirmed by the helper, but the system-level starvation boundary under sustained input/response backpressure needs dynamic proof.
+3. Exact minimum/maximum cycles from AddPipelineReg and cross-layer ready combinations require waveform measurement; static source proves only register boundaries and stall conditions.
+4. The actual timing of downstream TileLink denied/corrupt, source IDs, and D-response out-of-order range lies outside this module and needs SoC integration simulation.
+
 ## 4. 请求从分类到物理条目的路径
 
 ### 4.1 LoadUnit 与 StoreUnit 先做真实物理属性分类
@@ -228,15 +613,15 @@ MemBlock 在 LSQWrapper 与物理 UncacheImp 两端各插入一个 AddPipelineRe
 
 ~~~mermaid
 stateDiagram-v2
-  [*] --> Free
-  Free --> Ready: req.fire and allocate
-  Ready --> Ready: req.fire and merge
-  Ready --> WaitSame: earlier same-word entry sends A
-  WaitSame --> Ready: earlier same-word D fire
-  Ready --> Inflight: TileLink A fire
-  Inflight --> WaitReturn: TileLink D fire
-  WaitReturn --> Free: LSQ resp.fire
-  WaitSame --> Free: response path then LSQ resp.fire
+  [*] --&gt; Free
+  Free --&gt; Ready: req.fire and allocate
+  Ready --&gt; Ready: req.fire and merge
+  Ready --&gt; WaitSame: earlier same-word entry sends A
+  WaitSame --&gt; Ready: earlier same-word D fire
+  Ready --&gt; Inflight: TileLink A fire
+  Inflight --&gt; WaitReturn: TileLink D fire
+  WaitReturn --&gt; Free: LSQ resp.fire
+  WaitSame --&gt; Free: response path then LSQ resp.fire
 ~~~
 
 | 谓词 | 精确定义 | 谁使用 | 意义 |
@@ -361,15 +746,15 @@ UncacheImp 自己提供 LoadPipelineWidth 路 LoadForwardQueryIO。候选只包�
 
 ~~~mermaid
 flowchart LR
-  Q[LoadForwardQueryIO valid vaddr] --> F0[f0 vaddr word CAM]
-  S1[valid store entries] --> F0
-  F0 -->|old: inflight or waitReturn| O[old mask/data]
-  F0 -->|new: waitSame| N[new mask/data]
-  O --> M[byte-wise doMerge]
-  N --> M
-  P[DTLB paddr] --> F1[f1 paddr word CAM]
-  F1 -->|same match set| R[forwardData and forwardMask]
-  F1 -->|vaddr/paddr mismatch| D[set matchInvalid and request drain]
+  Q[LoadForwardQueryIO valid vaddr] --&gt; F0[f0 vaddr word CAM]
+  S1[valid store entries] --&gt; F0
+  F0 --&gt;|old: inflight or waitReturn| O[old mask/data]
+  F0 --&gt;|new: waitSame| N[new mask/data]
+  O --&gt; M[byte-wise doMerge]
+  N --&gt; M
+  P[DTLB paddr] --&gt; F1[f1 paddr word CAM]
+  F1 --&gt;|same match set| R[forwardData and forwardMask]
+  F1 --&gt;|vaddr/paddr mismatch| D[set matchInvalid and request drain]
 ~~~
 
 f1_tagMismatch 代表“f0 的虚拟 word 匹配集合”与“f1 的物理 word 匹配集合”不同。它使 forward.matchInvalid 有效，并与 nonempty 共同置 f1_needDrain；do_uarch_drain 随后使 e0 拒绝新请求，直到 empty。该 drain 是避免错误虚拟地址别名下使用错误前递候选的保护，而不是一次直接清空 buffer 的操作。[Uncache.scala:249](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:249) [Uncache.scala:251](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:251) [Uncache.scala:515](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:515) [Uncache.scala:550](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:550)
@@ -548,3 +933,171 @@ UncacheImp 在 env.EnableDifftest 时只为 A.fire 的 store 且 memBackTypeMM �
 2. 低 sid 固定优先级已由 helper 证实，但在持续输入/response backpressure 下的系统级饥饿边界需要动态证明。
 3. AddPipelineReg 与跨层 ready 组合形成的精确最小/最大周期数需要波形测量；静态源码只证明寄存器边界和阻塞条件。
 4. TileLink 下游对 denied/corrupt 与 source ID 的实际产生时机、D 响应乱序范围属于本模块边界外，需要在 SoC 集成仿真中核对。
+<!-- END ORIGINAL CHINESE -->
+
+# XiangShan Kunminghu V2: UncacheBuffer Source-Code Analysis
+
+> **Conclusion first:** data-side uncached accesses in Kunminghu V2 do not use the L1 DCache main data path. The physical UncacheBuffer is <code>UncacheImp</code> in [Uncache.scala](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:207). It keeps one XLEN-wide request from the LSQ in a physical entry, sends it to the data-MMIO port using its physical-entry number as the TileLink source ID, and returns it to the LSQ after the TileLink D response. <code>LoadQueueUncache</code> is an upstream logical load buffer. The two connect through an acknowledgement mapping from <code>mid</code> (logical entry ID) to <code>sid</code> (physical UncacheBuffer entry ID); they must not be conflated as one queue.
+>
+> This document reports only behavior supported by static source inspection. No RTL was generated and no simulation or FST was run. WaveDrom diagrams therefore depict valid/ready/register relationships inferred from Chisel, not measured waveforms.
+
+## 1. Scope, Version, and Evidence Boundary
+
+| Item | Scope used here |
+|---|---|
+| Primary object | Physical UncacheBuffer: <code>Uncache</code> and <code>UncacheImp</code> |
+| Main source | [Uncache.scala](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:32>) |
+| Upstream context | MemBlock, LSQWrapper, LoadQueueUncache, StoreQueue, LoadUnit, StoreUnit, and ROB |
+| Downstream boundary | Uncache TileLink A/D, ending at the XSTile data-MMIO port. The L2/device-internal implementation is not inferred. |
+| Source tree | <code>/home/yanyusong/xs-memory-env/XiangShan</code> |
+| Source baseline | Branch <code>kunminghu-v2</code>, commit <code>e12436c7cba86b195deec24981976d78bc263661</code> |
+| Active configuration | KunminghuV2Config inherits DefaultConfig; no override of UncacheBufferSize or LoadUncacheBufferSize was found. |
+| Design-document baseline | Not consulted. <code>/home/yanyusong/XiangShan-Design-Doc</code> does not exist locally, so design-document descriptions are not implementation evidence. |
+| Theory material | Course [14_LoadStore.md](</home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:311>) explains LSQ submodule placement; behavioral conclusions return to this source baseline. |
+| Worktree note | The source tree already had changes under <code>difftest</code> and untracked <code>src/main/resources/aia/</code> content. This analysis did not alter it. |
+| Weekly synchronization check | The skill's weekly synchronization found less than seven days since the previous run, skipped synchronization, and performed no fetch, pull, or destructive action. |
+| Waveform boundary | No FST was available for comparison. Cycle counts describe register boundaries and variable handshakes only, never fixed bus round-trip latency. |
+
+### 1.1 Design-Document and Code Traceability
+
+| ID | Design claim | Design-document evidence | Source evidence | Conclusion |
+|---|---|---|---|---|
+| D0 | Overall Uncache intent | Local checkout missing; not consulted | Not applicable | Implementation is not inferred from design documentation. |
+| C1 | The physical buffer is an independent TileLink client | Not applicable | [Uncache.scala:191](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:191>) | Code confirmed |
+| C2 | Data-MMIO and L1D-to-L2 are different connections | Not applicable | [MemBlock.scala:261](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:261>), [XSTile.scala:65](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/XSTile.scala:65>), [XSTile.scala:94](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/XSTile.scala:94>) | Code confirmed |
+| C3 | Logical load entries and physical entries use two IDs | Not applicable | [DCacheWrapper.scala:535](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:535>), [LoadQueueUncache.scala:466](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:466>) | Code confirmed |
+
+No local Design Doc was available for comparison, so none of the claims below is described as design-document verified. Functional statements are grounded in the named Chisel sources.
+
+## 2. Distinguish Three Similarly Named Layers First
+
+### 2.1 Physical UncacheBuffer, Logical LoadQueueUncache, and StoreQueue Are Different Structures
+
+| Layer | Instance/file | Primary retained state | Purpose | Release condition |
+|---|---|---|---|---|
+| Physical transport layer | <code>UncacheImp</code>, Uncache.scala | XLEN data, mask, paddr/vaddr, TL response, valid/inflight/waitSame/waitReturn | Merge same-XLEN-word NC requests, issue TileLink, and return one physical sid | LSQ accepts <code>UncacheWordResp</code>, namely <code>resp.fire</code> |
+| Load-semantics layer | <code>LoadQueueUncache</code>, LoadQueueUncache.scala | Logical load uop, ROB relation, exceptions, slaveId, s_idle/s_req/s_resp/s_wait | Send MMIO only at the ROB head; return NC-load data/exceptions to LDU | <code>mmioOut.fire</code>, <code>ncOut.fire</code>, or redirect flush |
+| Store-semantics layer | <code>StoreQueue</code>, StoreQueue.scala | Allocated stores, committed/address/data-valid state, MMIO/NC state | Send an MMIO/NC store only after the code-specified commit conditions | MMIO completes and commits, or the SQ lifetime ends after an NC response |
+
+At the top level, <code>LoadQueue</code> explicitly instantiates <code>LoadQueueUncache</code>; it does not connect every LoadUnit directly to physical UncacheImp. The subsequent connection attaches the uncache interface to the LSQ boundary. [LoadQueue.scala:214](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueue.scala:214>)
+
+~~~scala
+val uncacheBuffer = Module(new LoadQueueUncache)
+uncacheBuffer.io.uncache <> io.uncache
+io.nack_rollback(0) := uncacheBuffer.io.rollback
+~~~
+
+The physical module instead uses <code>UncacheBufferSize</code> Reg entries and an independent state vector, not the LoadQueueUncache state machine as storage state. [Uncache.scala:241](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:241>)
+
+~~~scala
+val entries = Reg(Vec(UncacheBufferSize, new UncacheEntry))
+val states = RegInit(VecInit(Seq.fill(UncacheBufferSize)(
+  0.U.asTypeOf(new UncacheEntryState))))
+~~~
+
+Accordingly, UncacheBuffer in this document means physical <code>UncacheImp</code> unless a discussion explicitly says <code>LoadQueueUncache</code> for load precise-retirement or exception semantics.
+
+### 2.2 End-to-End Topology and Responsibilities
+
+~~~mermaid
+flowchart LR
+  LDU[LoadUnit] -->|classified mmio/nc load| LQU[LoadQueueUncache]
+  SQ[StoreQueue] -->|committed/eligible mmio/nc store| LSQ[LSQWrapper]
+  LQU --> LSQ
+  LSQ -->|UncacheWordReq: mid| MB[MemBlock pipeline register]
+  MB -->|UncacheWordReq| UB[UncacheImp physical entries]
+  UB -->|TileLink A: source=sid| DMMIO[data-MMIO TL port]
+  DMMIO -->|TileLink D: source=sid| UB
+  UB -->|UncacheWordResp: id=sid| MB
+  MB --> LSQ
+  LSQ -->|is2lq route| LQU
+  LQU -->|mmioOut or ncOut| LDU
+  LSQ -->|store response| SQ
+  UB -->|store-data forwarding| LDU
+~~~
+
+L1D is deliberately absent from this Uncache main path. MemBlock instantiates DCacheWrapper and Uncache separately; the Uncache client goes through <code>uncache_xbar</code> and TLBuffer to <code>uncache_port</code>, and XSTile connects that port to <code>d_mmio_port</code>. The L1D client instead connects to <code>l1d_to_l2_buffer</code>. [MemBlock.scala:257](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:257>) [MemBlock.scala:286](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:286>) [XSTile.scala:65](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/XSTile.scala:65>) [XSTile.scala:99](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/XSTile.scala:99>)
+
+~~~scala
+uncache_xbar := TLBuffer() := uncache.clientNode
+uncache_port := TLBuffer.chainNode(2) := uncache_xbar
+l2top.inner.d_mmio_port := memBlock.uncache_port
+~~~
+
+### 2.3 Main-Module Contract: Who, Why, How, From, and To
+
+| Object | Who | Why | How | From | To |
+|---|---|---|---|---|---|
+| LoadUnit / StoreUnit classification point | Memory-execution pipelines produce and update classification | Separates cacheable, MMIO, PBMT NC, permission, and misalignment cases | S2 TLB/PMP/PBMT conditions and kill signals | Translated address, PMP, and uop NC/MMIO/exception fields | DCache or the subsequent LSQ/LoadQueueUncache path |
+| LoadQueueUncache entry | Owned and released by LoadQueue | Retains a load's ROB, writeback, and exception semantics; a pure bus slot cannot do this | FreeList allocation; s_idle/s_req/s_resp/s_wait; needFlushReg | S3 LqWriteBundle, ROB-pending information, and idResp | UncacheWordReq, ncOut/mmioOut, exception, rollback |
+| LSQWrapper uncache arbiter | LSQWrapper selects and routes returns | Coordinates load/store sharing of the physical Uncache interface | s_idle/s_load/s_store, ROB-age comparison, is2lq route | LoadQueue/StoreQueue requests and Uncache resp/idResp | MemBlock uncache request/response endpoints |
+| UncacheImp entry | Updated and physically owned by UncacheImp | Separates a sendable bus transaction from occupancy before return; supports same-word merge/order | e0 allocation/merge, q0 A issue, D update, r0 release | LSQ UncacheWordReq and TileLink D | TileLink A, LSQ UncacheWordResp, and Load forwarding |
+| Data-MMIO TileLink endpoint | Connected by XSTile | Hands non-cacheable data access to external MMIO/uncache fabric | sid as source with A/D valid-ready | Uncache clientNode | d_mmio_port; analysis ends here |
+
+## 3. Parameters, Address Granularity, and Interface Contract
+
+### 3.1 Effective Capacity and ID Width
+
+| Parameter/quantity | Effective value | Source | Effect |
+|---|---:|---|---|
+| XLEN | 64 | [Configs.scala:40](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:40>) | One physical entry retains 64-bit data with an 8-bit mask. |
+| UncacheBufferSize | 16 | [Parameters.scala:236](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:236>) | Sixteen physical entries; TileLink source-ID range is [0,16). |
+| UncacheBufferIndexWidth | 4 | <code>log2Up(16)</code> | Width of sid and <code>UncacheWordResp.id</code>. |
+| LoadUncacheBufferSize | 16 | [Parameters.scala:172](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:172>) | Number of logical LoadQueueUncache entries; it is not the source definition of physical-entry count. |
+| LoadPipelineWidth | 3 | [Parameters.scala:214](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:214>) | LoadQueueUncache observes up to three load requests in one cycle and provides the associated writeback-port structure. |
+| Default outstanding setting | false | [Parameters.scala:243](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/Parameters.scala:243>) | Reset value of smblockctl bit 7 is 0 unless software changes the CSR. |
+
+KunminghuV2Config overlays L2 settings and a CHI switch on DefaultConfig but does not override the two Uncache sizes above, so XSCoreParameters defaults apply. [Configs.scala:460](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:460>) [Configs.scala:481](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:481>)
+
+### 3.2 Block Here Does Not Mean a Cache Line
+
+In Uncache.scala, <code>BLOCK_OFFSET</code> is <code>log2Up(XLEN / 8)</code>. With XLEN=64 it is 3, so <code>getBlockAddr</code> removes the low three address bits; every <code>addrMatch</code> compares that result. Therefore, the same block in merging, <code>waitSame</code>, and the forwarding CAM is one 8-byte XLEN word, not a 64-byte DCache line. [Uncache.scala:32](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:32>) [Uncache.scala:269](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:269>)
+
+~~~scala
+def BLOCK_OFFSET = log2Up(XLEN / 8)
+def getBlockAddr(x: UInt) = x >> BLOCK_OFFSET
+def addrMatch(x: UncacheEntry, y: UncacheWordReq) =
+  getBlockAddr(x.addr) === getBlockAddr(y.addr)
+~~~
+
+Entry merging is bytewise overwrite: every byte selected by the new mask replaces old data, masks are ORed, and the merged address/vaddr are realigned to the least-significant set byte of the result mask. A sendable mask must be a nonzero, contiguous, naturally aligned 1/2/4/8-byte region; issue uses <code>PopCount(mask)</code> to form TileLink <code>lgSize</code>. Any parameter or mask-generation change must revalidate both constraints. [Uncache.scala:34](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:34>) [Uncache.scala:88](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:88>) [Uncache.scala:276](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:276>) [Uncache.scala:404](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:404>)
+
+### 3.3 The Two ID Domains of UncacheWordIO
+
+| Field | Producer | Consumer | Meaning |
+|---|---|---|---|
+| UncacheWordReq.id | LoadQueueUncache or StoreQueue | Read when UncacheImp accepts it | Upstream logical-owner <code>mid</code>; for a load it is the LoadQueueUncache entryIndex. |
+| UncacheIdResp.mid | UncacheImp | Received by LoadQueueUncache/StoreQueue after LSQWrapper routing | The upstream logical ID echoed unchanged. |
+| UncacheIdResp.sid | UncacheImp | Upstream logical entry | Allocated or merged physical UncacheImp slot. |
+| UncacheWordResp.id | UncacheImp | LSQWrapper and then upstream logical entry | Physical <code>sid</code>, not original mid. |
+| UncacheWordResp.is2lq | UncacheImp | LSQWrapper | True for <code>M_XRD</code>, choosing return to the load or store side. |
+| UncacheWordResp.nc | UncacheImp | StoreQueue and related consumers | Preserves NC/MMIO classification. |
+
+Bundle definitions directly show that req.id has <code>uncacheIdxBits</code> width, whereas idResp.mid, sid, and resp.id belong to distinct ID domains. [DCacheWrapper.scala:535](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:535>) [DCacheWrapper.scala:556](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:556>) [DCacheWrapper.scala:563](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/DCacheWrapper.scala:563>)
+
+~~~scala
+val id   = UInt(uncacheIdxBits.W)
+val mid = UInt(uncacheIdxBits.W)
+val sid = UInt(UncacheBufferIndexWidth.W)
+val id  = UInt(UncacheBufferIndexWidth.W)
+~~~
+
+The physical layer produces a Valid-form <code>idResp</code> in the cycle after <code>req.fire</code>. It has no ready, so a consumer must sample mid/sid when valid; an idResp backpressure channel must not be invented. [Uncache.scala:376](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:376>)
+
+~~~scala
+io.lsq.idResp.valid := RegNext(e0_fire)
+io.lsq.idResp.bits.mid := RegEnable(e0_req.id, e0_fire)
+io.lsq.idResp.bits.sid := RegEnable(e0_sid, e0_fire)
+~~~
+
+One physical merge need not map one logical mid to one sid. Every upstream request accepted by <code>req.fire</code> receives its own idResp; requests merged into one physical slot receive the same sid. LoadQueueUncache first sends idResp to the logical entry selected by mid, then delivers one physical response to all logical entries where <code>slaveId==resp.id</code>. Response wiring is conditional sid broadcast, not return to one permanently selected load entry. [LoadQueueUncache.scala:466](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:466>) [LoadQueueUncache.scala:471](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:471>)
+
+~~~scala
+when(i.U === io.uncache.idResp.bits.mid) {
+  e.io.uncache.idResp <> io.uncache.idResp
+}
+when(e.io.slaveId.valid &&
+  e.io.slaveId.bits === io.uncache.resp.bits.id) {
+  e.io.uncache.resp <> io.uncache.resp
+}
+~~~

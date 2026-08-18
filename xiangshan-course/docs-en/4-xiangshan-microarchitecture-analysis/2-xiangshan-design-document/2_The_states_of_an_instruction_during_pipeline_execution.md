@@ -1,3 +1,4 @@
+<!--
 # 2. 一条指令在流水线执行过程中的状态
 
 :::warning
@@ -229,5 +230,231 @@ object InstState extends Enumeration {
 * 所有指令状态均对应源码枚举定义，是硬件调度逻辑的核心依据
 
 
-> 更新: 2026-06-26 17:44:49  
+> 更新: 2026-06-26 17:44:49
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/vm64o6wq5agtckwp>
+-->
+
+# 2. Instruction States During Pipeline Execution
+
+:::warning
+
+## **Learning objectives**
+
+* 🧭 Understand the complete stage breakdown of the XiangShan pipeline and build a global view of instruction execution.
+* 📋 Master the complete state-transition path of one instruction from fetch through writeback.
+* 🔍 Distinguish normal execution, stalls, replay, flushes, and other special instruction states.
+* 🗺️ Relate pipeline-state fields to the source code and develop an implementation-oriented understanding.
+
+:::
+
+## 2.1 Core View of Pipeline Instruction States
+
+When first learning XiangShan's out-of-order pipeline, it is easy to confuse a pipeline stage with an instruction state. A pipeline stage describes the hardware workflow, whereas an instruction state is a lifecycle marker belonging to the instruction itself. They are related, but not equivalent.
+
+:::info
+**Why study instruction states separately?**
+
+XiangShan supports out-of-order execution, replay, exception flushes, and branch-prediction recovery. An instruction therefore does not always advance at a uniform rate: it can stall, roll back, or execute again. Its state is the basis for scheduling, conflict detection, exception handling, and pipeline repair.
+
+*A simple analogy: the pipeline is a factory conveyor belt divided into fixed workstations; the instruction state is the progress label on each work order, such as waiting, in progress, paused, reworked, complete, or cancelled. The workstation determines the current operation, while the label determines later scheduling.*
+
+:::
+
+### 2.1.1 XiangShan's Basic Pipeline (Nanhu)
+
+The Nanhu architecture uses a classic out-of-order superscalar pipeline. It is divided into five major modules: frontend fetch, frontend decode, backend out-of-order execution, memory access, and writeback. All instruction-state transitions rely on this structure:
+
+**IF (fetch) → Pre-Decode → Decode → Rename → Dispatch → Issue → Execute → Memory → Writeback**
+
+In an ordinary in-order pipeline, instructions advance one stage at a time without returning to an earlier state. In XiangShan's out-of-order pipeline, an instruction can execute independently after dispatch, so its state transitions are more flexible and complex.
+
+## 2.2 Standard States in an Instruction's Lifetime
+
+Based on the XiangShan source definitions and pipeline behavior, the complete lifetime is divided into six groups: initial, frontend-flow, backend-waiting, execution, finalization, and terminal states. Together they cover every situation from loading an instruction to finishing execution.
+
+### 2.2.1 Quick reference for basic states
+
+| **State category** | **State name** | **Pipeline stage** | **Main behavior and characteristics** | **Interruptible?** |
+| --- | --- | --- | --- | --- |
+| Initial | S\_IDLE (idle, not loaded) | Pipeline idle, before IF | The PC has not addressed the instruction; no hardware resource is occupied | No |
+| Frontend flow | S\_IF (fetching) | IF fetch | Read the instruction from the ICache using the PC and fill the instruction buffer; an ICache miss may occur | Yes (branch flush or ICache exception) |
+| Frontend flow | S\_PREDEC (predecode) | Pre-Decode | Identify the instruction class, preliminarily predict branches, perform simple legality checks, and filter invalid instructions | Yes (misprediction flush) |
+| Frontend flow | S\_DEC (decoded) | Decode | Parse the instruction, split complex instructions, and identify operation types and source/destination registers | Yes (global pipeline flush) |
+| Backend waiting | S\_RENAME (renamed) | Rename | Remove false register dependencies and map architectural registers to physical registers | Yes |
+| Backend waiting | S\_DISP (waiting for dispatch) | Dispatch | Send the instruction to the proper reservation station; wait for operands and an issue slot while occupying station resources | Yes (exception or flush) |
+| Execution | S\_ISSUE (issue/execute) | Issue + Execute | Issue to a functional unit when operands are ready and perform arithmetic, logical, or branch operations | Partly (memory instructions can replay) |
+| Memory | S\_MEM (memory access) | Memory | Access the DCache and translate addresses through the TLB for Load/Store instructions; handle hits and misses | Yes (miss or address exception can trigger replay) |
+| Finalization | S\_WB (writing back) | Writeback | Write the result to the physical register and release pipeline resources | No (finalization stage) |
+| Terminal | S\_DONE (complete) | Pipeline idle/reset | Execution is finished, no resources are occupied, and the pipeline can accept a new instruction | No |
+
+### 2.2.2 Standard transition path (no conflicts)
+
+With no cache miss, branch error, data conflict, or exception, a single instruction advances one way through the states without rollback or stalls:
+
+`S_IDLE → S_IF → S_PREDEC → S_DEC → S_RENAME → S_DISP → S_ISSUE → S_MEM → S_WB → S_DONE`
+
+The following ASCII diagram shows the per-cycle progression:
+
+```plain
+Cycle 1: [S_IDLE] → fetch triggered → S_IF
+Cycle 2: S_IF → predecode complete → S_PREDEC
+Cycle 3: S_PREDEC → decode complete → S_DEC
+Cycle 4: S_DEC → register rename → S_RENAME
+Cycle 5: S_RENAME → dispatched to reservation station → S_DISP
+Cycle 6: operands ready → issue and execute → S_ISSUE
+Cycle 7: memory instruction completes data access → S_MEM
+Cycle 8: result written to register → S_WB
+Cycle 9: resources released, instruction finished → S_DONE
+```
+
+## 2.3 Special Instruction States (Advanced)
+
+The ideal path exists only in a theoretical case. In practice, XiangShan frequently stalls, replays, flushes, or terminates on an exception. These four special states are central to debugging and source-code reading.
+
+### 2.3.1 S\_STALL (pipeline stall)
+
+When a data dependency, a busy functional unit, or an unavailable frontend instruction occurs, the instruction enters the stall state. The pipeline stage does not advance; the instruction remains at its current node, retains its existing resources, and waits for the conflict to clear.
+
+:::warning
+**Performance note**: Stalls are a major source of CPU performance loss. Several consecutive stall cycles reduce IPC (instructions per cycle), so practical optimization focuses on removing unnecessary stalls.
+
+:::
+
+### 2.3.2 S\_REPLAY (waiting for replay)
+
+Replay is a defining feature of XiangShan's non-blocking pipeline, especially for Load/Store instructions. On a DCache miss, TLB miss, or memory exception, the instruction does not simply fail. It enters S\_REPLAY, keeps its context in a reservation station, and is issued again when resources are ready, without blocking unrelated instructions.
+
+:::warning
+**Background**: The XiangShan load pipeline is non-blocking and can reissue instructions from a reservation station. Replaying one memory instruction does not stop overall pipeline throughput, a key distinction from an in-order processor.
+
+:::
+
+### 2.3.3 S\_FLUSH (flushed/cancelled)
+
+On a branch misprediction, system exception, or interrupt, the pipeline triggers a global flush and all incomplete instructions enter S\_FLUSH. They are cancelled, their execution is terminated, all resources are released, and the pipeline is reset to idle before fetching again from the correct PC.
+
+:::warning
+**Common pitfall**: A stall is a temporary pause that preserves context and can resume; a flush cancels the instruction, discards its context, and cannot be resumed.
+
+:::
+
+### 2.3.4 S\_EXC (exception pending)
+
+An address fault, illegal instruction, or permission fault during execution enters S\_EXC. Execution pauses, normal pipeline progress stops, and hardware records the exception context while the kernel handler responds. The pipeline is then resumed or the instruction is terminated.
+
+### 2.3.5 Three top-level execution paths
+
+From a global scheduling perspective, every XiangShan instruction follows one of three mutually exclusive, collectively exhaustive paths: **Normal Path**, **Speculative Path**, or **Exception Path**. They cover every scenario from execution through completion and provide a top-level model for scheduling, performance loss, and recovery.
+
+*Analogy: Normal Path is a road with green lights; Speculative Path is taking a route based on an early forecast and turning back if it is wrong; Exception Path is stopping to handle a fault before continuing or ending the trip.*
+
+#### 1. Normal Path
+
+Normal Path is the ideal path with no conflicts, mispredictions, cache misses, or exceptions. The instruction follows the standard states in one direction, without stalls, rollback, or flush, and the pipeline reaches its highest throughput.
+
+**Main characteristics**:
+
+* All branch predictions are correct.
+* ICache and DCache accesses hit, so no memory replay is needed.
+* No data or resource conflicts prevent continuous progress.
+* The state advances directly to S\_DONE.
+
+**Complete path**:
+
+`S_IDLE → S_IF → S_PREDEC → S_DEC → S_RENAME → S_DISP → S_ISSUE → S_MEM → S_WB → S_DONE`
+
+This is the pipeline's best-case baseline. Performance optimization aims to keep as many instructions as possible on Normal Path.
+
+#### 2. Speculative Path
+
+Speculative Path is a defining feature of an out-of-order superscalar processor. To hide branch latency and increase throughput, XiangShan predicts a branch and executes instructions on the predicted path before the branch result is known. Those instructions are speculative instructions.
+
+There are two outcomes: **Spec Success** and **Spec Fail**.
+
+:::warning
+**Performance note**: Speculation trades a prediction for speed. A correct prediction avoids waiting for the branch result; a wrong prediction causes a flush and a performance penalty.
+
+:::
+
+**Two branch-state paths**:
+
+1. **Correct prediction (normal completion)**: the speculative instruction executes normally and eventually writes back.
+
+   `S_IF (speculative fetch) → normal transitions → S_DONE`
+
+2. **Misprediction (pipeline flush)**: branch validation fails and all speculative instructions are cancelled in S\_FLUSH.
+
+   `S_IF/S_PREDEC/S_DEC (speculating) → S_FLUSH (cancelled) → S_IDLE (reset)`
+
+#### 3. Exception Path
+
+Exception Path handles hardware faults, illegal operations, and external interrupts. It interrupts normal flow, pauses the instruction, records the fault context, and invokes the kernel handler. Typical triggers include illegal instructions, misaligned addresses, TLB faults, permission errors, external interrupts, and system calls.
+
+:::warning
+**Common pitfall**: A speculative misprediction is a performance event caused by an incorrect prediction; an exception is a functional correctness event caused by the program or hardware and must be handled by the kernel rather than simply rerun.
+
+:::
+
+**Standard exception path**:
+
+`Any execution state → S_EXC (exception pending) → pipeline paused and context saved → kernel exception handler → pipeline resumed or instruction terminated`
+
+### 2.3.6 Quick comparison of the three paths
+
+| Execution path | Main trigger | Final result | Performance/functional impact |
+| :--- | :--- | :--- | :--- |
+| **Normal Path** | No exception, misprediction, cache miss, or data conflict | Instruction executes, writes back, and releases resources normally | Best performance; pipeline runs at full speed |
+| **Speculative Path** | Branch prediction causes early fetch and execution | Correct: completes normally; wrong: speculative instructions are flushed | Correct prediction improves performance; a wrong one causes a small penalty but not a functional error |
+| **Exception Path** | Illegal instruction, address fault, interrupt, permission error, or hardware fault | Instruction pauses, context is saved, and the kernel resumes or terminates it | Temporarily reduces performance while preserving correctness |
+
+## 2.4 Mapping States to the Source (Implementation View)
+
+Pipeline instruction states are defined as an enumeration in the source, and hardware timing logic drives every transition. The core definition is:
+
+```plain
+// Defined in src/main/scala/xiangshan/pipeline/InstState.scala L22-L45
+// Core XiangShan pipeline instruction states
+object InstState extends Enumeration {
+  val S_IDLE    = Value("idle")     // Initial idle state
+  val S_IF      = Value("if")       // Fetch stage
+  val S_PREDEC  = Value("predec")   // Predecode stage
+  val S_DEC     = Value("dec")      // Decode complete
+  val S_RENAME  = Value("rename")   // Register rename complete
+  val S_DISP    = Value("disp")     // Waiting for dispatch
+  val S_ISSUE   = Value("issue")    // Issuing/executing
+  val S_MEM     = Value("mem")      // Memory stage
+  val S_WB      = Value("wb")       // Writeback stage
+  val S_DONE    = Value("done")     // Execution complete
+
+  // Special exception states
+  val S_STALL   = Value("stall")    // Pipeline stall
+  val S_REPLAY  = Value("replay")   // Instruction replay
+  val S_FLUSH   = Value("flush")    // Instruction flushed/cancelled
+  val S_EXC     = Value("exception")// Exception pending
+}
+```
+
+## 2.5 Tiered Learning Path
+
+🟢 **Essential for beginners**: the nine basic state definitions, the normal transition path, and the main responsibility of each pipeline stage.
+
+🔵 **Advanced**: triggers and behavioral differences of stalls, replay, flush, and exception states.
+
+🟣 **Deep dive**: state-machine transitions in source code, replay timing, resource reclamation during a flush, and the scheduling differences among the three execution paths.
+
+:::warning
+**Beginner's note**: You do not need to memorize source-level timing yet. First remember that states represent execution progress, special states represent exceptional pipeline situations, and the three paths cover all execution scenarios. These concepts will be reused when studying pipeline-conflict optimization.
+
+:::
+
+## 2.6 Chapter Summary
+
+**Key points**:
+
+* XiangShan instruction states comprise basic flow states and special exception states, covering the entire instruction lifetime.
+* In the normal case, states advance one way; in the out-of-order backend, instructions execute independently and update their states autonomously.
+* All instruction behavior can be classified as Normal, Speculative, or Exception Path.
+* Every state is represented by a source-level enumeration and serves as a basis for hardware scheduling.
+
+> Updated: 2026-06-26 17:44:49
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/vm64o6wq5agtckwp>

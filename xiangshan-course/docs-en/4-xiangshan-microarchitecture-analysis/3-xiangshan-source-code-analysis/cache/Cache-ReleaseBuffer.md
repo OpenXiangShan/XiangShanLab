@@ -1,3 +1,4 @@
+<!--
 # 香山昆明湖 V2：CoupledL2 ReleaseBuffer 源码分析
 
 > **结论先行。** 在当前 `KunminghuV2Config` 的有效硬件配置中，ReleaseBuffer 位于 CHI 版 `coupledL2` 的每个 `tl2chi.Slice` 内；源码中它不是一个名为 `ReleaseBuffer` 的专用类，而是 `new MSHRBuffer(wPorts = 3)` 的逻辑角色名。它以 **MSHR ID 直接索引**保存完整 cache line 的 release/probe 数据，没有独立的 valid、满/空、分配或释放协议。条目的生命周期由外部 MSHR 控制。`huancun` 的 `inclusive.SinkC.releaseBuf` 确实是显式带 valid 位的缓存池，但 Kunminghu V2 启用 CHI 后并不实例化 HuanCun；它只能作为同名机制的对照，不能画成 V2 的实际下游。
@@ -263,16 +264,16 @@ RequestArb 对 DataStorage 请求施加了一拍 `ds_mcp2_stall`，所以即便 
 
 ```mermaid
 flowchart LR
-    C["L1 DCache / TileLink C"] --> SC["coupledL2 SinkC\nRelease ingress staging"]
-    SC -->|"ReleaseData task"| RA["RequestArb s1/s2"]
-    SC -->|"ProbeAckData last\nfull line"| MCTL["MSHRCtl\nset/tag + w_c_resp match"]
-    MCTL -->|"MSHR ID"| RB["ReleaseBuffer\nMSHRBuffer: 16 x 2 beats"]
-    MP["MainPipe s5\nDataStorage old line"] -->|"w(2)"| RB
-    NW["nested writeback"] -->|"w(0)"| RB
-    RA -->|"r.valid + MSHR ID"| RB
-    RB -->|"registered data"| S3["Slice / MainPipe s3"]
-    S3 --> DS["DataStorage write/read selection"]
-    S3 --> TX["CHI TXDAT / TXREQ path as task requires"]
+    C["L1 DCache / TileLink C"] --&gt; SC["coupledL2 SinkC\nRelease ingress staging"]
+    SC --&gt;|"ReleaseData task"| RA["RequestArb s1/s2"]
+    SC --&gt;|"ProbeAckData last\nfull line"| MCTL["MSHRCtl\nset/tag + w_c_resp match"]
+    MCTL --&gt;|"MSHR ID"| RB["ReleaseBuffer\nMSHRBuffer: 16 x 2 beats"]
+    MP["MainPipe s5\nDataStorage old line"] --&gt;|"w(2)"| RB
+    NW["nested writeback"] --&gt;|"w(0)"| RB
+    RA --&gt;|"r.valid + MSHR ID"| RB
+    RB --&gt;|"registered data"| S3["Slice / MainPipe s3"]
+    S3 --&gt; DS["DataStorage write/read selection"]
+    S3 --&gt; TX["CHI TXDAT / TXREQ path as task requires"]
 ```
 
 这里 `SinkC` 的 `ReleaseData task` 与 `ProbeAckData` 的直写路径是不同的：前者在 SinkC 的 ingress data/task buffer 中形成任务，后者在最后 beat 直接产生 `releaseBufWrite`。两者都不能仅凭“C 通道带数据”而假设相同的时序。
@@ -355,13 +356,13 @@ io.sinkC.ready := sink_ready_basic && !block_C
 
 ```mermaid
 stateDiagram-v2
-    [*] --> 无MSHR拥有者
-    无MSHR拥有者 --> MSHR有效: MSHRCtl 选择空闲 i 并分配
-    MSHR有效 --> 数据可用_逻辑: w(0) nested / w(1) ProbeAckData / w(2) DS旧行
-    数据可用_逻辑 --> s2读请求: RequestArb 条件满足
-    s2读请求 --> s3使用数据: RegEnable + RegNext(valid)
-    s3使用数据 --> MSHR有效: 其他 CHI/目录/数据操作继续
-    MSHR有效 --> 无MSHR拥有者: MSHR no_schedule && no_wait / will_free
+    [*] --&gt; 无MSHR拥有者
+    无MSHR拥有者 --&gt; MSHR有效: MSHRCtl 选择空闲 i 并分配
+    MSHR有效 --&gt; 数据可用_逻辑: w(0) nested / w(1) ProbeAckData / w(2) DS旧行
+    数据可用_逻辑 --&gt; s2读请求: RequestArb 条件满足
+    s2读请求 --&gt; s3使用数据: RegEnable + RegNext(valid)
+    s3使用数据 --&gt; MSHR有效: 其他 CHI/目录/数据操作继续
+    MSHR有效 --&gt; 无MSHR拥有者: MSHR no_schedule && no_wait / will_free
 ```
 
 `数据可用_逻辑` 不是 `MSHRBuffer` 内的真实状态寄存器。MSHR 的状态与等待条件才决定是否可读、是否可复用；ReleaseBuffer 不会在 `will_free` 时自动清零。有关 MSHR 释放的 `will_free`/`req_valid` 更新可见 [MSHR.scala:1303](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHR.scala:1303)--[MSHR.scala:1331](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHR.scala:1331)。
@@ -535,4 +536,303 @@ Kunminghu V2 的 CoupledL2 ReleaseBuffer 可以精确地描述为：**每个 CHI
 - 真正的阻塞、MSHR 匹配、条目释放和错误处理位于 SinkC、RequestArb、MSHRCtl、MainPipe 和 MSHR 状态机之间。
 - HuanCun 的 explicit `releaseBuf` 是值得比较的另一种设计，但在当前 CHI Kunminghu V2 配置中不在实际路径上。
 
-后续若要做波形验证，应以稳定的 MSHR ID 跟踪一次 ProbeAckData 或 CMO/replacement 事务，连续观察 `SinkC -> MSHRCtl match -> releaseBuf w/r -> MainPipe s3/s5 -> MSHR will_free`，而不是只凭 PC 或单个 C 通道 `valid` 推断条目生命周期。
+后续若要做波形验证，应以稳定的 MSHR ID 跟踪一次 ProbeAckData 或 CMO/replacement 事务，连续观察 `SinkC --&gt; MSHRCtl match --&gt; releaseBuf w/r --&gt; MainPipe s3/s5 --&gt; MSHR will_free`，而不是只凭 PC 或单个 C 通道 `valid` 推断条目生命周期。
+-->
+
+# XiangShan Kunminghu V2: CoupledL2 ReleaseBuffer Source Analysis
+
+> **Main conclusion.** In the active `KunminghuV2Config` hardware, each CHI `coupledL2.tl2chi.Slice` has a ReleaseBuffer role implemented as `new MSHRBuffer(wPorts = 3)`, rather than as a class literally named `ReleaseBuffer`. It stores whole cache lines of release/probe data indexed directly by MSHR ID. It has no local valid, full/empty, allocation, or release protocol; external MSHR control owns the entry lifecycle. HuanCun has explicit valid-buffer implementations with a similar purpose, but those are comparison designs, not the active default CHI path.
+
+## 1. Scope, Version, and Evidence Boundary
+
+| Item | Source-grounded fact | Evidence |
+| --- | --- | --- |
+| Top-level configuration | `KunminghuV2Config` selects a 1 MiB, four-bank, inclusive L2 and enables CHI. | [Configs.scala:477](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:477>) |
+| Live L2 implementation | `L2Top` instantiates `TL2CHICoupledL2` when `enableCHI` is true. | [L2Top.scala:112](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:112>) |
+| Subject of this page | `tl2chi.Slice` defines `releaseBuf = new MSHRBuffer(wPorts = 3)`. | [Slice.scala:52](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:52>) |
+| HuanCun's role | HuanCun is not instantiated by the default CHI configuration. | [Configs.scala:333](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:333>), [Top.scala:111](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Top.scala:111>) |
+
+Behavioral statements below are tied to the supplied XiangShan checkout. Design Doc material and the XSCache course text establish terms and questions, but do not replace implementation evidence.
+
+### 1.1 Why HuanCun cannot be treated as the V2 ReleaseBuffer
+
+With `EnableCHI=true`, `L2Top` selects CHI CoupledL2 and `L3CacheConfig` chooses the CHI-side OpenLLC configuration rather than `L3CacheParamsOpt` / HuanCun. Top-level code creates HuanCun only when `L3CacheParamsOpt` exists. The following objects therefore must not be drawn as one physical module:
+
+| Object | Location | Active in current KmhV2 CHI | Use here |
+| --- | --- | --- | --- |
+| `coupledL2.tl2chi.Slice.releaseBuf` | [tl2chi/Slice.scala:55](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:55>) | Yes | Primary subject |
+| `huancun.inclusive.SinkC.releaseBuf` | [inclusive/SinkC.scala:14](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/inclusive/SinkC.scala:14>) | No | Explicit-valid-buffer comparison |
+| `huancun.noninclusive.SinkC.buffer` | [noninclusive/SinkC.scala:10](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/noninclusive/SinkC.scala:10>) | No | Same role, different dual-consumer design |
+
+## 2. From Cache Theory to the Code Under Test
+
+For a non-blocking cache, temporary data storage, MSHRs, and coherence messages are distinct concepts. The current CoupledL2 ReleaseBuffer is an MSHR-context data sidecar, not a FIFO that allocates and frees entries itself. HuanCun's same-named storage is the implementation with an explicit capacity and valid-state pool.
+
+| Theoretical question | CoupledL2 code to inspect | Result |
+| --- | --- | --- |
+| Where is the data held? | `MSHRBuffer.buffer` | A two-dimensional register array whose first index is MSHR ID. |
+| Who owns an entry? | `MSHRCtl` and `MSHR.status` | MSHR allocation, matching, and release own it; ReleaseBuffer does not. |
+| What enters? | `SinkC`, `MainPipe`, nested writeback | Three write ports: nested data, ProbeAckData, and a DataStorage victim line from MainPipe s5. |
+| Who reads it? | `RequestArb` s2 | One read port, used only for probe-data and snoop hit-release conditions. |
+| How is it returned? | `MSHRBuffer.RegEnable` plus `Slice.RegNext` | Read request at s2; data and separately generated valid at s3. |
+| Where can backpressure arise? | SinkC, RequestArb, MSHR, and DataStorage arbitration | The buffer itself has no `ready`. |
+
+### 2.1 Design Doc traceability
+
+| Recognizable design intent | Local evidence | Result |
+| --- | --- | --- |
+| Preserve release/probe-related data. | [MSHRBuffer.scala:39](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/MSHRBuffer.scala:39>), [Slice.scala:145](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:145>) | Verified; it uses generic `MSHRBuffer`, not a dedicated class. |
+| ReqArb s2 selects and reads release data. | [RequestArb.scala:243](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:243>) | Verified for `readProbeDataDown`, `useProbeData`, and snoop hit-release conditions. |
+| ProbeAckData needs an MSHR association before writing. | [SinkC.scala:160](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SinkC.scala:160>), [MSHRCtl.scala:124](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MSHRCtl.scala:124>) | Verified: set/tag and `w_c_resp` matching yield the write ID. |
+| MainPipe can preserve a victim line. | [MainPipe.scala:470](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:470>) | Verified: s5 writes under the appropriate condition. |
+| CMO can need probe/old data. | [RequestArb.scala:256](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:256>) | Partly verified; detailed progress remains MSHR-state-machine behavior. |
+
+## 3. Configuration, Capacity, Address, and Indexing
+
+### 3.1 Default V2 parameter derivation
+
+`L2CacheConfig` derives sets as `size / banks / ways / 64`. The default `L2Param` uses 64-byte lines, 32-byte D-channel beats, and 16 MSHRs.
+
+| Parameter | KmhV2 value | Meaning for ReleaseBuffer |
+| --- | --- | --- |
+| L2 capacity | 1 MiB | Whole-L2 capacity, not one buffer's capacity |
+| Banks | 4 | One CHI Slice, thus one independent ReleaseBuffer, per bank |
+| Associativity | 8 ways | Each bank holds `512 sets x 8 ways x 64 B = 256 KiB` |
+| Line size | 64 B | One whole logical buffer item |
+| D beat size | 32 B | Two beats per line |
+| `beatSize` | 2 | Required explicitly by RequestArb |
+| `mshrsAll` | 16 | First dimension of the register array |
+
+One Slice therefore has `16 MSHR entries x 2 beats x 32 B = 1024 B` of raw ReleaseBuffer data; all four banks total 4 KiB. This is transient capacity coupled to MSHR concurrency, not a separately reportable cache level.
+
+### 3.2 Do not confuse physical address fields with MSHR ID
+
+`SinkC.toTaskBundle` parses a C-channel physical address into tag/set/offset for directory lookup and MSHR C-response matching. ReleaseBuffer instead indexes as `buffer(io.r.bits.id)`: its index is an MSHR ID, not set, way, byte offset, or a physical address field. The interface ID width follows `idsAll = 256` (eight bits) while the physical array has only 16 entries, so safety depends on MSHRCtl allocating and matching only real MSHR numbers. There is no local out-of-range assertion.
+
+## 4. Actual CoupledL2 ReleaseBuffer Structure
+
+### 4.1 Instance, interface, and storage array
+
+The CHI Slice instantiates both `refillBuf = new MSHRBuffer(wPorts = 2)` and `releaseBuf = new MSHRBuffer(wPorts = 3)`. The generic buffer has a `ValidIO` read request, an unqualified data response, and `wPorts` `ValidIO` writes. Its storage is:
+
+```scala
+val buffer = Reg(Vec(mshrsAll, Vec(beatSize, UInt((beatBytes * 8).W))))
+```
+
+| Interface | Direction | Meaning | `ready` present? |
+| --- | --- | --- | --- |
+| `r: ValidIO[MSHRBufRead(id)]` | `RequestArb -> ReleaseBuffer` | One MSHR-ID read request | No |
+| `resp: MSHRBufResp(data: DSBlock)` | ReleaseBuffer -> Slice/MainPipe | Registered complete-line data | No, and no self-valid |
+| `w(0..2): ValidIO[MSHRBufWrite(id, data, beatMask)]` | Three writers -> ReleaseBuffer | Update selected line beats by ID and mask | No |
+
+`ValidIO` is not `DecoupledIO`: a producer cannot wait for local `ready`, and no internal queue accumulates requests.
+
+### 4.2 It has no independent lifetime management
+
+The array is an uninitialized `Reg`. `RegEnable` loads the response only when `r.valid` is high; otherwise response data retains the previous successful read. Consequently:
+
+| Mechanism | Implemented locally? | Actual owner |
+| --- | --- | --- |
+| Entry valid, empty, or full | No | MSHR `status.valid`, ingress arbitration, and MSHR-full logic |
+| Allocate and free | No | MSHRCtl allocation and MSHR state release |
+| Reset data | No | Protocol must never treat unwritten data as valid after reset |
+| Read-response valid | No | Slice generates `RegNext(releaseBuf.io.r.valid)` separately |
+| Same-ID read-after-write bypass | No | Consumers must not depend on it |
+
+### 4.3 Write rules and same-cycle conflicts
+
+For every entry, `MSHRBuffer` creates one hit bit per write port. It asserts that at most two writers target a given entry, then uses `PriorityMux` to select both data and beat mask. The implications are:
+
+| Scenario | Local behavior | Consequence |
+| --- | --- | --- |
+| Writes to different IDs | Each entry computes its own hit vector and can update independently. | No global single-write limitation. |
+| Three writes to one ID | `PopCount(wens) <= 2` assertion fires. | No retry or local backpressure. |
+| Exactly two writes to one ID | One port's data **and** mask win. | Non-overlapping masks are not automatically merged. |
+| Read and write to one ID | No bypass or collision assertion. | Model the read as old data unless external scheduling proves otherwise. |
+| Idle read cycle | `resp` holds an old value. | Observe external valid together with data. |
+
+In the active Slice wiring, port order is `nestedWriteReleaseBuf`, `sinkCWriteReleaseBuf`, then `mpWriteReleaseBuf`. `PriorityMux` therefore makes the current implementation priority `nested > SinkC ProbeAckData > MainPipe` on a conflict. Validate that inference with an assertion or waveform, rather than treating stale comments as authority.
+
+## 5. Three Writes, One Read, and the Pipeline
+
+### 5.1 The three write sources
+
+| Port | Direct valid source | ID source | Data source | Mask | Typical case |
+| --- | --- | --- | --- | --- | --- |
+| `w(0)` | `mshrCtl.io.nestedwbDataId.valid` | `nestedwbDataId.bits` | `mainPipe.io.nestedwbData` | All beats | Nested writeback |
+| `w(1)` | `sinkC.io.releaseBufWrite.valid` | MSHRCtl overwrites it with `releaseBufWriteId` | SinkC's two-beat ProbeAckData line | All beats | Upstream ProbeAckData |
+| `w(2)` | `mainPipe.io.releaseBufWrite.valid` | `task_s5.mshrId` | Old line read from DataStorage | All beats | Replacement, probe, or CMO retention |
+
+An ordinary TileLink C `Release` or `ReleaseData` is not automatically a ReleaseBuffer write. SinkC initially stages it in its own `dataBuf` / `taskBuf` and emits a task after the last beat. The nested writeback path is specialized to an already-associated MSHR and must not be generalized to all C releases.
+
+For ProbeAckData, SinkC captures the first beat; on the last beat it concatenates both beats into a line and raises `releaseBufWrite.valid`. SinkC supplies a placeholder zero ID because MSHRCtl matches the address against the MSHR awaiting the C response and supplies the real ID.
+
+MainPipe chooses among refill and release data at s3, carries `need_write_releaseBuf` forward, and only writes at s5 when `task_s5.valid && need_write_releaseBuf_s5`. Seeing release data in s3 does not imply that an s5 buffer write must occur in the same transaction.
+
+### 5.2 RequestArb read conditions and s2-to-s3 timing
+
+The only ReleaseBuffer read originates in RequestArb. It is valid for MSHR downwards probe-data reads, selected upward tasks that use probe data, or a snoop hit-release that needs data. It is not a blanket read for every ReleaseData transaction. The read ID is either the MSHR ID or the snoop-hit release index.
+
+Slice wires this request into the buffer and aligns data to MainPipe s3 through:
+
+```scala
+mainPipe.io.releaseBufResp_s3.valid := RegNext(releaseBuf.io.r.valid, false.B)
+mainPipe.io.releaseBufResp_s3.bits := releaseBuf.io.resp.data
+```
+
+| Pipeline position | Code action | Relevant fact |
+| --- | --- | --- |
+| SinkC C channel | Receives release/probe messages and derives first/last/beat. | A 64-byte line is two 32-byte beats; ProbeAckData writes only on `last`. |
+| RequestArb s1 | Chooses a task from C, B, and A. | C has priority over B and B over A, subject to directory/blocking conditions. |
+| RequestArb s2 | Computes `releaseBufRead_s2.valid`. | Issues a single-ID read when the task conditions require it. |
+| MainPipe s3 | Receives `releaseBufResp_s3`. | `RegEnable` data and delayed valid are aligned for selection. |
+| MainPipe s4/s5 | Carries DataStorage results and writeback work. | s5 can produce `w(2)` but does not do so for every read. |
+| MSHR completion | MSHR state progresses to `will_free`. | Buffer bits are not cleared; a later full write for the reused ID overwrites them. |
+
+The separate `ds_mcp2_stall` placed by RequestArb limits DataStorage scheduling, so this local registered read must not be turned into a fixed end-to-end transaction latency claim.
+
+### 5.3 Actual data path
+
+```mermaid
+flowchart LR
+  C[L1 DCache / TileLink C] --> SC[CoupledL2 SinkC ingress staging]
+  SC -->|ReleaseData task| RA[RequestArb s1/s2]
+  SC -->|ProbeAckData last: whole line| CTL[MSHRCtl set/tag and C-response match]
+  CTL -->|MSHR ID| RB[ReleaseBuffer: MSHRBuffer, 16 x 2 beats]
+  MP[MainPipe s5 DataStorage victim] -->|w(2)| RB
+  NW[nested writeback] -->|w(0)| RB
+  RA -->|read valid and MSHR ID| RB
+  RB -->|registered data| S3[Slice / MainPipe s3]
+  S3 --> DS[DataStorage selection]
+  S3 --> TX[CHI TXDAT / TXREQ as required]
+```
+
+`ReleaseData` task formation and direct ProbeAckData writing are different SinkC paths. Do not infer identical timing from the mere fact that both carry C-channel data.
+
+### 5.4 ProbeAckData write-then-read timing
+
+For a two-beat ProbeAckData response, the first beat is staged, the last beat constructs and writes a full line after MSHRCtl provides the matching ID, then a later qualifying RequestArb s2 task reads that ID. The delayed `releaseBufResp_s3.valid` identifies when MainPipe may use the data. A raw `resp` value alone does not establish such a transaction.
+
+## 6. MSHR Binding, Allocation, and Release
+
+### 6.1 How a C response finds the correct entry
+
+MSHRCtl evaluates C response set/tag information and an active MSHR's `w_c_resp` condition. The matching MSHR produces `releaseBufWriteId`, which overwrites SinkC's placeholder ID. The buffer itself only receives that selected numeric ID; it neither matches addresses nor discovers a coherence transaction.
+
+### 6.2 MSHR-full policy, ingress priority, and reachability
+
+ReleaseBuffer cannot independently say that it is full. MSHR occupancy drives `mshrFull`, `a_mshrFull`, and request blocking rules. B traffic can be blocked when MSHRs are full, A keeps one reserve entry, and C is coordinated through other logic. Absence of a direct C-side buffer-full signal does not mean C traffic is unconditionally serviceable.
+
+### 6.3 Logical lifecycle
+
+```mermaid
+stateDiagram-v2
+  [*] --> MshrAllocated
+  MshrAllocated --> DataRetained: nested / ProbeAckData / MainPipe write
+  DataRetained --> DataRead: RequestArb s2 read condition
+  DataRead --> MshrAllocated: more MSHR work
+  DataRetained --> MshrFreed: external MSHR completion
+  MshrFreed --> [*]
+```
+
+The state diagram describes protocol ownership, not internal ReleaseBuffer state. In particular, `MshrFreed` does not clear the register entry.
+
+## 7. Explicit HuanCun Release Buffers: Comparison Only
+
+### 7.1 Inclusive SinkC buffer pool
+
+HuanCun inclusive SinkC owns an explicit release buffer with valid tracking, allocation, full detection, and a recovery path after its consumers finish. This makes buffer capacity visible locally. It is useful for contrasting designs, but not a block on the default CHI Kunminghu V2 netlist.
+
+### 7.2 Noninclusive SinkC dual-consumer buffer
+
+The noninclusive counterpart uses a buffer whose beats may have separate save and release consumption. Its lifetime waits for both consumers where required. Its name and control contract differ from CHI `MSHRBuffer`, so their signals cannot be equated by name alone.
+
+### 7.3 HuanCun comparison timing
+
+The HuanCun waveforms in the Chinese source show explicit allocation/backpressure and later reclamation. The CHI path instead ties storage lifetime to a fixed MSHR ID; a valid waveform for one should not be used as proof of the other.
+
+## 8. Backpressure, Throughput, and Conflict Boundaries
+
+### 8.1 Where a transaction can really stall
+
+`MSHRBuffer` has no `ready`, queue, full bit, or internal arbiting mechanism. Stalls occur at the request ingress, directory and DataStorage arbitration, MSHR allocation, SinkC's own staging, and downstream channel handshakes. A `valid` at a buffer port therefore does not imply a Decoupled `fire`; it means the source assumes the relevant surrounding invariant holds.
+
+### 8.2 What latency is and is not established
+
+The buffer's read data is register-enabled at the read request and Slice delays the associated valid to s3. This establishes local pipeline alignment. It does not establish fixed latency for an L1 request, a probe, a CMO, or a full CHI transaction, because those involve arbitration, MSHR state, Directory, DataStorage, and external channels.
+
+## 9. Cross-Boundary Semantics: Address, Exceptions, MMIO, CMO, and Difftest
+
+### 9.1 Virtual/physical address, cache-line boundary, and coherence-message boundary
+
+SinkC derives task address fields from a physical C-channel address. ReleaseBuffer holds data indexed by MSHR ID and is line-granular once its writers supply a full beat mask. It neither performs virtual-address translation nor detects a cache-line crossing; those are defined before or outside its local interface.
+
+### 9.2 MMIO, exceptions, and flush
+
+SinkC maps input `corrupt` into task `corrupt` or `denied` depending on opcode, while MainPipe returns DataStorage error through its MSHR-response path. ReleaseBuffer has no exception bit or recovery FSM. CMO/flush may make MainPipe retain release data, but no `flush entry` or `reset on CMO` interface exists in `MSHRBuffer`; transaction completion and eventual `will_free` remain external protocol behavior.
+
+### 9.3 Difftest boundary
+
+No Difftest-specific signal appears at the ReleaseBuffer, CHI Slice, SinkC, RequestArb, or MainPipe interfaces traced here. Appropriate local observability comes from Chisel assertions and transaction waveforms. This is a module-boundary conclusion, not a statement that XiangShan as a whole lacks Difftest.
+
+## 10. Three Executable Transaction Walkthroughs
+
+### 10.1 ProbeAckData returned and later used
+
+1. Upstream submits two `ProbeAckData` beats; SinkC stores the first and forms a full line on the last.
+2. MSHRCtl matches C tag/set and `status.w_c_resp`, then supplies `releaseBufWriteId` for `w(1)`.
+3. A later MSHR condition such as `readProbeDataDown` or `useProbeData` makes RequestArb s2 read the same ID.
+4. One cycle later, `releaseBufResp_s3.valid` qualifies the data for MainPipe s3; bare `resp` data is insufficient evidence.
+
+### 10.2 MainPipe retains a replacement or CMO victim line
+
+1. RequestArb/MainPipe determines from directory, replacement, probe, or CMO conditions that DataStorage's old line is needed.
+2. The task and data move through s3 to s5.
+3. Only `task_s5.valid && need_write_releaseBuf_s5` writes the full line on `w(2)` under that MSHR ID.
+4. A later qualifying ReleaseBuffer read retrieves it for the relevant CHI task.
+
+### 10.3 Nested writeback
+
+1. An MSHR produces nested writeback data and MSHRCtl selects a unique ID.
+2. Slice writes full-line data on `w(0)`.
+3. A same-cycle collision with another writer must obey the three-write assertion and priority behavior; mask merging cannot be assumed.
+
+## 11. Verification Points Requiring Special Attention
+
+| Check | Signals/assertions to observe | Expected property | Risk |
+| --- | --- | --- | --- |
+| `RB_RESET_MSHR_OWNER` | `mshr.status.valid`, `releaseBuf.io.r.valid` | A new ID is not read as valid before a complete write. | Buffer data has no `RegInit`. |
+| `RB_PROBEACK_MATCH` | SinkC response, `releaseBufWriteId`, MSHR set/tag/`w_c_resp` | ProbeAckData reaches exactly one waiting MSHR. | `ParallelPriorityMux` can mask ambiguity. |
+| `RB_PORT_CONFLICT` | all `w(0..2)` valid/ID/mask fields | Three same-ID writes assert; two writes select only one source. | Non-overlapping masks are not merged. |
+| `RB_READ_WRITE_SAME_ID` | same-cycle r/w ID | No consumer treats read as write-after-read forwarding. | No bypass or collision assertion. |
+| `RB_ID_RANGE` | every r/w ID | ID remains in real MSHR range. | Eight-bit ID addresses a 16-entry array. |
+| `RB_S2_S3_ALIGNMENT` | `releaseBufRead_s2.valid`, s3 valid/data | Valid is delayed one cycle and qualifies its matching data. | Raw response may be stale. |
+| `RB_C_PRIORITY` | Sink A/B/C valid/ready | C > B > A with stable payload during backpressure. | Starvation/stability under coherence pressure. |
+| `RB_MSHR_FULL` | `mshrFull`, `a_mshrFull`, A/B/C blocking | Occupancy policy matches MSHR reservations. | No direct buffer-full reasoning. |
+| `RB_TWO_BEAT_ATOMICITY` | C first/last/beat, `probeAckDataBuf` | Two beats form a complete line only on last. | Interleaving or missing beat breaks concatenation. |
+| `RB_CMO_ERROR` | release write condition, corrupt/denied, `dsResp` | Retention and error propagation remain associated. | Buffer has no independent error bit. |
+| `HC_INCLUSIVE_FULL` | HuanCun `bufFull/noSpace/insertIdxReg/bufValids` | A full comparison buffer backpressures a data first beat. | Applies only to non-CHI HuanCun. |
+| `HC_NOINCLUSIVE_DUAL_CONSUMER` | `beatValsSave/beatValsThrough`, save/release fire | Reclamation waits for required consumers. | Save-only/release-only/drop cases. |
+
+Useful bind/test assertions are:
+
+```scala
+assert(PopCount(resp_sinkC_match_vec) <= 1.U)
+when (releaseBuf.io.r.valid) {
+  assert(releaseBuf.io.r.bits.id < mshrsAll.U)
+}
+```
+
+They document desired protocol checks; they are not claimed to be present in the current implementation.
+
+## 12. Final Summary
+
+The Kunminghu V2 CoupledL2 ReleaseBuffer is precisely a per-CHI-L2-Slice, MSHR-ID-indexed, three-write/one-read register data sidecar operating primarily on complete cache lines.
+
+- Its capacity and reuse follow MSHR ownership, not FIFO full/empty/allocate/free semantics.
+- SinkC writes a complete two-beat ProbeAckData line, MainPipe s5 can retain a DataStorage victim line, and nested writeback supplies the third source.
+- RequestArb s2 reads only under specific probe/release conditions; Slice supplies data and an aligned valid at s3.
+- Blocking, MSHR matching, entry release, and error handling live across SinkC, RequestArb, MSHRCtl, MainPipe, and the MSHR state machine.
+- HuanCun's explicit release buffers are valuable comparisons but are not active in this CHI Kunminghu V2 configuration.
+
+For waveform validation, track one stable MSHR ID across `SinkC -> MSHRCtl match -> releaseBuf write/read -> MainPipe s3/s5 -> MSHR will_free`, rather than inferring entry lifetime from a PC or one C-channel `valid` signal.

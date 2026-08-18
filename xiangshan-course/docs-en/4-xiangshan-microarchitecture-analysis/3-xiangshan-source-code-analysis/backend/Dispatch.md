@@ -1,3 +1,4 @@
+<!--
 # 4.分发阶段
 
 # 4. Dispatch Queue——从重命名到发射的"分拣中心"
@@ -736,3 +737,745 @@ Move 消除指令的 pdest 等于源操作数的 PR，数据早已就绪。如�
 
 > 更新: 2026-06-02 10:56:42  
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/rx0ps1qslgayqqlb>
+-->
+
+# 4. Dispatch Stage
+
+# 4. Dispatch Queue — the "sorting center" between rename and issue
+
+> If this is your first time studying the dispatch stage of a processor, terms such as "Issue Queue routing," "BusyTable," and "LFST" (the load-forwarding store table) may look intimidating. Do not worry: dispatch has one essential job. It sorts renamed instructions into the workshop (Issue Queue) for their "trade," gives each one an employee badge (a ROB entry), and records whether its raw materials (source operands) are ready. Step by step, it looks much like an efficient logistics sorting center.
+
+:::info
+By the end of this section, you will be able to:
+
+* 🧭 Understand the **position and role** of dispatch in the XiangShan processor — the bridge between rename and issue
+* 📋 Understand **ROB allocation** — how each instruction obtains an in-order-commit tracking number
+* 🔍 Understand **Issue Queue routing** — how instructions are sorted into the correct issue queue according to `fuType`
+* ⚡ Understand **BusyTable** — initialization and wake-up of source-operand readiness
+* 🗺️ Understand **LFST forwarding** — how dependency information for memory instructions is passed ahead of time
+* 📦 Understand **LSQ enqueue** — the dedicated queue path for Load/Store instructions
+* ✅ Follow a complete learning path from source code to hands-on practice
+
+:::
+
+***
+
+## 4.1 Dispatch-stage overview
+
+### 4.1.1 Where dispatch sits in the pipeline
+
+You can picture the processor pipeline as a **modern factory**:
+
+:::info
+
+* The **front end (IFU→Decode)** is the **raw-material procurement and translation department** — it fetches instructions and translates them into micro-operations
+* **Rename** is the **ID office** — it gives every instruction the "real name" of a physical register
+* **Dispatch** is the **sorting center** — it assigns a workstation (ROB), sends the instruction to the correct workshop (Issue Queue), and records raw-material arrival status (BusyTable)
+* **Issue and execute** are the **production line** — they perform the actual operation described by the work order
+
+:::
+
+Without this sorting center, renamed instructions would be workers who have received identity cards but do not know where to report for work. Which one belongs in the ALU workshop? Which one belongs in the memory workshop? Have all materials arrived? Dispatch is the hub that resolves these questions.
+
+### 4.1.2 Dispatch-stage panorama
+
+XiangShan dispatch is not a simple forwarding module. It is a compound subsystem that performs **multi-destination routing and state initialization**:
+
+```plain
+┌──────────────── Dispatch (sorting center) ─────────────────────────────────────┐
+│                                                                                │
+│  Input: fromRename (RenameOutUop from rename, RenameWidth entries/cycle)       │
+│         │                                                                      │
+│         ├───────────────┬─────────────────┬──────────────────┐                 │
+│         ↓               ↓                 ↓                  ↓                 │
+│  ┌────────────┐  ┌────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │ ROB alloc  │  │ IQ routing │  │ BusyTable    │  │ LSQ enqueue  │          │
+│  │ (enqRob)   │  │ (fuMapIQIdx)│ │ source ready │  │ (lsqEnqIO)   │          │
+│  │            │  │             │ │ state init   │  │              │          │
+│  │ each uop   │  │ sort by     │ │ query five   │  │ dedicated    │          │
+│  │ gets a ROB │  │ fuType into │ │ BusyTables   │  │ Load/Store   │          │
+│  │ tracking ID│  │ its IQ      │ │              │  │ queue        │          │
+│  └────────────┘  └────────────┘  └──────────────┘  └──────────────┘          │
+│         │               │                 │                  │                 │
+│         ↓               ↓                 ↓                  ↓                 │
+│  ┌──────────┐  ┌──────────────────────────────────┐  ┌──────────┐           │
+│  │  ROB     │  │       Issue Queues                │  │   LSQ    │           │
+│  │ (in-order │  │  ALU IQ | FEX IQ | VFEX IQ | ... │  │ (memory  │           │
+│  │ commit)  │  │                                  │  │ queues)  │           │
+│  └──────────┘  └──────────────────────────────────┘  └──────────┘           │
+│                                                                                │
+│  Helper modules: LFST (load-forwarding store table), RegCacheTagTable,        │
+│                  VlBusyTable                                                   │
+│                                                                                │
+│  Key constraint: ROB full or any target IQ full → dispatch stalls              │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
+
+> **Reading the diagram**: dispatch has three output paths plus one state-initialization path. ROB allocation guarantees in-order commit, IQ routing sends instructions to the right workshop, BusyTable initialization tells the IQ whether the materials have arrived, and LSQ enqueue handles the dedicated memory path. If any path is blocked, the whole pipeline must wait.
+
+:::color4
+**❤** **Beginner tip:**
+
+For now, remember only this: **dispatch = allocate a ROB entry + sort into an IQ + initialize source readiness + enqueue memory instructions into the LSQ**. You do not need to get lost in LFST and RegCacheTagTable details yet; establish the overall picture first.
+
+:::
+
+***
+
+## 4.2 ROB allocation — giving each instruction an "employee badge"
+
+### 4.2.1 Why is a ROB needed?
+
+An out-of-order processor may execute instructions out of order, but it **must commit them in program order**. The ROB (Reorder Buffer) is the core data structure that guarantees this property. Think of it as the factory's **badge-management system**: every worker (instruction) receives a badge number in arrival order. No matter how quickly it finishes in its workshop, it must leave the factory (commit) in badge-number order.
+
+### 4.2.2 The ROB allocation interface in the source
+
+In `Dispatch.scala`, ROB allocation is performed through the `enqRob` port:
+
+```scala
+// From Dispatch.scala L109
+val enqRob = Flipped(new RobEnqIO)
+```
+
+When dispatch receives renamed micro-operations, it requests an enqueue from the ROB through `enqRob.req`. Each request carries the complete instruction information:
+
+```scala
+// From Dispatch.scala L167-L200 (fields arranged from the debug output)
+// enqRob.req(i).bits contains:
+// - instr, pc        : instruction encoding and PC
+// - commitType       : commit type
+// - fuType, fuOpType : functional unit and operation code
+// - psrc(0), psrc(1) : source physical registers
+// - pdest            : destination physical register
+// - robIdx           : ROB index (returned after ROB allocation)
+// - numUops, numWB   : number of micro-operations and writebacks
+```
+
+### 4.2.3 Key constraints on ROB allocation
+
+**Dispatch must stall when the ROB is full.** In the source, the ROB ready signal and the ready signals of all Issue Queues jointly determine whether dispatch can continue:
+
+```scala
+// From Dispatch.scala L324
+io.toRenameAllFire := io.fromRename.map(x => !x.valid || x.fire).reduce(_ && _)
+```
+
+`toRenameAllFire` means that every Rename→Dispatch handshake succeeded. It is true only when the ROB has space and every target IQ can accept its instruction; only then will rename continue without stalling.
+
+> The analogy is an entrance gate at a factory: when the badges are exhausted (ROB full) or a workshop is at capacity (IQ full), the gate closes and no new worker can enter.
+
+***
+
+## 4.3 Issue Queue routing — which workshop should receive the instruction?
+
+### 4.3.1 Why is routing needed?
+
+Renamed micro-operations carry a `fuType` (functional-unit type), but different functional units are connected to different Issue Queues. One of dispatch's main responsibilities is to **route an instruction to the correct Issue Queue according to `fuType`**.
+
+This is like a parcel sorting center: a parcel labeled "electronics" uses channel A and one labeled "food" uses channel B. A sorting mistake means the parcel never reaches its destination.
+
+### 4.3.2 `fuMapIQIdx` — mapping functional units to Issue Queues
+
+In `Dispatch.scala`, XiangShan builds a key mapping named `fuMapIQIdx`, recording which Issue Queues should receive each `FuConfig`:
+
+```scala
+// From Dispatch.scala L64-L68
+val fuMapIQIdx = sortedFuConfigs.map( fu => {
+  val fuInIQIdx = fuConfigsInIssueParams.zipWithIndex.filter { case (f, i) => f.contains(fu) }.map(_._2)
+  (fu -> fuInIQIdx)
+})
+```
+
+**What this code does:**
+
+1. Iterate over all sorted `FuConfig` values.
+2. For each `FuConfig`, check which Issue Queues contain that functional unit.
+3. Record the mapping: `FuConfig → [IQ indices]`.
+
+### 4.3.3 `needMultiIQ` vs. `needSingleIQ` — single-queue and multi-queue routing
+
+Some functional units exist in only one Issue Queue (single-queue routing); others exist in several queues (multi-queue routing, which needs load balancing):
+
+```scala
+// From Dispatch.scala L75-L76
+val needMultiIQ = sameIQIdxFus.sortBy(_._1.head.fuType.id).filter(_._2.size > 1)
+val needSingleIQ = sameIQIdxFus.sortBy(_._1.head.fuType.id).filter(_._2.size == 1)
+```
+
+| **Category** | **Meaning** | **Routing policy** | **Typical example** |
+| --- | --- | --- | --- |
+| **needSingleIQ** | The functional unit exists in only one IQ | Route directly; no choice is needed | Some dedicated division/encryption units |
+| **needMultiIQ** | The functional unit exists in multiple IQs | Select using load balancing | ALU (present in six IQs), multiplier |
+
+> A single-queue route is like a bank with one window: join the only line. A multi-queue route is like a bank with six windows: choose the shortest line.
+
+### 4.3.4 Multi-queue load balancing — choose the least occupied queue
+
+For a functional unit in `needMultiIQ`, dispatch chooses the least occupied queue by **comparing the number of occupied entries in each IQ**:
+
+```scala
+// From Dispatch.scala L590-L596
+val compareMatrix = Wire(Vec(iqNum, Vec(iqNum, Bool())))
+for (i <- 0 until iqNum) {
+  for (j <- 0 until iqNum) {
+    if (i == j) compareMatrix(i)(j) := false.B
+    else if (i < j) compareMatrix(i)(j) := issueQueueCountAddEnq(exuidx(i)) < issueQueueCountAddEnq(exuidx(j))
+    else compareMatrix(i)(j) := !compareMatrix(j)(i)
+  }
+}
+```
+
+**Load-balancing algorithm:**
+
+1. Build an `iqNum × iqNum` comparison matrix. `compareMatrix(i)(j)=true` means IQ *i* has more free capacity than IQ *j*.
+2. Compare `issueQueueCountAddEnq`, the current occupancy plus the entries that will be enqueued in the current cycle.
+3. Choose the least occupied IQ as the routing destination.
+
+The calculation of `issueQueueCountAddEnq` accounts for both current occupancy and instructions that will enter during this cycle:
+
+```scala
+// From Dispatch.scala L582-L583
+val issueQueueCount = VecInit(io.IQValidNumVec.zip(needAppendIQValidNumVec).map(x => RegNext(x._1 + x._2)))
+val issueQueueCountAddEnq = VecInit(issueQueueCount.zip(needAppendIQValidNumVec).map(x => x._1 + x._2))
+```
+
+### 4.3.5 The Nanhu Issue Queue configuration
+
+The debug output in the source shows the complete Issue Queue configuration for the XiangShan Nanhu architecture:
+
+```scala
+// From Dispatch.scala L293-L311 (organized from the debug output)
+Queue 0  : issueQueueALU0  — Alu, Csr, Fence, Brh, Jmp
+Queue 1  : issueQueueALU1  — Alu, Div, Brh, Jmp
+Queue 2  : issueQueueALU2  — Alu, I2F, Vsetriwi, Vsetriwv, fl2v, Brh, Jmp
+Queue 3  : issueQueueALU3  — Alu, Bku
+Queue 4  : issueQueueALU4  — Alu, Mul
+Queue 5  : issueQueueALU5  — Alu, Mul
+Queue 6  : issueQueueLDU0  — Ldu
+Queue 7  : issueQueueLDU1  — Ldu
+Queue 8  : issueQueueLDU2  — Ldu
+Queue 9  : issueQueueSTA0  — Sta, Mou  +  issueQueueSTD0 — Std, Moud
+Queue 10 : issueQueueSTA1  — Sta, Mou  +  issueQueueSTD1 — Std, Moud
+Queue 11 : issueQueueFEX0  — Falu, Fmac, Fcvt, Fcmp, F2v
+Queue 12 : issueQueueFEX1  — Falu, Fmac, Fdiv
+Queue 13 : issueQueueFEX2  — Falu, Fmac, Fdiv
+Queue 14 : issueQueueFEX3  — Falu, Fmac
+Queue 15 : issueQueueVFEX0 — VialuFix, Falu, Fvma, Vimac, Vppu, Vipu, VFcvt, Vsetrvf, FvMove
+Queue 16 : issueQueueVFEX1 — VialuFix, Falu, Fvma, Vfdiv, Vvid
+Queue 17 : issueQueueVLSU0 — Vldu, Vstu, Vsegldu, Vsegstu
+Queue 18 : issueQueueVLSU1 — Vldu, Vstu
+```
+
+> **Reading the diagram**: ALU operations appear in six IQs, Queue 0 through Queue 5 (a typical `needMultiIQ` case), whereas LDU appears only in Queue 6 through Queue 8. This multi-copy plus load-balancing design prevents the most frequent integer operations from stalling just because one IQ is full.
+
+***
+
+## 4.4 BusyTable — have the source operands arrived?
+
+### 4.4.1 Why is a BusyTable needed?
+
+During rename, we know which physical register corresponds to each source operand. But **does that physical register already contain data?** If an earlier instruction has not written its result back, the source operand has not arrived. The Issue Queue needs readiness for each source operand to decide when it can issue the instruction.
+
+A BusyTable records **whether each physical register contains valid data**. Think of it as a parcel-tracking system that labels each package "delivered" or "in transit."
+
+### 4.4.2 Instantiating the five BusyTables
+
+XiangShan instantiates an independent BusyTable for each register class:
+
+```scala
+// From Dispatch.scala L402-L407
+val intBusyTable  = Module(new BusyTable(numRegSrcInt * renameWidth, backendParams.numPregWb(IntData()),  IntPhyRegs,  IntWB()))
+val fpBusyTable   = Module(new BusyTable(numRegSrcFp  * renameWidth, backendParams.numPregWb(FpData()),   FpPhyRegs,   FpWB()))
+val vecBusyTable  = Module(new BusyTable(numRegSrcVf  * renameWidth, backendParams.numPregWb(VecData()),  VfPhyRegs,   VfWB()))
+val v0BusyTable   = Module(new BusyTable(numRegSrcV0  * renameWidth, backendParams.numPregWb(V0Data()),   V0PhyRegs,   V0WB()))
+val vlBusyTable   = Module(new VlBusyTable(numRegSrcVl * renameWidth, backendParams.numPregWb(VlData()), VlPhyRegs,   VlWB()))
+```
+
+| **BusyTable** | **Managed object** | **Number of read ports** | **Writeback source** |
+| --- | --- | --- | --- |
+| intBusyTable | Integer physical registers | numRegSrcInt × RenameWidth | IntWB (integer writeback) |
+| fpBusyTable | Floating-point physical registers | numRegSrcFp × RenameWidth | FpWB (floating-point writeback) |
+| vecBusyTable | Vector physical registers | numRegSrcVf × RenameWidth | VfWB (vector writeback) |
+| v0BusyTable | v0 mask physical registers | numRegSrcV0 × RenameWidth | V0WB |
+| vlBusyTable | vl-length physical registers | numRegSrcVl × RenameWidth | VlWB (special implementation) |
+
+> The analogy is five independent parcel-tracking systems: domestic parcels, international parcels, cold-chain parcels, fragile parcels, and special parcels, each with its own tracking rules.
+
+### 4.4.3 The two core BusyTable operations: allocation and wake-up
+
+**1. Allocation — mark a newly written destination register as busy**
+
+When an instruction receives a new destination physical register during rename, the BusyTable marks that PR as **busy (`busy=true`)**, because the instruction has not completed and its data has not been written back.
+
+```scala
+// From Dispatch.scala L412-L423
+val allocPregsValid = Wire(Vec(busyTables.size, Vec(RenameWidth, Bool())))
+allocPregsValid(0) := VecInit(fromRename.map(x => x.valid && x.bits.rfWen && !x.bits.isMove))
+//                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^ Note: move elimination does not mark it busy!
+allocPregsValid(1) := VecInit(fromRename.map(x => x.valid && x.bits.fpWen))
+allocPregsValid(2) := VecInit(fromRename.map(x => x.valid && x.bits.vecWen))
+allocPregsValid(3) := VecInit(fromRename.map(x => x.valid && x.bits.v0Wen))
+
+val allocPregs = Wire(Vec(busyTables.size, Vec(RenameWidth, ValidIO(UInt(PhyRegIdxWidth.W)))))
+allocPregs.zip(allocPregsValid).map(x => {
+  x._1.zip(x._2).zipWithIndex.map{case ((sink, source), i) => {
+    sink.valid := source
+    sink.bits := fromRename(i).bits.pdest  // newly allocated destination PR number
+  }}
+})
+```
+
+**Important detail:** integer `allocPregsValid` contains `!x.bits.isMove`. A move-eliminated instruction does not allocate a new PR, so its destination PR does not need to be marked busy; the source PR's data was already ready.
+
+**2. Wake-up — mark a result ready when an instruction writes back**
+
+When an instruction finishes and writes its result, its destination PR is updated to **ready (`busy=false`)** in the BusyTable. Every Issue Queue entry waiting for that PR can receive the wake-up signal.
+
+```scala
+// From Dispatch.scala L424-L433
+val wakeUp = io.wakeUpAll.wakeUpInt ++ io.wakeUpAll.wakeUpFp ++ io.wakeUpAll.wakeUpVec
+busyTables.zip(wbPregs).zip(allocPregs).map{ case ((b, w), a) => {
+  b.io.wakeUpInt := io.wakeUpAll.wakeUpInt   // integer writeback wake-up
+  b.io.wakeUpFp  := io.wakeUpAll.wakeUpFp    // floating-point writeback wake-up
+  b.io.wakeUpVec := io.wakeUpAll.wakeUpVec   // vector writeback wake-up
+  b.io.og0Cancel := io.og0Cancel             // cancellation signal
+  b.io.ldCancel  := io.ldCancel              // Load cancellation signal
+  b.io.wbPregs   := w                         // writeback port numbers
+  b.io.allocPregs := a                        // allocation port numbers
+}}
+```
+
+**Three wake-up sources:** integer, floating-point, and vector writeback. Every BusyTable receives all three, so cross-type dependencies are also woken correctly (for example, an integer instruction depending on a floating-point result).
+
+### 4.4.4 BusyTable reads — querying source-operand readiness
+
+Dispatch queries source readiness through BusyTable read ports and passes the results to the Issue Queue:
+
+```scala
+// From Dispatch.scala L461-L496 (simplified)
+busyTables.zip(idxRegType).zipWithIndex.map { case ((b, idxseq), i) => {
+  // Build read addresses: extract psrc indices belonging to this register class
+  val readAddr = VecInit(fromRename.map(x =>
+    x.bits.psrc.zipWithIndex.filter(xx => idxseq.contains(xx._2)).map(_._1)
+  ).flatten)
+  // Build read enables: read only when the source type matches
+  val readValid = VecInit(fromRename.map(x =>
+    x.bits.psrc.zipWithIndex.filter(xx => idxseq.contains(xx._2))
+      .map(y => x.valid && SrcType.isXp(x.bits.srcType(y._2)))
+  ).flatten)
+  // Connect read ports
+  b.io.read.map(_.req).zip(readAddr).map(x => x._1 := x._2)
+}}
+```
+
+**Key points in the read logic:**
+
+1. Filter the source operand indices in `psrc` by register type (int/fp/vec/v0).
+2. Issue a read only when the source type matches (for example, an integer source reads `intBusyTable`).
+3. A true response from `busyTables(k).io.read(readidx).resp` means that the source operand is **ready**.
+
+### 4.4.5 `allSrcState` — combining source readiness
+
+Dispatch combines the read results of the five BusyTables into the common `allSrcState` structure passed to the Issue Queue:
+
+```scala
+// From Dispatch.scala L497-L519
+val allSrcState = Wire(Vec(renameWidth, Vec(numRegSrc, Vec(numRegType, Bool()))))
+for (i <- 0 until renameWidth){
+  for (j <- 0 until numRegSrc){
+    for (k <- 0 until numRegType){
+      if (!idxRegType(k).contains(j)) {
+        allSrcState(i)(j)(k) := false.B
+      } else {
+        val readEn = k match {
+          case 0 => SrcType.isXp(fromRename(i).bits.srcType(j))  // integer source
+          case 1 => SrcType.isFp(fromRename(i).bits.srcType(j))  // floating-point source
+          case 2 => SrcType.isVp(fromRename(i).bits.srcType(j))  // vector source
+          case 3 => SrcType.isV0(fromRename(i).bits.srcType(j))  // v0 source
+        }
+        // source ready = (matching type and BusyTable ready) or immediate
+        allSrcState(i)(j)(k) := readEn && busyTables(k).io.read(readidx).resp
+                              || SrcType.isImm(fromRename(i).bits.srcType(j))
+      }
+    }
+  }
+  // Handle the vl source separately
+  allSrcStateVl(i) := vlBusyTable.io.read(i).resp || !fromRename(i).bits.vlRen
+}
+```
+
+**Core formula:** `source ready = (type matches && BusyTable returns true) || is an immediate`
+
+An immediate is inherently ready because it does not depend on a register, so `SrcType.isImm` directly contributes true.
+
+:::color4
+**❤** **Beginner tip:**
+
+BusyTable logic can be summarized in one sentence: **mark a newly allocated destination PR busy, mark it ready after writeback, and let reads tell the IQ whether a source operand has arrived**. The multi-type, multi-port details are engineering implementations of this rule.
+
+:::
+
+***
+
+## 4.5 LSQ enqueue — the dedicated path for memory instructions
+
+### 4.5.1 Why do memory instructions need special handling?
+
+In addition to entering a normal Issue Queue, a Load/Store instruction must enter the **LSQ (Load-Store Queue)**. Memory operations involve address dependencies, memory consistency, and Store-to-Load forwarding, so a dedicated queue is needed to manage them.
+
+### 4.5.2 The LSQ enqueue interface in the source
+
+```scala
+// From Dispatch.scala L146-L147
+val toMem = new Bundle {
+  val lsqEnqIO = Flipped(new LsqEnqIO)
+}
+```
+
+Dispatch sends enqueue requests to the LSQ through `lsqEnqIO`. Compared with a normal IQ, LSQ enqueue carries additional information:
+
+```scala
+// From Dispatch.scala L204-L241 (LSQ fields from the debug output)
+// lsqEnqIO.req(i).bits contains:
+// - instr, pc       : instruction encoding and PC
+// - fuType, fuOpType: functional unit and operation code
+// - psrc, pdest     : physical register numbers
+// - robIdx          : ROB index
+// - sqIdx           : Store Queue index (returned after LSQ allocation)
+// - needAlloc       : whether an LSQ entry is needed (0=no, 1=Load, 2=Store)
+// - canAccept       : whether the LSQ has free space
+```
+
+### 4.5.3 Dual enqueue into the LSQ and IQ
+
+A memory instruction enters the IQ and LSQ **at the same time** during dispatch. The IQ schedules issue; the LSQ manages memory dependencies and consistency. The instruction can enqueue only when both structures have space.
+
+> The analogy is applying for a bank loan: registration must succeed at both the "service window" (IQ) and the "risk-control system" (LSQ) before processing can begin.
+
+***
+
+## 4.6 LFST — the load-forwarding store table
+
+### 4.6.1 Why is LFST needed?
+
+In an out-of-order processor, a Load may depend on the address-computation result of an earlier Store. If dispatch can learn about this dependency early, it can mark the Load's source dependency in the Issue Queue and avoid issuing the Load blindly and cancelling it later.
+
+LFST (Load-Forward-Store-Table) is XiangShan's dedicated module for **forwarding Store→Load dependency information early during dispatch**.
+
+```scala
+// From Dispatch.scala L153
+val lfst = new DispatchLFSTIO
+```
+
+### 4.6.2 Passing LFST dependency information
+
+In the source, LFST dependency information reaches the Issue Queue through the BusyTable `loadDependency` read port:
+
+```scala
+// From Dispatch.scala L466-L486
+val srcLoadDependencyUpdate = fromRenameUpdate.map(x => x.bits.srcLoadDependency)
+val srcType = fromRenameUpdate.map(x => x.bits.srcType)
+srcLoadDependencyUpdate.zip(srcType).zipWithIndex.foreach {
+  case ((sinks, srcTypes), uopIdx) =>
+    for (srcidx <- 0 until 3) {
+      val sink = sinks(srcidx)
+      val srcType = srcTypes(srcidx)
+      val fpRead = busyTables(1).io.read(uopIdx * 3 + srcidx).loadDependency
+      if (srcidx < 2) {
+        val intRead = busyTables(0).io.read(uopIdx * 2 + srcidx).loadDependency
+        sink := Mux1H(Seq(
+          SrcType.isFp(srcType) -> fpRead,
+          SrcType.isXp(srcType) -> intRead,
+        ))
+      } else {
+        sink := Mux(SrcType.isFp(srcType), fpRead, 0.U.asTypeOf(sink))
+      }
+    }
+}
+```
+
+**Dependency-selection logic:** according to the source operand type (integer or floating point), read `loadDependency` from the corresponding BusyTable port and pass it downstream to the Issue Queue. This tells the IQ: "the source is ready, but it may depend on an unfinished Store, so issue it with special care."
+
+***
+
+## 4.7 RegCacheTagTable — managing register-cache tags
+
+### 4.7.1 What is RegCache?
+
+To reduce integer-register bypass latency, XiangShan introduces **RegCache**, a small register-cache mechanism. `RegCacheTagTable` manages RegCache tags and reads the tags for integer source operands during dispatch.
+
+```scala
+// From Dispatch.scala L400-L401
+val rcTagTable = Module(new RegCacheTagTable(numRegSrcInt * renameWidth))
+```
+
+### 4.7.2 Connecting RegCacheTagTable reads
+
+```scala
+// From Dispatch.scala L453-L459
+rcTagTable.io.allocPregs.zip(allocPregs(0)).map(x => x._1 := x._2)   // update tags on allocation
+rcTagTable.io.wakeupFromIQ := io.wakeUpAll.wakeUpInt                    // update tags on IQ wake-up
+rcTagTable.io.og0Cancel := io.og0Cancel                                 // cancellation signal
+rcTagTable.io.ldCancel := io.ldCancel                                   // Load cancellation signal
+```
+
+```scala
+// From Dispatch.scala L489-L494
+// Read RegCache tags only for integer source operands
+val rcTagUpdate = fromRenameUpdate.map(x =>
+  x.bits.regCacheIdx.zipWithIndex.filter(x => idxseq.contains(x._2)).map(_._1)
+).flatten
+rcTagUpdate.zip(rcTagTable.io.readPorts.map(_.addr)).map(x => x._1 := x._2)
+```
+
+> **RegCache is an advanced optimization.** Beginners only need to know that it exists. The key idea is that frequently used integer-register values can be cached closer to the execution units, reducing register-file read latency.
+
+***
+
+## 4.8 Special handling of vector source operands — ignoring an old `vd`
+
+### 4.8.1 Why do vector instructions need special handling?
+
+Vector instructions have a special source, the **old `vd`** (old destination vector register). Some vector instructions read the old destination for a merge operation. In many cases, such as an invisible tail or an all-one mask, the old value is not actually used. It can then be marked ready to avoid an unnecessary wait.
+
+```scala
+// From Dispatch.scala L521-L542
+val ignoreOldVdVec = Wire(Vec(renameWidth, Bool()))
+for (i <- 0 until renameWidth){
+  val isDependOldVd = fromRename(i).bits.vpu.isDependOldVd
+  val isWritePartVd = fromRename(i).bits.vpu.isWritePartVd
+  val vta = fromRename(i).bits.vpu.vta
+  val vma = fromRename(i).bits.vpu.vma
+  val vm = fromRename(i).bits.vpu.vm
+  val vlIsVlmax = vlBusyTable.io_vl_read.vlReadInfo(i).is_vlmax
+  val vlIsNonZero = vlBusyTable.io_vl_read.vlReadInfo(i).is_nonzero
+  val ignoreTail = vlIsVlmax && (vm =/= 0.U || vma) && !isWritePartVd
+  val ignoreWhole = (vm =/= 0.U || vma) && vta
+  val ignoreOldVd = vlBusyTable.io.read(i).resp && vlIsNonZero && !isDependOldVd && (ignoreTail || ignoreWhole)
+  ignoreOldVdVec(i) := readEn && ignoreOldVd
+  // If old vd can be ignored, mark it ready
+  allSrcState(i)(j)(k) := readEn && (busyTables(k).io.read(readidx).resp || ignoreOldVd)
+                        || SrcType.isImm(fromRename(i).bits.srcType(j))
+}
+```
+
+**Conditions for ignoring old `vd`:**
+
+1. `vl` is ready and non-zero.
+2. The instruction does not depend on the old `vd` value (`!isDependOldVd`).
+3. The conditions for ignoring the tail or the whole destination are met (related to `vta`, `vma`, and `vm`).
+
+> It is like cooking a dish that normally needs leftovers from the previous meal. If the recipe confirms that leftovers are not used, there is no need to wait for them to arrive.
+
+***
+
+## 4.9 When does dispatch stall?
+
+### 4.9.1 Three major sources of stalls
+
+Dispatch is **one of the stages most likely to become a bottleneck**, because it must satisfy the acceptance conditions of several downstream modules at once:
+
+| **Stall source** | **Trigger** | **Effect** |
+| --- | --- | --- |
+| **ROB full** | No free ROB entries | No instruction can enqueue; the whole pipeline stalls |
+| **Target IQ full** | The instruction's Issue Queue has no free entry | That instruction class stalls; other classes may continue |
+| **LSQ full** | The Load/Store Queue has no free entry | Memory instructions stall; non-memory instructions may continue |
+
+### 4.9.2 Stall propagation in the source
+
+```scala
+// From Dispatch.scala L324
+io.toRenameAllFire := io.fromRename.map(x => !x.valid || x.fire).reduce(_ && _)
+```
+
+`toRenameAllFire` is the signal sent from dispatch back to rename. It is true only when every valid instruction completes its handshake (`fire`). If any instruction cannot be dispatched because a downstream structure is full, the signal is false. Rename stalls, and front-end decode stalls in turn: **back-pressure propagates from back to front**.
+
+> This is like congestion on a highway: when the toll station at the front (IQ/ROB) is full, the cars behind it (instructions) stop one after another until the whole highway (pipeline) is blocked.
+
+***
+
+## 4.10 Data updates between dispatch and rename
+
+### 4.10.1 `fromRenameUpdate` — correcting rename output
+
+Dispatch does not merely accept rename output; it also **corrects selected fields** before passing it downstream:
+
+```scala
+// From Dispatch.scala L325-L342
+val fromRenameUpdate = Wire(Vec(RenameWidth, Flipped(ValidIO(new DispatchUpdateUop))))
+for (i <- 0 until RenameWidth) {
+  fromRenameUpdate(i).valid := fromRename(i).valid
+  // v0 does not need srcLoadDependency; srcState is updated through allSrcState
+  fromRenameUpdate(i).bits.srcLoadDependency(3) := 0.U.asTypeOf(...)
+  fromRenameUpdate(i).bits.srcState := 0.U.asTypeOf(...)
+  fromRenameUpdate(i).bits.srcStateVl := 0.U
+  connectSamePort(fromRenameUpdate(i).bits, fromRename(i).bits)
+  // Correct ftqOffset: for branch/Store compression, use the last instruction's offset
+  fromRenameUpdate(i).bits.ftqOffset := fromRename(i).bits.ftqLastOffset
+  // Correct ftqPtr: add one when crossing an FTQ line
+  fromRenameUpdate(i).bits.ftqPtr := fromRename(i).bits.ftqPtr + fromRename(i).bits.crossFtq
+  // Correct isRVC: use the last instruction's compressed flag
+  fromRenameUpdate(i).bits.isRVC := fromRename(i).bits.lastIsRVC
+}
+```
+
+**Important corrected fields:**
+
+* `ftqOffset`: ROB compression can put multiple instructions into one ROB entry, so the FTQ offset of the last instruction is required
+* `ftqPtr`: adjust the pointer when crossing an FTQ line
+* `srcState`: overwritten by BusyTable read results (rename cannot know readiness)
+* `srcLoadDependency`: filled by LFST logic
+
+***
+
+## 4.11 Special dispatch logic in SingleStep debug mode
+
+### 4.11.1 Why is SingleStep special handling needed?
+
+In debug mode, the processor must pause after every machine instruction commits. Because of ROB compression, one machine instruction can correspond to multiple micro-operations. Dispatch must track exactly which micro-operation belongs to the machine instruction currently being stepped.
+
+```scala
+// From Dispatch.scala L545-L568
+val s_holdRobidx :: s_updateRobidx :: Nil = Enum(2)
+val singleStepState = RegInit(s_updateRobidx)
+
+when(!io.singleStep) {
+  singleStepState := s_updateRobidx
+}.elsewhen(io.singleStep && fromRename(0).fire && io.enqRob.req(0).valid) {
+  singleStepState := s_holdRobidx
+  robidxStepHold := fromRename(0).bits.robIdx
+}
+```
+
+**State machine:**
+
+* `s_updateRobidx`: normal state; update the step's ROB index
+* `s_holdRobidx`: hold the current step's ROB index and wait for commit before pausing
+
+> This is advanced debug-related material; beginners only need to know that it exists.
+
+***
+
+## 4.12 Hands-on exercise: follow an ADD instruction through dispatch
+
+### 4.12.1 Exercise: follow `add x10, x1, x2`
+
+**Step 1: receive rename output**
+
+```scala
+// Dispatch.scala L106
+val fromRename = Vec(RenameWidth, Flipped(DecoupledIO(new RenameOutUop)))
+```
+
+Assume that after rename, `add x10, x1, x2` has `psrc(0)=PR5`, `psrc(1)=PR8`, `pdest=PR50`, and `fuType=ALU`.
+
+**Step 2: allocate a ROB entry**
+
+```scala
+// Dispatch.scala L109
+val enqRob = Flipped(new RobEnqIO)
+```
+
+Request an entry from the ROB and obtain `robIdx`. The ROB records this instruction's commit-tracking information.
+
+**Step 3: query source readiness in BusyTable**
+
+* Query `intBusyTable`: are PR5 and PR8 ready?
+* Assume PR5 has written back (ready) while PR8 has not (busy).
+* `allSrcState = [true, false]` (source 1 ready, source 2 not ready).
+
+**Step 4: route to an Issue Queue**
+
+* `fuType=ALU` → look up `fuMapIQIdx` → ALU is present in Queue 0 through Queue 5.
+* `needMultiIQ` → load balancing chooses a queue → assume Queue 2 is the least occupied.
+
+**Step 5: write into the Issue Queue**
+
+```scala
+// Dispatch.scala L112
+val toIssueQueues = Vec(IQEnqSum, DecoupledIO(new DispatchOutUop))
+```
+
+The instruction is written to Queue 2 with `psrc=[PR5, PR8]`, `pdest=PR50`, `robIdx`, and `srcState=[ready, busy]`.
+
+**Step 6: wait for wake-up**
+
+When a later instruction writes back PR8, `intBusyTable` wakes the entry. Source 2 becomes ready in the Issue Queue, and the instruction can issue.
+
+### 4.12.2 Comparison: dispatching a Load
+
+For `lw x10, 0(x5)`:
+
+1. After rename: `psrc(0)=PR5` (base register), `pdest=PR50`, `fuType=LDU`.
+2. Allocate a ROB entry.
+3. **LSQ enqueue**: the Load must allocate an LQ entry in the LSQ.
+4. Query BusyTable: is PR5 ready?
+5. IQ routing: `LDU` → Queue 6 through Queue 8 (Load-specific IQs).
+6. **Dual dependency**: both the IQ and LSQ must have space before the instruction can enqueue.
+
+***
+
+## 4.13 Frequently asked questions and troubleshooting
+
+### Q1: When dispatch stalls, how can I identify the responsible module?
+
+XiangShan's stall-reason tracking system (`stallReason`) records the reason for a stall in each cycle:
+
+```scala
+// From Dispatch.scala L157
+val stallReason = Flipped(new StallReasonIO(RenameWidth))
+```
+
+Analyze the `stallReason` output to determine precisely whether the ROB, an IQ, or the LSQ caused the stall.
+
+### Q2: Why is a move-eliminated instruction not marked busy in BusyTable?
+
+```scala
+// From Dispatch.scala L413
+allocPregsValid(0) := VecInit(fromRename.map(x => x.valid && x.bits.rfWen && !x.bits.isMove))
+```
+
+For a move-eliminated instruction, `pdest` equals the source PR, whose data is already ready. Marking it busy would make the downstream IQ incorrectly believe that the PR contains no valid data, and dependent instructions would never issue.
+
+### Q3: Can load balancing across multiple IQs add latency?
+
+Yes. The comparison matrix (`compareMatrix`) has O(iqNum²) combinational logic depth and may become a timing bottleneck in a high-frequency design. XiangShan mitigates this pressure by registering the `IQSort` path.
+
+***
+
+## 4.14 Tiered learning path
+
+🟢 **Must know first:** the three responsibilities of dispatch (ROB allocation, IQ routing, and BusyTable initialization), stall conditions, and back-pressure propagation
+
+🔵 **Understand next:** `fuMapIQIdx` routing, the `needMultiIQ` load-balancing algorithm, BusyTable allocation/wake-up/read source implementation, and dual LSQ enqueue
+
+🟣 **Deep dive:** LFST dependency forwarding, RegCacheTagTable tag management, ignoring an old vector `vd`, SingleStep debug dispatch, and timing optimization for multi-IQ load balancing
+
+***
+
+## 4.15 Summary
+
+✅ **Key points:**
+
+* Dispatch is the **bridge between rename and issue**. Its three core jobs are **ROB allocation, IQ routing, and source-readiness initialization**.
+* **ROB allocation** preserves in-order commit after out-of-order execution; a full ROB stalls the pipeline.
+* **IQ routing** uses `fuMapIQIdx` to send each instruction to the correct Issue Queue; multi-queue routing uses **load balancing** to select the least occupied IQ.
+* **BusyTable** records physical-register busy/ready state: a newly allocated PR is busy and is woken ready on writeback. Each of the five register classes has an independent BusyTable.
+* A **move-eliminated instruction** is **not marked busy** in BusyTable because its `pdest` shares the source PR's data.
+* **LSQ enqueue** is the dedicated memory-instruction path and requires both the IQ and LSQ to be ready.
+* **LFST** forwards Store→Load dependencies early so that Loads are not issued blindly.
+* Dispatch stalls when the **ROB, target IQ, or LSQ is full**, and back-pressure propagates toward the front end.
+
+🎉 **Congratulations on completing the dispatch stage!** You now understand the full path from an instruction receiving a physical-register identity to entering a workshop queue. Dispatch may look like a simple sorting center, but its routing, state initialization, load balancing, and stall control are all significant engineering challenges in a high-performance processor. Next, explore how instructions are selected and issued from the Issue Queue.
+
+***
+
+Next, continue with:
+
+* [XiangShan out-of-order pipeline design](16-xiangshan-ooo-pipeline-design)
+* [Dynamic instruction execution analysis](17-instruction-dynamic-execution-analysis)
+* [Bug classification and analysis](21-bug-classification-and-analysis)
+
+
+> Updated: 2026-06-02 10:56:42
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/rx0ps1qslgayqqlb>

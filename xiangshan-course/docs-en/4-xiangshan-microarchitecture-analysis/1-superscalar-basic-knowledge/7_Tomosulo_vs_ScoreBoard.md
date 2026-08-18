@@ -1,3 +1,4 @@
+<!--
 # 7. Tomosulo vs. ScoreBoard
 
 ## 2[附件: 超标量处理器核心调度机制：Scoreboard vs. Tomasulo.pptx](./attachments/TmgZkHVV_tGSVWim/超标量处理器核心调度机制：Scoreboard vs. Tomasulo.pptx)
@@ -277,3 +278,178 @@ class Rename(implicit p: Parameters) extends XiangShanModule {
 
 > 更新: 2026-06-03 15:47:05  
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/ls3en2b6g41pqp2e>
+-->
+
+# 7. Tomasulo vs. Scoreboard
+
+[Attachment: Core scheduling mechanisms in superscalar processors: Scoreboard vs. Tomasulo](./attachments/TmgZkHVV_tGSVWim/超标量处理器核心调度机制：Scoreboard vs. Tomasulo.pptx)
+
+## Learning objectives
+
+- Understand why dynamic scheduling is needed in a superscalar pipeline.
+- Explain the data structures and four phases of the Scoreboard and Tomasulo algorithms.
+- Compare their handling of RAW, WAR, and WAW hazards, scalability, and hardware cost.
+- Relate Tomasulo-style scheduling, register renaming, and precise exceptions to the XiangShan/Nanhu implementation.
+
+## 1. Why dynamic scheduling?
+
+In an in-order pipeline, one long-latency instruction can block younger independent instructions. Dynamic scheduling lets hardware select a ready instruction when its operands and functional unit are available, exposing instruction-level parallelism (ILP) at run time. The scheduler must preserve architectural correctness and, in a modern core, commit results in program order.
+
+## 2. Scoreboard algorithm
+
+The Scoreboard, introduced with the CDC 6600, is a centralized table that tracks functional-unit occupancy, operand readiness, and instruction state. It has four conceptual phases:
+
+1. **Issue**: Decode an instruction and reserve a free functional unit. Issue is held if the unit is busy or if issuing would create a structural conflict.
+2. **Read operands**: Wait until all source operands are available, then read them from the register file. The scoreboard delays reads to avoid RAW hazards.
+3. **Execute**: Run the operation in the reserved unit. Multiple independent units may execute concurrently.
+4. **Write result**: Write the result to the register file when the unit finishes, while checking for WAR hazards so an older reader is not bypassed.
+
+A simplified example is:
+
+```plain
+DIV.D F0, F2, F4
+ADD.D F6, F0, F8
+SUB.D F8, F10, F12
+```
+
+`ADD.D` waits for the divide because it has a true RAW dependence on `F0`. `SUB.D` writes `F8`, which an older instruction may still need to read, so the scoreboard can also delay its write for a WAR hazard. Since architectural registers are not renamed, WAW hazards likewise require centralized ordering checks.
+
+### Strengths and limitations
+
+| Strengths | Limitations |
+| --- | --- |
+| Simpler hardware and a single centralized control table | Centralized wakeup and hazard checks become a timing bottleneck |
+| Can issue independent instructions dynamically | WAR and WAW hazards are not removed; they must be stalled |
+| Useful for teaching and small, low-cost designs | Limited scalability beyond a small issue width and unit count |
+| No large physical-register structure is required | The register file is the main result-communication path |
+
+## 3. Tomasulo algorithm
+
+Tomasulo's key innovations are **register renaming**, **distributed reservation stations**, and a **common data bus (CDB)**. A destination is associated with a tag (or physical register) rather than only an architectural register name. Consumers wait for the tag, so WAR and WAW name dependences disappear while RAW true dependences remain.
+
+### 3.1 Core components
+
+- **Reservation stations** buffer instructions near their functional units and hold either a ready operand or the tag of its producer.
+- **Register alias table / physical register file** maps architectural destinations to physical registers (modern implementations use a PRF and a ROB).
+- **CDB or result network** broadcasts a completed value and its tag to every waiting station.
+- **Reorder buffer (ROB)** records program order and commits results in order, providing precise exceptions.
+
+### 3.2 Four execution phases
+
+1. **Issue/rename**: Allocate a reservation-station entry and a destination tag; capture ready operands and record tags for pending operands.
+2. **Execute**: When all operands are ready and the functional unit is available, execute the operation.
+3. **Write result**: Broadcast the result and tag on the CDB/result network. All matching stations and the physical register receive it.
+4. **Commit**: When the instruction reaches the ROB head and is complete, update architectural state. Branches update the PC and stores update the memory system at the appropriate commit point.
+
+For the same instruction sequence:
+
+```plain
+DIV.D F0, F2, F4   # rename F0 to P1
+ADD.D F6, F0, F8   # rename F6 to P2; source F0 refers to P1
+SUB.D F8, F10, F12 # rename F8 to P3
+```
+
+`ADD.D` still waits for `P1` (RAW). `SUB.D` can proceed without waiting for the older read of `F8`, because it writes `P3` (WAR removed). Independent instructions can execute in parallel.
+
+### Strengths and limitations
+
+| Strengths | Limitations |
+| --- | --- |
+| Register renaming removes WAR and WAW hazards | More state, ports, tags, and verification complexity |
+| Distributed scheduling scales better than one central table | Reservation stations and physical registers consume area and power |
+| CDB/result forwarding exposes more ILP | A single CDB can become a bandwidth bottleneck; modern cores use several result buses |
+| Works naturally with out-of-order execution and precise commit | Requires sophisticated recovery and control logic |
+
+## 4. Scoreboard vs. Tomasulo
+
+| Dimension | Scoreboard | Tomasulo |
+| --- | --- | --- |
+| Main idea | Centralized instruction/resource tracking | Distributed reservation stations plus renaming |
+| Register renaming | Not supported | Core feature |
+| Hazard handling | Partial RAW handling; WAR/WAW require stalls | RAW remains; WAR/WAW are removed by renaming |
+| Control | Centralized | Distributed wakeup and selection |
+| Operand storage | Register file | Reservation stations and physical register file |
+| Result propagation | Through the register file | CDB/result network broadcasts to all consumers |
+| Hardware complexity | Lower | Higher |
+| Scalability | Poor beyond a small issue width | Good; modern designs scale to multiple issue |
+| ILP extraction | Limited | Higher |
+| Precise exceptions | Not inherent | ROB provides ordered commit |
+| Historical example | CDC 6600 (1964) | IBM System/360 Model 91 (1967) |
+| Modern use | Mainly educational or specialized | Foundation of high-performance out-of-order CPUs |
+
+**Conclusion:** Tomasulo's extra hardware buys more ILP and removes the major name hazards. That trade-off is why Tomasulo-style scheduling, with a ROB and multiple result paths, underlies most modern high-performance cores.
+
+## 5. Tomasulo in XiangShan's Nanhu core
+
+The Nanhu architecture uses a Tomasulo-like out-of-order backend adapted for RISC-V. The source chapter lists these representative parameters:
+
+| Component | Stated parameter |
+| --- | --- |
+| Issue width | 4 instructions per cycle |
+| ROB | 256 entries |
+| Physical registers | 192 integer + 192 floating-point |
+| Integer reservation stations | 32 entries |
+| Floating-point reservation stations | 24 entries |
+| Load queue | 64 entries |
+| Store queue | 64 entries |
+| CDB/result paths | 4 |
+
+The implementation highlights are:
+
+1. **Hierarchical reservation stations:** Integer and floating-point instructions use separate structures, with entries specialized for different execution units.
+2. **Multiple result buses:** Four independent result paths can broadcast up to four completions per cycle, avoiding the single-CDB bottleneck.
+3. **Partitioned physical register files:** Integer and floating-point PRFs are separated and their read/write ports are organized to reduce wiring and complexity; old physical registers can be reclaimed quickly after commit.
+4. **Precise exceptions:** The ROB commits in program order and can roll back to the state before a faulting instruction, supporting fast interrupts and exceptions.
+
+### Simplified register-renaming example
+
+```scala
+// Simplified XiangShan RISC-V register-renaming logic
+class Rename(implicit p: Parameters) extends XiangShanModule {
+  val io = IO(new Bundle {
+    val in = Vec(RenameWidth, Flipped(Decoupled(new DecodeInst)))
+    val out = Vec(RenameWidth, Decoupled(new RenameInst))
+    val robAlloc = Vec(RenameWidth, Output(new RobAllocInfo))
+    val commit = Input(new CommitInfo)
+  })
+
+  val rat = RegInit(VecInit(Seq.fill(32)(0.U(PhyRegIdxWidth.W))))
+  val freeList = Module(new FreeList(PhyRegsNum, 32))
+
+  when (io.in(0).fire) {
+    val pd = freeList.io.allocate(0).bits
+    val ps1 = rat(io.in(0).bits.rs1)
+    val ps2 = rat(io.in(0).bits.rs2)
+    rat(io.in(0).bits.rd) := pd
+    io.out(0).bits.pd := pd
+    io.out(0).bits.ps1 := ps1
+    io.out(0).bits.ps2 := ps2
+  }
+
+  when (io.commit.valid) {
+    freeList.io.free(0).valid := true
+    freeList.io.free(0).bits := io.commit.oldPd
+  }
+}
+```
+
+## 6. Further questions and reading
+
+Why study Scoreboard when Tomasulo is more capable? Scoreboard can still be attractive when a design needs minimal state, predictable centralized control, or a small number of functional units. The trade-off is lower ILP and poorer scalability.
+
+Suggested topics include the evolution from original Tomasulo to ROB-based out-of-order execution, mapping-table versus swap-based renaming, practical ROB-size limits, and the interaction between SMT and dynamic scheduling.
+
+- [A detailed introduction to out-of-order execution](https://blog.csdn.net/gjq_1988/article/details/39520729)
+- [Register-renaming principles](register-renaming.html)
+- [XiangShan RISC-V microarchitecture documentation](https://docs.xiangshan.cc/zh-cn/latest/integration/overview/#microarchitecture)
+
+## 7. Chapter summary
+
+1. Dynamic scheduling resolves dependences and exposes ILP; Scoreboard and Tomasulo are the two classic algorithms.
+2. Scoreboard uses centralized state tracking and provides basic dynamic scheduling, but it does not remove WAR/WAW hazards and scales poorly.
+3. Tomasulo uses register renaming, distributed reservation stations, and result broadcasting to remove name hazards and schedule instructions efficiently. With an ROB, it supports precise, in-order commit.
+4. Tomasulo is more scalable and extracts more ILP, at the cost of more hardware and control complexity.
+5. XiangShan/Nanhu balances the cost with hierarchical reservation stations, multiple result buses, and optimized physical register files.
+
+> Updated: 2026-06-03 15:47:05
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/ls3en2b6g41pqp2e>

@@ -1,3 +1,4 @@
+<!--
 # 5. 单发射 vs. 多发射
 
 [附件: 单发射 vs. 多发射：处理器性能的核心抉择.pptx](./attachments/CjhqwUNZSf3oW9Re/单发射 vs. 多发射：处理器性能的核心抉择.pptx)
@@ -49,7 +50,7 @@ _<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">图 1：处
 <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">🎬</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> 点击下方按钮运行流水线动画，观察一条 ADD 指令在 5 级流水线中的完整执行过程。</font>
 
 ```html
-<!-- 5级流水线动画演示 - 开始 -->
+&lt;!-- 5级流水线动画演示 - 开始 --&gt;
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const btnRun = document.getElementById('btn-run');
@@ -383,7 +384,7 @@ document.addEventListener('DOMContentLoaded', function() {
     时钟周期：<span id="cycle-count">0</span>
   </div>
 </div>
-<!-- 5级流水线动画演示 - 结束 -->
+&lt;!-- 5级流水线动画演示 - 结束 --&gt;
 ```
 
 ---
@@ -492,7 +493,7 @@ end
 <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">🎬</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> 拖动滑块调整发射宽度（1-4），观察相同指令序列的执行时间变化。</font>
 
 ```html
-<!-- 单发射vs多发射对比动画 - 开始 -->
+&lt;!-- 单发射vs多发射对比动画 - 开始 --&gt;
 <script>
   // 单发射vs多发射对比动画逻辑
 document.addEventListener('DOMContentLoaded', function() {
@@ -875,7 +876,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </tr>
       </thead>
       <tbody id="pipeline-body">
-        <!-- 动态生成流水线表格内容 -->
+        &lt;!-- 动态生成流水线表格内容 --&gt;
       </tbody>
     </table>
   </div>
@@ -900,7 +901,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 </div>
-<!-- 单发射vs多发射对比动画 - 结束 -->
+&lt;!-- 单发射vs多发射对比动画 - 结束 --&gt;
 ```
 
 ### <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">4.4 多发射处理器的技术挑战</font>
@@ -982,3 +983,219 @@ document.addEventListener('DOMContentLoaded', function() {
 
 > 更新: 2026-05-12 11:45:52  
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/gxqhgm1yibgywucr>
+-->
+
+# 5. Single-Issue vs. Multiple-Issue Processors
+
+[Attachment: Single issue vs. multiple issue - a core choice in processor performance](./attachments/CjhqwUNZSf3oW9Re/单发射 vs. 多发射：处理器性能的核心抉择.pptx)
+
+## Learning objectives
+
+- Understand the essential difference between single-issue and multiple-issue processors.
+- Distinguish the two major multiple-issue implementation styles.
+- Follow XiangShan's evolution from a single-issue prototype to a multiple-issue core.
+- Select an appropriate architecture for a workload's performance, power, and area constraints.
+
+## 1. Why use multiple issue?
+
+There are two fundamental ways to improve processor performance:
+
+- **Raise clock frequency:** shorten each clock cycle, subject to physical, power, and cooling limits.
+- **Raise instruction-level parallelism (ILP):** do more useful work in the same clock cycle.
+
+Single issue and multiple issue are the basic architectural choices for exploiting ILP.
+
+*Figure 1: Processor-performance evolution and the contribution of ILP.*
+
+![Processor evolution and ILP](img/5-single-issue-vs-multi-issue/figure-001-ilp-risc-v.jpeg)
+
+**XiangShan RISC-V evolution:** from the single-issue in-order XiangShan No. 1 prototype to the four-issue out-of-order Nanhu architecture, its evolution follows this path of increasing ILP.
+
+## 2. Core concepts
+
+| Term | Definition |
+| --- | --- |
+| **Issue** | Send a decoded instruction to an execution unit so that it can begin execution. |
+| **Issue width** | Maximum number of instructions that can be issued in one clock cycle. |
+| **Instruction-level parallelism (ILP)** | Number of operations in a program that can execute at the same time. |
+
+### Classic five-stage pipeline
+
+The standard five-stage RISC pipeline provides the baseline:
+
+1. **IF (Instruction Fetch):** fetch the next instruction from instruction memory.
+2. **ID (Instruction Decode):** decode the opcode and read source registers.
+3. **EX (Execute):** perform the arithmetic or logical operation in the ALU.
+4. **MEM (Memory Access):** access data memory for a load or store.
+5. **WB (Write Back):** write the result to the destination register.
+
+The original lesson includes an interactive animation for an `ADD` instruction. Its execution is summarized here:
+
+| Cycle | Active stage | Operation |
+| --- | --- | --- |
+| 1 | IF | Fetch `add x1, x2, x3` from instruction memory. |
+| 2 | ID | Decode the opcode and read `x2` and `x3`. |
+| 3 | EX | Compute `x2 + x3` in the ALU. |
+| 4 | MEM | No data-memory access is required for `ADD`. |
+| 5 | WB | Write the result into `x1`. |
+
+## 3. Single-issue processors
+
+### 3.1 Definition
+
+A **single-issue processor** issues at most one instruction to its execution units in each cycle.
+
+- Its ideal pipeline CPI is 1.
+- Data, control, and structural hazards make real CPI greater than 1.
+- It is the simplest basic processor organization.
+
+### 3.2 Execution example
+
+Consider four independent RISC-V instructions:
+
+```plain
+add x1, x2, x3     # Instruction 1: x1 = x2 + x3
+sub x4, x5, x6     # Instruction 2: x4 = x5 - x6
+and x7, x8, x9     # Instruction 3: x7 = x8 & x9
+or  x10, x11, x12  # Instruction 4: x10 = x11 | x12
+```
+
+| Stage / cycle | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| IF | I1 | I2 | I3 | I4 | | | | |
+| ID | | I1 | I2 | I3 | I4 | | | |
+| EX | | | I1 | I2 | I3 | I4 | | |
+| MEM | | | | I1 | I2 | I3 | I4 | |
+| WB | | | | | I1 | I2 | I3 | I4 |
+
+Even though the four instructions are independent, a single-issue machine starts them one at a time and needs eight cycles for all four to finish.
+
+### 3.3 Advantages and disadvantages
+
+| Advantages | Disadvantages |
+| --- | --- |
+| Simple to design and verify | Low performance ceiling; hardware resources cannot be fully utilized |
+| Low power and small area | Cannot expose much ILP |
+| Easy timing closure | Process improvements alone yield limited performance gains |
+
+### 3.4 XiangShan's single-issue stage
+
+The early XiangShan No. 1 prototype used single-issue in-order execution to validate RISC-V compatibility and the basic architecture. Its simplified issue logic is:
+
+```verilog
+// Single-issue instruction-issue logic
+always @(posedge clk) begin
+  if (reset) begin
+    issue_valid <= 1'b0;
+  end else if (id_valid && !stall) begin
+    issue_valid <= 1'b1;
+    issue_inst <= id_inst;
+    issue_rs1 <= id_rs1;
+    issue_rs2 <= id_rs2;
+    issue_rd <= id_rd;
+  end else begin
+    issue_valid <= 1'b0;
+  end
+end
+```
+
+[View the XiangShan core source on GitHub](https://github.com/OpenXiangShan/XiangShan/tree/master/src/main/scala/xiangshan/core)
+
+## 4. Multiple-issue processors
+
+### 4.1 Definition
+
+A **multiple-issue processor** can send several instructions to different execution units in one clock cycle.
+
+- Common widths include two, four, and eight instructions per cycle.
+- The goal is to raise instruction throughput and lower CPI through concurrent execution.
+- Modern high-performance processors commonly use multiple issue.
+
+### 4.2 Two major implementation styles
+
+#### 4.2.1 Superscalar processors
+
+Superscalar is the most common multiple-issue implementation. Hardware **dynamically checks** dependencies at run time, issues several independent instructions together, and commonly combines this with out-of-order execution. Representative processors include modern x86 designs, ARM Cortex-A processors, and XiangShan Nanhu.
+
+#### 4.2.2 Very Long Instruction Word (VLIW) processors
+
+VLIW moves the scheduling decision to the compiler. One long instruction contains several operations, each assigned to an execution unit. This lowers hardware complexity but relies on compiler scheduling quality. DSPs and the earlier IA-64 family are representative examples.
+
+### 4.3 Two-issue superscalar execution
+
+For the same four independent instructions, a two-issue machine can fetch, decode, execute, access memory for, and write back two instructions per cycle:
+
+| Stage / cycle | 1 | 2 | 3 | 4 | 5 | 6 |
+| --- | --- | --- | --- | --- | --- |
+| IF | I1, I2 | I3, I4 | | | | |
+| ID | | I1, I2 | I3, I4 | | | |
+| EX | | | I1, I2 | I3, I4 | | |
+| MEM | | | | I1, I2 | I3, I4 | |
+| WB | | | | | I1, I2 | I3, I4 |
+
+The source lesson's second interactive comparison makes the same point: with no dependencies and enough units, four instructions complete in six cycles rather than eight. The practical gain is bounded by available ILP, dependencies, resource conflicts, and branch behavior.
+
+### 4.4 Technical challenges
+
+Higher issue width improves peak throughput but sharply raises implementation complexity:
+
+1. **Dependency checking:** A bundle of `N` instructions requires checking up to `N^2` intra-bundle dependency relationships in a cycle.
+2. **Register-file ports:** The basic model needs up to `2N` source reads and `N` result writes concurrently.
+3. **Functional-unit contention:** The scheduler must direct different instruction types to appropriate available units.
+4. **Branch-prediction accuracy:** A misprediction wastes more work as issue width increases.
+
+### 4.5 Multiple issue in XiangShan
+
+The chapter describes the second-generation **Nanhu** architecture as a four-issue out-of-order processor:
+
+| Core parameter | Stated value |
+| --- | --- |
+| Issue width | 4 instructions per cycle |
+| Reorder buffer (ROB) | 256 entries |
+| Physical registers | 192 |
+| Integer execution units | 4 |
+| Floating-point execution units | 2 |
+| Load/Store units | 2 |
+
+The design emphasizes efficient dispatch and dependency checking, an execution-unit layout optimized for RISC-V, and a low-power out-of-order design. The source reports that Nanhu achieved 3.2 times the performance of the single-issue prototype on SPEC CPU2006 integer benchmarks.
+
+## 5. Complete comparison
+
+| Dimension | Single issue | Multiple issue |
+| --- | --- | --- |
+| Issue width | 1 instruction/cycle | 2 or more instructions/cycle |
+| Ideal CPI | 1 | `1 / issue width` |
+| Practical CPI | Greater than 1 | Near or below 1 when enough ILP exists |
+| Design complexity | Low | High |
+| Hardware cost | Low area and power | Higher area and power |
+| Performance ceiling | Low | High |
+| ILP extraction | Limited | Stronger |
+| Suitable workloads | Low-power embedded systems, MCUs, teaching | High-performance computing, servers, desktop processors |
+
+There is no universally superior choice. Single issue is appropriate when power and area dominate; multiple issue is appropriate when high instruction throughput matters and its hardware cost is justified.
+
+## 6. Questions and further reading
+
+**Question:** If every instruction depends on the result of its predecessor, can a multiple-issue processor still be faster than a single-issue processor? Explain which independent work, latency hiding, or microarchitectural effects remain available.
+
+Further topics:
+
+- Why modern general-purpose processors rarely exceed eight-wide issue.
+- Why multiple issue often supports out-of-order execution but is not strictly required for it.
+- **Simultaneous multithreading (SMT):** multiple issue exposes ILP within one thread, whereas SMT exposes parallelism across threads.
+- The trade-off in widening XiangShan beyond four issue slots.
+
+- [Introduction to out-of-order execution](ooo-execution.html)
+- [How simultaneous multithreading works](https://zhuanlan.zhihu.com/p/656032861)
+- [XiangShan RISC-V documentation](https://xiangshan-doc.readthedocs.io/)
+
+## 7. Chapter summary
+
+1. A single-issue processor dispatches one instruction per cycle. It is simple but has limited performance.
+2. A multiple-issue processor dispatches several instructions per cycle and can expose more ILP.
+3. The main implementation styles are dynamic superscalar scheduling and statically scheduled VLIW; high-performance general-purpose processors usually choose superscalar.
+4. Single issue suits low-power, low-cost designs; multiple issue suits high-performance workloads.
+5. XiangShan's move from a single-issue prototype to four-issue out-of-order Nanhu illustrates this architectural progression.
+
+> Updated: 2026-05-12 11:45:52
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/gxqhgm1yibgywucr>

@@ -1,3 +1,4 @@
+<!--
 # 3.Move 指令消除
 
 # 3. Move 指令消除
@@ -644,3 +645,651 @@ pdest = psrc(0) = PR20
 
 > 更新: 2026-06-02 10:56:38  
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/beryss0adppkq5nr>
+-->
+
+# 3. Move Elimination
+
+# 3. Move Elimination
+
+> If you have completed the register-renaming chapter, you already know that when an instruction writes a destination register, the rename stage normally allocates a new physical register (PR) from the Freelist and maps the architectural register to it. But is there a case where **we do not need to allocate a new PR at all**? Yes, and it is very common. This is **Move Elimination**. Do not worry; it is even simpler than rename: it is essentially "skipping one step."
+
+:::info
+By the end of this section, you will be able to:
+
+* 🧭 Understand the **motivation for Move Elimination**: why a move instruction does not need to actually execute
+* 📋 Understand XiangShan's **complete Move Elimination mechanism**, from the `isMove` bit to the direct mapping-table update
+* 🔍 Understand the reference-counting design of **MEFreeList** and its key differences from **StdFreeList**
+* ⚡ Understand the special handling of Move Elimination during **commit, rollback, and snapshot recovery**
+* 🗺️ Follow a complete learning path from source code to practice
+
+:::
+
+***
+
+## 3.1 Why is Move Elimination needed?
+
+### 3.1.1 A move instruction looks simple but wastes resources
+
+The RISC-V ISA has no standalone instruction named `mv`. `mv x10, x5` is a pseudoinstruction for `addi x10, x5, 0`: add zero to x5 and write the result to x10. In the normal rename flow, it takes this path:
+
+```plain
+mv x10, x5  (actually addi x10, x5, 0)
+
+Normal rename flow:
+1. Allocate a new PR from the Freelist (for example, PR50)
+2. Update the mapping table: x10 → PR50
+3. Send PR50's number to the reservation station and Issue Queue
+4. Wait for issue → dispatch to the ALU
+5. The ALU adds zero: PR50 = PR_x5 + 0
+6. Write back PR50
+7. Reclaim the old x10 mapping after commit
+
+Total cost: 1 physical register + 1 ROB entry + 1 Issue Queue entry + one ALU execution cycle
+```
+
+But notice that **the result is exactly the value of PR_x5**. PR50 stores PR_x5 plus zero. Why not map x10 directly to PR_x5 and remove all those intermediate steps?
+
+> The analogy is copying a file from cabinet A to cabinet B when the contents are identical. You can put a label on cabinet B saying "same contents as slot X in cabinet A" instead of making another copy. Move Elimination does exactly this.
+
+### 3.1.2 How common are move instructions?
+
+Move instructions appear very frequently in programs:
+
+| **Scenario** | **Typical move** | **Frequency** |
+| --- | --- | --- |
+| Passing function-call arguments | `mv a0, x5` | Very high |
+| Saving/restoring register values | `mv s0, x10` | High |
+| Compiler register allocation | `mv x10, x5` | High |
+| Conditional-move pseudoinstruction | `seqz x10, x5` (= `sltiu x10, x5, 1`) | Medium |
+
+Move-like instructions can account for **5%–10%** of a typical workload. Eliminating all of them saves 5%–10% of ALU execution bandwidth and physical-register resources, a meaningful gain in a high-performance processor.
+
+:::color4
+**❤** **Core idea:** Move Elimination means that **when the result is identical to the source operand, do not allocate a new physical register; map the destination architectural register directly to the source physical register**. It saves a PR, an execution-unit slot, and latency at once.
+
+:::
+
+***
+
+## 3.2 The Move Elimination architecture at a glance
+
+### 3.2.1 Before versus after elimination
+
+```plain
+╔══════════════════════════════════════════════════════════════════╗
+║             Two paths for mv x10, x5                             ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║  ❌ Normal rename (no elimination):                              ║
+║                                                                  ║
+║  x5 ──→ PR20       x10 ──→ PR30 (old mapping)                   ║
+║       │                   │                                      ║
+║       │    Freelist ──→ allocate PR50                            ║
+║       │                   │                                      ║
+║       │         x10 ──→ PR50 (new mapping)                       ║
+║       │                   │                                      ║
+║       └──→ ALU: PR50 = PR20 + 0 ──→ write back PR50              ║
+║                                                                  ║
+║  Cost: 1 PR + ALU execution + Issue/ROB resources                ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║  ✅ Move Elimination:                                             ║
+║                                                                  ║
+║  x5 ──→ PR20       x10 ──→ PR30 (old mapping)                   ║
+║       │                                                          ║
+║       └───── direct mapping ────→ x10 ──→ PR20 (shared source PR)║
+║                                                                  ║
+║  No new PR, no ALU, zero execution latency                       ║
+║                                                                  ║
+║  Cost: 0 PR + 0 execution cycles + less Issue/ROB pressure        ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+> **Reading the diagram**: the key is "do not allocate a new PR; reuse the source PR directly." The same physical register PR20 is now pointed to by both x5 and x10. This is why **reference counting** is required.
+
+### 3.2.2 XiangShan's complete Move Elimination flow
+
+```plain
+┌────────────────── Move Elimination flow ──────────────────┐
+│                                                          │
+│  ① Decode stage                                           │
+│     Decode recognizes the move instruction                 │
+│     Set the isMove = true flag                             │
+│              │                                           │
+│              ↓                                           │
+│  ② Rename stage (the core!)                               │
+│     ┌──────────────────────────────┐                     │
+│     │ if (isMove):                 │                     │
+│     │   pdest = psrc (source PR)   │  ← no new PR         │
+│     │   do not request Freelist    │                     │
+│     │ else:                        │                     │
+│     │   pdest = Freelist.allocate()│  ← normal allocate  │
+│     └──────────────────────────────┘                     │
+│              │                                           │
+│              ↓                                           │
+│  ③ Update the mapping table                              │
+│     spec_table[ldest] = pdest                             │
+│     (for elimination, pdest is the source PR; two ARs share it)
+│              │                                           │
+│              ↓                                           │
+│  ④ Commit stage                                           │
+│     A move does not update archHeadPtr at commit            │
+│     (no new PR was allocated, so the Freelist head need not move)
+│              │                                           │
+│              ↓                                           │
+│  ⑤ Reclamation stage                                      │
+│     When x10's old PR30 is no longer referenced by any AR  │
+│     reference count reaches zero → return PR30 to Freelist │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+:::color4
+**❤** **Beginner tip:** remember the core operation: **for an `isMove` instruction, `pdest` directly equals `psrc`; no new PR is allocated**. Reference counting, skipping `archAlloc` at commit, and the reclamation check all follow from this operation.
+
+:::
+
+***
+
+## 3.3 Identifying and propagating the `isMove` flag
+
+### 3.3.1 How does decode recognize a move?
+
+Move recognition happens in the **decode stage**. XiangShan sets an `isMove` bit in the micro-operation so that rename can distinguish an ordinary instruction from an eliminable move.
+
+In RISC-V, the following forms can be treated as moves:
+
+| **Pseudoinstruction** | **Actual encoding** | **Move Elimination condition** |
+| --- | --- | --- |
+| `mv rd, rs` | `addi rd, rs, 0` | ADDI immediate is zero |
+| `fmv.s rd, rs` | `fsgnj.s rd, rs, rs` | Floating-point move (FSGNJ source 1 equals source 2) |
+| - | `add rd, rs, x0` | ADD source 2 is x0 (x0 is always zero) |
+| - | `or rd, rs, x0` | OR source 2 is x0 |
+| - | `xor rd, rs, x0` | XOR source 2 is x0 |
+
+> Decode is like a hospital triage desk: when it sees an instruction that only moves data, it attaches a "green channel" label (`isMove=true`) so later stages know to apply the special handling.
+
+### 3.3.2 Propagation of `isMove` through the pipeline
+
+Once generated by decode, `isMove` travels through the pipeline with the micro-operation. The commit interface in `Rename.scala` shows the flag being passed to ROB/RAB commit logic:
+
+```scala
+// From Rename.scala L182-L188
+intFreeList.io.commit match {
+  case commit =>
+    commit.doCommit := io.rabCommits.isCommit
+    commit.archAlloc := io.rabCommits.commitValid zip io.rabCommits.info map {
+      case (valid, info) => valid && info.rfWen && !info.isMove
+      //                                  ^^^^^^^^^^^^^ important: a move does not trigger archAlloc
+    }
+}
+```
+
+**Meaning of this code:** an instruction triggers `archAlloc` (architectural allocation) in the integer Freelist only when all three conditions hold:
+
+1. `valid`: the instruction is valid.
+2. `rfWen`: the instruction writes an integer register.
+3. `!info.isMove`: it is **not** a move-eliminated instruction.
+
+A move does not trigger `archAlloc` because it did not allocate a new PR from the Freelist, so commit does not need to advance the Freelist's architectural head pointer.
+
+***
+
+## 3.4 Core Move Elimination logic in rename
+
+### 3.4.1 The elimination decision in the source
+
+The core of Move Elimination is in rename. When an instruction is marked `isMove`, rename **skips Freelist allocation** and sets the destination physical-register number directly to the source operand's physical-register number.
+
+In `Rename.scala`, the output path makes the complete behavior clear:
+
+```scala
+// From Rename.scala L83-L84
+val out = Vec(RenameWidth, DecoupledIO(new RenameOutUop))
+```
+
+`RenameOutUop` contains `pdest` (destination PR number) and `psrc` (source PR number). For a move-eliminated instruction:
+
+| **Field** | **Ordinary instruction** | **Move-eliminated instruction** |
+| --- | --- | --- |
+| `pdest` | New PR allocated by the Freelist | Equals `psrc(0)` (source operand PR) |
+| `psrc` | Source PR looked up in the mapping table | Source PR looked up in the mapping table |
+| `isMove` | false | true |
+| `rfWen` | true | true (it still writes a register, but does not use the ALU) |
+| Freelist request | `allocateReq = true` | `allocateReq = false` (no allocation) |
+
+### 3.4.2 A shared physical register after elimination
+
+The most important architectural change after Move Elimination is that **one physical register can be pointed to by several architectural registers at the same time**.
+
+```plain
+// Initial state: x5 → PR20, x10 → PR30
+mv x10, x5
+
+// After elimination: x5 → PR20, x10 → PR20
+// PR20 is referenced by both architectural registers x5 and x10!
+```
+
+This is why integer registers use **MEFreeList (a reference-counted Freelist)** instead of `StdFreeList`: when multiple ARs share a PR, it is safe to reclaim that PR only after **all references disappear**.
+
+:::warning
+**Key point:** Move Elimination applies only to the **integer-register** Freelist (`intFreeList = MEFreeList`). The floating-point and vector Freelist instances (`fpFreeList` and `vecFreeList`) use `StdFreeList` and **do not support Move Elimination**. Their move frequency is lower, so the hardware cost of reference counting is not worthwhile.
+
+:::
+
+***
+
+## 3.5 MEFreeList: a reference-counted free list
+
+### 3.5.1 Why do integer registers need MEFreeList?
+
+The previous register-renaming chapter introduced `StdFreeList` allocation and reclamation: after an instruction commits, its old PR is returned directly to the Freelist tail. This is correct **without Move Elimination**, because each architectural register points to only one physical register at any instant, so an old PR is no longer needed.
+
+Move Elimination breaks that assumption. Consider this sequence:
+
+```plain
+// Initial state: x5 → PR20, x10 → PR30
+mv x10, x5        // elimination: x10 → PR20; PR20 is shared by x5 and x10
+add x5, x1, x2    // rename x5 → PR40; x5 no longer points to PR20
+// PR20 is still referenced by x10 and cannot be reclaimed!
+
+// PR20 becomes reclaimable only after x10 is renamed to another PR
+add x10, x3, x4   // rename x10 → PR50; x10 no longer points to PR20
+// PR20 can now be reclaimed
+```
+
+**The core problem:** `StdFreeList` only checks whether an old PR remains in `arch_table`; it cannot handle several ARs pointing to one PR. MEFreeList solves this with **reference counting**.
+
+### 3.5.2 MEFreeList source walkthrough
+
+```scala
+// From MEFreeList.scala L27-L30
+class MEFreeList(size: Int, commitWidth: Int)(implicit p: Parameters) extends BaseFreeList(size, commitWidth) with HasPerfEvents {
+  val freeList = RegInit(VecInit(
+    // originally {1, 2, ..., size - 1} are free. Register 0-31 are mapped to x0.
+    Seq.tabulate(size - 1)(i => (i + 1).U(PhyRegIdxWidth.W)) :+ 0.U(PhyRegIdxWidth.W)))
+```
+
+**Initialization:** the initial free queue contains PR1 through PR(size-1) and PR0. PR0 is special: x0 is always zero, so all integer registers initially map to PR0, but PR0 still waits at the end of the Freelist for allocation.
+
+### 3.5.3 MEFreeList allocation
+
+```scala
+// From MEFreeList.scala L53-L57
+val phyRegCandidates = Mux1H(headPtrOHVec(0), freeListVec)
+for (i <- 0 until RenameWidth) {
+  // enqueue instr, is move elimination
+  io.allocatePhyReg(i) := phyRegCandidates(PopCount(io.allocateReq.take(i)))
+}
+```
+
+**Important allocation details:**
+
+1. `phyRegCandidates` uses the one-hot `headPtr` encoding to select the currently allocatable PR list from `freeListVec`.
+2. For instruction *i*, skip PRs already allocated to earlier instructions (`PopCount(io.allocateReq.take(i))`) and select the next free PR.
+3. Note the comment **"is move elimination"**: if instruction *i* is eliminated (`allocateReq(i) = false`), `PopCount` automatically skips it; it does not participate in allocation.
+
+> Think of people lining up to receive ticket numbers: a move-eliminated instruction says "I do not need a ticket," so it does not consume a number.
+
+### 3.5.4 MEFreeList reclamation — the reference-counting core
+
+MEFreeList reclamation differs fundamentally from `StdFreeList`. It does not simply return an old PR when an instruction commits. Instead, `freeReq` and `freePhyReg`, together with the reference check, determine whether a PR can be released safely:
+
+```scala
+// From MEFreeList.scala L78-L91
+val freePtr = VecInit(Seq.tabulate(commitWidth)(i => tailPtr + PopCount(io.freeReq.take(i))))
+for (i <- 0 until size) {
+  val freeReqOH = VecInit(io.freeReq.zipWithIndex.map { case (w, idx) =>
+    w && freePtr(idx).value === i.U
+  })
+  val freePhyReg = Mux1H(freeReqOH, io.freePhyReg)
+  when(freeReqOH.asUInt.orR) {
+    freeList(i) := freePhyReg
+  }
+}
+// update tail pointer
+val tailPtrNext = tailPtr + PopCount(io.freeReq)
+tailPtr := tailPtrNext
+```
+
+**Key reclamation steps:**
+
+1. `freeReq` says whether the *i*th committing instruction needs to release an old PR.
+2. `freePhyReg` is the number of the old PR to release.
+3. The released PR is written at the Freelist tail (`freeList(i) := freePhyReg`).
+4. The tail pointer advances.
+
+**Where is the reference count?** Its core check is in `RenameTable.scala`, in the `need_free` decision:
+
+```scala
+// From RenameTable.scala L170-L174
+for (((old, free), i) <- (old_pdest zip need_free).zipWithIndex) {
+  val hasDuplicate = old_pdest.take(i).map(_ === old)
+  val blockedByDup = if (i == 0) false.B else VecInit(hasDuplicate).asUInt.orR
+  free := VecInit(arch_table.map(_ =/= old)).asUInt.andR && !blockedByDup
+}
+```
+
+**Reference-counting semantics:**
+
+* `VecInit(arch_table.map(_ =/= old)).asUInt.andR` checks whether **any mapping in `arch_table` still points to the old PR**.
+* If a mapping remains (reference count > 0), `need_free = false` and the PR is retained.
+* If no mapping remains (reference count = 0), `need_free = true` and the PR can be released.
+* `blockedByDup` prevents the same PR from being released twice in one commit batch.
+
+> This is like access control for a shared document: as long as someone still references it, it cannot be deleted. It is safe only after everyone has closed it.
+
+### 3.5.5 MEFreeList versus StdFreeList
+
+| **Dimension** | **MEFreeList (integer)** | **StdFreeList (floating point/vector)** |
+| --- | --- | --- |
+| **Move Elimination** | ✅ Supported | ❌ Not supported |
+| **Reclamation test** | Reference count: release only when no `arch_table` mapping points to the PR | Direct release: return the old PR after commit |
+| **archAlloc** | Excludes `isMove` instructions (does not advance the architectural head) | Includes every register-writing instruction |
+| **PR sharing** | One PR may be pointed to by several ARs | Each PR is pointed to by one AR |
+| **Hardware cost** | Higher (must scan `arch_table` for references) | Lower (direct pointer operations) |
+| **Use case** | Integer registers with frequent moves | Floating-point/vector registers with fewer moves |
+
+:::warning
+**Beginner tip:** the difference can be stated in one sentence: **MEFreeList supports Move Elimination and permits PR sharing, so reclamation checks references; StdFreeList does not support Move Elimination, PRs are not shared, and reclamation returns them directly**. The remaining details follow from this distinction.
+
+:::
+
+***
+
+## 3.6 Special handling of Move Elimination at commit
+
+### 3.6.1 Skipping `archAlloc` at commit
+
+We saw the key code in Section 3.3.2:
+
+```scala
+// From Rename.scala L185-L187
+commit.archAlloc := io.rabCommits.commitValid zip io.rabCommits.info map {
+  case (valid, info) => valid && info.rfWen && !info.isMove
+}
+```
+
+**Role of `archAlloc`:** it advances the Freelist's **architectural head pointer** (`archHeadPtr`). The architectural head marks PRs that have been formally committed and are no longer free resources in the Freelist.
+
+For a move-eliminated instruction:
+
+* No new PR was allocated from the Freelist.
+* The architectural head pointer must not move.
+* `archAlloc = false`.
+
+```scala
+// From MEFreeList.scala L59-L64
+val archAlloc = io.commit.archAlloc
+val numArchAllocate = PopCount(archAlloc)
+val archHeadPtrNew  = archHeadPtr + numArchAllocate
+val archHeadPtrNext = Mux(doCommit, archHeadPtrNew, archHeadPtr)
+archHeadPtr := archHeadPtrNext
+```
+
+**If a move is incorrectly counted in `archAlloc`**, `archHeadPtr` advances one extra position. The Freelist then believes that one extra PR was allocated; over a long run, available PRs shrink until the Freelist is exhausted. This is a fatal bug.
+
+### 3.6.2 Reclaiming the old PR at commit
+
+A move still needs **old-mapping reclamation** at commit. Although it allocated no new PR, it changed the destination mapping: x10 used to point to PR30 and now points to PR20. Can PR30 be reclaimed?
+
+The answer depends on whether another architectural register still references PR30. `RenameTable.scala` performs this check through `need_free` (see Section 3.5.4).
+
+**Example:**
+
+```plain
+// Initial: x5 → PR20, x10 → PR30, x11 → PR30 (assume x11 also points to PR30)
+mv x10, x5       // elimination: x10 → PR20
+// At commit: PR30 is still referenced by x11 → need_free = false → keep it
+
+// Later: add x11, x1, x2 → x11 → PR40
+// At commit: no AR references PR30 → need_free = true → reclaim PR30
+```
+
+***
+
+## 3.7 Special handling during rollback and recovery
+
+### 3.7.1 Handling a Redirect flush
+
+When a Redirect occurs (branch misprediction, exception, and so on), speculative state must be rolled back. Move-eliminated instructions are handled like ordinary instructions during this rollback: snapshot and `arch_table` recovery do not care whether a PR was newly allocated or shared; they only need to restore the correct mapping.
+
+**Key point:** the mapping written by a move in `spec_table` (x10 → PR20) is included in the snapshot. On Redirect, restore the mapping table from the snapshot; no extra handling is required.
+
+### 3.7.2 Handling a Walk rollback
+
+When the ROB/RAB rolls back one instruction at a time (Walk), move elimination also needs to be accounted for. In MEFreeList, the head-pointer logic in Walk mode is:
+
+```scala
+// From MEFreeList.scala L34-L36
+val doWalkRename = io.walk && io.doAllocate && !io.redirect
+val doNormalRename = io.canAllocate && io.doAllocate && !io.redirect
+val doRename = doWalkRename || doNormalRename
+```
+
+```scala
+// From MEFreeList.scala L67-L73
+val numAllocate = Mux(io.walk, PopCount(io.walkReq), PopCount(io.allocateReq))
+val headPtrNew   = Mux(lastCycleRedirect, redirectedHeadPtr, headPtr + numAllocate)
+val headPtrOHNew = Mux(lastCycleRedirect, redirectedHeadPtrOH, headPtrOHVec(numAllocate))
+val headPtrNext   = Mux(doRename, headPtrNew, headPtr)
+val headPtrOHNext = Mux(doRename, headPtrOHNew, headPtrOH)
+```
+
+**Walk mode:** when `io.walk` is true, MEFreeList uses `walkReq`, not `allocateReq`, to compute head-pointer movement. A move also does not move the head during Walk (it never moved it during allocation), so the corresponding bit in `walkReq` must be false.
+
+***
+
+## 3.8 Verifying Move Elimination correctness
+
+### 3.8.1 The source-level debug check
+
+MEFreeList contains a precise **invariant check** that verifies the conservation of physical registers during simulation:
+
+```scala
+// From MEFreeList.scala L99-L107
+if(backendParams.debugEn){
+  val debugArchHeadPtr = RegNext(RegNext(archHeadPtr, FreeListPtr(false, 0)), FreeListPtr(false, 0))
+  val debugArchRAT = RegNext(RegNext(io.debug_rat.get, VecInit(Seq.fill(32)(0.U(PhyRegIdxWidth.W)))), VecInit(Seq.fill(32)(0.U(PhyRegIdxWidth.W))))
+  val debugUniqPR = Seq.tabulate(32)(i => i match {
+    case 0 => true.B
+    case _ => !debugArchRAT.take(i).map(_ === debugArchRAT(i)).reduce(_ || _)
+  })
+  XSError(distanceBetween(tailPtr, debugArchHeadPtr) +& PopCount(debugUniqPR) =/= size.U,
+    "Integer physical register should be in either arch RAT or arch free list\n")
+}
+```
+
+**How the check works:**
+
+1. `debugArchRAT` is the architectural mapping table delayed by two cycles, providing stable timing.
+2. `debugUniqPR` counts **unique** PRs in `arch_table`, handling the many-to-one mappings introduced by Move Elimination.
+3. **Invariant:** `number of PRs in the Freelist + number of unique PRs in arch_table = total number of PRs`.
+
+> It is like reconciling a bank account: every unit of money is either in the vault (Freelist) or in a customer account (`arch_table`). Because Move Elimination lets several customers share one account, customer accounts must be counted uniquely.
+
+If this invariant is violated, physical-register management is incorrect (for example, a move incorrectly triggered `archAlloc`, or reference counting is wrong), and the simulator reports an error immediately.
+
+### 3.8.2 The deduplication logic in `debugUniqPR`
+
+```scala
+// From MEFreeList.scala L102-L105
+val debugUniqPR = Seq.tabulate(32)(i => i match {
+  case 0 => true.B   // PR0 for x0 is always counted
+  case _ => !debugArchRAT.take(i).map(_ === debugArchRAT(i)).reduce(_ || _)
+})
+```
+
+**Deduplication algorithm:** for architectural register *i*, check whether its PR is equal to a PR pointed to by an earlier architectural register. If it is a duplicate, do not count it in `debugUniqPR`; it was already counted earlier.
+
+This is the direct result of Move Elimination's many-to-one mapping: x5 and x10 may both point to PR20, but PR20 must be counted only once.
+
+***
+
+## 3.9 Performance benefits of Move Elimination
+
+### 3.9.1 Direct benefits
+
+| **Benefit** | **Effect** | **Estimate** |
+| --- | --- | --- |
+| **Physical-register savings** | Each eliminated move uses one fewer PR | 5%–10% PR-resource savings |
+| **ALU bandwidth** | A move does not execute in the ALU | 5%–10% of ALU cycles freed |
+| **Lower latency** | Elimination has zero execution latency (no Issue→Execute→Writeback) | 3–5 clock cycles saved on a critical path |
+| **Faster ROB turnover** | A move need not wait for execution before commit | Less ROB occupancy and higher throughput |
+
+### 3.9.2 Indirect benefits
+
+Move Elimination also **reduces Freelist pressure**. Without elimination, each move consumes a PR until its old PR is reclaimed at commit. With elimination, those PRs are never occupied, so more resources remain available and a Freelist-empty stall is less likely.
+
+```scala
+// From MEFreeList.scala L93-L97
+val freeRegCnt = Mux(doWalkRename && !lastCycleRedirect, distanceBetween(tailPtrNext, headPtr) - PopCount(io.walkReq),
+                     Mux(doNormalRename,                     distanceBetween(tailPtrNext, headPtr) - PopCount(io.allocateReq),
+                                                             distanceBetween(tailPtrNext, headPtr)))
+io.canAllocate := freeRegCntReg >= RenameWidth.U
+```
+
+The `canAllocate` signal checks whether the Freelist has enough free PRs for all instructions in the current cycle. A move does not count in `allocateReq`, so `PopCount(io.allocateReq)` is smaller and the Freelist is less likely to stall for insufficient allocation capacity.
+
+***
+
+## 3.10 Limitations and cautions
+
+### 3.10.1 Integer registers only
+
+XiangShan's Move Elimination **applies only to integer registers**. Floating-point and vector register Freelist instances use `StdFreeList` and do not support it. There are three reasons:
+
+1. **Frequency:** floating-point/vector moves occur much less often than integer moves.
+2. **Hardware cost:** reference counting scans `arch_table`; doing this for 32-entry floating-point/vector maps adds nontrivial overhead.
+3. **Precision semantics:** floating-point moves such as `fmv.s` can involve special NaN-propagation semantics, so direct mapping could change observable behavior in some cases.
+
+### 3.10.2 Move-like instructions that cannot be eliminated
+
+Not every instruction that looks like a move can be eliminated:
+
+| **Instruction** | **Eliminable?** | **Reason** |
+| --- | --- | --- |
+| `addi rd, rs, 0` | ✅ | The result is exactly `rs` |
+| `add rd, rs, x0` | ✅ | x0 is always zero, so the result is `rs` |
+| `or rd, rs, x0` | ✅ | `rs OR 0 = rs` |
+| `fmv.s rd, rs` | ❌ (XiangShan) | Floating-point registers do not support Move Elimination |
+| `addi rd, rs, 1` | ❌ | The immediate is nonzero, so the result differs from `rs` |
+| `add rd, x0, rs` | ✅ | `x0 + rs = rs` |
+
+### 3.10.3 Timing challenges of reference counting
+
+The MEFreeList `need_free` check scans the entire 32-entry `arch_table`, making it a **long combinational operation**. In a high-frequency design it may become a timing bottleneck. XiangShan mitigates this in two ways:
+
+* Perform `need_free` in `RenameTable`, separate from the Freelist, to reduce per-module complexity.
+* Register `old_pdest` for one cycle to shorten the combinational path.
+
+***
+
+## 3.11 Hands-on exercise: follow one move through elimination
+
+### 3.11.1 Exercise: follow `mv x10, x5`
+
+**Step 1: Decode — recognize the move**
+
+The decoder recognizes `addi x10, x5, 0` as a move and sets `isMove = true` in the micro-operation.
+
+**Step 2: Rename — read the source mapping**
+
+```scala
+// The rename module reads x5's physical mapping
+// Assume x5 → PR20, so psrc(0) = PR20
+```
+
+**Step 3: Rename — skip Freelist allocation**
+
+Because `isMove = true`, rename **does not issue `allocateReq` to `intFreeList`** and directly sets:
+
+```plain
+pdest = psrc(0) = PR20
+```
+
+**Step 4: Update the mapping table**
+
+```scala
+// Update spec_table: x10 → PR20 (x10 previously → PR30)
+// PR20 is now referenced by both x5 and x10
+// PR30 becomes old_pdest and awaits the reclamation check
+```
+
+**Step 5: Output the renamed result**
+
+The micro-operation leaves through the `out` port with `pdest=PR20, isMove=true`. The later Issue/Dispatch modules see `isMove=true` and know that the instruction does not need to execute in the ALU.
+
+**Step 6: Commit — skip `archAlloc`**
+
+```scala
+// archAlloc = valid && rfWen && !isMove = true && true && false = false
+// archHeadPtr does not advance
+```
+
+**Step 7: Reclaim the old mapping**
+
+Check whether any other architectural register references PR30. If none does, `need_free = true` and PR30 returns to the Freelist.
+
+### 3.11.2 Comparison experiment: the path without elimination
+
+For the same `mv x10, x5`, if Move Elimination is disabled:
+
+```plain
+1. Freelist allocates PR50
+2. x10 → PR50 (new mapping)
+3. Wait for issue in the Issue Queue
+4. ALU executes: PR50 = PR20 + 0
+5. Write back PR50
+6. Commit: advance archHeadPtr and reclaim PR30
+```
+
+**Elimination saves:** one PR, the entire Issue→Execute→Writeback latency, and one ALU execution cycle.
+
+***
+
+## 3.12 Frequently asked questions and troubleshooting
+
+### Q1: After Move Elimination, can changing x5 affect x10?
+
+**No.** Elimination occurs during rename. If a later instruction writes x5, rename allocates a new PR for x5 (for example PR40), producing x5→PR40 and x10→PR20. x5 and x10 no longer share PR20, so changing x5 (PR40) does not affect x10 (PR20).
+
+### Q2: If the Freelist is empty, will a move-eliminated instruction stall?
+
+**No.** A move does not request a Freelist allocation, so it is unaffected by whether the Freelist is empty. This is an additional benefit under high Freelist pressure: moves can still pass through rename.
+
+### Q3: How can I verify that Move Elimination works correctly?
+
+MEFreeList includes the conservation-law check described in Section 3.8. You can also use Difftest to compare the RTL simulation with the reference model's architectural state. Move Elimination does not change architectural state; it changes only the microarchitectural mappings.
+
+***
+
+## 3.13 Tiered learning path
+
+🟢 **Beginner essentials:** the core concept (`isMove` → no new PR → direct source-PR mapping) and why reference counting is needed
+
+🔵 **Intermediate:** MEFreeList allocation/reclamation source, the `archAlloc` skip logic, and the reference test in `need_free`
+
+🟣 **Advanced:** architectural differences between MEFreeList and StdFreeList, timing optimization for reference counting, Move Elimination during Walk rollback, and the complete conservation-law check
+
+***
+
+## 3.14 Summary
+
+✅ **Key points:**
+
+* The core of Move Elimination: an **`isMove` instruction does not allocate a new PR; it maps the destination AR directly to the source PR**, saving resources and latency.
+* Because elimination lets **multiple ARs share one PR**, reference counting is required to decide when a PR can be safely reclaimed.
+* XiangShan uses **MEFreeList** (Move Elimination supported) for integer registers and **StdFreeList** (not supported) for floating-point/vector registers.
+* MEFreeList's `archAlloc` signal **excludes `isMove` instructions**, preventing an incorrect advance of the Freelist architectural head.
+* The key reclamation condition is `<code>need_free = no mapping in arch_table points to old PR && no duplicate release in the same batch</code>`.
+* XiangShan includes a **conservation-law check**: PRs in the Freelist plus deduplicated PRs in `arch_table` equal the total PR count.
+* Move Elimination applies only to integer registers; floating-point/vector registers are excluded because of frequency and semantic considerations.
+
+🎉 **Congratulations on completing Move Elimination!** It is one of the most elegant microarchitectural optimizations after register rename. The seemingly simple act of "skipping one step" coordinates Freelist architecture, reference counting, commit logic, and several other modules. Once you understand it, you understand how high-performance processors implement zero-cost data movement. Continue exploring the other microarchitectural optimizations in the XiangShan pipeline.
+
+
+> Updated: 2026-06-02 10:56:38
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/beryss0adppkq5nr>

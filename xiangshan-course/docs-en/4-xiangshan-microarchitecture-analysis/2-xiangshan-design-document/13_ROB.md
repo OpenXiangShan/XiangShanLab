@@ -1,3 +1,4 @@
+<!--
 # 13. ROB
 
 乱序处理器的核心矛盾是：指令可以乱序执行，但结果必须按序提交。ROB 就是解决这个矛盾的"秩序守护者"——它记录每条指令的状态，确保即使指令乱序完成，最终的效果也和顺序执行一模一样。
@@ -38,7 +39,7 @@ ROB 压缩的核心思想：**一条指令的多个 uop 共享同一个 ROB 项*
 ```scala
 // RobBundles.scala — uopNum 字段
 val uopNum = UInt(log2Up(MaxUopSize + 1).W)
- 
+
 //判断是否已全部写回
 def isWritebacked: Bool = !uopNum.orR
 def isUopWritebacked: Bool = !uopNum.orR
@@ -62,7 +63,7 @@ robCommitEntry.commit_w := robEntry.uopNum === 0.U
 ```scala
 // RobBundles.scala — realDestSize 字段
 val realDestSize = UInt(log2Up(MaxUopSize + 1).W)
- 
+
 // 提交时传递 realDestSize
 robCommitEntry.realDestSize := robEntry.realDestSize
 ```
@@ -360,7 +361,7 @@ ROB 的大小通常在 200 项以上，每项都有多个字段需要读写。�
 // Rob.scala
 val bankNum = 8
 assert(RobSize % bankNum == 0, "RobSize % bankNum must be 0")
- 
+
 //  Bank 分体：按 robIdx 低位交错
 val robBanks = VecInit((0 until bankNum).map(i =>
   VecInit(robEntries.zipWithIndex.filter(_._2 % bankNum == i).map(_._1))
@@ -478,18 +479,18 @@ ROB 负责指令的**生命周期管理**（有效、写回、异常），而 **
 ```scala
 // Rob.scala — Rab 作为 ROB 内部子模块实例化
 val rab = Module(new RenameBuffer(RabSize))
- 
+
 //  Rab 与 ROB 解耦连接
 rab.io.redirect.valid := io.redirect.valid
 rab.io.req.zip(io.enq.req).map { case (dest, src) =>
   dest.bits := src.bits
   dest.valid := src.valid && io.enq.canAccept
 }
- 
+
 // 提交时 ROB 只传递 commitSize，Rab 自行计算映射更新
 rab.io.fromRob.commitSize := Mux(deqVlsExceptionNeedCommit, deqVlsExceptionCommitSize, commitSizeSum)
 rab.io.fromRob.walkSize := walkSizeSum
- 
+
 // Walk 结束需等待 Rab 也完成
 state_next := Mux(
   io.redirect.valid || RegNext(io.redirect.valid), s_walk,
@@ -506,7 +507,7 @@ ROB 需要接收所有执行单元的写回，端口数量可能多达 20+。香
 for (i <- 0 until RobSize) {
   val canWbSeq = exuWBs.map(wb => wb.valid && wb.bits.robIdx.value === i.U)
   val wbCnt = Mux1H(canWbSeq, io.writebackNums.map(_.bits))
- 
+
   // 多个写回同时命中同一 ROB 项时，uopNum 一次性减去总数
   when(robEntries(i).valid) {
     robEntries(i).uopNum := robEntries(i).uopNum - wbCnt
@@ -525,7 +526,7 @@ for (i <- 0 until RobSize) {
 ```scala
 // Rob.scala— Snapshot 生成
 val snapshots = SnapshotGenerator(snapshotPtrVec, snptEnq, io.snpt.snptDeq, io.redirect.valid, io.snpt.flushVec)
- 
+
 //  Walk 指针初始化时使用 Snapshot
 val walkPtrVec_next: Vec[RobPtr] = Mux(io.redirect.valid,
   Mux(io.snpt.useSnpt, snapPtrVecForWalk, deqPtrVecForWalk),  // ← 有 Snapshot 则从快照点开始 Walk
@@ -558,14 +559,14 @@ val walkSizeSum   = PriorityMuxDefault(walkSizeSumCond.reverse.zip(walkSizeSumSe
 ```scala
 // Rob.scala — VTypeBuffer 独立实例化
 val vtypeBuffer = Module(new VTypeBuffer(VTypeBufferSize))
- 
+
 // VTypeBuffer 独立连接
 vtypeBuffer.io.redirect.valid := io.redirect.valid
 vtypeBuffer.io.req.zip(io.enq.req).map { case (sink, source) =>
   sink.valid := source.valid && io.enq.canAccept
   sink.bits := source.bits
 }
- 
+
 // 提交和 Walk 的 VType 计数独立计算
 private val commitIsVTypeVec = VecInit(io.commits.commitValid.zip(io.commits.info).map {
   case (valid, info) => io.commits.isCommit && valid && info.needVTB
@@ -575,7 +576,7 @@ private val walkIsVTypeVec = VecInit(io.commits.walkValid.zip(walkInfo).map {
 })
 vtypeBuffer.io.fromRob.commitSize := PopCount(commitIsVTypeVec)
 vtypeBuffer.io.fromRob.walkSize := PopCount(walkIsVTypeVec)
- 
+
 // Walk 结束需同时等 VTypeBuffer 完成
 state_next := Mux(...,
   Mux(state === s_walk && walkFinished && rab.io.status.walkEnd && vtypeBuffer.io.status.walkEnd, s_idle, state)
@@ -592,7 +593,7 @@ val misPredBlock = misPredBlockCounter(0)            // 误预测写回后阻塞
 val deqFlushBlock = deqFlushBlockCounter(0)           // deqPtr 异常冲刷阻塞
 val blockCommit = misPredBlock || lastCycleFlush || hasWFI || io.redirect.valid ||
   (deqNeedFlush && !deqHasFlushed) || deqFlushBlock || criticalErrorState || traceBlock
- 
+
 io.commits.isCommit := state === s_idle && !blockCommit
 ```
 
@@ -614,5 +615,486 @@ io.commits.isCommit := state === s_idle && !blockCommit
 *
 
 
-> 更新: 2026-07-02 11:08:23  
+> 更新: 2026-07-02 11:08:23
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/ct6fo45fnprgwops>
+-->
+
+# 13. ROB
+
+The central tension in an out-of-order processor is that instructions may execute out of order, while their effects must be committed in order. The reorder buffer (ROB) records each instruction's state so that out-of-order completion still produces the same architectural result as in-order execution.
+
+:::info
+**After this chapter, you will be able to:**
+
+* Understand ROB compression and aggregation of multiple uops.
+* Follow the complete ROB commit flow and its constraints.
+* Understand ROB exception priority and trap entry.
+* Identify Replay triggers and rollback behavior.
+
+:::
+
+***
+
+## 13.1 Overall Position: What Is the ROB?
+
+Think of the ROB as a filing cabinet. Each instruction occupies one entry when enqueued in program order. Instructions execute and write back out of order, but writeback only marks their ROB state complete. Only a contiguous sequence of completed entries at the head can **commit**, making the effects architectural. This provides precise traps and in-order commit; without it, an out-of-order processor could not recover a consistent state after an exception.
+
+***
+
+## 13.2 ROB Compression
+
+### 13.2.1 Why Compress the ROB?
+
+A complex instruction, such as a vector or fused instruction, may be split into multiple micro-operations during Dispatch. Giving every uop a separate ROB entry would consume the window quickly. Compression lets all uops from one instruction share one entry while a counter tracks completion.
+
+### 13.2.2 The `uopNum` Counter
+
+Each entry has a `uopNum` field recording how many uops have not written back:
+
+```scala
+val uopNum = UInt(log2Up(MaxUopSize + 1).W)
+def isWritebacked: Bool = !uopNum.orR
+def isUopWritebacked: Bool = !uopNum.orR
+```
+
+| **State** | **`uopNum`** | **Meaning** |
+| --- | --- | --- |
+| Newly enqueued | Total uop count | No uop has written back |
+| Partial writeback | Decreasing | Number of uops still outstanding |
+| Complete writeback | 0 | The instruction is complete and may commit |
+
+Commit uses the same condition:
+
+```scala
+robCommitEntry.commit_w := robEntry.uopNum === 0.U
+```
+
+### 13.2.3 `realDestSize`
+
+```scala
+val realDestSize = UInt(log2Up(MaxUopSize + 1).W)
+robCommitEntry.realDestSize := robEntry.realDestSize
+```
+
+`realDestSize` can be smaller than the uop count because some uops do not write a destination register. They still count in `uopNum`, because completion must be observed, but do not consume a valid destination slot.
+
+| **Field** | **Meaning** |
+| --- | --- |
+| `uopNum` | Remaining uops; zero means complete |
+| `realDestSize` | Number of genuinely valid destination registers |
+| `valid` | Whether the ROB entry is occupied |
+
+### 13.2.4 Enqueue Initialization
+
+`connectEnq` initializes the key fields when an entry is allocated:
+
+```scala
+def connectEnq(robEntry: RobEntryBundle, robEnq: EnqRobUop): Unit = {
+  robEntry.wflags      := robEnq.wfflags
+  robEntry.commitType  := robEnq.commitType
+  robEntry.ftqIdx      := robEnq.ftqPtr
+  robEntry.ftqOffset   := robEnq.ftqOffset
+  robEntry.isRVC       := robEnq.isRVC
+  robEntry.needVTB     := robEnq.isVset || robEnq.vpu.isVleff
+  robEntry.isHls       := robEnq.isHls
+  robEntry.rfWen       := robEnq.rfWen
+  robEntry.fpWen       := robEnq.dirtyFs
+  robEntry.dirtyVs     := robEnq.dirtyVs
+  robEntry.needFlush   := robEnq.hasException || robEnq.flushPipe
+}
+```
+
+***
+
+## 13.3 ROB Commit
+
+### 13.3.1 Commit Conditions
+
+The head entry may commit only when it is valid, all of its uops have written back, it does not request a flush, and there is no older blocking condition:
+
+| **Condition** | **Code** | **Meaning** |
+| --- | --- | --- |
+| Valid | `robEntry.valid` | The entry is occupied |
+| Written back | `robEntry.uopNum === 0.U` (`isWritebacked`) | All uops have written back |
+| No exception or flush request | `!robEntry.needFlush` | No exception or flush request |
+| No older block | `!hasBlockBackward && !hasWaitForward` | No unresolved blocking condition |
+
+```scala
+def isWritebacked: Bool = !uopNum.orR
+robCommitEntry.commit_w := robEntry.uopNum === 0.U
+val hasBlockBackward = RegInit(false.B)
+val hasWaitForward = RegInit(false.B)
+```
+
+### 13.3.2 Commit Flow
+
+```plain
+Inspect the CommitWidth entries beginning at the ROB head (deqPtr)
+    │
+    ├──→ hasBlockBackward? ──→ yes ──→ block commit and wait
+    ├──→ exception/needFlush? ──→ yes ──→ stop and enter exception handling
+    ├──→ all uops written back (uopNum=0)? ──→ no ──→ wait for writeback
+    └──→ all conditions satisfied ──→ commit up to CommitWidth entries
+                                      │
+                                      ├──→ notify Rab: update the architectural map and free old PRFs
+                                      ├──→ notify LSQ: allow Stores to reach memory
+                                      ├──→ notify CSR: accumulate fflags/vxsat
+                                      ├──→ notify VTypeBuffer: make vector configuration effective
+                                      └──→ free ROB entries and advance deqPtr
+```
+
+The ROB exports commit information to the rename archive buffer:
+
+```scala
+val rabCommits = Output(new RabCommitIO)
+val vlCommits  = Output(new VlCommitBundle(RabCommitWidth))
+```
+
+### 13.3.3 Commit Width
+
+The ROB can commit `CommitWidth` instructions per cycle. The actual count is limited by contiguous completed entries at the head, exceptions or special instructions, and LSQ Store bandwidth. XiangShan uses eight interleaved banks, so a contiguous commit group reads different banks:
+
+```scala
+val bankNum = 8
+assert(RobSize % bankNum == 0, "RobSize % bankNum must be 0")
+val robBanks = VecInit((0 until bankNum).map(i =>
+  VecInit(robEntries.zipWithIndex.filter(_._2 % bankNum == i).map(_._1))
+))
+```
+
+### 13.3.4 Commit Side Effects
+
+| **Side effect** | **Target** | **Signal/interface** | **Meaning** |
+| --- | --- | --- | --- |
+| Register-map update | Rab -> architectural RAT | `rabCommits` | Confirm physical-register ownership |
+| Free old register | FreeList | Through Rab | Release the overwritten physical register |
+| Store commit | LSQ / SBuffer | `io.lsq` | Allow Store data to reach memory |
+| Accumulate `fflags` | CSR | `io.csr` | Accumulate floating-point exception flags |
+| Accumulate `vxsat` | CSR | `io.csr` | Accumulate vector saturation flags |
+| Update VTYPE | VTypeBuffer | `commitVType` | Make vector configuration effective |
+
+```scala
+val rab = Module(new RenameBuffer(RabSize))
+val vtypeBuffer = Module(new VTypeBuffer(VTypeBufferSize))
+```
+
+***
+
+## 13.4 ROB Exception Handling
+
+### 13.4.1 Why Must Exceptions Be In Order?
+
+Instructions can discover exceptions out of order, but RISC-V requires the first faulting instruction in program order to be handled; exceptions from younger instructions are ignored. This is like a clinic queue: an earlier registration is called first even if a later patient was examined sooner.
+
+### 13.4.2 Sources of Exception Information
+
+The ROB classifies writeback ports by their metadata:
+
+```scala
+val exuWBs       = io.exuWriteback
+val exceptionWBs = io.writeback.filter(x => x.bits.exceptionVec.nonEmpty).toSeq
+val redirectWBs  = io.writeback.filter(x => x.bits.redirect.nonEmpty).toSeq
+val csrWBs       = io.exuWriteback.filter(x => x.bits.params.hasCSR).toSeq
+val fflagsWBs    = io.exuWriteback.filter(x => x.bits.fflags.nonEmpty).toSeq
+val vxsatWBs     = io.exuWriteback.filter(x => x.bits.vxsat.nonEmpty).toSeq
+val branchWBs    = io.exuWriteback.filter(_.bits.params.hasBrhFu).toSeq
+```
+
+| **Source** | **Signal** | **Exception/event** |
+| --- | --- | --- |
+| Execution-unit writeback | `exceptionWBs` | Illegal instruction, breakpoint, ECALL, and so on |
+| Load/store writeback | `exceptionWBs` | Page fault, access fault, misalignment |
+| CSR writeback | `csrWBs` | CSR permission fault |
+| Branch/jump writeback | `redirectWBs` | Misprediction redirect |
+
+### 13.4.3 Exception Flow
+
+![ROB exception flow](img/13-rob/figure-001-13-rob-2.svg)
+
+`ExceptionGen` collects exception information from all writeback ports, orders candidates by `RobPtr`, and selects the oldest exception.
+
+### 13.4.4 `needFlush` and `hasException`
+
+```scala
+robEntry.needFlush := robEnq.hasException || robEnq.flushPipe
+```
+
+`needFlush` covers two cases: `hasException` means that the instruction raised an exception, while `flushPipe` means that it requests a flush, such as a CSR write or FENCE, without necessarily raising an exception.
+
+### 13.4.5 Interrupt Safety
+
+An interrupt is an asynchronous exception checked at commit. Each ROB entry has an `interrupt_safe` flag:
+
+```scala
+val interrupt_safe = Bool()
+robCommitEntry.interrupt_safe := robEntry.interrupt_safe
+```
+
+CSR and FENCE instructions can change processor state before completion and cannot be interrupted arbitrarily. Interrupts are accepted only between entries marked `interrupt_safe`; exceptions have priority when both are pending.
+
+### 13.4.6 Vector Exceptions
+
+A vector instruction may have modified only some elements when it faults, so recovery needs extra coordination:
+
+```scala
+val fromVecExcpMod = Input(new Bundle { val busy = Bool() })
+val toVecExcpMod = Output(new Bundle {
+  val logicPhyRegMap = Vec(RabCommitWidth, ValidIO(new RegWriteFromRab))
+  val excpInfo = ValidIO(new VecExcpInfo)
+})
+```
+
+When the vector-exception module is busy, the ROB blocks new enqueues:
+
+```scala
+io.enq.canAccept := allowEnqueue && !hasBlockBackward && rab.io.canEnq &&
+  vtypeBuffer.io.canEnq && !io.fromVecExcpMod.busy
+```
+
+***
+
+## 13.5 Replay
+
+### 13.5.1 What Is Replay?
+
+Some instructions fail because of a temporary resource conflict rather than a program error, such as a TLB miss or a Store address that is not ready. They must be issued again instead of raising an exception.
+
+### 13.5.2 Replay Triggers
+
+| **Scenario** | **Cause** | **Replay action** |
+| --- | --- | --- |
+| TLB miss | The page-table entry is not in the TLB | Reissue after the TLB is filled |
+| Store address not ready | A Load depends on a Store address still being computed | Reissue after the address is available |
+| MMIO access | Memory-mapped I/O needs special handling | Serialize the access |
+
+### 13.5.3 Replay Implementation
+
+Replay shares the `flushPipe` path. A writeback marks `replayInst`; when the ROB head sees it, it flushes and re-executes the instruction:
+
+```scala
+val deqHasReplayInst = deqNeedFlushAndHitExceptionGenState && exceptionDataRead.bits.replayInst
+val isFlushPipe = deqPtrEntry.commit_w && (deqHasFlushPipe || deqHasReplayInst)
+
+io.flushOut.valid := (state === s_idle) && deqPtrEntryValid &&
+  (intrEnable || deqHasException && (...) || isFlushPipe) && !lastCycleFlush
+io.flushOut.bits.level := Mux(
+  deqHasReplayInst || intrEnable || deqHasException || needModifyFtqIdxOffset,
+  RedirectLevel.flush,
+  RedirectLevel.flushAfter
+)
+```
+
+```scala
+XSPerfAccumulate("replay_inst_num", io.flushOut.valid && isFlushPipe && deqHasReplayInst)
+```
+
+:::danger
+Replay is expensive because it costs roughly a small pipeline flush. The design tries to avoid it, for example by using Store-to-Load forwarding when a Store address is not ready.
+
+:::
+
+***
+
+## 13.6 ROB Banks
+
+### 13.6.1 Why Bank the ROB?
+
+An ROB normally has more than 200 entries, each with many fields. Commit must read `CommitWidth` consecutive head entries simultaneously. A monolithic SRAM would require too many read ports and excessive area.
+
+### 13.6.2 Bank Distribution
+
+XiangShan uses eight banks and interleaves entries by the low bits of the ROB index:
+
+```scala
+val bankNum = 8
+assert(RobSize % bankNum == 0, "RobSize % bankNum must be 0")
+val robBanks = VecInit((0 until bankNum).map(i =>
+  VecInit(robEntries.zipWithIndex.filter(_._2 % bankNum == i).map(_._1))
+))
+```
+
+```plain
+Bank 0: ROB[0], ROB[8],  ROB[16], ...
+Bank 1: ROB[1], ROB[9],  ROB[17], ...
+Bank 2: ROB[2], ROB[10], ROB[18], ...
+...
+Bank 7: ROB[7], ROB[15], ROB[23], ...
+```
+
+### 13.6.3 Bank Constraint
+
+`CommitWidth` is normally 6-8 and the bank count is 8. Thus any contiguous group of `CommitWidth` entries is distributed across different banks. Each bank is read at most once per commit group; no arbitration is needed.
+
+### 13.6.4 Current-Line Read and Next-Line Prefetch
+
+The high bits of `deqPtr` select the current row, and the eight banks provide its entries in parallel:
+
+```scala
+val bankNumWidth = log2Up(bankNum)
+val deqPtrWidth = deqPtr.value.getWidth
+val highDeqPtrThisLine = deqPtr.value(deqPtrWidth - 1, bankNumWidth)
+val highDeqPtrNextLine = Mux(highDeqPtrThisLine === highDeqPtrMax, 0.U,
+  highDeqPtrThisLine + 1.U)
+val robIdxThisLine = VecInit((0 until bankNum).map(i =>
+  Cat(highDeqPtrThisLine, i.U(bankNumWidth.W))))
+val robIdxNextLine = VecInit((0 until bankNum).map(i =>
+  Cat(highDeqPtrNextLine, i.U(bankNumWidth.W))))
+```
+
+One-hot in-bank addresses avoid decoder delay:
+
+```scala
+val eachBankEntrieNum = robBanks(0).length
+val robBanksRaddrThisLine = RegInit(1.U(eachBankEntrieNum.W))
+val robBanksRaddrNextLine = Wire(UInt(eachBankEntrieNum.W))
+val robBanksRdataThisLine = VecInit(robBanks.map(bank =>
+  Mux1H(robBanksRaddrThisLine, bank)))
+val robBanksRdataNextLine = VecInit(robBanks.map { bank =>
+  val shiftBank = bank.drop(1) :+ bank(0)
+  Mux1H(robBanksRaddrThisLine, shiftBank)
+})
+```
+
+The one-hot row address advances after a commit group:
+
+```scala
+.elsewhen(allCommitted || io.commits.isWalk && !changeBankAddrToDeqPtr) {
+  robBanksRaddrNextLine := Mux(robBanksRaddrThisLine.head(1) === 1.U,
+    1.U, robBanksRaddrThisLine << 1)
+}
+```
+
+### 13.6.5 Latching Bank Data at Commit
+
+Read data is latched in `robDeqGroup` for use by commit logic:
+
+```scala
+val robDeqGroup = Reg(Vec(bankNum, new RobCommitEntryBundle))
+val rawInfo = VecInit((0 until CommitWidth).map(i =>
+  robDeqGroup(deqPtrVec(i).value(bankAddrWidth - 1, 0))))
+val commitInfo = VecInit((0 until CommitWidth).map(i =>
+  robDeqGroup(deqPtrVec(i).value(bankAddrWidth - 1, 0))))
+for (i <- 0 until CommitWidth) {
+  connectCommitEntry(robDeqGroup(i), robBanksRdataThisLineUpdate(i))
+  when(allCommitted) {
+    connectCommitEntry(robDeqGroup(i), robBanksRdataNextLineUpdate(i))
+  }
+}
+```
+
+### 13.6.6 Benefits and Costs
+
+| **Benefit** | **Cost** |
+| --- | --- |
+| Fewer read ports per bank | Writeback must route to the correct bank |
+| No commit-time bank conflicts (8 banks >= `CommitWidth`) | Enqueue must calculate the destination bank |
+| Smaller area per bank | More complex inter-bank pointer management |
+| One-hot addressing avoids decoder delay | More complex line-switch logic |
+
+***
+
+## 13.7 ROB Timing Pressure
+
+### 13.7.1 Critical Paths
+
+| **Path** | **Description** | **Severity** |
+| --- | --- | --- |
+| Writeback -> state update | Multiple writeback ports match and update one ROB entry | Very high |
+| Commit -> head read | Read and latch `CommitWidth` consecutive entries | Very high |
+| Exception detection -> flush | `ExceptionGen`, `deqPtr` comparison, and `flushOut` generation | Medium |
+| Rab commit -> architectural RAT update | Register-map update through Rab at commit | Medium |
+
+### 13.7.2 Optimization 1: Separate ROB and Rab
+
+The ROB manages instruction lifetime (valid, writeback, and exceptions), while the Rename Archive Buffer (Rab) manages architectural register-map updates. Decoupling them lets the ROB keep lightweight status bits and notify Rab at commit; Rab independently handles mapping commit and rollback.
+
+```scala
+val rab = Module(new RenameBuffer(RabSize))
+rab.io.redirect.valid := io.redirect.valid
+rab.io.req.zip(io.enq.req).map { case (dest, src) =>
+  dest.bits := src.bits
+  dest.valid := src.valid && io.enq.canAccept
+}
+rab.io.fromRob.commitSize := Mux(deqVlsExceptionNeedCommit,
+  deqVlsExceptionCommitSize, commitSizeSum)
+rab.io.fromRob.walkSize := walkSizeSum
+```
+
+### 13.7.3 Optimization 2: Aggregate Writeback by ROB Entry
+
+The ROB may receive more than twenty writeback ports. XiangShan matches all writebacks against each entry, so multiple uops hitting one entry decrement `uopNum` together:
+
+```scala
+for (i <- 0 until RobSize) {
+  val canWbSeq = exuWBs.map(wb => wb.valid && wb.bits.robIdx.value === i.U)
+  val wbCnt = Mux1H(canWbSeq, io.writebackNums.map(_.bits))
+  when(robEntries(i).valid) {
+    robEntries(i).uopNum := robEntries(i).uopNum - wbCnt
+  }
+}
+```
+
+### 13.7.4 Optimization 3: Walk Path
+
+After a redirect, the ROB walks from the current pointer back to the redirect point and releases entries. The ordinary path walks `CommitWidth` entries per cycle. Snapshots restore a pointer quickly and skip many entries:
+
+```scala
+val snapshots = SnapshotGenerator(snapshotPtrVec, snptEnq, io.snpt.snptDeq,
+  io.redirect.valid, io.snpt.flushVec)
+val walkPtrVec_next: Vec[RobPtr] = Mux(io.redirect.valid,
+  Mux(io.snpt.useSnpt, snapPtrVecForWalk, deqPtrVecForWalk),
+  Mux((state === s_walk) && !walkFinished,
+    VecInit(walkPtrVec.map(_ + CommitWidth.U)), walkPtrVec))
+```
+
+`realDestSize` determines how many physical destinations are released during Walk, while `donotNeedWalk` excludes entries that require no walk.
+
+```scala
+val realDestSizeSeq = VecInit(robDeqGroup.zip(hasCommitted).map {
+  case (r, h) => Mux(h, 0.U, r.realDestSize)
+})
+val walkDestSizeSeq = VecInit(robDeqGroup.zip(donotNeedWalk).map {
+  case (r, d) => Mux(d, 0.U, r.realDestSize)
+})
+val commitSizeSum = PriorityMuxDefault(commitSizeSumCond.reverse.zip(commitSizeSumSeq.reverse), 0.U)
+val walkSizeSum = PriorityMuxDefault(walkSizeSumCond.reverse.zip(walkSizeSumSeq.reverse), 0.U)
+```
+
+### 13.7.5 Optimization 4: Independent VTypeBuffer
+
+VTYPE and VL commit differently from ordinary registers. XiangShan gives them a dedicated VTypeBuffer so vector-configuration handling does not compete with the main ROB path:
+
+```scala
+val vtypeBuffer = Module(new VTypeBuffer(VTypeBufferSize))
+vtypeBuffer.io.redirect.valid := io.redirect.valid
+vtypeBuffer.io.fromRob.commitSize := PopCount(commitIsVTypeVec)
+vtypeBuffer.io.fromRob.walkSize := PopCount(walkIsVTypeVec)
+```
+
+Walk completes only after both Rab and VTypeBuffer report `walkEnd`.
+
+### 13.7.6 Optimization 5: Fine-Grained Commit Blocking
+
+```scala
+val misPredBlock = misPredBlockCounter(0)
+val deqFlushBlock = deqFlushBlockCounter(0)
+val blockCommit = misPredBlock || lastCycleFlush || hasWFI || io.redirect.valid ||
+  (deqNeedFlush && !deqHasFlushed) || deqFlushBlock || criticalErrorState || traceBlock
+io.commits.isCommit := state === s_idle && !blockCommit
+```
+
+***
+
+## 13.8 Summary
+
+* **ROB compression**: Multiple uops share one entry; `uopNum` tracks writeback progress and `realDestSize` counts valid destinations. Commit is allowed only after `uopNum === 0`.
+* **ROB commit**: Contiguous completed head entries commit in order. `blockCommit` combines misprediction, last-flush, WFI, redirect, deq-flush, critical-error, and trace blocking. Commit updates Rab, frees old registers, commits Stores, and accumulates `fflags`/`vxsat`.
+* **ROB exceptions**: Only the oldest program-order exception enters the trap path. `interrupt_safe` controls interrupt timing, and `needFlush` covers both exceptions and explicit flush requests.
+* **Replay**: Temporary conflicts such as TLB misses, incomplete Store addresses, and MMIO cause reissue. Replay shares `isFlushPipe`; a RegCache bank conflict is not Replay.
+* **ROB banks**: Eight-way interleaving, current-line plus next-line prefetch, one-hot addressing, and `robDeqGroup` latching remove commit bank conflicts.
+* **Timing pressure**: Critical paths are writeback state updates and head reads. ROB/Rab separation, per-entry writeback aggregation, Snapshot plus `donotNeedWalk`, an independent VTypeBuffer, and fine-grained blocking reduce the cost.
+
+The design principle is **order and recovery**: in-order commit provides precise traps, while efficient flushing restores a consistent state quickly. Compression and bank interleaving pursue performance within the ordering constraint; Snapshot/`donotNeedWalk` and Rab/VTypeBuffer separation accelerate recovery.
+
+> Updated: 2026-07-02 11:08:23
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/ct6fo45fnprgwops>

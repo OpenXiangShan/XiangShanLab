@@ -1,3 +1,4 @@
+<!--
 # 11. Physical Register Cache
 
 上一章我们聊到了物理寄存器堆——那个所有人都要去存取货物的"总仓库"。但总仓库的窗口有限，排队太久了怎么办？香山的答案是：在总仓库旁边开一家**便利店**——RegCache。
@@ -96,11 +97,11 @@ io.readPorts.lazyZip(IntRCTagTable.io.readPorts.lazyZip(MemRCTagTable.io.readPor
     r_mem.ren := r_in.ren      // 同时查 MemRCTagTable
     r_int.tag := r_in.tag
     r_mem.tag := r_in.tag
- 
+
     // 如果该 preg 刚被新分配（alloc），则 Tag 无效
     val matchAlloc = io.allocPregs.map(x => x.valid && r_in.tag === x.bits).reduce(_ || _)
     r_in.valid := (r_int.valid || r_mem.valid) && !matchAlloc
- 
+
     // 命中后拼接完整 RegCacheIdx：MSB 区分 Int/Mem
     r_in.addr := Mux(r_int.valid, Cat("b0".U, r_int.addr), Cat("b1".U, r_mem.addr))
   }
@@ -353,7 +354,7 @@ io.toWakeupQueueRCIdx.zipWithIndex.foreach { case (rcIdx, i) =>
     rcIdx := Cat("b1".U, MemRegCacheRepRCIdx(i - IntRegCacheWriteSize))  // MSB=1 → MemRegCache
   }
 }
- 
+
 // 替换索引延迟 3 拍，与数据对齐
 val delayToWakeupQueueRCIdx = RegNextN(io.toWakeupQueueRCIdx, 3)
 writePorts.zip(delayToWakeupQueueRCIdx).foreach { case (w, rcIdx) =>
@@ -395,26 +396,26 @@ RegCache 的 Tag 表可能需要**取消**已写入的映射，发生在以下�
 val allocVec = (IntRCTagTable.io.tagVec ++ MemRCTagTable.io.tagVec).map { t =>
   io.allocPregs.map(a => a.valid && a.bits === t).asUInt.orR
 }
- 
+
 // replaceVec: 同一个 tag 被新写入 → 旧条目被替换
 val replaceVec = IntRCTagTable.io.tagVec.map { t =>
   IntRCTagTable.io.writePorts.map(w => w.wen && w.tag === t).asUInt.orR
 } ++ MemRCTagTable.io.tagVec.map { t =>
   MemRCTagTable.io.writePorts.map(w => w.wen && w.tag === t).asUInt.orR
 }
- 
+
 // ldCancelVec: Load 被取消 → 缓存数据无效
 val ldCancelVec = (IntRCTagTable.io.loadDependencyVec ++ MemRCTagTable.io.loadDependencyVec).map { ldDp =>
   LoadShouldCancel(Some(ldDp), io.ldCancel)
 }
- 
+
 // 综合取消条件 = (alloc || replace || ldCancel) && 该项有效
 val cancelVec = allocVec.lazyZip(replaceVec).lazyZip(ldCancelVec)
   .lazyZip(IntRCTagTable.io.validVec ++ MemRCTagTable.io.validVec)
   .map { case (alloc, rep, ldCancel, v) =>
     (alloc || rep || ldCancel) && v
   }
- 
+
 (IntRCTagTable.io.cancelVec ++ MemRCTagTable.io.cancelVec).zip(cancelVec).foreach { case (cancelIn, cancel) =>
   cancelIn := cancel
 }
@@ -450,11 +451,11 @@ RegCache 虽然容量比 RF 小得多，但它面临的**写端口压力**并不
 val IntRegCache = Module(new RegCacheDataModule("IntRegCache", IntRegCacheSize,
   IntRegCacheReadSize, IntRegCacheWriteSize,
   params.intSchdParams.get.rfDataWidth, RegCacheIdxWidth - 1, params.intSchdParams.get.pregIdxWidth))
- 
+
 val MemRegCache = Module(new RegCacheDataModule("MemRegCache", MemRegCacheSize,
   MemRegCacheReadSize, MemRegCacheWriteSize,
   params.intSchdParams.get.rfDataWidth, RegCacheIdxWidth - 1, params.intSchdParams.get.pregIdxWidth))
- 
+
 val IntRegCacheAgeTimer = Module(new RegCacheAgeTimer(IntRegCacheSize, IntRegCacheReadSize, IntRegCacheWriteSize, RegCacheIdxWidth - 1))
 val MemRegCacheAgeTimer = Module(new RegCacheAgeTimer(MemRegCacheSize, MemRegCacheReadSize, MemRegCacheWriteSize, RegCacheIdxWidth - 1))
 ```
@@ -613,5 +614,334 @@ val originSrc = Mux1H(Seq(
 核心原则：RegCache 是\*\*"用空间换带宽"\*\*的典型设计——用少量额外的存储空间，换取 RF 读端口的显著减负。而分 Bank Set 则进一步将写端口压力分摊到两个独立的存储体上，实现更精细的资源管理。
 
 
-> 更新: 2026-07-01 18:52:47  
+> 更新: 2026-07-01 18:52:47
 > 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/wlcxzp55p1g3gdw3>
+-->
+
+# 11. Physical Register Cache
+
+RegCache is a small, fast companion to the integer physical register file. It caches recently written-back integer values, reducing contention on the much larger RF read-port structure.
+
+:::info
+**After this chapter, you will be able to:**
+
+* Explain why RegCache exists and what benefit it provides.
+* Follow RegCache reads, writes, tag matches, and cancellation.
+* Understand its Age Timer replacement policy.
+* Distinguish the IntRegCache and MemRegCache bank sets.
+
+:::
+
+***
+
+## 11.1 Overall Position: Why Is RegCache Needed?
+
+The full integer RF contains roughly 200 physical registers and must serve many simultaneous source reads. Most consumers, however, use recently produced values. RegCache exploits that temporal locality.
+
+| **Property** | **RF: main warehouse** | **RegCache: convenience store** |
+| --- | --- | --- |
+| Capacity | All physical registers | Recent writeback subset |
+| Read ports | Many but contended | Fewer and fast |
+| Hit rate | Always holds a value | Depends on temporal locality |
+| Latency | One cycle because the address is registered with `RegNext` | Combinational data read plus registered address path |
+| Role | Primary storage | Auxiliary accelerator that relieves RF reads |
+
+***
+
+## 11.2 RegCache Architecture
+
+```plain
+Wakeup / Writeback
+      │
+      ├──→ RegCacheDataModule: value array
+      └──→ RegCacheTagModule: physical-register tag -> cache index
+
+Issue / source read
+      │
+      ├──→ IntRCTagTable or MemRCTagTable lookup
+      ├──→ hit: read RegCache data
+      └──→ miss/cancel: fall back to the physical RF
+```
+
+The tag table supplies a compact `RegCacheIdx`; the data module uses that index to provide the cached value. Valid, replacement, and cancellation state ensure that a matching tag remains safe to use.
+
+## 11.3 RegCache Read Flow
+
+### Step 1: Tag Lookup Before OG0
+
+Wakeup logic looks up the physical-source register number in both tag tables:
+
+```scala
+val intHit = intRCTagTable.io.read.hit
+val memHit = memRCTagTable.io.read.hit
+val regCacheHit = (intHit || memHit) && !allocCancel
+```
+
+* An **IntRCTagTable** hit returns an index with MSB 0 and addresses IntRegCache.
+* A **MemRCTagTable** hit returns an index with MSB 1 and addresses MemRegCache.
+* A miss, or a match invalidated by a concurrent allocation, falls back to RF reading.
+
+### Step 2: Data Read in OG1
+
+```scala
+val rcData = regCacheDataModule.io.readData(regCacheIdx)
+val rfData = intRegfile.io.readData(rfAddr)
+```
+
+The data source selected by wakeup follows the uop into OG1. A RegCache hit supplies `rcData`; otherwise, the normal RF path supplies `rfData`.
+
+### Step 3: Final Selection in `BypassNetwork`
+
+`BypassNetwork` uses one-hot controls to select exactly one of the eight `DataSource` alternatives for each source operand. RegCache is one peer in that selection, not a separate late override:
+
+| **`DataSource`** | **Selected value** |
+| --- | --- |
+| `forward` | Same-cycle Forward data. |
+| `bypass` | One-cycle Bypass data. |
+| `bypass2` | Two-cycle Bypass2 data. |
+| `zero` | Constant zero. |
+| `v0` | V0 mask-register data. |
+| `reg` | Normal RF-read data. |
+| `regcache` | RegCache-read data. |
+| `imm` | The uop immediate. |
+
+```scala
+val originSrc = Mux1H(Seq(
+  readForward  -> forwardData,
+  readBypass   -> bypassData,
+  readBypass2  -> bypass2Data,
+  readZero     -> 0.U,
+  readV0       -> v0Data,
+  readRegOH    -> rfData,
+  readRegCache -> regCacheData,
+  readImm      -> immData,
+))
+```
+
+| **Cancellation** | **Trigger** | **Meaning** |
+| --- | --- | --- |
+| `allocCancel` | Rename allocates a physical register with the cached tag | The old cached value is overwritten and invalid |
+| `replaceCancel` | New writeback updates the same tag | The old entry is replaced |
+| `ldCancel` | A Load is cancelled | Cached Load data is invalid |
+
+## 11.4 RegCache Write Flow
+
+### 11.4.1 When It Writes
+
+RegCache writes with producer wakeup/writeback, not with architectural PRF commit. It caches a bypass-stage value early so a close dependent can read it without a contested RF port.
+
+### 11.4.2 Conditions
+
+| **Condition** | **Meaning** |
+| --- | --- |
+| `wakeup.valid` | Writeback is valid |
+| `rfWen` | Destination is the integer RF; RegCache caches integer data only |
+| `!LoadShouldCancel` | The Load was not cancelled |
+| `!(is0Lat && og0Cancel)` | A zero-latency instruction was not cancelled in its issue cycle |
+
+```scala
+val canWrite = wakeup.valid && rfWen && !LoadShouldCancel && !(is0Lat && og0Cancel)
+when (canWrite) {
+  tagModule.io.writeTag := pdest
+  dataModule.io.writeData := wakeup.data
+}
+```
+
+### 11.4.3 Written Fields
+
+* **Data**: the execution-unit result, stored in `RegCacheDataModule`.
+* **Tag**: destination physical-register number `pdest`, stored in `RegCacheTagModule` to create the tag-to-index mapping.
+
+***
+
+## 11.5 Replacement Policy: Age Timer
+
+### 11.5.1 How the Age Timer Works
+
+Each entry has a two-bit `ageTimer`; a larger value denotes an older, more replaceable entry. Next-state priority is write, read, saturation, then aging. A write resets it, a read preserves it, and a valid entry that has reached the maximum value remains saturated. Invalid entries are preferred as replacement victims.
+
+```scala
+// RegCacheAgeTimer.scala
+for ((atNext, i) <- ageTimerNext.zipWithIndex) {
+  when (hasWriteReq(i)) {
+    atNext := 0.U // Write: reset to newest.
+  }.elsewhen (hasReadReq(i)) {
+    atNext := ageTimer(i) // Read: preserve the age; do not age this entry.
+  }.elsewhen (ageTimer(i) === 3.U && io.validInfo(i)) {
+    atNext := 3.U // A valid, saturated entry remains saturated.
+  }.otherwise {
+    atNext := ageTimer(i) + 1.U // All other cases age by one tick.
+  }
+  ageTimer(i) := atNext
+}
+```
+
+The design also has four free-running two-bit `ageTimerExtra` counters. An entry selects `ageTimerExtra(i / (numEntries / 4))`, so each counter is shared by one quarter of the entries. Pairwise age comparison concatenates the entry timer with its selected Extra Timer, while valid-versus-invalid comparisons continue to prefer replacing an invalid entry:
+
+```scala
+val ageTimerExtra = RegInit(VecInit((0 until 4).map(_.U(2.W))))
+ageTimerExtra.foreach(timer => timer := timer + 1.U)
+
+def age_cmp_func(row: Int, col: Int): Bool = {
+  if (row < col) {
+    val res = Wire(Bool())
+    when (io.validInfo(row) && !io.validInfo(col)) {
+      res := false.B // A valid entry is younger than an invalid entry.
+    }.elsewhen (!io.validInfo(row) && io.validInfo(col)) {
+      res := true.B  // An invalid entry is older and is replaced first.
+    }.otherwise {
+      res := Cat(ageTimerNext(row), ageTimerExtra(row / (numEntries / 4))) >=
+        Cat(ageTimerNext(col), ageTimerExtra(col / (numEntries / 4)))
+    }
+    res
+  } else if (row == col) {
+    true.B
+  } else {
+    !age_cmp_func(col, row)
+  }
+}
+```
+
+### 11.5.2 Replacement Index
+
+`ageInfo(row)(col)` records whether `row` is at least as old as `col`, including invalid-entry priority and the concatenated base/Extra Timer comparison. `RegCacheAgeDetector` sums each row's pairwise results, then assigns the oldest, second-oldest, and subsequent entries to the replacement ports:
+
+```scala
+class RegCacheAgeDetector(numEntries: Int, numReplace: Int) extends XSModule {
+  val io = IO(new Bundle {
+    val ageInfo = Vec(numEntries, Vec(numEntries, Input(Bool())))
+    val out = Vec(numReplace, Output(UInt(log2Up(numEntries).W)))
+  })
+
+  // The row score counts entries that are younger than this entry.
+  val rowOnesSum = (0 until numEntries).map(i =>
+    PopCount((0 until numEntries).map(j => io.ageInfo(i)(j)))
+  )
+
+  // The highest score is the oldest replacement target, followed by the next oldest.
+  io.out.zipWithIndex.foreach { case (out, idx) =>
+    out := PriorityMux(
+      rowOnesSum.map(_ === (numEntries - idx).U).zip((0 until numEntries).map(_.U))
+    )
+  }
+}
+```
+
+### 11.5.3 Timing Alignment
+
+The replacement index is pipelined for three cycles so that it aligns with the arriving writeback data and tag. This keeps replacement choice and value write in the same transaction.
+
+***
+
+## 11.6 Cancellation
+
+| **Reason** | **Trigger** | **Effect** |
+| --- | --- | --- |
+| New physical-register allocation | Rename creates a new `pdest`; the old mapping is obsolete | Invalidate the corresponding tag-table entry |
+| Tag overwrite | Another producer writes the same physical-register number | Replace the old entry and update the tag |
+| Load Cancel | A Load violation/redirect invalidates data | Mark the matching RegCache entry invalid |
+
+```scala
+when (allocCancel || replaceCancel || ldCancel) {
+  tagModule.io.invalidate := true.B
+}
+```
+
+:::warning
+Cancellation is necessary because RegCache is an opportunistic copy of speculative producer data. A tag match alone is insufficient once allocation, replacement, or load cancellation invalidates that copy.
+
+:::
+
+## 11.7 RegCache Bank Sets
+
+### 11.7.1 Why Split RegCache?
+
+Integer and memory producers have different writeback behavior. Bank sets keep their ports and replacement state independent, avoiding structural conflict between ALU-style and Load-style traffic.
+
+### 11.7.2 IntRegCache and MemRegCache
+
+| **Bank set** | **Name** | **Client** | **Writeback sources** |
+| --- | --- | --- | --- |
+| Bank 0 | IntRegCache | Integer execution units | ALU, MUL, BJU, and related units |
+| Bank 1 | MemRegCache | Memory execution units | LDU and related Load producers |
+
+```scala
+val isMemBank = regCacheIdx.msb
+val data = Mux(isMemBank, memRegCacheData, intRegCacheData)
+```
+
+### 11.7.3 Bank Selection
+
+Both tag tables are queried in parallel. A hit encodes the bank in the MSB of `RegCacheIdx`:
+
+```plain
+IntRCTagTable hit → 0 | IntIndex
+MemRCTagTable hit → 1 | MemIndex
+no hit or alloc match → RegCache miss; read the RF
+```
+
+### 11.7.4 Benefits and Costs
+
+| **Benefit** | **Cost** |
+| --- | --- |
+| Half as many ports per bank and smaller area | Read ports connect to both banks and need a mux |
+| Separate Int and Mem write ports do not collide | Both tag tables must be queried |
+| Independent Age Timers and replacement | Space cannot be shared between the bank sets |
+
+### 11.7.5 Tag-Table Bank Set
+
+The two tag tables mirror the data split. A tag lookup returns either `0 | IntIndex`, `1 | MemIndex`, or a miss that selects the RF path.
+
+## 11.8 Cooperation with DataPath
+
+```plain
+Wakeup Queue determines DataSource
+      ↓
+Tag lookup chooses RegCache or RF source
+      ↓
+DataPath reads the selected storage in OG1
+      ↓
+BypassNetwork performs one-hot source selection
+      ↓
+Exu receives the operand
+```
+
+`DataSource` is determined in the Wakeup Queue and carried with each source operand. The complete encoding is:
+
+| **Encoding** | **Data source** | **Selected data** |
+| --- | --- | --- |
+| `b1000` | `reg` | Register-file read data |
+| `b0110` | `regcache` | RegCache read data |
+| `b0101` | `v0` | V0 register-file data |
+| `b0000` | `zero` | Constant zero |
+| `b0001` | `forward` | Same-cycle Forward data |
+| `b0010` | `bypass` | One-cycle Bypass data |
+| `b0011` | `bypass2` | Two-cycle/vector Bypass2 data |
+| `b0100` | `imm` | Immediate data |
+
+Every source operand selects exactly one of these data sources; it is not valid to merge two source paths. `BypassNetwork` implements that requirement as a one-hot `Mux1H` selection:
+
+```scala
+val originSrc = Mux1H(Seq(
+  readForward  -> forwardData,  // DataSource.forward
+  readBypass   -> bypassData,   // DataSource.bypass
+  readBypass2  -> bypass2Data,  // DataSource.bypass2
+  readZero     -> 0.U,          // DataSource.zero
+  readV0       -> v0Data,       // DataSource.v0
+  readRegOH    -> rfData,       // DataSource.reg
+  readRegCache -> regCacheData, // DataSource.regcache
+  readImm      -> immData,      // DataSource.imm
+))
+```
+
+## 11.9 Summary
+
+* **Position**: RegCache is a small RF-side cache of recently written integer values that reduces RF read-port contention.
+* **Read/write behavior**: Writes are coupled to wakeup and store both data and `pdest` tag. Reads first query a tag table; hits read RegCache and misses fall back to RF.
+* **Replacement**: Writes reset an entry's age, reads hold it, valid idle entries age to saturation, invalid entries are preferred victims, and the pairwise `ageInfo` matrix selects the oldest remaining candidate. The four Extra Timers refine the ordering. The replacement index is aligned to the write with a three-cycle pipeline.
+* **Cancellation**: Allocation overwrite, tag replacement, and Load Cancel invalidate unsafe entries.
+* **Bank sets**: IntRegCache and MemRegCache are selected by the MSB of `RegCacheIdx` and manage replacement and tags independently.
+* **DataPath cooperation**: RegCache is one of eight independent sources: RF, RegCache, V0, zero, Forward, Bypass, Bypass2, and immediate data.
+
+> Updated: 2026-07-01 18:52:47
+> Original: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/wlcxzp55p1g3gdw3>

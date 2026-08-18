@@ -1,47 +1,68 @@
-# Frontend FauFTB 分支预测器深入分析
+<!-- # Frontend FauFTB 分支预测器深入分析 -->
+# In-Depth Analysis of the Frontend FauFTB Branch Predictor
 
 <!-- regenerated-by-analyze-xiangshan-kunminghu -->
 > Regenerated from `OpenXiangShan/XiangShan` branch `kunminghu-v2`, source commit `52262f303fc06daf84cdab7011d59b7df65ce7e8` using the updated Frontend graph/stage rules.
 
 
 
-> 官方源码：`https://github.com/OpenXiangShan/XiangShan.git`；分支 `kunminghu-v2`；分析 commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`。论文解释算法原理，源码决定香山的有效参数、流水、更新与恢复。
+<!-- > 官方源码：`https://github.com/OpenXiangShan/XiangShan.git`；分支 `kunminghu-v2`；分析 commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`。论文解释算法原理，源码决定香山的有效参数、流水、更新与恢复。 -->
+> Official source: `https://github.com/OpenXiangShan/XiangShan.git`; branch `kunminghu-v2`; analysis commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`. Papers explain algorithmic principles, while the source determines XiangShan's effective parameters, pipeline, update behavior, and recovery behavior.
 
 <!-- frontend-tutorial-generated-by-analyze-xiangshan-kunminghu -->
-> 所有实现结论均限定在 `kunminghu-v2` commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`；Design Doc 结论必须回到第 18 节的源码追溯矩阵。
+<!-- > 所有实现结论均限定在 `kunminghu-v2` commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`；Design Doc 结论必须回到第 18 节的源码追溯矩阵。 -->
+> All implementation conclusions are limited to `kunminghu-v2` commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`; Design Doc claims must be traced back through the source-traceability matrix in Section 18.
 
 ## 1. Scope
 
-本节保留模块职责、分析基线、范围和统一五问，明确本文只以当前源码证据为准。
+<!-- 本节保留模块职责、分析基线、范围和统一五问，明确本文只以当前源码证据为准。 -->
+This section preserves the module responsibilities, analysis baseline, scope, and common five questions, making clear that this document relies only on evidence from the current source.
 
-### 1.1. 统一五问导读
-> 用户写作 `FeuFTB`，官方源码模块名为 **`FauFTB`**，本文按真实类名分析。
+<!-- ### 1.1. 统一五问导读 -->
+### 1.1. Five-Question Guide
+<!-- > 用户写作 `FeuFTB`，官方源码模块名为 **`FauFTB`**，本文按真实类名分析。 -->
+> The user wrote `FeuFTB`; the official source module name is **`FauFTB`**, which is used throughout this analysis.
 
-| 问题 | 回答 |
+<!-- | 问题 | 回答 | -->
+| Question | Answer |
 | --- | --- |
-| **Who** | `FauFTB` 是预测器链最前面的快速 fetch-target predictor，也常被称作 uFTB/fast FTB。 |
-| **What** | 用较小、低延迟的表保存预测块入口、分支槽、target 和 fall-through，尽早给 S1 下一 PC。 |
-| **How** | PC 索引并行匹配表项；命中后构造 `FullBranchPrediction`；提交 update 时命中修改、未命中分配，并处理写旁路/替换。 |
-| **From what** | 查询来自 BPU S0 PC；训练来自 FTQ commit update；flush/redirect 来自 BPU 公共控制。 |
-| **To what** | 输出先进入 TAGE_SC，并把快速表项/命中信息旁送给后级 FTB 复用和校验。 |
+<!-- | **Who** | `FauFTB` 是预测器链最前面的快速 fetch-target predictor，也常被称作 uFTB/fast FTB。 | -->
+| **Who** | `FauFTB` is the fast fetch-target predictor at the head of the predictor chain, also called uFTB or fast FTB. |
+<!-- | **What** | 用较小、低延迟的表保存预测块入口、分支槽、target 和 fall-through，尽早给 S1 下一 PC。 | -->
+| **What** | It uses a small, low-latency table to store fetch-block entries, branch slots, targets, and fall-through addresses, providing S1 with the next PC as early as possible. |
+<!-- | **How** | PC 索引并行匹配表项；命中后构造 `FullBranchPrediction`；提交 update 时命中修改、未命中分配，并处理写旁路/替换。 | -->
+| **How** | The PC indexes parallel entry comparisons; a hit constructs `FullBranchPrediction`; a committed update modifies a hit, allocates on a miss, and handles write bypass and replacement. |
+<!-- | **From what** | 查询来自 BPU S0 PC；训练来自 FTQ commit update；flush/redirect 来自 BPU 公共控制。 | -->
+| **From what** | Lookups come from the BPU S0 PC, training comes from the FTQ commit update, and flush/redirect comes from shared BPU control. |
+<!-- | **To what** | 输出先进入 TAGE_SC，并把快速表项/命中信息旁送给后级 FTB 复用和校验。 | -->
+| **To what** | The output first enters TAGE_SC, while the fast entry and hit information are passed to the later FTB for reuse and checking. |
 
-### 1.2. 分析范围
+<!-- ### 1.2. 分析范围 -->
+### 1.2. Analysis Scope
 - Source: OpenXiangShan/XiangShan `kunminghu-v2`, commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`.
 - Relative source file: [src/main/scala/xiangshan/frontend/FauFTB.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala).
 - Effective instantiation: [Parameters.scala:126-143](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L126-L143) instantiates `new FauFTB` as the first component in the default predictor chain.
 
-## 2. 关键源码证据
+<!-- ## 2. 关键源码证据 -->
+## 2. Key Source Evidence
 
-本节直接列出 `FauFTB / uFTB` 的有效源码入口、关键代码骨架和行为解释，避免只保存文件名或行号。
+<!-- 本节直接列出 `FauFTB / uFTB` 的有效源码入口、关键代码骨架和行为解释，避免只保存文件名或行号。 -->
+This section directly lists the effective FauFTB/uFTB source entry points, key code skeleton, and behavioral explanation instead of retaining only filenames or line numbers.
 
-### 2.1. 源码入口和行号
-| 源码文件 | 本文使用它证明什么 | 行号证据 |
+<!-- ### 2.1. 源码入口和行号 -->
+### 2.1. Source Entry Points and Line References
+<!-- | 源码文件 | 本文使用它证明什么 | 行号证据 | -->
+| Source file | What it establishes in this document | Line evidence |
 | --- | --- | --- |
-| `frontend/FauFTB.scala` | 快速目标块预测、entry 命中、输出早级预测 | [frontend/FauFTB.scala#L76-L128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128) |
-| `frontend/Composer.scala` | FauFTB 位于有效预测器链首级 | [frontend/Composer.scala#L25-L31](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L25-L31) |
-| `Parameters.scala` | `UbtbSize = 256` 等容量参数 | [Parameters.scala#L124-L143](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L124-L143) |
+<!-- | `frontend/FauFTB.scala` | 快速目标块预测、entry 命中、输出早级预测 | [frontend/FauFTB.scala#L76-L128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128) | -->
+| `frontend/FauFTB.scala` | Fast fetch-target prediction, entry hit detection, and early-stage prediction output | [frontend/FauFTB.scala#L76-L128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128) |
+<!-- | `frontend/Composer.scala` | FauFTB 位于有效预测器链首级 | [frontend/Composer.scala#L25-L31](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L25-L31) | -->
+| `frontend/Composer.scala` | FauFTB is at the head of the effective predictor chain | [frontend/Composer.scala#L25-L31](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L25-L31) |
+<!-- | `Parameters.scala` | `UbtbSize = 256` 等容量参数 | [Parameters.scala#L124-L143](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L124-L143) | -->
+| `Parameters.scala` | Capacity parameters such as `UbtbSize = 256` | [Parameters.scala#L124-L143](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L124-L143) |
 
-### 2.2. 核心代码骨架
+<!-- ### 2.2. 核心代码骨架 -->
+### 2.2. Core Code Skeleton
 ```scala
 val idx = getIdx(s0_pc)
 val entry = table.read(idx)
@@ -49,34 +70,51 @@ val hit = entry.valid && entry.tag === getTag(s0_pc)
 io.out.full_pred := fromFauFtbEntry(entry, hit)
 ```
 
-### 2.3. 代码解析
-FauFTB 负责最早给出候选 fetch block、fall-through 和部分目标信息。它优先追求低延迟，允许后续 TAGE/FTB/ITTAGE/RAS 用更完整信息覆盖。
+<!-- ### 2.3. 代码解析 -->
+### 2.3. Code Walkthrough
+<!-- FauFTB 负责最早给出候选 fetch block、fall-through 和部分目标信息。它优先追求低延迟，允许后续 TAGE/FTB/ITTAGE/RAS 用更完整信息覆盖。 -->
+FauFTB produces the earliest candidate fetch block, fall-through, and partial target information. It prioritizes low latency and allows later TAGE/FTB/ITTAGE/RAS stages to override it with more complete information.
 ## 3. Theory-to-Code Mapping
 
-本节把理论概念直接绑定到 `FauFTB / uFTB` 的源码对象、控制/数据状态和下游消费者。
+<!-- 本节把理论概念直接绑定到 `FauFTB / uFTB` 的源码对象、控制/数据状态和下游消费者。 -->
+This section binds theoretical concepts directly to FauFTB/uFTB source objects, control/data state, and downstream consumers.
 
-### 3.1. 理论到代码映射表
-| 理论概念 | 代码对象 | 为什么需要它 | 消费者/后续影响 |
+<!-- ### 3.1. 理论到代码映射表 -->
+### 3.1. Theory-to-Code Mapping
+<!-- | 理论概念 | 代码对象 | 为什么需要它 | 消费者/后续影响 | -->
+| Theoretical concept | Code object | Why it is needed | Consumers / downstream effect |
 | --- | --- | --- | --- |
-| 快速 BTB/uBTB | index/tag/valid entry | 先给下一取指块，隐藏后续预测器延迟 | TAGE_SC 和 FTB |
-| false hit 修复 | entry hit 与后续 FTB/IFU 纠错 | 快速表可能给错目标或类型 | BPU redirect、FTQ training |
-| 容量别名 | `UbtbSize`、idx/tag | 同索引不同 tag 需要 miss 或替换 | 更新路径 |
+<!-- | 快速 BTB/uBTB | index/tag/valid entry | 先给下一取指块，隐藏后续预测器延迟 | TAGE_SC 和 FTB | -->
+| Fast BTB/uBTB | index/tag/valid entry | Supplies the next fetch block first, hiding later predictor latency | TAGE_SC and FTB |
+<!-- | false hit 修复 | entry hit 与后续 FTB/IFU 纠错 | 快速表可能给错目标或类型 | BPU redirect、FTQ training | -->
+| False-hit correction | entry hit and later FTB/IFU correction | The fast table can provide an incorrect target or type | BPU redirect and FTQ training |
+<!-- | 容量别名 | `UbtbSize`、idx/tag | 同索引不同 tag 需要 miss 或替换 | 更新路径 | -->
+| Capacity aliasing | `UbtbSize`, index, and tag | Different tags at one index require a miss or replacement | Update path |
 
-### 3.2. 阅读顺序
-先按第 2 节定位源码对象，再顺着本表检查信号从哪里来、状态在哪里保存、何时更新、谁消费结果。若本篇只引用相邻模块拥有的状态，则以相邻 Frontend 分文档的源码分析为准。
-## 4. 论文原则和有效代码
+<!-- ### 3.2. 阅读顺序 -->
+### 3.2. Reading Order
+<!-- 先按第 2 节定位源码对象，再顺着本表检查信号从哪里来、状态在哪里保存、何时更新、谁消费结果。若本篇只引用相邻模块拥有的状态，则以相邻 Frontend 分文档的源码分析为准。 -->
+First locate the source objects in Section 2, then use this table to follow where each signal originates, where state is stored, when it is updated, and who consumes the result. When this document references state owned by an adjacent module, defer to that module's frontend source analysis.
+<!-- ## 4. 论文原则和有效代码 -->
+## 4. Paper Principles and Effective Code
 
 
-### 4.1. 状态机与论文理论
-FauFTB 主要是 S0 请求、S1 返回、update 三阶段隐式状态机。理论基础是分级 BTB/FTB：小表低延迟覆盖热点控制流，大表稍晚提供容量和准确率。XiangShan FTB 论文 *A design of fetch target buffer implemented on XiangShan processor*（DOI `10.1117/12.2642006`）解释了按 fetch block 保存多个分支信息为何有利于宽取指和时序；FauFTB 的具体组织以源码为准。
+<!-- ### 4.1. 状态机与论文理论 -->
+### 4.1. State Machine and Paper Theory
+<!-- FauFTB 主要是 S0 请求、S1 返回、update 三阶段隐式状态机。理论基础是分级 BTB/FTB：小表低延迟覆盖热点控制流，大表稍晚提供容量和准确率。XiangShan FTB 论文 *A design of fetch target buffer implemented on XiangShan processor*（DOI `10.1117/12.2642006`）解释了按 fetch block 保存多个分支信息为何有利于宽取指和时序；FauFTB 的具体组织以源码为准。 -->
+FauFTB is primarily an implicit three-phase state machine: S0 request, S1 response, and update. Its theoretical basis is hierarchical BTB/FTB design: a small table covers hot control flow at low latency, while a larger table supplies capacity and accuracy later. The XiangShan FTB paper, *A design of fetch target buffer implemented on XiangShan processor* (DOI `10.1117/12.2642006`), explains why storing multiple branch records per fetch block benefits wide fetch and timing; FauFTB's specific organization follows the source.
 
 ## 5. Microarchitecture Parameters
 
 
-### 5.1. 表容量、冲突与边界
-- FauFTB 是有限表，容量压力表现为 replacement/alias，而不是 FIFO overflow；新 entry 只能覆盖替换策略选择的 way。
-- update 与 lookup 冲突时使用 ready/valid 或写旁路保证不读取半更新 entry。
-- 多命中/错误 entry 不允许静默强化：后级比较和提交 update 会修复；miss 时输出 fall-through，不存在 underflow 读取。
+<!-- ### 5.1. 表容量、冲突与边界 -->
+### 5.1. Table Capacity, Conflicts, and Boundaries
+<!-- - FauFTB 是有限表，容量压力表现为 replacement/alias，而不是 FIFO overflow；新 entry 只能覆盖替换策略选择的 way。 -->
+- FauFTB is finite; capacity pressure appears as replacement or aliasing rather than FIFO overflow, and a new entry can only replace the way selected by the replacement policy.
+<!-- - update 与 lookup 冲突时使用 ready/valid 或写旁路保证不读取半更新 entry。 -->
+- When update and lookup conflict, ready/valid control or write bypass prevents a partially updated entry from being read.
+<!-- - 多命中/错误 entry 不允许静默强化：后级比较和提交 update 会修复；miss 时输出 fall-through，不存在 underflow 读取。 -->
+- Multiple hits or erroneous entries must not be silently reinforced: later comparisons and committed updates repair them; a miss emits fall-through and never performs an underflow read.
 
 ```waveform-draw
 {
@@ -122,26 +160,39 @@ FauFTB 主要是 S0 请求、S1 返回、update 三阶段隐式状态机。理�
 }
 ```
 
-## 6. 模块边界和接口
+<!-- ## 6. 模块边界和接口 -->
+## 6. Module Boundaries and Interfaces
 
 
 ### 6.1. Role
 `FauFTB` is the fast/uBTB-style target predictor. It produces an S1 prediction from a 32-way register-file-like structure, then passes its hit entry into `FTB` so FTB can close its SRAM read path when FauFTB and FTB stay consistent.
 
-### 6.2. 控制信号逐项解释：Who / From / To / How / Why
-> 下表覆盖本文讲解中出现的查询、流水推进、选择、训练、替换和恢复控制。`为什么存在` 不以信号命名猜测，而以当前 `kunminghu-v2` 数据依赖、资源限制和恢复要求为依据。
+<!-- ### 6.2. 控制信号逐项解释：Who / From / To / How / Why -->
+### 6.2. Control Signals: Who / From / To / How / Why
+<!-- > 下表覆盖本文讲解中出现的查询、流水推进、选择、训练、替换和恢复控制。`为什么存在` 不以信号命名猜测，而以当前 `kunminghu-v2` 数据依赖、资源限制和恢复要求为依据。 -->
+> The table covers lookup, pipeline advance, selection, training, replacement, and recovery control used in this discussion. Its rationale is based on current `kunminghu-v2` data dependencies, resource constraints, and recovery requirements, not signal names alone.
 
-| 控制信号 / 状态 | 谁产生 / 从哪里来 | 谁消费 / 到哪里去 | 何时、如何生效 | 为什么存在；缺失会怎样 | 代码证据 |
+<!-- | 控制信号 / 状态 | 谁产生 / 从哪里来 | 谁消费 / 到哪里去 | 何时、如何生效 | 为什么存在；缺失会怎样 | 代码证据 | -->
+| Control signal / state | Producer / source | Consumer / destination | When and how it takes effect | Why it exists; consequence if absent | Source evidence |
 | --- | --- | --- | --- | --- | --- |
-| `io.in.valid / s0_fire` | BPU 公共请求 | FauFTB S1 查询 | 接受 PC 后并行比较全部 way。 | uFTB 位于最早级，必须明确哪一拍请求真实进入，避免全相联比较结果跨请求。 | [frontend/FauFTB.scala:76-117](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L117) |
-| `s1_hit_oh` | 各 way tag/valid 比较 | Mux1H 与命中检测 | one-hot 指出匹配的预测 entry。 | 并行查找需要保留具体 way，才能选择正确 FTB entry、方向 counter 和后续训练位置。 | [frontend/FauFTB.scala:92-117](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L92-L117) |
-| `s1_hit` | s1_hit_oh.orR | 快速预测有效控制 | 决定是否用 uFTB entry 覆盖默认顺序流。 | entry 数据本身即使有位模式也不代表有效；hit 把“有匹配”与“未命中”明确分开。 | [frontend/FauFTB.scala:92-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L92-L128) |
-| `ctrs(w)(br)(1)` | 每 way/分支槽 2-bit counter | br_taken_mask | 最高位形成快速方向。 | FTB entry 只描述控制流位置/目标，还需要独立方向状态决定条件分支是否 taken。 | [frontend/FauFTB.scala:86-108](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L86-L108) |
-| `io.update.valid` | FTQ 提交更新 | 命中重写、分配和 counter 训练 | 仅真实更新触发表写。 | 避免错误路径和无关提交修改早期预测器；同时将慢速真实信息回灌到最快一级。 | [frontend/FauFTB.scala:139-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L139-L205) |
-| `update_hit` | update PC 与现有 way 比较 | 写 way 选择 | 命中时原地更新，未命中时走替换。 | 已有 entry 应保持身份和替换年龄；不区分 hit 会造成重复 entry 或无谓驱逐。 | [frontend/FauFTB.scala:139-180](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L139-L180) |
-| `update_way` | 命中 way 或 PLRU victim | 各 way.write_valid | 唯一选择本拍写入目标。 | 表只有有限 way，必须把 hit-update 与 miss-allocation 统一成 one-hot 写控制，防止多 way 同写。 | [frontend/FauFTB.scala:162-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L162-L205) |
-| `write_valid` | update_way 与 update.valid | FauFTBWay 数据/tag/valid | 被选 way 才更新 entry。 | 每个 way 独立存储；显式写使能隔离未选项，避免广播数据污染整个表。 | [frontend/FauFTB.scala:43-74](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L43-L74) |
-| `meta.hit / meta.pred_way` | 预测阶段 | FTQ 与训练阶段 | 记录原预测是否命中以及命中 way。 | 提交时表内容可能已变化；保存原 way 才能判断原预测质量并进行一致更新。 | [frontend/FauFTB.scala:78-84](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L78-L84) |
+<!-- | `io.in.valid / s0_fire` | BPU 公共请求 | FauFTB S1 查询 | 接受 PC 后并行比较全部 way。 | uFTB 位于最早级，必须明确哪一拍请求真实进入，避免全相联比较结果跨请求。 | [frontend/FauFTB.scala:76-117](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L117) | -->
+| `io.in.valid / s0_fire` | Shared BPU request | FauFTB S1 lookup | After accepting a PC, all ways are compared in parallel. | As uFTB is the earliest stage, it must identify the cycle in which a request actually enters, preventing fully associative comparison results from crossing requests. | [frontend/FauFTB.scala:76-117](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L117) |
+<!-- | `s1_hit_oh` | 各 way tag/valid 比较 | Mux1H 与命中检测 | one-hot 指出匹配的预测 entry。 | 并行查找需要保留具体 way，才能选择正确 FTB entry、方向 counter 和后续训练位置。 | [frontend/FauFTB.scala:92-117](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L92-L117) | -->
+| `s1_hit_oh` | Tag/valid comparison of each way | Mux1H and hit detection | A one-hot vector identifies the matching prediction entry. | Parallel lookup must retain the concrete way to select the correct FTB entry, direction counter, and later training location. | [frontend/FauFTB.scala:92-117](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L92-L117) |
+<!-- | `s1_hit` | s1_hit_oh.orR | 快速预测有效控制 | 决定是否用 uFTB entry 覆盖默认顺序流。 | entry 数据本身即使有位模式也不代表有效；hit 把“有匹配”与“未命中”明确分开。 | [frontend/FauFTB.scala:92-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L92-L128) | -->
+| `s1_hit` | `s1_hit_oh.orR` | Fast-prediction valid control | Determines whether the uFTB entry overrides default sequential flow. | A bit pattern in entry data does not itself imply validity; hit cleanly separates a match from a miss. | [frontend/FauFTB.scala:92-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L92-L128) |
+<!-- | `ctrs(w)(br)(1)` | 每 way/分支槽 2-bit counter | br_taken_mask | 最高位形成快速方向。 | FTB entry 只描述控制流位置/目标，还需要独立方向状态决定条件分支是否 taken。 | [frontend/FauFTB.scala:86-108](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L86-L108) | -->
+| `ctrs(w)(br)(1)` | Two-bit counter per way and branch slot | `br_taken_mask` | Its most-significant bit forms the fast direction. | An FTB entry only describes control-flow position and target; independent direction state is still needed to decide whether a conditional branch is taken. | [frontend/FauFTB.scala:86-108](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L86-L108) |
+<!-- | `io.update.valid` | FTQ 提交更新 | 命中重写、分配和 counter 训练 | 仅真实更新触发表写。 | 避免错误路径和无关提交修改早期预测器；同时将慢速真实信息回灌到最快一级。 | [frontend/FauFTB.scala:139-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L139-L205) | -->
+| `io.update.valid` | FTQ committed update | Hit rewrite, allocation, and counter training | Only a real update triggers a table write. | It prevents wrong-path and unrelated commits from modifying the early predictor while feeding resolved information back to the fastest stage. | [frontend/FauFTB.scala:139-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L139-L205) |
+<!-- | `update_hit` | update PC 与现有 way 比较 | 写 way 选择 | 命中时原地更新，未命中时走替换。 | 已有 entry 应保持身份和替换年龄；不区分 hit 会造成重复 entry 或无谓驱逐。 | [frontend/FauFTB.scala:139-180](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L139-L180) | -->
+| `update_hit` | Comparison of the update PC with existing ways | Write-way selection | Updates in place on a hit and uses replacement on a miss. | An existing entry should retain its identity and replacement age; ignoring a hit creates duplicate entries or unnecessary evictions. | [frontend/FauFTB.scala:139-180](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L139-L180) |
+<!-- | `update_way` | 命中 way 或 PLRU victim | 各 way.write_valid | 唯一选择本拍写入目标。 | 表只有有限 way，必须把 hit-update 与 miss-allocation 统一成 one-hot 写控制，防止多 way 同写。 | [frontend/FauFTB.scala:162-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L162-L205) | -->
+| `update_way` | Hit way or PLRU victim | Each way's `write_valid` | Uniquely selects this cycle's write target. | The table has finite ways, so hit updates and miss allocations must use one-hot write control to prevent simultaneous writes to multiple ways. | [frontend/FauFTB.scala:162-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L162-L205) |
+<!-- | `write_valid` | update_way 与 update.valid | FauFTBWay 数据/tag/valid | 被选 way 才更新 entry。 | 每个 way 独立存储；显式写使能隔离未选项，避免广播数据污染整个表。 | [frontend/FauFTB.scala:43-74](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L43-L74) | -->
+| `write_valid` | `update_way` and `update.valid` | FauFTBWay data/tag/valid | Only the selected way updates its entry. | Each way stores state independently; explicit write enables isolate unselected ways and prevent broadcast data from corrupting the whole table. | [frontend/FauFTB.scala:43-74](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L43-L74) |
+<!-- | `meta.hit / meta.pred_way` | 预测阶段 | FTQ 与训练阶段 | 记录原预测是否命中以及命中 way。 | 提交时表内容可能已变化；保存原 way 才能判断原预测质量并进行一致更新。 | [frontend/FauFTB.scala:78-84](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L78-L84) | -->
+| `meta.hit / meta.pred_way` | Prediction stage | FTQ and training stage | Records whether the original prediction hit and which way hit. | Table contents may change before commit; preserving the original way is necessary to judge prediction quality and update consistently. | [frontend/FauFTB.scala:78-84](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L78-L84) |
 
 #### 6.2.1. Top-Level Module Connectivity
 
@@ -224,13 +275,15 @@ The stage graph keeps chronological forward edges separate from the bundled reco
 }
 ```
 
-## 7. 为什么模块存在
+<!-- ## 7. 为什么模块存在 -->
+## 7. Why the Module Exists
 
 
 ### 7.1. Why It Exists
 FauFTB gives a fast S1 target/direction guess before the larger FTB SRAM path completes. `FTB` consumes `io.fauftb_entry_in` and can close its own read path after a consistency threshold ([FTB.scala:663-741](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FTB.scala#L663-L741)), reducing pressure and energy on the main FTB.
 
-## 8. 有效动态路径
+<!-- ## 8. 有效动态路径 -->
+## 8. Effective Dynamic Path
 
 
 ### 8.1. Index, Search, and Update
@@ -238,15 +291,19 @@ Lookup does not use a set index. Every way compares `getTag(s1_pc_dup(0))`, wher
 
 Update is two-stage. S0 captures update valid, PC, metadata, and compares all ways by update tag ([FauFTB.scala:143-160](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L143-L160)). S1 chooses the hit way if present, otherwise PLRU allocation ([FauFTB.scala:162-170](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L162-L170)), writes the entry/tag ([FauFTB.scala:171-175](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L171-L175)), and updates the per-branch counters only for real branch slots that are not strong-bias entries ([FauFTB.scala:156-160](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L156-L160), [FauFTB.scala:187-198](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L187-L198)).
 
-## 9. Index 和地址/历史计算
+<!-- ## 9. Index 和地址/历史计算 -->
+## 9. Index and Address/History Calculations
 
 
-地址、PC、折叠历史、tag、set/way、line offset 和 FTQ offset 都必须追到源码表达式；索引冲突、回绕和跨边界情况在算法和验证章节中继续展开。
+<!-- 地址、PC、折叠历史、tag、set/way、line offset 和 FTQ offset 都必须追到源码表达式；索引冲突、回绕和跨边界情况在算法和验证章节中继续展开。 -->
+Addresses, PCs, folded histories, tags, sets/ways, line offsets, and FTQ offsets must all be traced to source expressions; index conflicts, wraparound, and boundary cases are expanded in the algorithm and verification sections.
 
-## 10. 核心算法
+<!-- ## 10. 核心算法 -->
+## 10. Core Algorithm
 
 
-### 10.1. 算法示例推演
+<!-- ### 10.1. 算法示例推演 -->
+### 10.1. Algorithm Walkthrough
 Example input: S1 PC is `0x8000_1234`; `instOffsetBits=1`, so `getTag(pc)` uses bits `[16:1]` for the 16-bit tag ([FauFTB.scala:26-39](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L26-L39)). Assume way 7 has `valid=true`, matching tag, an FTB entry whose first branch slot targets `0x8000_1200`, and its branch counter is `2'b10`.
 
 1. Lookup: every way compares `tag === req_tag && valid` ([FauFTB.scala:56-64](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L56-L64), [FauFTB.scala:92-99](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L92-L99)). Only way 7 hits, so `s1_hit_oh=1<<7`, `s1_hit=true`, and `s1_hit_way=7`.
@@ -257,7 +314,8 @@ Example input: S1 PC is `0x8000_1234`; `instOffsetBits=1`, so `getTag(pc)` uses 
 
 Downstream effect: before update, `full_pred.br_taken_mask` is true in S1; after one not-taken training update, the same branch becomes weak-not-taken in FauFTB, while the main FTB/TAGE stages may still override it in S2/S3.
 
-### 10.2. 逐流水级算法
+<!-- ### 10.2. 逐流水级算法 -->
+### 10.2. Per-Stage Algorithm
 | Stage | Inputs | Algorithm and state | Ready/stall | Output | Source lines |
 | --- | --- | --- | --- | --- | --- |
 | S1 lookup | `s1_pc_dup(0)`, `ctrl.ubtb_enable` | All 32 ways compare `getTag(s1_pc)` against registered way tags; each way has `data/tag/valid`. | Inherits base predictor readiness; no SRAM read stall because ways are registers. | `s1_hit`, `s1_hit_way`, selected `FauFTBEntry`, S1 `full_pred`. | [FauFTB.scala:43-74](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L43-L74), [FauFTB.scala:92-117](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L92-L117) |
@@ -266,20 +324,25 @@ Downstream effect: before update, `full_pred.br_taken_mask` is true in S1; after
 | Update S0 | FTQ update PC and metadata | Register update, compute update tag, compare all way tags including write bypass hit. | No read port stall. | `u_s0_hit_oh`, `u_s0_br_update_valids`. | [FauFTB.scala:143-160](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L143-L160) |
 | Update S1 | hit/miss result | Hit rewrites hit way; miss chooses PLRU allocation; writes entry/tag and trains counters. | PLRU touched by prediction and update. | Updated way entry, tag, counter, PLRU state. | [FauFTB.scala:162-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L162-L205) |
 
-## 11. 状态和存储结构
+<!-- ## 11. 状态和存储结构 -->
+## 11. State and Storage Structures
 
 
-把每个表、栈、FIFO、MSHR、uncache entry 和 pipeline register 记录为 `valid/full/empty/ready` 可观察状态，并说明谁写入、谁读取、何时清空以及满/空时谁被反压。
+<!-- 把每个表、栈、FIFO、MSHR、uncache entry 和 pipeline register 记录为 `valid/full/empty/ready` 可观察状态，并说明谁写入、谁读取、何时清空以及满/空时谁被反压。 -->
+Record each table, stack, FIFO, MSHR, uncache entry, and pipeline register as observable `valid/full/empty/ready` state, and identify its writers, readers, clearing conditions, and the party backpressured at full or empty boundaries.
 
-## 12. Pipeline stage 分析
+<!-- ## 12. Pipeline stage 分析 -->
+## 12. Pipeline-Stage Analysis
 
 
-阶段说明只使用源码中的寄存器、valid/ready 和 fire 条件；对 Frontend 使用 F0/F1/F2/F3，对 Backend 使用实际 Decode/Rename/Dispatch/Issue/Execute/Writeback/ROB 边界。
+<!-- 阶段说明只使用源码中的寄存器、valid/ready 和 fire 条件；对 Frontend 使用 F0/F1/F2/F3，对 Backend 使用实际 Decode/Rename/Dispatch/Issue/Execute/Writeback/ROB 边界。 -->
+Stage descriptions use only source registers, valid/ready, and fire conditions; frontend stages use F0/F1/F2/F3, and backend stages use the actual Decode/Rename/Dispatch/Issue/Execute/Writeback/ROB boundaries.
 
 ## 13. Control path rationale
 
 
-### 13.1. Redirect 信号生成
+<!-- ### 13.1. Redirect 信号生成 -->
+### 13.1. Redirect Signal Generation
 FauFTB does not directly assert BPU redirect. It influences redirect by producing an early S1 prediction that later stages may override.
 
 | Redirect-like effect | Condition | Stage | Downstream effect | Source lines |
@@ -290,44 +353,67 @@ FauFTB does not directly assert BPU redirect. It influences redirect by producin
 
 Example: FauFTB predicts taken from counter `2'b10`, but TAGE later changes `br_taken_mask` to not-taken. BPU's S2 comparison sees `takenDiff` and generates `s2_redirect_dup` through [frontend/BPU.scala:620-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L620-L635) and [frontend/BPU.scala:698-705](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L705).
 
-## 14. Data path 与跨边界
+<!-- ## 14. Data path 与跨边界 -->
+## 14. Data Path and Boundary Crossings
 
 
-### 14.1. 跨边界代码解析
-本预测器只产生预测元数据，不直接把跨页、跨 Cache Line 或 MMIO 访问当成一个原子内存事务。对一个取指块跨边界的场景，先由预测链生成块起始 PC、taken mask、target 和 fall-through，再由 IFU/ICache 对每个地址片段分别完成翻译、权限和内存类型判断。BPU 在 S1/S2/S3 比较预测差异并生成 redirect 的规则见 [frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635) 和 [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854)；因此第二片段发生 page fault、line miss 或 MMIO 分类变化时，恢复对象是预测历史和 FTQ 上下文，而不是把两片段静默拼接。
+<!-- ### 14.1. 跨边界代码解析 -->
+### 14.1. Boundary-Crossing Code Walkthrough
+<!-- 本预测器只产生预测元数据，不直接把跨页、跨 Cache Line 或 MMIO 访问当成一个原子内存事务。对一个取指块跨边界的场景，先由预测链生成块起始 PC、taken mask、target 和 fall-through，再由 IFU/ICache 对每个地址片段分别完成翻译、权限和内存类型判断。BPU 在 S1/S2/S3 比较预测差异并生成 redirect 的规则见 [frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635) 和 [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854)；因此第二片段发生 page fault、line miss 或 MMIO 分类变化时，恢复对象是预测历史和 FTQ 上下文，而不是把两片段静默拼接。 -->
+This predictor produces only prediction metadata; it does not treat accesses across a page, cache line, or MMIO boundary as an atomic memory transaction. For a fetch block that crosses a boundary, the predictor chain first produces the block start PC, taken mask, target, and fall-through; IFU/ICache then independently translate, check permissions, and classify memory type for each address fragment. The BPU rules that compare predictions in S1/S2/S3 and generate redirects are in [frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635) and [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854); therefore, when the second fragment causes a page fault, line miss, or MMIO classification change, recovery operates on prediction history and FTQ context rather than silently joining the fragments.
 
-最小实例是块尾部剩余半条 32-bit 指令：第一片段可能在当前 Cache Line/页命中，第二片段需要下一 Line 或下一页的独立请求；IFU 保存 `lastHalf`，跨周期合并并在 flush 时清除，[frontend/IFU.scala:915-943](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/IFU.scala#L915-L943)。若第二页或第二 Line 的结果改变 CFI 位置、target 或 fall-through，BPU 的 redirect 比较优先于继续使用旧预测。对 MMIO/uncache 地址，预测器只能提供候选 PC，实际访问必须转入 IFU 的 MMIO FSM，等待翻译、PMP/PMA 和提交约束，不能由预测命中绕过副作用控制。
+<!-- 最小实例是块尾部剩余半条 32-bit 指令：第一片段可能在当前 Cache Line/页命中，第二片段需要下一 Line 或下一页的独立请求；IFU 保存 `lastHalf`，跨周期合并并在 flush 时清除，[frontend/IFU.scala:915-943](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/IFU.scala#L915-L943)。若第二页或第二 Line 的结果改变 CFI 位置、target 或 fall-through，BPU 的 redirect 比较优先于继续使用旧预测。对 MMIO/uncache 地址，预测器只能提供候选 PC，实际访问必须转入 IFU 的 MMIO FSM，等待翻译、PMP/PMA 和提交约束，不能由预测命中绕过副作用控制。 -->
+The smallest example is the half of a 32-bit instruction left at the end of a block: the first fragment can hit in the current cache line or page, while the second needs an independent request to the next line or page. IFU retains `lastHalf`, merges it across cycles, and clears it on flush ([frontend/IFU.scala:915-943](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/IFU.scala#L915-L943)). If the second page or line changes the CFI position, target, or fall-through, BPU redirect comparison takes priority over continuing with the old prediction. For MMIO/uncache addresses, the predictor supplies only a candidate PC; the access must enter the IFU MMIO FSM and wait for translation, PMP/PMA, and commit constraints, so a prediction hit cannot bypass side-effect control.
 
-**边界检查表**
+<!-- **边界检查表** -->
+**Boundary-Checking Table**
 
-| 边界 | 第一片段 | 第二片段 | 失败/恢复 |
+<!-- | 边界 | 第一片段 | 第二片段 | 失败/恢复 | -->
+| Boundary | First fragment | Second fragment | Failure / recovery |
 | --- | --- | --- | --- |
-| 虚拟页 | 当前页的预测块与历史 | 下一页的独立翻译和权限结果 | page/access/guest fault、flush、重定向 |
-| Cache Line | 当前 line 的 tag/数据命中 | 下一 line 的 miss/refill 或独立响应 | target/CFI 不一致时 redirect |
-| MMIO/uncache | 预测 PC 与元数据 | IFU/uncache 请求、响应和提交门控 | resend、异常、commit wait 或 cancel |
+<!-- | 虚拟页 | 当前页的预测块与历史 | 下一页的独立翻译和权限结果 | page/access/guest fault、flush、重定向 | -->
+| Virtual page | Prediction block and history from the current page | Independent translation and permission result for the next page | Page/access/guest fault, flush, or redirect |
+<!-- | Cache Line | 当前 line 的 tag/数据命中 | 下一 line 的 miss/refill 或独立响应 | target/CFI 不一致时 redirect | -->
+| Cache line | Tag/data hit in the current line | Miss/refill or independent response from the next line | Redirect on target/CFI mismatch |
+<!-- | MMIO/uncache | 预测 PC 与元数据 | IFU/uncache 请求、响应和提交门控 | resend、异常、commit wait 或 cancel | -->
+| MMIO/uncache | Predicted PC and metadata | IFU/uncache request, response, and commit gating | Resend, exception, commit wait, or cancel |
 
-## 15. 异常、debug、privilege
+<!-- ## 15. 异常、debug、privilege -->
+## 15. Exceptions, Debug, and Privilege
 
 
-区分预测错误、replay、page/access/guest fault、MMIO side effect、debug redirect 和架构异常；说明异常产生者、优先级、清理对象、恢复入口和提交可见性。
+<!-- 区分预测错误、replay、page/access/guest fault、MMIO side effect、debug redirect 和架构异常；说明异常产生者、优先级、清理对象、恢复入口和提交可见性。 -->
+Distinguish misprediction, replay, page/access/guest faults, MMIO side effects, debug redirects, and architectural exceptions; identify their producer, priority, cleared state, recovery point, and commit visibility.
 
-## 16. CSR 控制
+<!-- ## 16. CSR 控制 -->
+## 16. CSR Control
 
 
-前端分支预测器的使能控制来自 CSR 模块生成的 `CustomCSRCtrlIO.bp_ctrl`，不是各预测器本地私有 CSR。有效链路是：`sbpctl` CSR 字段 -> `io.status.custom.bp_ctrl` -> Backend `frontendCsrCtrl` -> XSCore `frontend.io.csrCtrl` -> Frontend `bpu.io.ctrl` -> BPU 内各子预测器 `io.enable`。
+<!-- 前端分支预测器的使能控制来自 CSR 模块生成的 `CustomCSRCtrlIO.bp_ctrl`，不是各预测器本地私有 CSR。有效链路是：`sbpctl` CSR 字段 -> `io.status.custom.bp_ctrl` -> Backend `frontendCsrCtrl` -> XSCore `frontend.io.csrCtrl` -> Frontend `bpu.io.ctrl` -> BPU 内各子预测器 `io.enable`。 -->
+Frontend branch-predictor enables originate in `CustomCSRCtrlIO.bp_ctrl` generated by the CSR module, not in private CSRs local to individual predictors. The effective path is: `sbpctl` CSR field -> `io.status.custom.bp_ctrl` -> backend `frontendCsrCtrl` -> XSCore `frontend.io.csrCtrl` -> frontend `bpu.io.ctrl` -> each BPU subpredictor's `io.enable`.
 
-### 16.1. CSR 字段到 BPU 控制信号
-| 控制位 | CSR 源字段 | Frontend/BPU 消费者 | 有效作用 | 源码证据 |
+<!-- ### 16.1. CSR 字段到 BPU 控制信号 -->
+### 16.1. CSR Fields to BPU Control Signals
+<!-- | 控制位 | CSR 源字段 | Frontend/BPU 消费者 | 有效作用 | 源码证据 | -->
+| Control bit | CSR source field | Frontend/BPU consumer | Effective behavior | Source evidence |
 | --- | --- | --- | --- | --- |
-| `bp_ctrl.ubtbEnable` | `sbpctl.regOut.UBTB_ENABLE` | `ubtb.io.enable` | 允许或关闭 S1 fast uBTB/MicroBtb 查询结果参与预测链；关闭后仍保留 fall-through 基线。 | [NewCSR.scala:1378](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1378), [Bpu.scala:96](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L96), [Bpu.scala:105](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L105) |
-| `bp_ctrl.abtbEnable` | `sbpctl.regOut.ABTB_ENABLE` | `abtb.io.enable` | 控制 AheadBtb 目标/属性预测是否参与早期预测。 | [NewCSR.scala:1379](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1379), [Bpu.scala:97](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L97), [Bpu.scala:106](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L106) |
-| `bp_ctrl.mbtbEnable` | `sbpctl.regOut.MBTB_ENABLE` | `mbtb.io.enable` | 控制 MainBtb 是否提供主 BTB 命中、直接分支/JAL target 和 fall-through 信息。 | [NewCSR.scala:1380](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1380), [Bpu.scala:98](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L98), [Bpu.scala:107](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L107) |
-| `bp_ctrl.tageEnable` | `sbpctl.regOut.TAGE_ENABLE` | `tage.io.enable` | 控制 TAGE 条件分支方向预测是否有效；关闭时不能把 TAGE provider 结果作为方向覆盖依据。 | [NewCSR.scala:1381](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1381), [Bpu.scala:99](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L99), [Bpu.scala:108](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L108) |
-| `bp_ctrl.scEnable` | `sbpctl.regOut.SC_ENABLE` | `sc.io.enable` | 控制 statistical corrector 是否修正 TAGE/基础方向结果。 | [NewCSR.scala:1382](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1382), [Bpu.scala:100](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L100), [Bpu.scala:109](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L109) |
-| `bp_ctrl.ittageEnable` | `sbpctl.regOut.ITTAGE_ENABLE` | `ittage.io.enable` | 控制间接跳转/JALR target 覆盖预测是否有效。 | [NewCSR.scala:1383](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1383), [Bpu.scala:101](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L101), [Bpu.scala:110](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L110) |
-| `bp_ctrl.rasEnable` | `sbpctl.regOut.RAS_ENABLE` | `ras.io.enable` | 控制 return address stack 是否给 RET/JALR 返回目标提供覆盖。 | [NewCSR.scala:1384](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1384), [Bpu.scala:102](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L102), [Bpu.scala:111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L111) |
+<!-- | `bp_ctrl.ubtbEnable` | `sbpctl.regOut.UBTB_ENABLE` | `ubtb.io.enable` | 允许或关闭 S1 fast uBTB/MicroBtb 查询结果参与预测链；关闭后仍保留 fall-through 基线。 | [NewCSR.scala:1378](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1378), [Bpu.scala:96](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L96), [Bpu.scala:105](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L105) | -->
+| `bp_ctrl.ubtbEnable` | `sbpctl.regOut.UBTB_ENABLE` | `ubtb.io.enable` | Enables or disables S1 fast uBTB/MicroBtb lookup results in the prediction chain; the fall-through baseline remains when disabled. | [NewCSR.scala:1378](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1378), [Bpu.scala:96](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L96), [Bpu.scala:105](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L105) |
+<!-- | `bp_ctrl.abtbEnable` | `sbpctl.regOut.ABTB_ENABLE` | `abtb.io.enable` | 控制 AheadBtb 目标/属性预测是否参与早期预测。 | [NewCSR.scala:1379](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1379), [Bpu.scala:97](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L97), [Bpu.scala:106](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L106) | -->
+| `bp_ctrl.abtbEnable` | `sbpctl.regOut.ABTB_ENABLE` | `abtb.io.enable` | Controls whether AheadBtb target and attribute prediction participates in early prediction. | [NewCSR.scala:1379](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1379), [Bpu.scala:97](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L97), [Bpu.scala:106](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L106) |
+<!-- | `bp_ctrl.mbtbEnable` | `sbpctl.regOut.MBTB_ENABLE` | `mbtb.io.enable` | 控制 MainBtb 是否提供主 BTB 命中、直接分支/JAL target 和 fall-through 信息。 | [NewCSR.scala:1380](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1380), [Bpu.scala:98](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L98), [Bpu.scala:107](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L107) | -->
+| `bp_ctrl.mbtbEnable` | `sbpctl.regOut.MBTB_ENABLE` | `mbtb.io.enable` | Controls whether MainBtb supplies primary BTB hits, direct-branch/JAL targets, and fall-through information. | [NewCSR.scala:1380](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1380), [Bpu.scala:98](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L98), [Bpu.scala:107](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L107) |
+<!-- | `bp_ctrl.tageEnable` | `sbpctl.regOut.TAGE_ENABLE` | `tage.io.enable` | 控制 TAGE 条件分支方向预测是否有效；关闭时不能把 TAGE provider 结果作为方向覆盖依据。 | [NewCSR.scala:1381](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1381), [Bpu.scala:99](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L99), [Bpu.scala:108](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L108) | -->
+| `bp_ctrl.tageEnable` | `sbpctl.regOut.TAGE_ENABLE` | `tage.io.enable` | Controls whether TAGE conditional-branch direction prediction is valid; when disabled, a TAGE provider result cannot override direction. | [NewCSR.scala:1381](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1381), [Bpu.scala:99](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L99), [Bpu.scala:108](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L108) |
+<!-- | `bp_ctrl.scEnable` | `sbpctl.regOut.SC_ENABLE` | `sc.io.enable` | 控制 statistical corrector 是否修正 TAGE/基础方向结果。 | [NewCSR.scala:1382](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1382), [Bpu.scala:100](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L100), [Bpu.scala:109](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L109) | -->
+| `bp_ctrl.scEnable` | `sbpctl.regOut.SC_ENABLE` | `sc.io.enable` | Controls whether the statistical corrector adjusts the TAGE/base direction result. | [NewCSR.scala:1382](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1382), [Bpu.scala:100](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L100), [Bpu.scala:109](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L109) |
+<!-- | `bp_ctrl.ittageEnable` | `sbpctl.regOut.ITTAGE_ENABLE` | `ittage.io.enable` | 控制间接跳转/JALR target 覆盖预测是否有效。 | [NewCSR.scala:1383](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1383), [Bpu.scala:101](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L101), [Bpu.scala:110](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L110) | -->
+| `bp_ctrl.ittageEnable` | `sbpctl.regOut.ITTAGE_ENABLE` | `ittage.io.enable` | Controls whether indirect-jump/JALR target override prediction is valid. | [NewCSR.scala:1383](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1383), [Bpu.scala:101](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L101), [Bpu.scala:110](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L110) |
+<!-- | `bp_ctrl.rasEnable` | `sbpctl.regOut.RAS_ENABLE` | `ras.io.enable` | 控制 return address stack 是否给 RET/JALR 返回目标提供覆盖。 | [NewCSR.scala:1384](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1384), [Bpu.scala:102](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L102), [Bpu.scala:111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L111) | -->
+| `bp_ctrl.rasEnable` | `sbpctl.regOut.RAS_ENABLE` | `ras.io.enable` | Controls whether the return-address stack overrides RET/JALR return targets. | [NewCSR.scala:1384](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala#L1384), [Bpu.scala:102](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L102), [Bpu.scala:111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L111) |
 
-### 16.2. 有效代码骨架
+<!-- ### 16.2. 有效代码骨架 -->
+### 16.2. Effective Code Skeleton
 ```scala
 // backend/fu/NewCSR/NewCSR.scala
 io.status.custom.bp_ctrl.ubtbEnable   := sbpctl.regOut.UBTB_ENABLE.asBool
@@ -356,15 +442,19 @@ ittage.io.enable      := ctrl.ittageEnable
 ras.io.enable         := ctrl.rasEnable
 ```
 
-### 16.3. 代码解析
-`BpuCtrl` bundle 明确定义了 `ubtbEnable`、`abtbEnable`、`mbtbEnable`、`tageEnable`、`scEnable`、`ittageEnable`、`rasEnable` 七个 Bool 控制位：[Bundles.scala:179-189](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bundles.scala#L179-L189)。`CustomCSRCtrlIO` 将 `bp_ctrl` 作为 CSR 输出的一部分：[Bundle.scala:586-596](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Bundle.scala#L586-L596)。Backend 把 `csrio.customCtrl` 暴露为 `frontendCsrCtrl`，XSCore 再连到 Frontend：[Backend.scala:526-527](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/Backend.scala#L526-L527), [XSCore.scala:138](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/XSCore.scala#L138)。Frontend 先用 `CsrCtrlPortDelay` 延迟 CSR 控制，再把 `csrCtrl.bp_ctrl` 送进 BPU：[Frontend.scala:143-153](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Frontend.scala#L143-L153)。BPU 内部再延迟 2 拍以满足时序，随后分发给各子预测器：[Bpu.scala:89-111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L89-L111)。
+<!-- ### 16.3. 代码解析 -->
+### 16.3. Code Walkthrough
+<!-- `BpuCtrl` bundle 明确定义了 `ubtbEnable`、`abtbEnable`、`mbtbEnable`、`tageEnable`、`scEnable`、`ittageEnable`、`rasEnable` 七个 Bool 控制位：[Bundles.scala:179-189](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bundles.scala#L179-L189)。`CustomCSRCtrlIO` 将 `bp_ctrl` 作为 CSR 输出的一部分：[Bundle.scala:586-596](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Bundle.scala#L586-L596)。Backend 把 `csrio.customCtrl` 暴露为 `frontendCsrCtrl`，XSCore 再连到 Frontend：[Backend.scala:526-527](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/Backend.scala#L526-L527), [XSCore.scala:138](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/XSCore.scala#L138)。Frontend 先用 `CsrCtrlPortDelay` 延迟 CSR 控制，再把 `csrCtrl.bp_ctrl` 送进 BPU：[Frontend.scala:143-153](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Frontend.scala#L143-L153)。BPU 内部再延迟 2 拍以满足时序，随后分发给各子预测器：[Bpu.scala:89-111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L89-L111)。 -->
+The `BpuCtrl` bundle explicitly defines seven Boolean control bits: `ubtbEnable`, `abtbEnable`, `mbtbEnable`, `tageEnable`, `scEnable`, `ittageEnable`, and `rasEnable` ([Bundles.scala:179-189](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bundles.scala#L179-L189)). `CustomCSRCtrlIO` exposes `bp_ctrl` as part of its CSR output ([Bundle.scala:586-596](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Bundle.scala#L586-L596)). The backend exposes `csrio.customCtrl` as `frontendCsrCtrl`, which XSCore connects to the frontend ([Backend.scala:526-527](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/Backend.scala#L526-L527), [XSCore.scala:138](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/XSCore.scala#L138)). The frontend first delays CSR control through `CsrCtrlPortDelay` and sends `csrCtrl.bp_ctrl` to BPU ([Frontend.scala:143-153](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Frontend.scala#L143-L153)). BPU then delays it by two cycles for timing and distributes it to individual subpredictors ([Bpu.scala:89-111](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/bpu/Bpu.scala#L89-L111)).
 
-需要注意两点：第一，`fallThrough` 基线预测器始终 `enable := true.B`，`MicroTage` 和 `MicroRas` 当前也固定使能，源码中 `utageEnable` 仍是注释项，不应写成已由 CSR 控制；第二，在 `EnableConstantin && !FPGAPlatform` 配置下，`constCtrl` 可覆盖 CSR 位，否则直接使用 CSR 位，因此验证时要同时覆盖 Constantin override 和普通 CSR 控制两条路径。
+<!-- 需要注意两点：第一，`fallThrough` 基线预测器始终 `enable := true.B`，`MicroTage` 和 `MicroRas` 当前也固定使能，源码中 `utageEnable` 仍是注释项，不应写成已由 CSR 控制；第二，在 `EnableConstantin && !FPGAPlatform` 配置下，`constCtrl` 可覆盖 CSR 位，否则直接使用 CSR 位，因此验证时要同时覆盖 Constantin override 和普通 CSR 控制两条路径。 -->
+Two points require care. First, the `fallThrough` baseline predictor is always `enable := true.B`; `MicroTage` and `MicroRas` are also currently always enabled, and `utageEnable` remains commented out in the source, so it must not be described as CSR-controlled. Second, under `EnableConstantin && !FPGAPlatform`, `constCtrl` can override CSR bits; otherwise the CSR bits are used directly. Verification must therefore cover both the Constantin-override and normal CSR-control paths.
 
 ## 17. Diagrams
 
 
-### 17.1. 结构图
+<!-- ### 17.1. 结构图 -->
+### 17.1. Structural Diagram
 ```mermaid
 flowchart LR
   PC[s1_pc tag] --> Ways[32 FauFTBWay tag compare]
@@ -375,20 +465,24 @@ flowchart LR
   Update --> PLRU[PLRU replacement]
 ```
 
-## 18. 有效行为和 Design Doc 差异
+<!-- ## 18. 有效行为和 Design Doc 差异 -->
+## 18. Effective Behavior and Design Doc Differences
 
 
 ### 18.1. Design Doc to Source Traceability
 | Design Doc location | Atomic claim | XiangShan source evidence | Relationship | Status | Discrepancy |
 | --- | --- | --- | --- | --- | --- |
 | [docs/en/frontend/BPU/mbtb.md:1](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/mbtb.md#L1) | FTB/auxiliary target structures provide target metadata | [frontend/FauFTB.scala:73-142](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/FauFTB.scala#L73-L142) | lookup response and target metadata generation | **Partially verified** | Exact FauFTB terminology is not a separate Design Doc page. |
-| [docs/en/frontend/BPU/index.md:38](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L38) | 预测结果进入 FTQ 并可在后级被覆盖 | [frontend/BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) | BPU response is consumed by FTQ | **Verified** | 无 |
-| [docs/en/frontend/BPU/index.md:50](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L50) | redirect 后恢复预测上下文 | [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854) | flush/redirect cleanup | **Verified** | 无 |
+<!-- | [docs/en/frontend/BPU/index.md:38](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L38) | 预测结果进入 FTQ 并可在后级被覆盖 | [frontend/BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) | BPU response is consumed by FTQ | **Verified** | 无 | -->
+| [docs/en/frontend/BPU/index.md:38](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L38) | The prediction result enters FTQ and can be overridden by later stages | [frontend/BPU.scala:381-455](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L381-L455) | BPU response is consumed by FTQ | **Verified** | None |
+<!-- | [docs/en/frontend/BPU/index.md:50](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L50) | redirect 后恢复预测上下文 | [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854) | flush/redirect cleanup | **Verified** | 无 | -->
+| [docs/en/frontend/BPU/index.md:50](https://github.com/OpenXiangShan/XiangShan-Design-Doc/blob/f8e258dc2d9c02c0616764856e1d18feedb91b81/docs/en/frontend/BPU/index.md#L50) | Prediction context is restored after a redirect | [frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/52262f303fc06daf84cdab7011d59b7df65ce7e8/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854) | Flush/redirect cleanup | **Verified** | None |
 
 ### 18.2. Design Doc Baseline
 - Design Doc: `OpenXiangShan/XiangShan-Design-Doc`, branch `kunminghu-v3`, commit `f8e258dc2d9c02c0616764856e1d18feedb91b81`.
 - XiangShan source: `OpenXiangShan/XiangShan`, branch `kunminghu-v2`, commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`.
-- 设计文档是意图和接口假设；以下矩阵只把能在该源码 commit 的有效 Chisel 中定位到的内容作为实现事实。
+<!-- - 设计文档是意图和接口假设；以下矩阵只把能在该源码 commit 的有效 Chisel 中定位到的内容作为实现事实。 -->
+- The Design Doc provides intent and interface assumptions; the following matrix treats only content that can be located in active Chisel at this source commit as implementation fact.
 
 ### 18.3. Design Doc Line-by-Line Mapping
 1. `frontend/FauFTB.scala:73-142` forms the lookup address/index, reads the entry, and produces the auxiliary target/valid information. The table result is consumed by the BPU composition path.
@@ -399,13 +493,17 @@ flowchart LR
 - `Not found`: there is no exact `FauFTB` Design Doc page in the selected English frontend set. The nearest `mbtb`/BPU pages are used and explicitly labeled as indirect mapping.
 - `Version mismatch`: Design Doc `kunminghu-v3` and source `kunminghu-v2` may differ in FTB composition.
 
-## 19. 动态场景示例
+<!-- ## 19. 动态场景示例 -->
+## 19. Dynamic Scenario Example
 
 
-### 19.1. 示例讲解
-循环头 PC 连续命中 FauFTB，S1 即得到循环回边 target；若后级 FTB/TAGE 与其一致，不产生覆盖。若新控制流首次出现，FauFTB miss 先走 fall-through，提交后 FTQ update 分配表项，下一次进入该 PC 时即可在早级命中。
+<!-- ### 19.1. 示例讲解 -->
+### 19.1. Scenario Walkthrough
+<!-- 循环头 PC 连续命中 FauFTB，S1 即得到循环回边 target；若后级 FTB/TAGE 与其一致，不产生覆盖。若新控制流首次出现，FauFTB miss 先走 fall-through，提交后 FTQ update 分配表项，下一次进入该 PC 时即可在早级命中。 -->
+A loop-head PC repeatedly hits FauFTB, so S1 immediately obtains the loop-back target; if later FTB/TAGE agrees, no override occurs. When a new control-flow pattern first appears, a FauFTB miss initially follows fall-through; after commit, an FTQ update allocates an entry, allowing an early-stage hit on the next visit to that PC.
 
-### 19.2. 典型场景
+<!-- ### 19.2. 典型场景 -->
+### 19.2. Typical Scenarios
 | Scenario | Trigger | Code | Result |
 | --- | --- | --- | --- |
 | Fast hit | Any valid way tag matches S1 PC and `ubtb_enable` is set | [FauFTB.scala:96-117](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L96-L117) | S1 full prediction and FauFTB entry are emitted. |
@@ -414,10 +512,12 @@ flowchart LR
 | Update miss | No existing way matches | [FauFTB.scala:167-170](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L167-L170) | Allocate PLRU way. |
 | Counter training | Branch valid and not strong bias | [FauFTB.scala:156-160](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L156-L160), [FauFTB.scala:190-195](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L190-L195) | 2-bit counter increments/decrements with resolved taken. |
 
-## 20. 结论
+<!-- ## 20. 结论 -->
+## 20. Conclusion
 
 
-### 20.1. 预测器关系
+<!-- ### 20.1. 预测器关系 -->
+### 20.1. Predictor Relationships
 The effective Kunminghu frontend predictor chain is not a set of independent predictors voting in parallel. [Parameters.scala:124-143](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L124-L143) constructs `FauFTB`, `Tage_SC`, `FTB`, `ITTage`, and `RAS`, connects them as `resp_in -> uftb -> tage -> ftb -> ittage -> ras`, and returns `ras.io.out` as the final composed prediction. [Bim.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Bim.scala) is not part of this chain in this commit; its effective role is replaced by the `TageBTable` base table inside [Tage.scala:143-270](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Tage.scala#L143-L270).
 
 | Component | Relationship to the chain | What it contributes | How disagreement is handled | Source lines |
@@ -435,45 +535,75 @@ Metadata and training are also chained. `Composer` concatenates each component's
 Cross-predictor example: suppose uFTB predicts fall-through for PC `0x8000_1000`, but TAGE later marks branch slot 0 taken and FTB supplies target `0x8000_1080`. The chain first carries the uFTB result into `Tage_SC` and `FTB` ([Parameters.scala:136-140](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L136-L140)). BPU records the earlier S1 prediction, compares it with the richer S2 composed response, and detects direction/target/CFI-index differences ([frontend/BPU.scala:606-635](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L635), [frontend/BPU.scala:698-705](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L705)). It then registers the S2 target, folded history, and global-history pointer into the next-PC/history generators ([frontend/BPU.scala:707-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L707-L725)). If an even later RAS or ITTAGE target differs in S3, the S3 comparison checks branch-taken mask, target, JALR target, fall-through error, and FTB multi-hit before generating `s3_redirect` ([frontend/BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854)).
 
 
-## 21. 验证特别注意
+<!-- ## 21. 验证特别注意 -->
+## 21. Special Verification Considerations
 
-本节保留原文的验证矩阵和通用判定原则；验证要求仍以当前 `kunminghu-v2` 有效源码为准。
+<!-- 本节保留原文的验证矩阵和通用判定原则；验证要求仍以当前 `kunminghu-v2` 有效源码为准。 -->
+This section preserves the original verification matrix and general acceptance principles; verification requirements remain grounded in the active `kunminghu-v2` source.
 
-### 21.1. 验证矩阵与通用判定原则
-> 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。每个期望必须以当前 `kunminghu-v2` 有效 Chisel 为准。
+<!-- ### 21.1. 验证矩阵与通用判定原则 -->
+### 21.1. Verification Matrix and General Acceptance Principles
+<!-- > 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。每个期望必须以当前 `kunminghu-v2` 有效 Chisel 为准。 -->
+> This section is derived from the FSM, conflict, forward-progress, index/hash, cache-structure, exception/virtualization, and performance-bottleneck rules in `tools/verification-driver/skills`. Every expectation must be checked against active Chisel in the current `kunminghu-v2` source.
 
-| Verification ID | 风险 / 不变量 | 定向激励 | 期望观察 | Checker / Coverage |
+<!-- | Verification ID | 风险 / 不变量 | 定向激励 | 期望观察 | Checker / Coverage | -->
+| Verification ID | Risk / invariant | Directed stimulus | Expected observation | Checker / coverage |
 | --- | --- | --- | --- | --- |
-| `F_RESET_IDLE` | 复位扫描期间不能输出未初始化预测 | 在 reset 释放前后持续给查询 PC | ready/response valid 与复位状态一致；首个有效计数器/entry 无陈旧值；证据 [frontend/FauFTB.scala:76-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128) | FSM checker；reset/first-request cover |
-| `H_SAME_INDEX_DIFF_TAG` | 索引 alias 不得伪造错误 hit | 按源码 index/hash 构造同 index、不同 tag 的 PC | 有 tag 表只能命中真实 tag；无 tag Bim 允许方向 alias 但不得破坏端口/状态 | Index/hash checker；alias cross |
-| `C_SAME_ENTRY_RW` | lookup 与 update 同拍同 entry | 查询 PC 与提交 update 命中同 index/way | read-old/read-new/旁路/stall 行为与代码一致；证据 [frontend/FauFTB.scala:139-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L139-L205) | Storage conflict checker；RAW bypass cover |
-| `C_MULTI_WRITE_SAME_ENTRY` | 多个分支槽或更新源写同 entry | 构造同拍多个有效更新候选 | 写掩码、优先级或非法断言符合代码；不能丢失未胜出请求而无 retry | Multi-write checker；onehot/mask cover |
-| `F_REQ_AND_FLUSH` | 错误路径 lookup/update 与 redirect 竞争 | 查询或 update valid 同拍施加 redirect/flush | 错误路径不得训练；流水 meta 被清除或恢复到正确 FTQ entry | Flush/replay checker；predictor metadata scoreboard |
-| `P_LIVELOCK_REPLAY_LOOP` | 持续端口冲突或 update stall | 连续制造 lookup/write 冲突并周期释放端口 | 在公平条件下查询和更新最终完成，无重复训练 | Forward-progress checker；retry-exit cover |
-| `PB_RECOVERY_THROUGHPUT` | 高负载 redirect 后预测带宽不能永久下降 | 饱和查询后注入 redirect，再恢复稳定流 | 无陈旧预测可见，流水在有限周期恢复持续服务 | Performance checker；recovery latency/throughput |
-| `RESOURCE_CONTENTION` | 有限表容量和替换压力 | 填充同 set/索引候选并持续插入新 block | 只替换代码选择的 entry；命中项、fall-through 与 meta 保持自洽 | Replacement scoreboard；capacity stress |
+<!-- | `F_RESET_IDLE` | 复位扫描期间不能输出未初始化预测 | 在 reset 释放前后持续给查询 PC | ready/response valid 与复位状态一致；首个有效计数器/entry 无陈旧值；证据 [frontend/FauFTB.scala:76-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128) | FSM checker；reset/first-request cover | -->
+| `F_RESET_IDLE` | No uninitialized prediction during reset scan | Continuously provide a lookup PC before and after reset release | Ready/response valid matches reset state; the first valid counter/entry has no stale value; evidence: [frontend/FauFTB.scala:76-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128) | FSM checker; reset/first-request cover |
+<!-- | `H_SAME_INDEX_DIFF_TAG` | 索引 alias 不得伪造错误 hit | 按源码 index/hash 构造同 index、不同 tag 的 PC | 有 tag 表只能命中真实 tag；无 tag Bim 允许方向 alias 但不得破坏端口/状态 | Index/hash checker；alias cross | -->
+| `H_SAME_INDEX_DIFF_TAG` | Index alias must not fabricate a false hit | Construct PCs with the same index and different tags from the source index/hash logic | A tagged table can hit only the actual tag; a tagless Bim may alias direction but must not corrupt ports or state | Index/hash checker; alias cross |
+<!-- | `C_SAME_ENTRY_RW` | lookup 与 update 同拍同 entry | 查询 PC 与提交 update 命中同 index/way | read-old/read-new/旁路/stall 行为与代码一致；证据 [frontend/FauFTB.scala:139-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L139-L205) | Storage conflict checker；RAW bypass cover | -->
+| `C_SAME_ENTRY_RW` | Lookup and update access the same entry in one cycle | Make lookup PC and committed update hit the same index/way | Read-old/read-new/bypass/stall behavior matches the code; evidence: [frontend/FauFTB.scala:139-205](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L139-L205) | Storage-conflict checker; RAW-bypass cover |
+<!-- | `C_MULTI_WRITE_SAME_ENTRY` | 多个分支槽或更新源写同 entry | 构造同拍多个有效更新候选 | 写掩码、优先级或非法断言符合代码；不能丢失未胜出请求而无 retry | Multi-write checker；onehot/mask cover | -->
+| `C_MULTI_WRITE_SAME_ENTRY` | Multiple branch slots or update sources write one entry | Construct multiple valid update candidates in one cycle | Write mask, priority, or illegal assertion matches the code; no losing request is silently dropped without retry | Multi-write checker; one-hot/mask cover |
+<!-- | `F_REQ_AND_FLUSH` | 错误路径 lookup/update 与 redirect 竞争 | 查询或 update valid 同拍施加 redirect/flush | 错误路径不得训练；流水 meta 被清除或恢复到正确 FTQ entry | Flush/replay checker；predictor metadata scoreboard | -->
+| `F_REQ_AND_FLUSH` | Wrong-path lookup/update competes with redirect | Assert redirect/flush in the same cycle as lookup or update valid | Wrong-path work does not train; pipeline metadata is cleared or restored to the correct FTQ entry | Flush/replay checker; predictor-metadata scoreboard |
+<!-- | `P_LIVELOCK_REPLAY_LOOP` | 持续端口冲突或 update stall | 连续制造 lookup/write 冲突并周期释放端口 | 在公平条件下查询和更新最终完成，无重复训练 | Forward-progress checker；retry-exit cover | -->
+| `P_LIVELOCK_REPLAY_LOOP` | Persistent port conflict or update stall | Repeatedly create lookup/write conflicts and periodically release the port | Under fairness, lookup and update eventually finish without duplicate training | Forward-progress checker; retry-exit cover |
+<!-- | `PB_RECOVERY_THROUGHPUT` | 高负载 redirect 后预测带宽不能永久下降 | 饱和查询后注入 redirect，再恢复稳定流 | 无陈旧预测可见，流水在有限周期恢复持续服务 | Performance checker；recovery latency/throughput | -->
+| `PB_RECOVERY_THROUGHPUT` | Prediction bandwidth must not permanently decrease after a high-load redirect | Inject a redirect after saturated lookup traffic, then restore a steady stream | No stale prediction is visible; the pipeline resumes continuous service within bounded cycles | Performance checker; recovery latency/throughput |
+<!-- | `RESOURCE_CONTENTION` | 有限表容量和替换压力 | 填充同 set/索引候选并持续插入新 block | 只替换代码选择的 entry；命中项、fall-through 与 meta 保持自洽 | Replacement scoreboard；capacity stress | -->
+| `RESOURCE_CONTENTION` | Finite-table capacity and replacement pressure | Fill same-set/index candidates and continuously insert new blocks | Only the entry selected by the code is replaced; hit entries, fall-through, and metadata remain self-consistent | Replacement scoreboard; capacity stress |
 
-#### 21.1.1. 通用判定原则
+<!-- #### 21.1.1. 通用判定原则 -->
+#### 21.1.1. General Decision Rules
 
-- `valid && !ready` 期间 payload 必须稳定；只有 `fire` 才能推进指针、状态或训练一次。
-- flush/redirect/replay 的胜负关系必须按代码优先级检查；错误路径不得提交、写表、训练预测器或暴露异常/数据。
-- 资源填满后必须验证可排空；重复冲突、retry 或 redirect 不得形成 deadlock/livelock，并检查低优先级旧请求是否饥饿。
-- 环形指针必须覆盖最大值到零的 wrap；表索引必须构造 same-index/different-tag 和同拍 read/write 冲突组。
-- 性能覆盖至少记录占用率、反压周期、redirect 恢复延迟、重试次数和恢复后的持续吞吐。
+<!-- - `valid && !ready` 期间 payload 必须稳定；只有 `fire` 才能推进指针、状态或训练一次。 -->
+- The payload must remain stable while `valid && !ready`; only `fire` may advance a pointer/state or perform one training update.
+<!-- - flush/redirect/replay 的胜负关系必须按代码优先级检查；错误路径不得提交、写表、训练预测器或暴露异常/数据。 -->
+- Check flush/redirect/replay precedence according to the code; a wrong path must not commit, write tables, train predictors, or expose exceptions/data.
+<!-- - 资源填满后必须验证可排空；重复冲突、retry 或 redirect 不得形成 deadlock/livelock，并检查低优先级旧请求是否饥饿。 -->
+- After resources fill, verify that they can drain; repeated conflicts, retries, or redirects must not create deadlock/livelock, and starvation of old low-priority requests must be checked.
+<!-- - 环形指针必须覆盖最大值到零的 wrap；表索引必须构造 same-index/different-tag 和同拍 read/write 冲突组。 -->
+- Circular pointers must cover wraparound from the maximum value to zero; table indices must include same-index/different-tag and same-cycle read/write conflicts.
+<!-- - 性能覆盖至少记录占用率、反压周期、redirect 恢复延迟、重试次数和恢复后的持续吞吐。 -->
+- Performance coverage should record occupancy, backpressure cycles, redirect recovery latency, retry count, and sustained throughput after recovery.
 
-## `bpu-doc.md` 补充：快速路径与 FallThrough
-`bpu-doc.md` 中的 `uBTB`、`FallThroughPredictor` 与 “S1 快速路径” 在当前 `kunminghu-v2` 文档中主要落到 `FauFTB` 和 BPU 默认 fall-through 生成逻辑。需要注意：当前有效链路没有单独命名为 `FallThroughPredictor` 的独立模块；fall-through 是预测结构中的默认目标生成路径。
+<!-- ## `bpu-doc.md` 补充：快速路径与 FallThrough -->
+## `bpu-doc.md` Supplement: Fast Path and FallThrough
+<!-- `bpu-doc.md` 中的 `uBTB`、`FallThroughPredictor` 与 “S1 快速路径” 在当前 `kunminghu-v2` 文档中主要落到 `FauFTB` 和 BPU 默认 fall-through 生成逻辑。需要注意：当前有效链路没有单独命名为 `FallThroughPredictor` 的独立模块；fall-through 是预测结构中的默认目标生成路径。 -->
+In the current `kunminghu-v2` documentation, `bpu-doc.md`'s `uBTB`, `FallThroughPredictor`, and “S1 fast path” map mainly to `FauFTB` and BPU's default fall-through generation. There is no separately named `FallThroughPredictor` module in the effective chain; fall-through is the default target-generation path.
 
-### 22.1. 快速路径职责
+<!-- ### 22.1. 快速路径职责 -->
+### 22.1. Fast-Path Responsibilities
 
-| 描述 | 当前实现解释 | 代码证据 |
+<!-- | 描述 | 当前实现解释 | 代码证据 |
 | --- | --- | --- |
 | 低延迟 S1 粗预测 | `FauFTB` 是 Composer 链首个 predictor，用小容量全相联表尽快给出 hit、entry、target/fall-through 相关信息。 | [Parameters.scala:127-139](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L127-L139), [Composer.scala:25-31](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L25-L31), [FauFTB.scala:76-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128) |
 | 默认 fall-through | 未命中或没有 taken CFI 时，预测目标回到顺序下一块；FTB/FauFTB entry 的 `fallThroughAddr` 参与后级比较。 | [FTB.scala:683-811](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FTB.scala#L683-L811), [BPU.scala:606-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L725) |
 | 快速预测可被后级覆盖 | FauFTB 只负责尽快启动取指；TAGE/FTB/ITTAGE/RAS 的晚级输出可以通过 S2/S3 redirect 覆盖它。 | [BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725), [BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854) |
 | 训练/更新不直接等于 override | override 截断错误路径；真正写表来自 FTQ update，经 Composer 分发。 | [Composer.scala:72-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L72-L77) |
+-->
+| Description | Current implementation | Source evidence |
+| --- | --- | --- |
+| Low-latency S1 coarse prediction | `FauFTB` is the first predictor in Composer and uses a small fully associative table to produce hit, entry, target, and fall-through information quickly. | [Parameters.scala:127-139](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/Parameters.scala#L127-L139), [Composer.scala:25-31](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L25-L31), [FauFTB.scala:76-128](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FauFTB.scala#L76-L128) |
+| Default fall-through | On a miss or with no taken CFI, the target returns to the next sequential block; `fallThroughAddr` from FTB/FauFTB participates in later comparisons. | [FTB.scala:683-811](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/FTB.scala#L683-L811), [BPU.scala:606-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L606-L725) |
+| Later-stage override | FauFTB starts fetching quickly; later TAGE/FTB/ITTAGE/RAS outputs can override it through S2/S3 redirect. | [BPU.scala:698-725](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L698-L725), [BPU.scala:827-854](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala#L827-L854) |
+| Training/update is not the same as override | Override truncates a wrong path; actual table writes come from FTQ update distributed by Composer. | [Composer.scala:72-77](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Composer.scala#L72-L77) |
 
-### 22.2. 模块互联 Mermaid 图
+<!-- ### 22.2. 模块互联 Mermaid 图 -->
+### 22.2. Module Connectivity Mermaid Diagram
 
 ```mermaid
 flowchart LR

@@ -1,3 +1,4 @@
+<!--
 # Cache-GrantBuffer：Kunminghu V2 CoupledL2 响应缓冲与 GrantAck 生命周期
 
 > 结论先行：<code>GrantBuffer</code> 是 Kunminghu V2 的 CoupledL2 Slice 内、面向上游 TileLink D/E 通道的响应整形和资源预留单元。它把 MainPipe 的 <code>TaskWithData</code> 分成 D 通道 FIFO、两条数据 beat FIFO、可选预取响应 FIFO 与 GrantAck 等待表；它并不拥有目录、数据 SRAM 或 MSHR。其最重要的正确性责任是：从 Grant/GrantData 被 <code>d_task.fire</code> 接收起，到 E 通道 GrantAck 到达前，保守地保留相应 cache block 的 <code>set/tag</code>，使同地址 Probe 不会越过该未完成的授权。这个保护窗口可能早于 D 真正对 L1 发出，因而是代码可见的保守顺序约束，而不是把类注释直接当成时序事实。[GrantBuffer.scala:265-290](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:265)
@@ -25,15 +26,15 @@
 
 ~~~mermaid
 flowchart LR
-  RA[RequestArb s1/s2] -->|task/status| MP[MainPipe s3/s4/s5]
-  MP -->|toSourceD: TaskWithData| GB[GrantBuffer]
-  GB -->|TileLink D: Grant, GrantData, ReleaseAck...| L1[L1 clients]
-  L1 -->|TileLink E: GrantAck| GB
-  GB -->|block A/B/C and MSHR entrance| RA
-  GB -->|grantStatus set/tag| MC[MSHRCtl]
-  MC -->|grantStatus| SB[SourceB]
-  SB -->|deferred Probe B| L1
-  GB -->|PrefetchResp| PF[CoupledL2 Prefetcher]
+  RA[RequestArb s1/s2] --&gt;|task/status| MP[MainPipe s3/s4/s5]
+  MP --&gt;|toSourceD: TaskWithData| GB[GrantBuffer]
+  GB --&gt;|TileLink D: Grant, GrantData, ReleaseAck...| L1[L1 clients]
+  L1 --&gt;|TileLink E: GrantAck| GB
+  GB --&gt;|block A/B/C and MSHR entrance| RA
+  GB --&gt;|grantStatus set/tag| MC[MSHRCtl]
+  MC --&gt;|grantStatus| SB[SourceB]
+  SB --&gt;|deferred Probe B| L1
+  GB --&gt;|PrefetchResp| PF[CoupledL2 Prefetcher]
 ~~~
 
 图中的每一条有效连线均可在 [tl2chi/Slice.scala:65-67](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:65)、[tl2chi/Slice.scala:95-105](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:95)、[tl2chi/Slice.scala:130-173](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:130) 和 [tl2chi/Slice.scala:196-203](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:196) 找到。
@@ -151,17 +152,17 @@ MainPipe 的 D 候选和其可见 stage status 由 [tl2chi/MainPipe.scala:620-68
 
 ~~~mermaid
 flowchart LR
-  MP[MainPipe TaskWithData] --> GQT[grantQueue: task + grantid]
-  MP --> Q0[grantQueueData0: beat 0]
-  MP --> Q1[grantQueueData1: beat 1]
-  GQT --> SEL{grantBufValid?}
-  Q0 --> SEL
-  Q1 --> SEL
-  SEL -->|no, first D beat| D[TileLink D]
-  SEL -->|data task| GB[grantBuf: remaining beat]
-  GB -->|priority next D beat| D
-  E[TileLink E GrantAck] --> IF[inflightGrant valid/set/tag]
-  IF --> SB[SourceB conflict defer]
+  MP[MainPipe TaskWithData] --&gt; GQT[grantQueue: task + grantid]
+  MP --&gt; Q0[grantQueueData0: beat 0]
+  MP --&gt; Q1[grantQueueData1: beat 1]
+  GQT --&gt; SEL{grantBufValid?}
+  Q0 --&gt; SEL
+  Q1 --&gt; SEL
+  SEL --&gt;|no, first D beat| D[TileLink D]
+  SEL --&gt;|data task| GB[grantBuf: remaining beat]
+  GB --&gt;|priority next D beat| D
+  E[TileLink E GrantAck] --&gt; IF[inflightGrant valid/set/tag]
+  IF --&gt; SB[SourceB conflict defer]
 ~~~
 
 核心实现如下。注意 <code>isKeyword</code> 会交换“直接发送”和“保存”的 data0/data1 选择；源码没有在 GrantBuffer 内解释该字段的协议语义，因此本文只陈述它确实改变 beat 选择，不能把它解释成一般 TileLink beat 排序规则。[GrantBuffer.scala:198-217](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:198)。
@@ -208,18 +209,18 @@ GrantBuffer 没有 <code>Enum</code> FSM；其状态机由 FIFO valid、<code>gr
 
 ~~~mermaid
 stateDiagram-v2
-  [*] --> Empty
-  Empty --> Queued: d_task valid / D-class enqueue
-  Queued --> SendSingle: opcode(0)=0 and d.ready
-  Queued --> SendFirst: opcode(0)=1 and d.ready
-  SendSingle --> Empty: dequeue
-  SendFirst --> SecondBeatHeld: grantBufValid := true
-  SecondBeatHeld --> Queued: d.ready / grantBufValid := false
+  [*] --&gt; Empty
+  Empty --&gt; Queued: d_task valid / D-class enqueue
+  Queued --&gt; SendSingle: opcode(0)=0 and d.ready
+  Queued --&gt; SendFirst: opcode(0)=1 and d.ready
+  SendSingle --&gt; Empty: dequeue
+  SendFirst --&gt; SecondBeatHeld: grantBufValid := true
+  SecondBeatHeld --&gt; Queued: d.ready / grantBufValid := false
 
   state GrantAckLifecycle {
-    [*] --> NoGrant
-    NoGrant --> AwaitAck: d_task.fire / Grant or GrantData or mergeA
-    AwaitAck --> NoGrant: e.fire indexed by e.bits.sink
+    [*] --&gt; NoGrant
+    NoGrant --&gt; AwaitAck: d_task.fire / Grant or GrantData or mergeA
+    AwaitAck --&gt; NoGrant: e.fire indexed by e.bits.sink
   }
 ~~~
 
@@ -343,3 +344,203 @@ GrantBuffer 的输入已经是以 <code>set/tag</code> 和完整 <code>DSBlock</
 <strong>已确认：</strong> Kunminghu V2 的有效 L2 链是 CHI CoupledL2；GrantBuffer 以 16 项参数化资源（每 Slice）进行 D/GrantAck/预取响应管理；它通过 set/tag 在飞表保护 Probe 顺序，并以“管线预测占用 + 实际占用”提前反压。
 
 <strong>待补证：</strong> 标准 Chisel Queue 的具体 reset/pointer/同地址读写 RTL；MainPipe 使用的标准 Chisel <code>Arbiter</code> 在三份 D 候选同时 valid 时的库级优先级；顶层 hint-guided grant 对端到端 D 延迟的实际周期数；以及是否存在违反 E 指向有效 in-flight slot 假设的协议激励。以上均适合在生成 Verilog、FST 波形或形式属性中继续验证。
+-->
+
+# Cache-GrantBuffer: CoupledL2 Response Buffering and the GrantAck Lifetime in Kunminghu V2
+
+> **Conclusion first.** `GrantBuffer` is the response-shaping and resource-reservation unit for the upstream TileLink D/E channels inside a Kunminghu V2 CoupledL2 Slice. It separates MainPipe `TaskWithData` traffic into a D-channel task FIFO, two data-beat FIFOs, an optional prefetch-response FIFO, and a GrantAck wait table. It owns neither the directory, the data SRAM, nor MSHRs. Its central correctness obligation is conservative ordering: from acceptance of a Grant/GrantData at `d_task.fire` until the matching E-channel GrantAck arrives, it retains the cache block `set/tag` so that a same-address Probe cannot pass an unacknowledged grant. The protection interval can start before D is actually issued to L1, so it is a source-visible conservative ordering rule rather than a timing claim inferred from a class comment. [GrantBuffer.scala:265](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:265>)
+
+## 1. Scope and Evidence
+
+### 1.1 Analysis Baseline
+
+| Item | Baseline | Notes |
+| --- | --- | --- |
+| XiangShan source | `/home/yanyusong/xs-memory-env/XiangShan`, `kunminghu-v2@e12436c7cba86b195deec24981976d78bc263661` | User-specified local checkout. Existing `difftest` edits and untracked `src/main/resources/aia/` content were left untouched and were not used as evidence. |
+| Related submodules | `coupledL2@fb5469838c8902b6cb33992c0a30ee3d446e4453`; `huancun@65ef077373ecf398b4cecdea06b65ef9b8d79044` | Submodule pointers in that checkout when this analysis was performed. |
+| Design document | `/home/yanyusong/XiangShan-Design-Doc`, `kunminghu-v2@58d9e2ad11f044cb6f8887d9687d9e110696d1aa` | Used only to locate design intent; implementation claims are supported by source locations. |
+| XiangShanLab | `/home/yanyusong/XiangShanLab@680010a3cf7cc72900345600b99709bc337a52bf` | Used for course concepts and local document conventions. |
+| Synchronization check | `weekly_sync.py` returned `skip: last sync 2.88 days ago < 7 days` | No reset, clean, or pull was performed. |
+| Focus | `coupledL2/GrantBuffer.scala` and effective wiring | The analysis follows `tl2chi/Slice`, `RequestArb`, `MSHRCtl`, `SourceB`, `MainPipe`, and top-level configuration. |
+
+### 1.2 Active Kunminghu V2 Instantiation Chain
+
+`KunminghuV2Config` combines a 1 MiB, four-bank L2 configuration with `WithCHI`, which sets `EnableCHI`. `L2Top` consequently instantiates `TL2CHICoupledL2`, not the TileLink-to-TileLink variant. [Configs.scala:477](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:477>) [L2Top.scala:111](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/L2Top.scala:111>)
+
+`CoupledL2Base` creates one `tl2chi.Slice` per bank when CHI is enabled. Each Slice locally instantiates `GrantBuffer`, connects `MainPipe.io.toSourceD` to its input, and routes its backpressure, in-flight-Grant state, and prefetch response to adjacent modules. [CoupledL2.scala:419](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/CoupledL2.scala:419>) [Slice.scala:65](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:65>)
+
+The outward D/E connection is not a bare direct wire: the Slice connects GrantBuffer D through the inner buffer and returns L1 E to GrantBuffer through that buffer. Therefore the D/E arrows below denote the effective inner-buffer path, not a separate response implementation. [Slice.scala:196](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:196>)
+
+```mermaid
+flowchart LR
+  RA[RequestArb s1/s2] -->|task/status| MP[MainPipe s3/s4/s5]
+  MP -->|toSourceD: TaskWithData| GB[GrantBuffer]
+  GB -->|TileLink D: Grant, GrantData, ReleaseAck| L1[L1 clients]
+  L1 -->|TileLink E: GrantAck| GB
+  GB -. admission backpressure .-> RA
+  GB -->|grantStatus set/tag| MC[MSHRCtl]
+  MC --> SB[SourceB]
+  SB -->|deferred Probe B| L1
+  GB -->|PrefetchResp| PF[CoupledL2 Prefetcher]
+```
+
+### 1.3 HuanCun Boundary
+
+The specified `huancun/src/main/scala` contains no `GrantBuffer` class. Its upstream D-channel implementation is a distinct `huancun.SourceD`, which reads data from a banked store/bypass path, pipelines through s1--s4, and transmits D through `TLArbiter.lowest`; its E channel is accepted by a separate `SinkE`. [SourceD.scala:30](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SourceD.scala:30>) [SinkE.scala:27](</home/yanyusong/xs-memory-env/XiangShan/huancun/src/main/scala/huancun/SinkE.scala:27>)
+
+This distinction is configuration-relevant. The top level creates HuanCun only when `soc.L3CacheParamsOpt` is present, while the CHI configuration disables that option and configures OpenLLC instead. The default Kunminghu V2 CHI path must therefore not substitute `huancun.SourceD` behavior for GrantBuffer. [Top.scala:104](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Top.scala:104>) [Configs.scala:333](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:333>)
+
+## 2. Theory, Design Intent, and Effective Code
+
+GrantBuffer is an elastic L2 response stage, not an instruction pipeline. FIFOs, valid bits, and ready signals decouple MainPipe response production from L1 D/E consumption. [GrantBuffer.scala:112](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:112>)
+
+| Concept | Course-level meaning | Effective code object | Important difference from a simplified model |
+| --- | --- | --- | --- |
+| Pipelining and backpressure | Adjacent stages preserve state when downstream resources are unavailable | `grantQueue`, `grantBufValid`, `io.d.ready` | There are no named s0/s1 stages. D is driven by a FIFO head or one-cycle residual-beat register. |
+| Structural contention | Multiple transactions contend for bounded queues, ports, or state | `noSpaceForSinkReq`, `noSpaceWaitSinkEForSinkReq` | Admission considers both queued work and pipeline work that may consume GrantBuffer soon: conservative credit reservation. |
+| Coherence ordering | A conflicting Probe must not pass an unacknowledged grant | `inflightGrant`, `GrantStatus`, `SourceB` | There is no global address-CAM response reorderer; valid `set/tag` records hold only blocks awaiting GrantAck. |
+| Multi-beat transfer | A wide line is divided into bus beats | `grantQueueData0/1`, `grantBuf` | This implementation explicitly requires `beatSize == 2`; it is not a generic arbitrary-beat counter. |
+| Prefetch is non-architectural state | Prefetch completion is not CPU instruction retirement | `pftRespQueue`, `PrefetchResp` | The event is sent only to the L2 prefetcher, with no ROB, PRF, or commit interface. |
+
+The Design Doc agrees with three source-backed aspects: D and prefetch responses are split, Grant/GrantData wait for E GrantAck, and predicted occupancy gates admission. Its early-wake-up-hint claim is only partially supported: active `l1Hint` comes from `CustomL1Hint` in MainPipe, while the GrantBuffer-to-MainPipe hint wiring is commented out. [GrantBuffer.scala:162](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:162>) [MainPipe.scala:856](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:856>) [Slice.scala:125](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:125>)
+
+## 3. Module Contract
+
+| Object | Producer / consumer | Purpose | Mechanism | From | To |
+| --- | --- | --- | --- | --- | --- |
+| `d_task` | Produced by MainPipe; consumed by GrantBuffer | Decouple L2 main-pipeline upstream responses from L1 D | `DecoupledIO(TaskWithData)`; `ready` is tied high and earlier admission reservation prevents overflow | `MainPipe.io.toSourceD` | Task FIFO, data FIFOs, prefetch FIFO, in-flight Grant table |
+| `d` | Produced by GrantBuffer; consumed by L1 client | Emit TileLink D responses | `valid = grantBufValid || deqValid`; residual second beat has priority | FIFO head or `grantBuf` | Grant, GrantData, ReleaseAck, and AccessAckData endpoint at L1 |
+| `e` | Produced by L1 client; consumed by GrantBuffer | Acknowledge receipt of a Grant and release the Probe barrier | `e.ready := true.B`; `e.bits.sink` clears the table entry | TileLink E GrantAck | Corresponding `inflightGrant` entry |
+| `inflightGrant` | Updated by GrantBuffer; observed by MSHRCtl/SourceB | Prevent same-address Probe from arriving before grant acknowledgement | First free index records `set/tag`; E fire clears valid | Grant/GrantData or merged-A input; E sink | `grantStatus`, then SourceB's Probe waiting logic |
+| `pftRespQueue` | Updated by GrantBuffer; consumed by prefetcher | Separate HintAck prefetch-completion events from D | Ten-entry flow FIFO when the prefetch option exists | `HintAck && fromL2pft` | `prefetchResp` |
+| `toReqArb` | Produced by GrantBuffer; consumed by RequestArb | Stop foreseeable response-table overflow or Grant/Probe conflict before actual enqueue | Predicted pipeline occupancy plus FIFO/in-flight thresholds | `pipeStatusVec`, `status_s1`, local state | A/B/C admission ready and MSHR-task ready |
+
+`toTLBundleD` transfers task `opcode`, `param`, `sourceId`, and `denied`, fixes `size = offsetBits`, places the allocated `grant_id` in `sink`, and sets `corrupt = task.corrupt || task.denied`. GrantBuffer does not redo address translation, permission checks, or data-ECC evaluation. [GrantBuffer.scala:85](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:85>)
+
+## 4. Capacity, Addressing, and Storage
+
+With `L2CacheConfig("1MB", ways = 8, banks = 4)`, each bank has `1024 KiB / 4 / 8 / 64 B = 512` sets. `L2Param` leaves `mshrs` at its default of 16. Every Slice GrantBuffer therefore has sixteen task entries, sixteen data0 entries, sixteen data1 entries, and sixteen in-flight Grant entries. These are per-Slice capacities, not one 16-entry queue shared by all banks. [Configs.scala:278](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/top/Configs.scala:278>) [L2Param.scala:65](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/L2Param.scala:65>)
+
+| Structure | Capacity / representation | Initialization and update | Release / lookup / backpressure |
+| --- | --- | --- | --- |
+| `grantQueue` | `entries = mshrsAll = 16`; Chisel Queue state, externally visible `count` | Enqueue D-class task | Dequeue only when D consumes and no residual beat is pending. FIFO-head only; entry prediction rather than `d_task.ready` applies admission pressure. |
+| `grantQueueData0/1` | 16 entries each | Enqueue/dequeue in lockstep with task FIFO; split `DSBlock` into beats 0/1 | Follow task dequeue; FIFO-head access. |
+| `grantBuf` | One `DSBeat` plus task/id, guarded by `grantBufValid` | Reset valid false; save the remaining beat when the first is sent | Clear when stored beat sees `io.d.ready`; prevents task-FIFO dequeue while a second beat remains. |
+| `inflightGrant` | `grantBufInflightSize = mshrsAll = 16` `Valid(set,tag)` entries | Reset all valid bits false; write on Grant/GrantData/merge-A `d_task.fire` | E fire indexed by `e.bits.sink` clears valid. SourceB compares set/tag; the table reserves A/C/MSHR capacity and blocks same-address B. |
+| `pftRespQueue` | Ten entries, only with `prefetchOpt` | Enqueue `HintAck && fromL2pft` | Dequeue on `prefetchResp.ready`; thresholds 10/9 block admission, with an explicit not-full assertion. |
+
+The in-flight insert index is `PriorityEncoder(inflightGrant.map(!_.valid))`. That index is saved as the task's `grantid`, becomes the D `sink`, and is looked up again by E `sink`; it is a local reclamation index, neither a physical address nor an MSHR ID. [GrantBuffer.scala:158](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:158>)
+
+The module can prove no general same-cycle Queue-pointer behavior or library Arbiter gate-level priority. Such details require generated RTL or waveform evidence. The source does prove explicit residual-beat and in-flight valid-state updates.
+
+## 5. Response Pipeline, Data Path, and Handshakes
+
+| Stage / state | Input and stored state | Action | Valid/ready and stall behavior | Output |
+| --- | --- | --- | --- | --- |
+| MainPipe s3/s4/s5 | `TaskBundle`, directory/data results, `d_s3/d_s4/d_s5` | Decide whether to generate D-class work and arbitrate it into `toSourceD` | Its status is exported so GrantBuffer can predict capacity | `TaskWithData` to GrantBuffer |
+| GrantBuffer receive | `d_task.bits.task/data` | Enqueue D task and two data beats; possibly enqueue HintAck prefetch response; record Grant state | `d_task.ready := true.B`; correctness relies on earlier `toReqArb` reservation; receiving while full is asserted illegal | FIFOs, in-flight table, prefetch FIFO |
+| First D beat | FIFO head `deqTask/deqData/deqId` | Send data-less response directly, or select first data beat and retain the other | FIFO dequeues only on `io.d.ready && !grantBufValid` | `io.d` |
+| Residual D beat | `grantBuf(task,data,grantid)` | Send stored beat before any newer FIFO head | `grantBufValid && io.d.ready` clears valid; no new head is taken in that cycle | `io.d` |
+| E acknowledgement | `io.e.bits.sink` | Clear the matching in-flight valid bit | `e.ready = true`, so a valid E always fires | Corresponding `grantStatus` entry disappears |
+| Prefetch response | `pftRespQueue` head | Send tag/set/vaddr/pfSource to prefetcher | Holds in FIFO under downstream stall | `prefetchResp` |
+
+```mermaid
+flowchart LR
+  MP[MainPipe TaskWithData] --> Q[grantQueue: task + grantid]
+  MP --> Q0[grantQueueData0: beat 0]
+  MP --> Q1[grantQueueData1: beat 1]
+  Q --> SEL{grantBufValid?}
+  Q0 --> SEL
+  Q1 --> SEL
+  SEL -->|no: first D beat| D[TileLink D]
+  SEL -->|data response| RB[grantBuf: remaining beat]
+  RB -->|priority next D beat| D
+  E[TileLink E GrantAck] --> IF[inflightGrant valid/set/tag]
+  IF --> SB[SourceB conflict deferral]
+```
+
+If D deasserts ready, the FIFO head or residual beat holds; neither dequeue nor clearing `grantBufValid` occurs. A two-beat GrantData sends the first beat, sets `grantBufValid`, and sends the stored second beat on the next successful D handshake. This is the directly supported two-beat contract. [GrantBuffer.scala:194](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:194>)
+
+## 6. State Lifecycle, Algorithms, and Control
+
+The implicit states are: an empty/nonempty D FIFO; `grantBufValid = 1` while the remaining data beat waits; a valid in-flight Grant entry between D-task acceptance and E fire; and a nonempty prefetch-response FIFO. These states provide decoupling, beat pairing, GrantAck ordering, and prefetch-control isolation.
+
+### 6.1 Response Classification and Merged-A Rewrite
+
+GrantBuffer classifies D-class tasks by task channel and opcode. A merged-A task may be rewritten into a ReleaseAck-like response while retaining its assigned `grantid`; D-class tasks enter the three lockstep queues, whereas `HintAck && fromL2pft` enters the prefetch FIFO. The task/beat queues must remain paired so an arriving D response cannot use metadata from one task with data from another.
+
+### 6.2 GrantAck Table and Same-Address Probe Ordering
+
+At Grant or GrantData acceptance, a free in-flight entry captures the task's `set/tag`; E fire clears `inflightGrant(e.sink).valid`. Before clearing, a Sink B request whose `set/tag` matches any valid record is blocked at RequestArb. A Probe already accepted into SourceB also waits for the corresponding GrantStatus to become invalid. This is a conservative barrier: the record is created at `d_task.fire`, not necessarily at the external L1 D fire. [GrantBuffer.scala:265](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:265>) [SourceB.scala:79](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/SourceB.scala:79>)
+
+### 6.3 Look-Ahead Capacity Reservation
+
+GrantBuffer does not wait for a FIFO's `enq.ready` to go low. It combines `RequestArb.status_vec` and `MainPipe.status_vec_toD`, counts pipeline items that may generate D responses, then adds actual FIFO/in-flight occupancy. Work not yet at GrantBuffer therefore consumes reservation credit early.
+
+| Credit / conflict | Source-derived condition | Admission effect |
+| --- | --- | --- |
+| D-response room for Sink request | `PopCount(pipe.tail: fromA || fromC) + grantQueueCnt >= mshrsAll` | Block A and C; A also observes E/prefetch credits. |
+| E-wait room for Sink request | `PopCount(pipe.tail: fromA) + PopCount(inflight.valid) >= mshrsAll` | Block A to avoid overflow of the GrantAck wait table. |
+| D/E room for MSHR request | Same formulas with threshold `mshrsAll - 1` | Reserve one slot and block MSHR work at RequestArb. |
+| Prefetch-response room | `PopCount(pipe.tail: fromA) + pftQueue.count >= 10`; MSHR threshold 9 | Current logic conservatively blocks all admission, not just prefetch. |
+| B conflict | Any valid in-flight set/tag matches `status_s1.b_set/b_tag` | Block Sink B at RequestArb. |
+
+RequestArb ORs these block reasons with MSHR/MainPipe/TX conditions and accepts C, then B, then A. GrantBuffer is thus one admission blocker, not the only arbitration authority. [RequestArb.scala:111](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:111>)
+
+## 7. Key Scenarios
+
+| Scenario | Result grounded in source |
+| --- | --- |
+| Data-less ReleaseAck or other one-beat D response | FIFO head is sent and all three lockstep queues dequeue together; no `grantBuf` occupancy. |
+| Two-beat GrantData | First beat is sent, second beat is saved in `grantBuf`, and the saved beat has priority over the next task. |
+| D downstream backpressure | FIFO/residual-beat payload holds; no dequeue and no residual valid clear occur. |
+| Same-address Probe before GrantAck | Sink B is blocked at RequestArb, or an existing SourceB entry waits until GrantStatus disappears. |
+| E GrantAck | Valid E has no backpressure and clears `inflightGrant(e.sink)`, restoring B visibility and E credit. |
+| D FIFO predicted full | A/C s1 admission is blocked before a new D-producing task could overrun the queues. |
+| Last MSHR slot | MSHR task admission is blocked at the 15-entry threshold, preserving a potential sink-request slot. |
+| Prefetch response nearly full | The present design blocks A/B/C/MSHR together until prefetch consumption reduces occupancy. |
+| Redirect or flush | GrantBuffer has no local redirect/flush port or state update; it neither creates nor proves a local kill action. |
+
+## 8. Latency, Throughput, Exceptions, and Boundaries
+
+The relevant time origins are `MainPipe.io.toSourceD.fire`; destination events are reported separately as `GrantBuffer.io.d.fire`, `io.e.fire`, and `prefetchResp.fire`. Source code supplies no fixed frequency or CPU issue/commit-to-event latency, so the path must not be described as a fixed number of load cycles.
+
+| Path | Source-proven behavior | Main variable / bottleneck |
+| --- | --- | --- |
+| Data-less D response | D can dequeue when ready; exact empty-queue flow timing depends on the Chisel Queue implementation | MainPipe arbitration, FIFO state, D ready, top-level Slice-D selection |
+| Two-beat GrantData | With consecutive D readiness, first beat captures residual and following readiness sends it | D backpressure and residual-beat priority; no new task dequeues while residual valid |
+| GrantAck lifetime | No fixed cycle bound; up to sixteen unacknowledged grants per Slice | L1 E protocol and downstream stall |
+| Prefetch response | No fixed cycle bound; ten-entry FIFO can expand into Slice admission backpressure | Prefetcher ready and FIFO occupancy |
+
+GrantBuffer forwards already-formed task `denied/corrupt`, with denied also making D corrupt. It does not generate page faults, PMP/PMA/PBMT outcomes, trap priority, ROB commit state, or Difftest events. Its queues and GrantAck table are microarchitectural coherence state, not RISC-V architectural state. [GrantBuffer.scala:85](</home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:85>)
+
+The module receives L2-internal responses expressed as `set/tag` and a complete `DSBlock`. It has no virtual-address input, page splitter, TLB, MMIO bridge, or byte-fragment assembler. Its two beats are the 32-B transport pieces of one 64-B cache line, not evidence of a cross-line access. MMIO routing and side-effect ordering require study of `tl2chi/MMIOBridge` and the L1 uncache path; they must not be attributed to GrantBuffer.
+
+## 9. Verification Priorities
+
+| ID | Risk / invariant | Directed stimulus | Required observation |
+| --- | --- | --- | --- |
+| `F_RESET_IDLE` | Explicit valid state resets cleanly | Reset, then send first GrantData | `inflightGrant.valid` and `grantBufValid` start at zero; first transaction uses an idle slot. |
+| `F_HOLD_BACKPRESSURE` | D stall must not drop or change payload | Enqueue GrantData, hold `io.d.ready=0`, then release | Current D bits and residual beat stay stable; exactly one fire per beat after release. |
+| `F_RESP_AND_REPLAY` | Two beats cannot duplicate or reorder | Keep D ready and cover `isKeyword=0/1` | Each task produces two D fires; second comes from `grantBuf` with the source mux ordering. |
+| `C_SAME_ENTRY_RW` | E acknowledgement and new Grant must not clear the wrong table entry | Coincide E fire with new `d_task.fire`, including legal/illegal sink cases | Legal different entries update independently; bad same/invalid cases must be covered by assertion or scoreboard. |
+| `RESOURCE_CONTENTION` | Predicted occupancy blocks before physical FIFO overflow | Hold D unready and create A/C work across RequestArb/MainPipe | Block signals rise at documented thresholds; full-while-receiving assertion remains unreachable. |
+| `H_SAME_INDEX_DIFF_TAG` | Probe matching must include both set and tag | Create in-flight set/tag, then B with same set/different tag and same tag | Only same tag blocks/waits. |
+| `P_DEADLOCK_ALL_STALL` | Prefetch/D stalls must recover | Hold prefetch response and D until thresholds, then release them | Admission falls first, then count/block signals recover and work progresses. |
+| `F_REQ_AND_FLUSH` | No invented local flush behavior | Exercise system redirect/flush and inspect GrantBuffer ports | No direct local clear condition exists apart from reset/upstream absence; integration needs separate proof. |
+
+## 10. Example Runtime Sequence
+
+For a refill after an L1 DCache `AcquireBlock` miss:
+
+1. Once its downstream work completes, an MSHR causes MainPipe to produce a D-class response from one of s3/s4/s5; `toSourceD` arbitrates candidates and the Slice connects that Decoupled transaction to GrantBuffer.
+2. GrantBuffer writes the task and both 32-B beats to its three lockstep FIFOs. In the same cycle it records the line `set/tag` in the first free in-flight slot and uses that index as the future D `sink`.
+3. When D is ready, the first beat leaves and the remaining beat plus the same grant ID is saved in `grantBuf`. The next D-ready event gives the residual beat priority. Both valid states hold under D backpressure.
+4. Until an E GrantAck arrives, a B Probe for that same `set/tag` is stopped by `blockB_s1`; an already-admitted SourceB entry also waits for GrantStatus to become invalid. This prevents a conflicting Probe from reaching L1 before the grant is acknowledged.
+5. L1 returns E with the same sink index. GrantBuffer clears the entry; resource credit and the Probe barrier are removed in the following combinational evaluation.
+
+### 10.1 Confirmed and Open Points
+
+**Confirmed:** the active L2 chain is CHI CoupledL2; GrantBuffer uses parameterized 16-entry per-Slice resources for D, GrantAck, and prefetch-response management; an in-flight `set/tag` table protects Probe ordering; and predicted plus actual occupancy provides early backpressure.
+
+**Still to verify dynamically:** exact Chisel Queue reset/pointer and same-address read/write RTL; library-level priority of MainPipe's Chisel `Arbiter` when all three D candidates are valid; real end-to-end D latency under top-level hint-guided Slice selection; and behavior under any stimulus that violates the assumption that E refers to a valid in-flight slot. These belong in generated Verilog, FST-waveform, or formal verification work.

@@ -1,3 +1,4 @@
+<!--
 # Cache-MainPipe：Kunminghu V2 CoupledL2 主流水线源码分析
 
 > 结论先行：本文的 <code>MainPipe</code> 是 Kunminghu V2 默认 CHI 配置下每个 CoupledL2 Slice 的 <code>coupledL2/tl2chi/MainPipe.scala</code>，不是 L1 DCache 的同名模块，也不是 HuanCun 的模块。它接收 RequestArb 已准入的 S2 <code>TaskBundle</code>，在 S3 结合 Directory 结果分类 A/B/C/MSHR 任务，决定目录和 DataStorage 的读写、是否创建 MSHR、以及向 TileLink D 或 CHI TXREQ/TXRSP/TXDAT 的响应；S4/S5 主要承担长组合路径切分和 DataStorage MCP2 数据返回。MainPipe 本身没有入口 <code>ready</code>，真正的准入背压在 RequestArb、RequestBuffer、MSHRCtl、GrantBuffer 与 TX 队列的共同控制中完成。[MainPipe.scala:40-123](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:40) [RequestArb.scala:132-217](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/RequestArb.scala:132) [Slice.scala:84-143](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/Slice.scala:84)
@@ -37,12 +38,12 @@ else Some(LazyModule(new TL2TLCoupledL2()(new Config(config))))
 
 ~~~mermaid
 flowchart LR
-  CFG[KunminghuV2Config<br/>EnableCHI = true] --> L2TOP[L2Top]
-  L2TOP --> L2CHI[TL2CHICoupledL2]
-  L2CHI --> S0[tl2chi Slice bank 0]
-  L2CHI --> SN[tl2chi Slice bank N]
-  S0 --> MP0[MainPipe]
-  SN --> MPN[MainPipe]
+  CFG[KunminghuV2Config<br/>EnableCHI = true] --&gt; L2TOP[L2Top]
+  L2TOP --&gt; L2CHI[TL2CHICoupledL2]
+  L2CHI --&gt; S0[tl2chi Slice bank 0]
+  L2CHI --&gt; SN[tl2chi Slice bank N]
+  S0 --&gt; MP0[MainPipe]
+  SN --&gt; MPN[MainPipe]
 ~~~
 
 ### 1.3 <code>huancun</code> 与 DCache 同名模块的边界
@@ -112,18 +113,18 @@ flowchart LR
 
 ~~~mermaid
 flowchart LR
-  SA[SinkA / RequestBuffer] -->|Decoupled A task| RA[RequestArb]
-  SB[RXSNP] -->|Decoupled B task| RA
-  SC[SinkC] -->|Decoupled C task| RA
-  MC[MSHRCtl] -->|Decoupled mshrTask| RA
-  RA -->|Valid taskToPipe_s2| MP[MainPipe]
-  RA -->|Decoupled dirRead_s1| DIR[Directory]
-  DIR -->|Valid dirResp_s3/replResp| MP
-  MP -->|Valid DS request + en| DS[DataStorage]
-  DS -->|S5 rdata/error| MP
-  MP -->|Decoupled D| GB[GrantBuffer]
-  MP -->|Decoupled TXREQ/RSP/DAT| TX[CHI TX queues]
-  MP -->|Valid alloc / buffers| MC
+  SA[SinkA / RequestBuffer] --&gt;|Decoupled A task| RA[RequestArb]
+  SB[RXSNP] --&gt;|Decoupled B task| RA
+  SC[SinkC] --&gt;|Decoupled C task| RA
+  MC[MSHRCtl] --&gt;|Decoupled mshrTask| RA
+  RA --&gt;|Valid taskToPipe_s2| MP[MainPipe]
+  RA --&gt;|Decoupled dirRead_s1| DIR[Directory]
+  DIR --&gt;|Valid dirResp_s3/replResp| MP
+  MP --&gt;|Valid DS request + en| DS[DataStorage]
+  DS --&gt;|S5 rdata/error| MP
+  MP --&gt;|Decoupled D| GB[GrantBuffer]
+  MP --&gt;|Decoupled TXREQ/RSP/DAT| TX[CHI TX queues]
+  MP --&gt;|Valid alloc / buffers| MC
 ~~~
 
 ### 3.3 为什么 MainPipe 能没有入口 <code>ready</code>
@@ -362,20 +363,20 @@ MainPipe 没有一个名为 <code>state</code> 的枚举 FSM。其主生命周�
 
 ~~~mermaid
 stateDiagram-v2
-  [*] --> ResetSweep
-  ResetSweep --> AdmitS1: resetFinish and RequestArb conditions
-  AdmitS1 --> S2: s1_fire
-  S2 --> S3: task_s2.valid
-  S3 --> ShortResp: D/TX candidate and no DS-long path
-  S3 --> S4: !req_drop_s3
-  S3 --> MSHRHeld: need_mshr_s3 and alloc valid
-  S3 --> RetryHeld: refill retry
-  S4 --> S5: !req_drop_s4
-  S4 --> ShortResp: channel fire
-  S5 --> ShortResp: D/TX fire or queued
-  MSHRHeld --> AdmitS1: MSHR task returns through RequestArb
-  RetryHeld --> AdmitS1: MSHR retry task returns
-  ShortResp --> [*]
+  [*] --&gt; ResetSweep
+  ResetSweep --&gt; AdmitS1: resetFinish and RequestArb conditions
+  AdmitS1 --&gt; S2: s1_fire
+  S2 --&gt; S3: task_s2.valid
+  S3 --&gt; ShortResp: D/TX candidate and no DS-long path
+  S3 --&gt; S4: !req_drop_s3
+  S3 --&gt; MSHRHeld: need_mshr_s3 and alloc valid
+  S3 --&gt; RetryHeld: refill retry
+  S4 --&gt; S5: !req_drop_s4
+  S4 --&gt; ShortResp: channel fire
+  S5 --&gt; ShortResp: D/TX fire or queued
+  MSHRHeld --&gt; AdmitS1: MSHR task returns through RequestArb
+  RetryHeld --&gt; AdmitS1: MSHR retry task returns
+  ShortResp --&gt; [*]
 ~~~
 
 <code>resetFinish</code>、<code>task_s3/s4/s5.valid</code>、<code>req_drop_s3/s4</code> 的赋值见 [MainPipe.scala:127-150](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:127) [MainPipe.scala:622-624](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:622) [MainPipe.scala:759-823](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/MainPipe.scala:759)。
@@ -488,3 +489,294 @@ MainPipe 的 CMO optional IO 和 done 计算见 [MainPipe.scala:119-123](/home/y
 3. S3 是主要决策点：分类事务、分配 MSHR、选 DS 地址/数据、更新 Directory、产生 one-hot 输出。S4/S5 将长组合和 MCP2 数据返回分离。
 4. 正确性依赖明确的单端口、same-set/tag、MSHR reserve、GrantAck、retry 和输出容量规则；这些都是可直接写成断言/波形检查的条件。
 5. 未做 elaboration/FST 的部分包括：最终地址宽度、生成 RTL 中标准 Arbiter/FIFO 的逐拍细节、不同 Slice 的最终 CHI arbitration，以及 error 到 SoC/BEU/Difftest 的终点。本文已经指出其应继续追踪的代码边界，而没有把未知部分写成事实。
+-->
+
+# Cache-MainPipe: Kunminghu V2 CoupledL2 Main-Pipeline Source Analysis
+
+> **Conclusion first.** This page's `MainPipe` is `coupledL2/tl2chi/MainPipe.scala` in every CoupledL2 Slice selected by Kunminghu V2's default CHI configuration. It is neither the L1 DCache module with the same name nor a HuanCun module. It accepts a RequestArb-admitted S2 `TaskBundle`, combines it with Directory results in S3, decides Directory/DataStorage activity, possible MSHR allocation, and TileLink-D or CHI TXREQ/TXRSP/TXDAT responses. S4/S5 split long combinational paths and receive MCP2 DataStorage results. MainPipe has no input `ready`; admission backpressure is decided earlier by RequestArb, RequestBuffer, MSHRCtl, GrantBuffer, and TX-side resource feedback.
+
+## 1. Scope, Version, and Effective Implementation
+
+### 1.1 Analysis baseline
+
+| Item | Baseline used | Treatment |
+| --- | --- | --- |
+| XiangShan | `/home/yanyusong/xs-memory-env/XiangShan`, `kunminghu-v2@e12436c7cba86b195deec24981976d78bc263661` | User-supplied checkout; pre-existing `difftest` edits and `src/main/resources/aia/` untracked files are not touched or used as evidence. |
+| `coupledL2` | `fb5469838c8902b6cb33992c0a30ee3d446e4453` | Direct source for MainPipe, Directory, DataStorage, MSHR, and CHI Slice. |
+| `huancun` | `65ef077373ecf398b4cecdea06b65ef9b8d79044` | Checked only for module boundary and non-CHI configuration selection. |
+| Design Doc | `/home/yanyusong/XiangShan-Design-Doc@58d9e2ad11f044cb6f8887d9687d9e110696d1aa` | Used to locate design intent; behavior is established from Chisel source. |
+| Course repository | `XiangShanLab@680010a3cf7cc72900345600b99709bc337a52bf` | Used for course terminology and Markdown style. |
+
+### 1.2 Why the effective implementation is `tl2chi/MainPipe`
+
+`KunminghuV2Config` selects a 1 MiB, four-bank L2 and adds `WithCHI`, setting `EnableCHI=true`. `L2Top` consequently creates `TL2CHICoupledL2`, assigns `BankBitsKey = log2Ceil(L2NBanks)`, and CoupledL2 creates a `tl2chi.Slice` for each bank. That Slice instantiates the MainPipe analyzed here.
+
+```mermaid
+flowchart LR
+  CFG[KunminghuV2Config: EnableCHI true] --> L2TOP[L2Top]
+  L2TOP --> L2CHI[TL2CHICoupledL2]
+  L2CHI --> S0[tl2chi Slice bank 0]
+  L2CHI --> SN[tl2chi Slice bank N]
+  S0 --> MP0[MainPipe]
+  SN --> MPN[MainPipe]
+```
+
+This conclusion comes from the instance chain, not merely a filename. Each `tl2chi.Slice` also instantiates Directory, DataStorage, Refill/Release `MSHRBuffer`s, RequestArb, RequestBuffer, and MSHRCtl, with MainPipe ports wired to those neighbors.
+
+### 1.3 Boundary from HuanCun and L1 DCache MainPipe
+
+Under `EnableCHI=true`, top-level configuration retains `OpenLLCParamsOpt` rather than `L3CacheParamsOpt`; the latter is what causes HuanCun construction. HuanCun has no `class MainPipe` in the checked source. The L1 DCache `mainpipe/MainPipe.scala` is a separate three-stage pipeline with Probe, MissQueue, StoreBuffer, Atomic, and SRAM interfaces. Its `s1/s2/s3` stages, task format, and storage ownership must not be combined with this L2 CHI pipeline.
+
+| Name | Effective location | Analyzed here? | Reason |
+| --- | --- | --- | --- |
+| L2 CHI MainPipe | `coupledL2/tl2chi/MainPipe.scala` | Yes | One per bank in the V2 CHI Slice. |
+| L2 TileLink MainPipe | `coupledL2/tl2tl/MainPipe.scala` | No | Used by the separate non-CHI Slice branch. |
+| L1 DCache MainPipe | `xiangshan/cache/dcache/mainpipe/MainPipe.scala` | No | Independent L1D transaction pipeline. |
+| HuanCun Slice/SourceD | `huancun` | No | Not instantiated by the default V2 CHI path. |
+
+## 2. Theory, Design Doc, and Effective Code
+
+### 2.1 Theory-to-code mapping
+
+Pipeline concepts explain stage registers and resource backpressure, but this is not a CPU fetch/issue/retire pipeline. Its payload is a cache `TaskBundle` carrying `tag/set/off`, TileLink channel, MSHR association, and CHI fields, not a ROB pointer or execution-unit result.
+
+| Course concept | Effective entity around MainPipe | Code-level meaning | Unsupported extrapolation |
+| --- | --- | --- | --- |
+| Pipeline stages and stage registers | `task_s2`, `task_s3`, `task_s4`, `task_s5` | S2 is registered into S3; S4/S5 retain task, data, and output classification. | No CPU redirect/ROB-flush interface exists. |
+| Structural conflict | Single-port Directory, MCP2 DataStorage, MSHR/TX/GrantBuffer capacity | Admission is withheld before the task enters MainPipe. | `taskFromArb_s2.valid` alone is not a `fire`. |
+| Hit and miss | Directory tag/meta lookup plus `need_mshr_s3` | Hits can update metadata/respond locally; long downstream/probe/alias work allocates MSHR. | A miss is not one independent MainPipe enum state. |
+| Non-blocking cache | Multiple MSHRs, Refill/Release buffers, TX queues | Long transactions leave MainPipe and later return through MSHR tasks. | MSHR allocation is `ValidIO`, not a MainPipe-to-MSHR ready/fire handshake. |
+
+### 2.2 Design Doc traceability matrix
+
+| ID | Intent cross-checked | Current source relationship | Status |
+| --- | --- | --- | --- |
+| D1 | ReqArb is the first two stages and MainPipe covers later stages. | RequestArb selects in S1 and retains `task_s2`; MainPipe registers S3 then has explicit S4/S5. | Verified |
+| D2 | DataStorage cooperates with main pipeline while avoiding port conflict. | It is single-port/read-MCP2 and requires request stability over two cycles; MainPipe provides corresponding hold logic. | Verified; two cycles are an array protocol, not universal transaction completion. |
+| D3 | MSHR handles miss/refill/replacement long state. | MainPipe produces allocation information, MSHRCtl selects an empty entry, and MSHR returns tasks to RequestArb. | Verified |
+| D4 | Tag/data ECC errors propagate to transaction results. | Directory produces tag error, DataStorage returns data error, and S5 combines them for response/error output. | Verified locally; system-level error disposition is outside this module. |
+
+### 2.3 Conclusions not inferred from comments or documents
+
+- The TileLink manager `minLatency=2` is not proof of a fixed L1-to-MainPipe or hit latency.
+- MainPipe's local output helper passes `Seq(s5, s4, s3)` to a standard Chisel `Arbiter`; the source establishes older stages are listed first, but this page does not invent a custom age-aware scheduler.
+- No elaboration or FST was run. Configuration-derived bit fields and capacities are static conclusions; exact generated-RTL arbitration, cross-Slice scheduling, and error-reporting time require further evidence.
+
+## 3. Module Contract: Who / Why / How / From / To
+
+### 3.1 MainPipe interface groups
+
+| Interface group | From / owner | Purpose and type | Destination |
+| --- | --- | --- | --- |
+| `taskFromArb_s2`, `taskInfo_s1` | RequestArb | Admitted task plus S1 context; both `ValidIO`, with no MainPipe `ready`. | `task_s3` and CustomL1Hint logic |
+| `dirResp_s3`, `replResp` | Directory | Hit/way/meta/tag/error and replacement outcome, pipeline-aligned `ValidIO`. | S3 classification, MSHR allocation, Directory/DS selection |
+| `toDS` and returned rdata/error | MainPipe/DataStorage | `en_s3`, `req_s3`, `wdata_s3`; not Decoupled. | Way/set array access, S5 response payload |
+| `toMSHRCtl.mshr_alloc_s3` | MainPipe | Sends long-lived A/B work as `ValidIO[MSHRRequest]`. | MSHRCtl-selected entry |
+| `toSourceD` | MainPipe | `DecoupledIO[TaskWithData]` TileLink response candidates. | GrantBuffer and L1 D/E lifetime |
+| `toTXREQ`, `toTXRSP`, `toTXDAT` | MainPipe | Decoupled CHI request, response, and data candidates. | Corresponding TX queues and CHI aggregator |
+| `metaWReq`, `tagWReq` | MainPipe | ValidIO Directory state/tag updates. | Single-port Directory SRAM |
+| `releaseBufWrite`, `dsResp`, `nestedwb` | MainPipe | Preserve old data and report data errors/nested writeback under MSHR ID. | ReleaseBuffer/MSHRCtl |
+| `error`, optional CMO ports | MainPipe | Cache-error and parameter-generated CMO reporting. | Slice/upstream consumers |
+
+### 3.2 Handshake boundary: which signals can be called `fire`
+
+`taskFromArb_s2`, Directory responses, MSHR allocation, and DataStorage request are `ValidIO`; they have no local `ready` and must not be described as a MainPipe `fire`. Real admission `fire` is RequestArb `s1_fire`, where Sink A/B/C and MSHR sources are Decoupled. Final L1 D and CHI TX outputs are Decoupled again.
+
+```mermaid
+flowchart LR
+  SA[SinkA / RequestBuffer] -->|Decoupled A task| RA[RequestArb]
+  SB[RXSNP] -->|Decoupled B task| RA
+  SC[SinkC] -->|Decoupled C task| RA
+  MC[MSHRCtl] -->|Decoupled MSHR task| RA
+  RA -->|Valid taskToPipe_s2| MP[MainPipe]
+  RA -->|Decoupled directory read| DIR[Directory]
+  DIR -->|Valid dirResp/replResp| MP
+  MP -->|Valid DS request plus en| DS[DataStorage]
+  DS -->|S5 rdata/error| MP
+  MP -->|Decoupled D| GB[GrantBuffer]
+  MP -->|Decoupled TXREQ/TXRSP/TXDAT| TX[CHI TX queues]
+  MP -->|Valid allocation/buffer info| MC
+```
+
+### 3.3 Why MainPipe can omit an input `ready`
+
+RequestArb combines block information from MSHRCtl, MainPipe, GrantBuffer, and TX-side queues. It selects C before B before A; an existing returning MSHR task overrides all channel tasks. It only returns upstream ready when Directory read readiness, reset completion, absence of a held MSHR task, and `s2_ready` coincide. MainPipe contributes conflict/occupancy feedback before this point, so pressure is applied before S2 entry rather than by accepting and then stalling a Valid-only input.
+
+## 4. Parameters, Address, and Storage Structure
+
+### 4.1 Parameters derived for Kunminghu V2
+
+`L2CacheConfig` calculates sets as `size / banks / ways / 64`. The default eight ways and `KunminghuV2Config`'s 1 MiB/four banks yield 512 sets per bank. `L2Param` defaults to 16 MSHRs.
+
+| Parameter | Value in this configuration | MainPipe relevance |
+| --- | ---: | --- |
+| Total L2 capacity | 1 MiB | Aggregate capacity of four Slices |
+| Banks | 4; `bankBits=2` | One Slice/MainPipe per bank; address parse skips bank bits. |
+| Ways | 8; `wayBits=3` | Directory/DS way index and `wayMask` width. |
+| Sets per Slice | 512; `setBits=9` | Directory and DataStorage set width. |
+| Cache line | 64 B; `offsetBits=6` | Task `off`, CHI/TL line size, DSBlock width. |
+| CHI D beat | 32 B; `beatSize=2` | TXDAT/GrantBuffer divide a line into two beats; DS still handles a full line. |
+| MSHRs per Slice | 16 | MSHRCtl/MSHRBuffer capacity and TX-reservation upper bound. |
+
+These are source-expression derivations for this configuration, not literals hard-coded in MainPipe.
+
+### 4.2 Address, bank, set, way, and cache-line granularity
+
+`SinkA` and `RXSNP` use `parseAddress` to construct task `tag/set/off`. The function skips `offsetBits + bankBits` before taking the set, so with 64-B lines/four banks the fields are:
+
+| Logical field | Derived PA bits | Consumer | Boundary |
+| --- | --- | --- | --- |
+| `off` | `PA[5:0]` | Task line offset; not a DS index | Byte offset within one line |
+| Slice bank | `PA[7:6]` | Bank routing/RXSNP routing | Depends on four banks and 64-B lines |
+| Slice-local `set` | `PA[16:8]` | Directory and DS indexing | Nine bits for 512 sets |
+| `tag` | Bits above `PA[16:0]` | Directory compare and CHI address reconstruction | Exact full address width is not asserted here |
+| `way` | Not an address field | Directory hit/replacer, then DS index | Three bits for eight ways |
+
+MainPipe reconstructs CHI request address as `Cat(tag, set, 0.U(offsetBits.W))`, clearing the line offset. Its payload operations are cache-line operations; this does not determine how an upstream cross-line CPU request is split.
+
+### 4.3 Directory, DataStorage, and buffer update/replace/search responsibilities
+
+Directory owns tag/meta lookup, hit, state, and replacement selection. DataStorage only reads/writes selected whole-line payload by way/set. Refill/Release buffers preserve MSHR-associated data. MainPipe chooses and orchestrates these actions, but does not own a separate replacement or validity table.
+
+### 4.4 Directory replacement and retry
+
+Directory excludes ways under refill or conflicting directory hit when producing a free/victim choice. If no usable way remains, `replResp.retry` is raised; MainPipe/MSHR must defer rather than write a tag or overwrite an unsafe victim.
+
+## 5. S1--S5 Stage Detail
+
+### 5.1 Stage summary
+
+| Stage | Main action | Key boundary |
+| --- | --- | --- |
+| S1 | RequestArb selects C/B/A or returning MSHR task and starts Directory read. | Decoupled source admission / `s1_fire` |
+| S2 | Task is held in RequestArb; MCP2 spacing may prevent the next ordinary admission. | `s2_ready`, `ds_mcp2_stall` |
+| S3 | MainPipe classifies transaction, uses Directory result, selects MSHR/DS/Directory/output actions. | Major decision point |
+| S4 | Retains task and long-path intermediate results. | Pipeline split |
+| S5 | Consumes DataStorage rdata/error, writes ReleaseBuffer if required, and forms later outputs/error feedback. | MCP2 data destination |
+
+### 5.2 S1/S2: arbitration, first request, and MCP2 interval
+
+RequestArb has channel precedence C > B > A, and a returning MSHR task precedes channel work. It needs a ready Directory read port, reset finish, no conflicting held MSHR task, and `s2_ready` before `s1_fire`. After a normal (non-AHint) task fires, `ds_mcp2_stall` deliberately introduces a bubble, preventing a back-to-back physical DataStorage enable.
+
+### 5.3 S3: classification, MSHR decision, and DataStorage request
+
+S3 combines `task_s3`, Directory hit/meta/replacement response, Refill/Release buffer data, and MSHR-related condition bits. It decides whether work is a direct hit response, a miss/permission-upgrade/replacement case requiring MSHR, a snoop/probe flow, or a C/CMO path. It selects DS `way/set`, read versus write, and full-line write data, then drives `en_s3` for the actual DataStorage access.
+
+MainPipe holds `req_s3.valid/bits` over the MCP2 window while `en_s3` denotes the one actual access cycle. `req.valid` is not a second independent array operation and, because the DS interface is Valid-only, it is not a Decoupled handshake.
+
+### 5.4 S3 Directory update, reset sweep, and one-hot outputs
+
+S3 constructs meta/tag updates for hits, fills, invalidations, and reset sweeping. Directory is single-port: a pending meta/tag write takes precedence over a new Directory read, preventing ambiguous read/write behavior. S3 also generates one-hot output classifications so later stages can know whether a candidate belongs to D, TXREQ, TXRSP, or TXDAT.
+
+### 5.5 S4/S5: timing separation, returned data, and egress arbitration
+
+S4/S5 retain task/data/output category to break long combinational paths. S5 pairs `rdata_s5/error_s5` with the originating task, selects data for output, can write a victim/old line to ReleaseBuffer, and reports DataStorage error to MSHR paths. For each physical D/TX output, S3/S4/S5 candidates are arbitrated; one output transfer in an early stage prevents the same task from being reissued later by stage-valid gating.
+
+## 6. MSHR, Resource Arbitration, and Concrete Transaction Walkthroughs
+
+### 6.1 MSHR allocation, reservation, and return flow
+
+When S3 determines that an A/B transaction cannot complete in the short pipeline, it presents an allocation bundle. MSHRCtl owns actual free-entry choice, reserves capacity according to source policy, and starts the selected MSHR. The MSHR retains long-lived refill/probe/replacement state and later emits tasks back to RequestArb. No MainPipe-local `ready` completes this allocation protocol.
+
+### 6.2 Same set/tag conflict: ingress control rather than MainPipe flush
+
+Same-set/tag conflicts are represented by RequestArb/MSHRCtl blocking and MSHR state relationships. MainPipe does not contain a general independent ``flush conflicting work`` state machine. A later same-address transaction waits or is routed by those upstream conflict policies.
+
+### 6.3 Implicit state machine, not one isolated MainPipe FSM
+
+MainPipe's observable progression is distributed: stage-valid/task registers, Directory result, MSHR state, buffer availability, and output handshakes jointly define progress. It is useful to view it as a pipeline of transaction contexts, but incorrect to replace that distributed control with a single unproven `Enum` FSM.
+
+### 6.4 Dynamic case A: hit A Get / AcquireBlock
+
+1. SinkA presents a Decoupled task and RequestArb admits it in S1/S2 if resources permit.
+2. S3 receives the Directory hit/way/meta result and determines the needed response/data path.
+3. If data is needed, S3 issues DS read and S5 consumes the full line; otherwise a shorter response candidate may be formed.
+4. D/TX output arbitration and GrantBuffer readiness determine external transfer timing; a hit does not alone prove a fixed response cycle.
+
+### 6.5 Dynamic case B: A miss, permission upgrade, or replacement
+
+1. S3 sees a miss or a condition that needs downstream/probe/replacement work.
+2. It emits MSHR allocation information, subject to MSHRCtl capacity/reservation policy.
+3. The MSHR may obtain CHI response/refill, select a victim, preserve old data in ReleaseBuffer, and send later tasks back through RequestArb.
+4. A Directory retry due to lack of a safe way extends the transaction; no tag write occurs before a valid replacement decision.
+
+### 6.6 Dynamic case C: CHI snoop and nested/blocking work
+
+RXSNP provides B/snoop work to RequestArb. S3 uses Directory/MSHR state to decide data/probe response or a block/retry relationship. A snoop to a line with an active Grant or refill can be constrained by GrantBuffer/MSHR masks; it is not safe to infer completion from snoop valid alone. Nested writeback and ReleaseBuffer paths retain data under the associated MSHR ID as necessary.
+
+## 7. Correctness, Progress, and Exception Boundary
+
+### 7.1 Code-visible progress defenses
+
+| Defense | Meaning |
+| --- | --- |
+| RequestArb admission conditions | Avoid placing work into MainPipe without Directory/resource capacity. |
+| MCP2 bubble | Keeps DataStorage `en` from occurring in consecutive cycles. |
+| Directory read/write exclusion | Keeps tag/meta single-port access defined. |
+| MSHR reserve/full policy | Maintains source-specific admission safety. |
+| GrantBuffer/GrantAck tracking | Prevents a conflicting B/snoop path from overtaking an in-flight grant. |
+| RXSNP stall counter/assertion | Detects persistent blocked snoop head-of-line behavior. |
+
+These safeguards do not amount to a general proof of liveness; long-term fairness and external-CHI progress still require runtime/formal evidence.
+
+### 7.2 ECC/error path
+
+Directory reports tag error, DataStorage returns data error after the read timing, and MainPipe S5 combines them into response corrupt/error fields, `dsResp`, and Slice `io.error`. The source proves local signal propagation, not whether a consumer turns it into a synchronous exception, BEU event, retry, or any other system action.
+
+### 7.3 Difftest scope
+
+The traced `tl2chi/MainPipe.scala`, `tl2chi/Slice.scala`, and `tl2chi/MSHR.scala` do not directly construct or drive a Difftest bundle. MainPipe's hit/miss handling must not be used to fabricate a ROB, commit, register-state, or Difftest event. System-level Difftest correlation must be pursued at SoC/test-harness boundaries.
+
+### 7.4 Virtual page, cache line, MMIO, and CHI boundary
+
+| Boundary | MainPipe-local evidence | Not claimed here | Continue tracing |
+| --- | --- | --- | --- |
+| VA-to-PA/cross page | Optional `vaddr` can support prefetch training, but MainPipe's lookup fields are tag/set/off and it has no TLB/PMP/ASID/page-fault port. | Page-crossing split, exception priority, complete synonym handling. | L1D/LoadStore/TLB path before SinkA |
+| Cross cache line | DS operates on DSBlock and CHI address clears offset. | Whether/upstream where one CPU request splits into two L2 tasks. | TileLink A producer/L1D miss logic |
+| MMIO | A separate `MMIOBridge` has uncached manager semantics. | MainPipe lookup, full MMIO ordering, AXI timing. | MMIOBridge, Top CHI routes, OpenNCB/external LLC |
+| CHI to LLC/AXI | Top-level dispatches RXRSP/RXDAT by transaction/slice and RXSNP by address bank. | A direct AXI master interface on MainPipe. | TL2CHICoupledL2, Top, OpenLLC/OpenNCB |
+
+## 8. Latency and Throughput: What the Code Establishes
+
+### 8.1 Latency decomposition
+
+| Path | Visible stages/condition | Valid conclusion |
+| --- | --- | --- |
+| Admission to MainPipe S3 | RequestArb S1 fire -> S2 register -> MainPipe S3 register; Directory has its own S1-read/S2-latch/S3-compare path. | Stage relationship, not a fixed external-valid-to-response count. |
+| Hit requiring data | DS read starts in S3; DataStorage describes S3 read, S4 pass, S5 destination. | Data-return relation, still subject to ingress and output backpressure. |
+| Short response with no data | S3 can create D/TXRSP/TXREQ/TXDAT candidate; S4/S5 may retain it or suppress after an earlier fire. | Can be shorter than data path, not one uniform opcode latency. |
+| Miss/probe/refill/retry | MainPipe allocation -> MSHR waits for CHI/probe/buffer/replacer -> task returns. | Variable latency with no fixed bound from this code. |
+| CMO All | Invalid line may drop in S3; valid line waits MSHR CMO response then delayed `cmoLineDone`. | Branch/configuration dependent; default V2 has `enableFlush=false`. |
+
+### 8.2 Throughput limits
+
+1. Ordinary DataStorage-accessing work is separated by `ds_mcp2_stall`; a Slice cannot claim unconditional one-cache-transaction-per-cycle admission.
+2. DataStorage is single-port and asserts `!io.en || !RegNext(io.en)`, regardless of whether the accesses are to the same set.
+3. Directory tag/meta/replacer access is also read/write exclusive; a write makes a new read unavailable.
+4. Sixteen MSHRs, 16-entry MSHRBuffers, and `mshrsAll`-sized Grant/TX queues are resource bounds, not alone sufficient admission conditions: B reserve, GrantAck, CHI credits, and predictive queue counters contribute.
+5. S3/S4/S5 can retain different tasks, but each physical D/TX output serves one candidate per arbitration choice. This is egress throughput control, not disappearance of other tasks.
+
+The defensible conclusion is that MainPipe overlaps cache transactions, while steady-state initiation for ordinary DS access is at least subject to MCP2 spacing. Hit latency, miss latency, and CPU load latency remain path dependent.
+
+## 9. Verification Checklist
+
+| ID | Stimulus | Observe | Expected invariant |
+| --- | --- | --- | --- |
+| V1 | First A after reset | reset finish, Directory reset-meta writes | No channel task admission before reset sweep completes; all way metadata clears per set. |
+| V2 | A/B/C valid together | `sinkValids`, ready, `task_s1` | C admitted; then B; then A; returning MSHR task wins over channels. |
+| V3 | Two consecutive non-Hint requests | `s1_fire`, `ds_mcp2_stall`, `s2_ready`, DS `en` | Second ordinary admission is bubbled; DS enable is not consecutive. |
+| V4 | Directory read and meta/tag write same cycle | read.ready, meta/tag write valid | Write takes priority and read is not accepted. |
+| V5 | MSHRs near full, then A/B arrive | `mshrFull`, `a_mshrFull` | A blocks with one slot left; B blocks only when full. |
+| V6 | Refill victim has no safe way | `freeWayMask_s3`, `replResp.retry` | No tag write; MSHR retry/backoff returns to directory work. |
+| V7 | B snoop against GrantAck-blocked same address | GrantBuffer `inflightGrant`, B block | B does not overtake the in-flight grant; E GrantAck clears the relevant state. |
+| V8 | Simultaneous S3/S4/S5 D/TX candidates | output valid/ready and `Seq(s5,s4,s3)` | One physical output transfer; later-stage duplicate issue is suppressed. |
+| V9 | Tag or data ECC fault | Directory error, DS error, response corrupt, `io.error` | Error reaches response/Slice boundary without assuming Difftest event. |
+| V10 | Persistent conflict-blocked snoop | RXSNP `stallCnt` | Count grows when head cannot fire and assertion catches excessive stall; classify actual blocker. |
+
+## 10. Summary and Questions Still Requiring Waveforms
+
+1. The effective target is CHI CoupledL2 `tl2chi/MainPipe`; neither HuanCun nor L1D's similarly named MainPipe belongs to this implementation chain.
+2. MainPipe is the Directory/DS/MSHR/response-channel convergence point, while admission belongs to RequestArb and surrounding resource feedback. Valid-only inputs must not receive invented ready/fire semantics.
+3. S3 performs primary classification, MSHR/DS/Directory selection, and output formation. S4/S5 separate long paths and consume MCP2 data results.
+4. Correctness depends on explicit single-port, same-set/tag, MSHR-reserve, GrantAck, retry, and egress-capacity rules; all are suitable waveform/assertion targets.
+5. Final address width, exact generated-Arbiter/FIFO cycle behavior, final multi-Slice CHI arbitration, and the endpoint from cache error to SoC/BEU/Difftest remain open because no elaboration/FST evidence was collected here.
