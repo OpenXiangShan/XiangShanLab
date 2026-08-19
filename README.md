@@ -39,6 +39,7 @@
 
 - `tools/` - 工具与辅助脚本
   - `analyze-xiangshan-wavekit/`
+  - `wavekit-xslab/` - WaveKit 工具与波形分析仓库（Git 子模块）
   - `scenarios-extractor/`
   - `specification-analyzer/`
   - `verification-driver/`
@@ -51,6 +52,11 @@
 - 课程学习：[`xiangshan-course/README.md`](./xiangshan-course/README.md)
 - 编程实践：[`xiangshan-programming-practice/README.md`](./xiangshan-programming-practice/README.md)
 - 竞赛提交：[`2026-CIE-RISC-V-Contest-Application-Track/README.md`](./2026-CIE-RISC-V-Contest-Application-Track/README.md)
+
+## 关联仓库
+
+- `tools/wavekit-xslab/` - XiangShanLab 的 WaveKit 相关工具与波形分析仓库（Git 子模块）
+  - GitHub：[XiangShanLab/wavekit-xslab](https://github.com/XiangShanLab/wavekit-xslab)
 
 ## 说明
 

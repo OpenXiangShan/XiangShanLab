@@ -1,0 +1,4 @@
+[submodule "wavekit-xslab"]
+	path = tools/wavekit-xslab
+	url = git@github.com:XiangShanLab/wavekit-xslab.git
+	branch = main

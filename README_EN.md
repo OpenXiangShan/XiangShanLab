@@ -40,6 +40,7 @@
 
 - `tools/` - Tools and helper scripts
   - `analyze-xiangshan-wavekit/`
+  - `wavekit-xslab/` - WaveKit tools and waveform-analysis repository (Git submodule)
   - `scenarios-extractor/`
   - `specification-analyzer/`
   - `verification-driver/`
@@ -52,6 +53,11 @@
 - Course materials: [`xiangshan-course/README.md`](./xiangshan-course/README.md)
 - Programming practice: [`xiangshan-programming-practice/README.md`](./xiangshan-programming-practice/README.md)
 - Contest submission: [`2026-CIE-RISC-V-Contest-Application-Track/README.md`](./2026-CIE-RISC-V-Contest-Application-Track/README.md)
+
+## Related Repositories
+
+- `tools/wavekit-xslab/` - WaveKit tools and waveform-analysis repository associated with XiangShanLab (Git submodule)
+  - GitHub: [XiangShanLab/wavekit-xslab](https://github.com/XiangShanLab/wavekit-xslab)
 
 ## Notes
 

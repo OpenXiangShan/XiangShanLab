@@ -8,6 +8,7 @@
 | --- | --- |
 | `xiangshan-code-analyzer/` | 香山 Kunminghu 源码深度分析 skill，覆盖前端、后端、访存、Cache、AIA/IOPMP/AXI、Difftest、异常/调试/特权态等主题。 |
 | `analyze-xiangshan-wavekit/` | 基于 wavekit 的香山波形单指令追踪与流水线行为分析 skill，强调从波形证据还原 PC、ROB/LQ/SQ/FTQ、valid/ready/fire、redirect、bubble 和 difftest 状态。 |
+| `wavekit-xslab/` | XiangShanLab 的 WaveKit 工具与波形分析仓库；作为 Git 子模块接入，固定到对应提交。 |
 | `xiangshan-scenario-wave-test/` | 从微架构场景描述生成测试程序、构建镜像、运行 emu dump wave，并用 wavekit 验证场景是否真实复现的闭环 skill。 |
 | `scenarios-extractor/` | 将机制名、模块名或优化点转换为可执行的验证场景描述，包括 stimulus、期望观察、失败特征、checker、coverage 和所需证据。 |
 | `verification-driver/` | 验证驱动规则库，提供架构验证、微架构场景验证、系统验证、边界条件、冲突、FSM、性能瓶颈、debug、虚拟化和保护等场景模板。 |
@@ -73,4 +74,3 @@
 - 生成的数据应单独放入结果目录，并在 README 或索引文件中记录来源、时间、过滤条件和后续分析建议。
 - 面向香山源码的结论应尽量保留分支 / commit、文件路径、行号和关键信号名，避免只写抽象描述。
 - 涉及规范状态、GitHub issue/PR、远端源码或工具版本时，应以当前官方来源或本地同步数据为准。
-
