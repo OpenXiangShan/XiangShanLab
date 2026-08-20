@@ -324,6 +324,45 @@ def download_and_extract_attachments(urls: Sequence[str], directory: Path) -> li
     return downloaded
 
 
+def find_latest_commit_before(
+    repository: Path, issue_created_at: str | None
+) -> str | None:
+    """Return the newest repository commit strictly before an issue timestamp."""
+    if issue_created_at is None:
+        return None
+
+    try:
+        issue_datetime = datetime.strptime(issue_created_at, "%Y-%m-%d %H-%M-%S")
+    except (TypeError, ValueError):
+        return None
+
+    # GitHub exposes issue timestamps in UTC; keep that timezone explicit when
+    # asking Git so the host's local timezone cannot shift the cutoff.
+    git_before = issue_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+    result = subprocess.run(
+        [
+            "git",
+            "log",
+            "--all",
+            "HEAD",
+            "--before",
+            git_before,
+            "--date-order",
+            "--format=%H",
+            "--max-count=1",
+        ],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    for line in result.stdout.splitlines():
+        commit_hash = line.strip()
+        if re.fullmatch(r"[0-9a-f]{7,40}", commit_hash, flags=re.IGNORECASE):
+            return commit_hash.lower()
+    return None
+
+
 def parse_github_issue_details(issue_number: int) -> tuple[str | None, str | None]:
     """Fetch one issue page and return its XiangShan commit and creation time."""
     page_html = fetch_github_issue_page(issue_number)
@@ -404,6 +443,38 @@ def main(argv: Sequence[str] | None = None) -> int:
     print("已进入 xs-env 目录，开始执行 source setup.sh")
     subprocess.run(["bash", "-lc", "source setup.sh"], check=True)
     print("source setup.sh 执行完成")
+
+    xiangshan_directory = xs_env_directory / "XiangShan"
+    if not xiangshan_directory.is_dir():
+        print(f"未找到 XiangShan 目录：{xiangshan_directory}，跳过 checkout")
+        return 0
+
+    os.chdir(xiangshan_directory)
+    print(f"已进入 XiangShan 目录：{xiangshan_directory}")
+
+    checkout_hash = commit_hash
+    if checkout_hash is None:
+        try:
+            checkout_hash = find_latest_commit_before(xiangshan_directory, issue_created_at)
+        except (OSError, subprocess.CalledProcessError) as exc:
+            detail = (
+                exc.stderr.strip()
+                if isinstance(exc, subprocess.CalledProcessError) and exc.stderr
+                else str(exc)
+            )
+            print(f"查找 issue 创建时间之前的 XiangShan commit 失败，跳过 checkout：{detail}")
+        if checkout_hash is None:
+            if issue_created_at is None:
+                print("issue_created_at 为 None，无法选择历史 commit，跳过 checkout")
+            else:
+                print(f"没有找到早于 issue_created_at={issue_created_at} 的 XiangShan commit，跳过 checkout")
+        else:
+            commit_hash = checkout_hash
+            print(f"根据 issue_created_at={issue_created_at} 选择 XiangShan commit：{checkout_hash}")
+
+    if checkout_hash is not None:
+        subprocess.run(["git", "checkout", checkout_hash], check=True)
+        print(f"XiangShan checkout 完成：{checkout_hash}")
     return 0
 
 
