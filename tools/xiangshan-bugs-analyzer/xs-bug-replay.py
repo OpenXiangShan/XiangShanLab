@@ -5,11 +5,17 @@ from __future__ import annotations
 
 import argparse
 import html
+import os
+import re
 import subprocess
 import urllib.error
+import urllib.parse
 import urllib.request
+from datetime import datetime
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Sequence
+import zipfile
 
 
 USE_SOCKS5_RPOXY = True
@@ -25,6 +31,10 @@ _XIANGSHAN_REFERENCE_PATTERN = (
     rf"(?:https?://github\.com)?/?OpenXiangShan/XiangShan/"
     rf"(?:blob|commit|tree)/{_SHA_PATTERN}(?:[/?#\"'<]|$)"
 )
+_ATTACHMENT_URL_PATTERN = re.compile(
+    r"https?://github\.com/[^\s\"'<>\\)]+",
+    flags=re.IGNORECASE,
+)
 
 
 class _IssuePageTextExtractor(HTMLParser):
@@ -36,9 +46,24 @@ class _IssuePageTextExtractor(HTMLParser):
         self._in_json_ld = False
         self.visible_text: list[str] = []
         self.json_ld: list[str] = []
+        self.published_times: list[str] = []
+        self.relative_times: list[str] = []
+        self.links: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
+        if tag == "a" and attributes.get("href"):
+            self.links.append(attributes["href"] or "")
+        if tag == "meta":
+            descriptor = (attributes.get("property") or attributes.get("name") or "").lower()
+            if descriptor in {"article:published_time", "og:article:published_time"}:
+                content = attributes.get("content")
+                if content:
+                    self.published_times.append(content)
+        elif tag == "relative-time":
+            datetime_value = attributes.get("datetime")
+            if datetime_value:
+                self.relative_times.append(datetime_value)
         if tag == "script" and attributes.get("type", "").lower() == "application/ld+json":
             self._in_json_ld = True
             return
@@ -125,8 +150,6 @@ def _issue_page_texts(page_html: str) -> tuple[str, ...]:
 
 
 def _find_commit(patterns: Sequence[str], texts: Sequence[str]) -> str | None:
-    import re
-
     for text in texts:
         for pattern in patterns:
             match = re.search(pattern, text, flags=re.IGNORECASE)
@@ -147,9 +170,169 @@ def extract_xiangshan_commit_hash(page_html: str) -> str | None:
     return _find_commit((_XIANGSHAN_REFERENCE_PATTERN,), texts)
 
 
+def _format_issue_created_at(timestamp: str) -> str | None:
+    """Format an ISO timestamp as YYYY-MM-DD HH-MM-SS."""
+    normalized = html.unescape(timestamp).strip()
+    if normalized.endswith(("Z", "z")):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except (TypeError, ValueError):
+        return None
+    return parsed.strftime("%Y-%m-%d %H-%M-%S")
+
+
+def extract_issue_created_at(page_html: str) -> str | None:
+    """Extract the issue creation time from GitHub page metadata."""
+    if not isinstance(page_html, str):
+        raise TypeError("GitHub issue 页面内容必须是字符串")
+
+    parser = _IssuePageTextExtractor()
+    parser.feed(page_html)
+    parser.close()
+
+    json_ld = "\n".join(parser.json_ld)
+    for field in ("datePublished", "dateCreated"):
+        pattern = rf'"{field}"\s*:\s*"([^"]+)"'
+        for match in re.finditer(pattern, json_ld, flags=re.IGNORECASE):
+            formatted = _format_issue_created_at(match.group(1))
+            if formatted:
+                return formatted
+    for timestamp in parser.published_times + parser.relative_times:
+        formatted = _format_issue_created_at(timestamp)
+        if formatted:
+            return formatted
+    return None
+
+
+def extract_issue_attachment_urls(page_html: str) -> list[str]:
+    """Extract GitHub attachment URLs referenced by an issue page."""
+    if not isinstance(page_html, str):
+        raise TypeError("GitHub issue 页面内容必须是字符串")
+
+    parser = _IssuePageTextExtractor()
+    parser.feed(page_html)
+    parser.close()
+
+    candidates = parser.links + _ATTACHMENT_URL_PATTERN.findall(html.unescape(page_html).replace("\\/", "/"))
+    attachment_urls: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        candidate = html.unescape(candidate).replace("\\/", "/")
+        candidate = re.split(r"\\[nrt]", candidate, maxsplit=1)[0]
+        candidate = candidate.rstrip(".,;:)]}\\")
+        if candidate.startswith("/"):
+            candidate = urllib.parse.urljoin("https://github.com", candidate)
+        parsed = urllib.parse.urlsplit(candidate)
+        host = parsed.netloc.lower().split(":", 1)[0]
+        path = parsed.path.lower()
+        is_attachment = host == "github.com" and (
+            path.startswith("/user-attachments/files/")
+            or path.startswith("/user-attachments/assets/")
+            or path.startswith("/openxiangshan/xiangshan/files/")
+        )
+        if is_attachment and candidate not in seen:
+            seen.add(candidate)
+            attachment_urls.append(candidate)
+    return attachment_urls
+
+
+def parse_github_issue_resources(issue_number: int) -> tuple[str | None, str | None, list[str]]:
+    """Fetch one issue page and return commit, creation time, and attachments."""
+    page_html = fetch_github_issue_page(issue_number)
+    return (
+        extract_xiangshan_commit_hash(page_html),
+        extract_issue_created_at(page_html),
+        extract_issue_attachment_urls(page_html),
+    )
+
+
+def _attachment_filename(url: str) -> str:
+    path = urllib.parse.unquote(urllib.parse.urlsplit(url).path)
+    filename = Path(path).name
+    return filename if filename not in {"", ".", ".."} else "attachment"
+
+
+def _unique_path(directory: Path, filename: str) -> Path:
+    candidate = directory / filename
+    if not candidate.exists():
+        return candidate
+    stem = candidate.stem
+    suffix = candidate.suffix
+    index = 1
+    while True:
+        candidate = directory / f"{stem}-{index}{suffix}"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def download_issue_attachment(url: str, directory: Path) -> Path | None:
+    """Download one issue attachment through the configured proxy."""
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = _unique_path(directory, _attachment_filename(url))
+    command = [
+        "curl",
+        "--fail-with-body",
+        "--location",
+        "--silent",
+        "--show-error",
+        "--connect-timeout",
+        "20",
+        "--max-time",
+        "90",
+    ]
+    if USE_SOCKS5_RPOXY:
+        command.extend(("--socks5-hostname", PROXY))
+    command.extend(("--output", str(destination), url))
+    try:
+        subprocess.run(command, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        destination.unlink(missing_ok=True)
+        detail = exc.stderr.strip() if isinstance(exc, subprocess.CalledProcessError) and exc.stderr else str(exc)
+        print(f"附件下载失败：{url}: {detail}")
+        return None
+    return destination
+
+
+def extract_zip_safely(zip_path: Path, directory: Path) -> bool:
+    """Extract a ZIP while rejecting members that escape the target directory."""
+    target_root = directory.resolve()
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            for member in archive.infolist():
+                target = (directory / member.filename).resolve()
+                if target != target_root and target_root not in target.parents:
+                    raise RuntimeError(f"ZIP 成员路径越界：{member.filename}")
+            archive.extractall(directory)
+    except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+        print(f"ZIP 解压失败：{zip_path}: {exc}")
+        return False
+    return True
+
+
+def download_and_extract_attachments(urls: Sequence[str], directory: Path) -> list[Path]:
+    """Download issue attachments and extract downloaded ZIP files."""
+    downloaded: list[Path] = []
+    for url in urls:
+        path = download_issue_attachment(url, directory)
+        if path is None:
+            continue
+        downloaded.append(path)
+        if path.suffix.lower() == ".zip" or zipfile.is_zipfile(path):
+            extract_zip_safely(path, directory)
+    return downloaded
+
+
+def parse_github_issue_details(issue_number: int) -> tuple[str | None, str | None]:
+    """Fetch one issue page and return its XiangShan commit and creation time."""
+    page_html = fetch_github_issue_page(issue_number)
+    return extract_xiangshan_commit_hash(page_html), extract_issue_created_at(page_html)
+
+
 def parse_github_issue(issue_number: int) -> str | None:
     """Fetch an XiangShan issue page and return its referenced commit hash, if any."""
-    return extract_xiangshan_commit_hash(fetch_github_issue_page(issue_number))
+    return parse_github_issue_details(issue_number)[0]
 
 
 def prompt_for_issue() -> int:
@@ -175,19 +358,52 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("输入不合法，--issue 必须是整数。")
             return 1
 
-    commit_hash = args.commit_hash
-    if not commit_hash:
-        print(f"未提供 --commit_hash，正在读取 issue #{issue} 的 XiangShan commit...")
-        try:
-            commit_hash = parse_github_issue(issue)
-        except (RuntimeError, TypeError, ValueError) as exc:
-            print(f"读取 issue #{issue} 的 commit 失败：{exc}")
-            return 1
-        if not commit_hash:
-            print(f"issue #{issue} 中没有找到 XiangShan commit hash。")
-            return 1
+    commit_hash: str | None = args.commit_hash or None
+    if commit_hash is None:
+        print(f"未提供 --commit_hash，正在读取 issue #{issue} 的 commit 和提出时间...")
+    else:
+        print(f"正在读取 issue #{issue} 的提出时间...")
 
-    print(f"获取的参数：issue={issue}, commit_hash={commit_hash}")
+    fetched_commit_hash: str | None = None
+    issue_created_at: str | None = None
+    attachment_urls: list[str] = []
+    issue_lookup_failed = False
+    try:
+        fetched_commit_hash, issue_created_at, attachment_urls = parse_github_issue_resources(issue)
+    except Exception as exc:
+        issue_lookup_failed = True
+        print(f"读取 issue #{issue} 页面信息失败，自动 commit 和提出时间记为 None：{exc}")
+
+    if commit_hash is None:
+        commit_hash = fetched_commit_hash
+        if commit_hash is None and not issue_lookup_failed:
+            print(f"issue #{issue} 中没有找到 XiangShan commit hash，已记录为 None。")
+
+    print(
+        f"获取的参数：issue={issue}, commit_hash={commit_hash}, "
+        f"issue_created_at={issue_created_at}"
+    )
+    replay_directory = Path(f"xs-bug-replay-{issue}")
+    replay_directory.mkdir(exist_ok=True)
+    print(f"工作目录：{replay_directory}")
+    if attachment_urls:
+        print(f"发现 {len(attachment_urls)} 个 issue 附件，开始下载到 {replay_directory}...")
+        downloaded_attachments = download_and_extract_attachments(attachment_urls, replay_directory)
+        print(f"附件处理完成，成功下载 {len(downloaded_attachments)} 个文件")
+    else:
+        print(f"issue #{issue} 页面没有找到附件")
+    os.chdir(replay_directory)
+    print("开始克隆 xs-env 仓库……")
+    subprocess.run(
+        ["git", "clone", "git@github.com:OpenXiangShan/xs-env.git"],
+        check=True,
+    )
+    print("克隆 xs-env 仓库完成")
+    xs_env_directory = Path.cwd() / "xs-env"
+    os.chdir(xs_env_directory)
+    print("已进入 xs-env 目录，开始执行 source setup.sh")
+    subprocess.run(["bash", "-lc", "source setup.sh"], check=True)
+    print("source setup.sh 执行完成")
     return 0
 
 
