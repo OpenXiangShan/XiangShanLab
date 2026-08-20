@@ -22,6 +22,10 @@ USE_SOCKS5_RPOXY = True
 PROXY = "172.38.10.247:8970"
 
 GITHUB_ISSUE_URL = "https://github.com/OpenXiangShan/XiangShan/issues/{issue_number}"
+EMU_BUILD_COMMAND = (
+    "cd .. && source env.sh && cd XiangShan && "
+    "make init && make emu EMU_TRACE=fst -j8"
+)
 _SHA_PATTERN = r"([0-9a-f]{7,40})"
 _XIANGSHAN_COMMIT_PATTERNS = (
     rf"(?:xiang\s*shan|香山)(?:\s+(?:rtl|repo(?:sitory)?))?\s+commit"
@@ -363,6 +367,19 @@ def find_latest_commit_before(
     return None
 
 
+def build_xiangshan_emu(xiangshan_directory: Path) -> Path:
+    """Build the FST-enabled emu in a fresh shell rooted at XiangShan."""
+    subprocess.run(
+        ["bash", "-lc", EMU_BUILD_COMMAND],
+        cwd=xiangshan_directory,
+        check=True,
+    )
+    emu_path = xiangshan_directory / "build" / "emu"
+    if not emu_path.exists():
+        raise RuntimeError(f"emu 编译命令结束后没有生成：{emu_path}")
+    return emu_path
+
+
 def parse_github_issue_details(issue_number: int) -> tuple[str | None, str | None]:
     """Fetch one issue page and return its XiangShan commit and creation time."""
     page_html = fetch_github_issue_page(issue_number)
@@ -475,6 +492,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if checkout_hash is not None:
         subprocess.run(["git", "checkout", checkout_hash], check=True)
         print(f"XiangShan checkout 完成：{checkout_hash}")
+        print("开始在新的 shell process 中编译 XiangShan emu...")
+        emu_path = build_xiangshan_emu(xiangshan_directory)
+        print(f"XiangShan emu 编译完成：{emu_path}")
+    else:
+        print("没有可用于 checkout 的 XiangShan commit，跳过 emu 编译")
     return 0
 
 
