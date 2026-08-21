@@ -7,6 +7,7 @@ import argparse
 import html
 import os
 import re
+import shlex
 import subprocess
 import urllib.error
 import urllib.parse
@@ -39,6 +40,10 @@ _ATTACHMENT_URL_PATTERN = re.compile(
     r"https?://github\.com/[^\s\"'<>\\)]+",
     flags=re.IGNORECASE,
 )
+_ATTACHMENT_FILE_SUFFIXES = (".bin", ".elf", ".c")
+_REPLAYABLE_FILE_SUFFIXES = {".bin", ".elf"}
+_RISCV_OBJDUMP_COMMAND = "riscv64-unknown-elf-objdump"
+_ATTACHMENT_SEARCH_EXCLUDED_ROOTS = {"xs-env"}
 
 
 class _IssuePageTextExtractor(HTMLParser):
@@ -328,6 +333,178 @@ def download_and_extract_attachments(urls: Sequence[str], directory: Path) -> li
     return downloaded
 
 
+def find_attachment_files(directory: Path) -> dict[str, list[Path]]:
+    """Find candidate .bin, .elf, and .c files in the attachment directory.
+
+    The search includes files extracted from ZIP attachments.  An existing
+    ``xs-env`` checkout is excluded because it is the replay environment, not
+    an issue attachment, and can contain a large number of unrelated source
+    and binary files.  Each returned value is an array of absolute paths.
+    """
+    directory = directory.resolve()
+    found = {suffix: [] for suffix in _ATTACHMENT_FILE_SUFFIXES}
+    if not directory.is_dir():
+        return found
+
+    for root, dirnames, filenames in os.walk(directory, topdown=True):
+        root_path = Path(root)
+        relative_root = root_path.relative_to(directory)
+        if relative_root.parts and relative_root.parts[0] in _ATTACHMENT_SEARCH_EXCLUDED_ROOTS:
+            dirnames[:] = []
+            continue
+        if not relative_root.parts:
+            dirnames[:] = [
+                name for name in dirnames if name not in _ATTACHMENT_SEARCH_EXCLUDED_ROOTS
+            ]
+        for filename in filenames:
+            candidate = root_path / filename
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            path = candidate.resolve()
+            suffix = candidate.suffix.lower()
+            if suffix in found:
+                found[suffix].append(path)
+
+    for paths in found.values():
+        paths.sort(key=lambda path: path.relative_to(directory).as_posix())
+    return found
+
+
+def report_attachment_files(directory: Path, found: dict[str, list[Path]]) -> None:
+    """Report each attachment file category independently."""
+    directory = directory.resolve()
+    print("附件候选文件搜索结果（按扩展名匹配，不代表已验证可执行）：")
+    for suffix in _ATTACHMENT_FILE_SUFFIXES:
+        paths = found.get(suffix, [])
+        if not paths:
+            print(f"是否找到 {suffix} 文件：否")
+            continue
+
+        absolute_paths = ", ".join(
+            str(path.resolve() if path.is_absolute() else (directory / path).resolve())
+            for path in paths
+        )
+        print(f"是否找到 {suffix} 文件：是（{len(paths)} 个）")
+        print(f"{suffix} 文件绝对路径：{absolute_paths}")
+
+
+def disassemble_elf_attachment(
+    image_path: Path,
+    xs_env_directory: Path,
+    replay_directory: Path,
+) -> Path | None:
+    """Disassemble one ELF attachment before its emu replay."""
+    image_path = image_path.resolve()
+    xs_env_directory = xs_env_directory.resolve()
+    replay_directory = replay_directory.resolve()
+    if image_path.suffix.lower() != ".elf":
+        return None
+
+    try:
+        relative_image_path = image_path.relative_to(replay_directory)
+    except ValueError:
+        print(f"ELF 路径不在 replay 工作目录内，跳过反汇编：{image_path}")
+        return None
+
+    disassembly_path = replay_directory / (
+        f"{relative_image_path.as_posix()}.replay.diasm"
+    )
+    shell_command = (
+        f"cd {shlex.quote(str(xs_env_directory))} && "
+        "source env.sh >/dev/null && "
+        f"{_RISCV_OBJDUMP_COMMAND} -d {shlex.quote(str(image_path))}"
+    )
+    print(f"开始生成 ELF 反汇编：{image_path}")
+    print(f"反汇编文件：{disassembly_path}")
+    try:
+        disassembly_path.parent.mkdir(parents=True, exist_ok=True)
+        with disassembly_path.open("w", encoding="utf-8") as disassembly_file:
+            result = subprocess.run(
+                ["bash", "-lc", shell_command],
+                check=False,
+                stdout=disassembly_file,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+    except OSError as exc:
+        print(f"ELF 反汇编启动失败：{image_path}: {exc}")
+        return disassembly_path
+
+    if result.returncode == 0:
+        print(f"ELF 反汇编完成：{disassembly_path}")
+    else:
+        detail = (result.stderr or "").strip()
+        if detail:
+            print(f"ELF 反汇编失败：{image_path}，返回码={result.returncode}：{detail}")
+        else:
+            print(f"ELF 反汇编失败：{image_path}，返回码={result.returncode}")
+    return disassembly_path
+
+
+def replay_attachment_files(
+    attachment_file_paths: Sequence[Path],
+    xs_env_directory: Path,
+    replay_directory: Path,
+) -> None:
+    """Run each ELF/BIN attachment in its own shell and save both streams."""
+    xs_env_directory = xs_env_directory.resolve()
+    replay_directory = replay_directory.resolve()
+    replayable_paths = [
+        Path(path).resolve()
+        for path in attachment_file_paths
+        if Path(path).suffix.lower() in _REPLAYABLE_FILE_SUFFIXES
+    ]
+    if not replayable_paths:
+        print("没有找到可回放的 .elf 或 .bin 文件，跳过 emu 仿真")
+        return
+
+    for image_path in replayable_paths:
+        try:
+            relative_image_path = image_path.relative_to(replay_directory)
+        except ValueError:
+            print(f"附件路径不在 replay 工作目录内，跳过仿真：{image_path}")
+            continue
+
+        relative_image_name = relative_image_path.as_posix()
+        if image_path.suffix.lower() == ".elf":
+            disassemble_elf_attachment(
+                image_path,
+                xs_env_directory,
+                replay_directory,
+            )
+        stdout_path = replay_directory / f"{relative_image_name}.replay.stdout"
+        stderr_path = replay_directory / f"{relative_image_name}.replay.stderr"
+
+        shell_command = (
+            f"cd {shlex.quote(str(xs_env_directory))} && "
+            "source env.sh && "
+            f"./XiangShan/build/emu --diff ./XiangShan/ready-to-run/riscv64-nemu-interpreter-so --dump-wave-full -i {shlex.quote(str(image_path))}"
+        )
+        print(f"开始回放 {image_path}")
+        print(f"stdout：{stdout_path}")
+        print(f"stderr：{stderr_path}")
+        try:
+            stdout_path.parent.mkdir(parents=True, exist_ok=True)
+            stderr_path.parent.mkdir(parents=True, exist_ok=True)
+            with stdout_path.open("w", encoding="utf-8") as stdout_file, stderr_path.open(
+                "w", encoding="utf-8"
+            ) as stderr_file:
+                result = subprocess.run(
+                    ["bash", "-lc", shell_command],
+                    check=False,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                )
+        except OSError as exc:
+            try:
+                stderr_path.write_text(f"启动回放 shell 失败：{exc}\n", encoding="utf-8")
+            except OSError:
+                pass
+            print(f"回放 shell 启动失败：{image_path}: {exc}")
+            continue
+        print(f"回放结束：{image_path}，返回码={result.returncode}")
+
+
 def find_latest_commit_before(
     repository: Path, issue_created_at: str | None
 ) -> str | None:
@@ -402,7 +579,7 @@ def prompt_for_issue() -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Parse replay parameters and report missing required inputs."""
+    """Prepare the replay environment and run discovered binary attachments."""
     args = build_parser().parse_args(argv)
 
     if not args.issue:
@@ -441,13 +618,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     replay_directory = Path(f"xs-bug-replay-{issue}")
     replay_directory.mkdir(exist_ok=True)
+    replay_directory_absolute = replay_directory.resolve()
     print(f"工作目录：{replay_directory}")
+    downloaded_attachments: list[Path] = []
     if attachment_urls:
         print(f"发现 {len(attachment_urls)} 个 issue 附件，开始下载到 {replay_directory}...")
         downloaded_attachments = download_and_extract_attachments(attachment_urls, replay_directory)
         print(f"附件处理完成，成功下载 {len(downloaded_attachments)} 个文件")
     else:
         print(f"issue #{issue} 页面没有找到附件")
+    attachment_files = find_attachment_files(replay_directory)
+    # Keep one flat array for the later replay command; every item is absolute.
+    attachment_file_paths: list[Path] = [
+        path
+        for suffix in _ATTACHMENT_FILE_SUFFIXES
+        for path in attachment_files[suffix]
+    ]
+    print(f"已保存候选文件绝对路径数组，共 {len(attachment_file_paths)} 个文件")
+    report_attachment_files(replay_directory, attachment_files)
     os.chdir(replay_directory)
     print("开始克隆 xs-env 仓库……")
     subprocess.run(
@@ -495,6 +683,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("开始在新的 shell process 中编译 XiangShan emu...")
         emu_path = build_xiangshan_emu(xiangshan_directory)
         print(f"XiangShan emu 编译完成：{emu_path}")
+        replay_attachment_files(
+            attachment_file_paths,
+            xs_env_directory,
+            replay_directory_absolute,
+        )
     else:
         print("没有可用于 checkout 的 XiangShan commit，跳过 emu 编译")
     return 0
