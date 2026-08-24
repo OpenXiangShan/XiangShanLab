@@ -1,0 +1,14 @@
+emu compiled at Aug 24 2026, 10:06:58
+Using simulated 32768B flash
+dump wave to /nfs/home/yanyusong/XiangShanLab/tools/xiangshan-bugs-analyzer/xs-bug-replay-4702/xs-env/XiangShan/build/2026-08-24@11:39:43.fst...
+Core  0's Commit SHA is: 92a95fb4d8, dirty: 0
+Using simulated 8386560MB RAM
+The image is ./nexus-am/apps/bug-replay/build/bug-replay-riscv64-xs.bin
+enable_pmp
+timer interrupt inc 2048
+unexpected premission fault pc = 0x80000304!
+Core 0: [31mHIT BAD TRAP at pc = 0x80000322
+[0m[35mCore-0 instrCnt = 3,713, cycleCnt = 18,394, IPC = 0.201859
+[0m[34mSeed=0 Guest cycle spent: 18,398 (this will be different from cycleCnt if emu loads a snapshot)
+[0m[34mHost time spent: 309,017ms
+[0m
