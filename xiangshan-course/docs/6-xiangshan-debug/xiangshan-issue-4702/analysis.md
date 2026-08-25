@@ -444,7 +444,7 @@ PR #4702 用 `s0_isCbo_noZero` 选择 read command，再在 S1/S2 将 load 权�
 
 ## Q&A
 
-以下回答中的路径和行号均对应本文分析所使用的旧版昆明湖源码。
+以下回答中的路径和行号均对应本文分析所使用的旧版昆明湖源码。以下仅保留直接解释 #4702 权限/异常 bug 的问题。
 
 ### Q1. 为什么昆明湖会让 CBO 指令走 Store Unit？
 
@@ -542,48 +542,19 @@ CBO 的唯一软件输入是目标地址。`DecodeUnit.scala:478-481` 对 CBO �
 
 STD 的实现也证明它不是 CBO 的执行单元：`MemBlock.scala:81-87` 中的 `Std` 只把 `io.in.bits.data.src(0)` 转发为输出数据；`ExeUnit.scala:443-468` 的 `MemExeUnit` 只搬运数据、ROB index 和 SQ index，没有 TLB、PMP 或地址异常接口。源码中 STD IQ 会复制 STA IQ 的 uop（`Scheduler.scala:500-517`），这是为了普通 store 的数据就绪协议，并不意味着 management CBO 需要一个数据副作用。对于唯一真正需要“写零数据”的 `CBO.ZERO`，数据值由 `StoreQueue.scala:583-610` 特判为 `0.U`，仍然由 StoreQueue 管理，而不是由 CBO 读取一个软件数据源。
 
-### Q4. `FuType.stu` 如何区分 STA 和 STD？
-
-`FuType.stu` 本身并不能独立区分两个执行单元。`FuConfig.scala:108-112` 的 `fuSel` 只是比较 `uop.fuType === this.fuType.U`，而 `StaCfg` 与 `StdCfg` 在 `FuConfig.scala:434-459` 中都使用 `FuType.stu`。真正的区分来自配置名称和 issue topology：
-
-- `ExeUnitParams.scala:269-281` 用配置名分别定义 `hasStoreAddrFu`（`name == "sta"`）和 `hasStdFu`（`name == "std"`）；
-- `IssueBlockParams.scala:177-185` 分别统计 `StaCnt` 和 `StdCnt`；
-- `Parameters.scala:469-496` 明确建立 `STA0/STA1` 与 `STD0/STD1` 两组不同的 issue block；
-- `Scheduler.scala:383-396` 用 `StaCnt` 找地址 IQ，用 `StdCnt` 找数据 IQ。
-
-因此准确的说法不是“CBO 由 `FuType.stu` 自动选择了唯一的 StoreUnit”，而是：CBO 被标记为 store family，memory scheduler 根据 STA 配置和地址源形状把它送入 Store Address 路径；STD 是与 STA 配对的数据通路。
-
-### Q5. CBO 为什么必须经过 StoreQueue，而不能在 StoreUnit 中直接执行 cache 操作？
-
-StoreUnit 处于乱序执行的地址流水中，而 CMO 副作用必须按程序顺序、在 ROB 提交边界发生。`StoreQueue.scala:811-820` 的注释直接把 CMO 放入“写回、等待 ROB head、请求、响应、写回 ROB、提交”的状态机。`StoreQueue.scala:960` 的 `deqCanDoCbo` 只在当前 `deqPtr` 对应的 SQ entry 已分配、地址有效且没有异常时成立；`StoreQueue.scala:996-1005` 还要求先完成 `flushSbuffer`，再发 `cmoOpReq`。
-
-如果 StoreUnit 在发射时直接操作 cache，年轻 CBO 可能越过更老的 store 或异常指令，造成 cache 已经改变但 ROB 最终 flush 的不可恢复副作用。把操作交给 StoreQueue，才能利用已有的 store buffer drain、ROB-head gating、CMO response 和精确提交机制。
-
-### Q6. CBO 指令什么时候分配 StoreQueue entry？
-
-StoreQueue entry 在 dispatch/enqueue 阶段分配，而不是等 StoreUnit 计算完地址才分配。`StoreQueue.scala:260-277` 定义了 `allocated`、`addrvalid`、`datavalid`、`pending`、`hasException` 等状态；`StoreQueue.scala:366-417` 根据 `io.enq.req` 设置 `allocated(i) := true.B`，保存 `uop`，并把地址/数据有效位清零、`waitStoreS2` 置位。
-
-随后 STA 地址结果通过 `storeAddrIn` 回填：`StoreQueue.scala:499-542` 保存 `paddr`、`vaddr`、mask、`uop` 和 `sqIdx`；S2 的补充结果在 `554-576` 更新 `pending/mmio/hasException`。这使 CBO 在地址翻译尚未完成时就已经拥有 SQ/ROB 身份，发生 TLB miss、redirect 或 exception 时可以精确地找到并回收同一条指令。
-
-### Q7. 为什么 CBO 的 cache 副作用必须等到 ROB head 才能发生？
-
-源码用“SQ 头指针 + ROB pending 信息”实现这个约束。`StoreQueue.scala:832-839` 只有在 `io.rob.pendingst`、当前 uop 的 ROB index 等于 `pendingPtr`、该 entry 的 `pending/datavalid/addrvalid` 都有效且没有异常时，才进入 uncache/CMO 状态机；对 CBO 而言，`StoreQueue.scala:960` 又以 `uop(deqPtr)` 为基础生成 `deqCanDoCbo`。
-
-这不是人为增加的延迟，而是精确状态的必要条件：CBO 会使 cache 状态发生可见变化，必须保证所有更老的 store 已完成、所有更老的异常已经决定，并且不会被更老的 redirect 撤销。`StoreQueue.scala:1029` 还把 `deqCanDoCbo` 写入 `flushPipe`，显式要求 CMO 期间保持流水顺序。
-
-### Q8. CBO.INVAL、CBO.CLEAN、CBO.FLUSH 在昆明湖内部有什么区别？
+### Q4. CBO.INVAL、CBO.CLEAN、CBO.FLUSH 在昆明湖内部有什么区别？
 
 三条 management CBO 在解码时分别绑定不同的 `LSUOpType`（`DecodeUnit.scala:479-481`）。操作码编码和分类在 `package.scala:582-596`：`cbo_clean = 1100b`、`cbo_flush = 1101b`、`cbo_inval = 1110b`，`isCbo` 识别这三类，而 `isCboAll` 还额外包含 `cbo_zero`。
 
 StoreQueue 在 ROB-head 阶段保存完整 uop（`StoreQueue.scala:832-838`），取出 `uncacheUop.fuOpType(1,0)` 作为 `cmoOpCode`（`StoreQueue.scala:823-828`），再由 `cmoOpReq.bits.opcode` 发送（`957-999`）。因此三条指令共用地址翻译、顺序和响应状态机，但通过 `fuOpType` 保留各自的 CMO 子操作。`cbo.inval` 还有专门的 difftest 事件条件（`StoreQueue.scala:1394-1398`）。
 
-### Q9. CBO.ZERO 为什么不能和 INVAL/CLEAN/FLUSH 使用完全相同的权限命令？
+### Q5. CBO.ZERO 为什么不能和 INVAL/CLEAN/FLUSH 使用完全相同的权限命令？
 
 源码已经把它们分成两类：`LSUOpType.isCboAll` 包含 ZERO，而 `LSUOpType.isCbo` 只包含 management CBO（`package.scala:592-596`）。StoreUnit 在 S2 同时保存 `s2_isCbo` 和 `s2_isCbo_noZero`（`StoreUnit.scala:465-466`），只有后者会进入 `lsq_replenish.mmio` 的 CMO/uncache 分支（`StoreUnit.scala:510-514`）。
 
 ZERO 还会经过 StoreQueue 的特殊路径：`StoreQueue.scala:963-979` 记录它进入 store buffer 并等待 buffer flush，`StoreQueue.scala:1043-1060` 通过 `cboZeroStout` 写回；数据写入在 `StoreQueue.scala:594-599` 对 `cbo_zero` 强制使用 `0.U`。这表明 ZERO 具备实际写入零值的 store-like 语义，不能因为 management CBO 需要 read 权限，就把所有 CBO 无条件改成同一种命令。
 
-### Q10. TLB request 的 `cmd` 是如何影响 PTE 权限检查的？
+### Q6. TLB request 的 `cmd` 是如何影响 PTE 权限检查的？
 
 `MMUBundle.scala:382-396` 定义 `TlbCmd.read = 00b`、`write = 01b`，并由 `isRead/isWrite` 解释。旧版 StoreUnit 在 `StoreUnit.scala:205-215` 无条件设置：
 
@@ -595,7 +566,7 @@ io.tlb.req.bits.memidx.is_st := true.B
 
 TLB 的 `perm_check` 在 `TLB.scala:407-421` 依据命令得到 `isLd`/`isSt`，分别检查 `perm.r` 和 `perm.w`；stage-2 也在 `TLB.scala:426-435` 依据同一命令计算 guest load/store 权限。因此 command 并不是调试字段，而是决定 PTE/G-stage 选择哪一组权限位和哪一组异常位的控制信号。旧代码把 CBO 放进 StoreUnit 后仍使用 write command，正是本 bug 的直接入口。
 
-### Q11. 为什么旧版产生的是 store exception，而不是 load exception？
+### Q7. 为什么旧版产生的是 store exception，而不是 load exception？
 
 旧版 StoreUnit 的异常向量映射完全读取 TLB 的 store 结果：`StoreUnit.scala:383-385` 分别执行
 
@@ -607,43 +578,19 @@ storeGuestPageFault  := resp.excp(0).gpf.st
 
 PMP 也把 write command 的失败放到 `st`：`PMP.scala:405-409` 中 `resp.st := (TlbCmd.isWrite(cmd) || TlbCmd.isAmo(cmd)) && !cfg.w`。S2 再把 `s2_pmp.st` OR 入 `storeAccessFault`（`StoreUnit.scala:470-477`），S3 输出时只保留 `StaCfg` 声明的异常（`StoreUnit.scala:632-635`）。所以旧波形中的 store exception 不是 CBO 本身规定了写异常，而是“StoreUnit 的 store command -> st 结果 -> StaCfg 异常向量”这条实现链的必然结果。
 
-### Q12. PTE、PMP 和 G-stage 权限检查分别在哪一层完成？
+### Q8. PTE、PMP 和 G-stage 权限检查分别在哪一层完成？
 
 PTE 和 G-stage 权限在 DTLB 内完成。`TLB.scala:407-421` 计算 stage-1 的 `pf.ld/pf.st`，`TLB.scala:426-435` 计算 stage-2 的 `gpf.ld/gpf.st`，并在 `TLB.scala:468-480` 将页故障和地址故障写入返回 bundle。StoreUnit 的 S1 在 `StoreUnit.scala:364-385` 把这些返回字段写进 STA exception vector。
 
 PMP/PMA 则由独立的 PMP checker 完成。`PMP.scala:404-413` 将同一个 `cmd` 映射成 `resp.ld`、`resp.st`、`resp.instr`；StoreUnit 在 `StoreUnit.scala:447-477` 等待物理地址产生后读取 `io.pmp`，再生成最终 access fault。两层的共同点是都依赖 command，区别是 TLB 负责页表/G-stage 权限，PMP 负责物理地址区域权限。旧版只消费 `.st` 字段，因此即使将 command 改成 read，也还需要显式把 `.ld` 结果转换到 CBO 应报告的 STA 异常类别。
 
-### Q13. CBO 的虚拟地址、物理地址和 cache-block 对齐约束分别在哪里处理？
-
-虚拟地址在 StoreUnit S0 形成：`StoreUnit.scala:134-149` 计算 `rs1 + sign-extended imm`，并将该地址送入 TLB（`StoreUnit.scala:205-208`）。普通 store 的 byte/half/word/double 对齐判断在 `StoreUnit.scala:159-164`，但 `|| s0_isCbo` 明确让 CBO 不受普通 store 宽度对齐条件限制。
-
-TLB 命中后，物理地址在 S1 保存到 `s1_paddr` 和 `s1_out.paddr`（`StoreUnit.scala:289-299、364-375`）。StoreQueue 在提交 CMO 前使用 `get_block_addr`（`StoreQueue.scala:957-960`）对物理地址取 cache block 基地址；该函数定义在 `L1Cache.scala:81-88`，实现为 `(addr >> blockOffBits) << blockOffBits`。因此“指令地址是否可翻译/可访问”和“CMO 最终操作哪个 cache block”是两个连续但不同的步骤。
-
-### Q14. CBO 在 TLB miss、replay、redirect 或 backpressure 下如何保持指令身份？
-
-StoreUnit 用流水寄存器和反馈携带同一个 uop 的身份。`StoreUnit.scala:279-299` 在 S1 锁存 `s0_out`、`s1_isCbo`、TLB 命中和物理地址；`StoreUnit.scala:307-313` 用 `robIdx.needFlush(io.redirect)` 或 TLB miss kill 当前阶段；`StoreUnit.scala:344-354` 的 `s1_feedback` 回传 `robIdx`、`sqIdx` 和 TLB miss 状态给 issue queue。
-
-StoreQueue 侧也按 SQ/ROB 身份处理取消：`StoreQueue.scala:373-417` 用 `enqCancel := robIdx.needFlush(...)` 避免被 redirect 的 entry 分配，`StoreQueue.scala:538-542` 按 `uop.sqIdx` 写回地址和 uop。由于 CMO 请求只读取 `uop(deqPtr)`，并且 `mmioState` 通过 ready/fire 保持状态，backpressure 不会把一个 CBO 的地址、opcode 和异常状态与另一条指令混在一起。
-
-### Q15. CBO 异常发生时，StoreQueue 中已经产生的状态如何回收？
-
-StoreUnit 在 S2 把异常随地址结果送回 LSQ：`StoreUnit.scala:510-522` 设置 `lsq_replenish.af`、`hasException` 和 `updateAddrValid`。StoreQueue 在 `StoreQueue.scala:554-576` 将 `hasException` 写入对应 SQ entry，并再次送进 `StoreExceptionBuffer`；该 buffer 的端口定义在 `StoreQueue.scala:73-93`，专门接收 STA 产生的异常地址和 exception vector。
-
-随后 `deqCanDoCbo` 要求 `!hasException(deqPtr)`（`StoreQueue.scala:957-961`），所以有异常的 CBO 不会发出 `cmoOpReq`。异常 entry 仍可沿 ROB 精确地触发 trap，完成后由 SQ 的正常 dequeue 逻辑清理 `allocated/completed`（`StoreQueue.scala:341-355`）。这保证了“异常可提交”与“cache 副作用不发生”同时成立。
-
-### Q16. 为什么普通 store 的权限行为不能被 CBO 修复影响？
+### Q9. 为什么普通 store 的权限行为不能被 CBO 修复影响？
 
 在旧版结构中，普通 store 和 CBO 共用 StoreUnit 的地址流水，但分类信号已经存在：`StoreUnit.scala:152` 用 `LSUOpType.isCboAll` 识别全部 CBO，`StoreUnit.scala:465-466` 又把 management CBO 和 ZERO 分开；普通 store 不满足这些条件，仍走普通 store 的对齐、DCache probe 和 store buffer 数据路径。
 
 因此 command 选择必须以 opcode 为条件：普通 store 保持 `TlbCmd.write`；`CBO.INVAL/CLEAN/FLUSH` 使用其 ISA 所需的 read 检查；`CBO.ZERO` 依据自身的写零语义单独处理。`StoreQueue.scala:594-599` 对 ZERO 的数据特判和 `StoreQueue.scala:872` 对 management CBO 的 MMIO request 排除，都是不能把三类指令合并成一个无条件规则的源码证据。
 
-### Q17. CBO 与普通 store、MMIO、uncache 操作在 StoreQueue 中如何区分？
-
-它们共享“ROB head 后再产生外部副作用”的框架，但请求分支不同。`StoreQueue.scala:811-820` 统一描述了 MMIO、uncached 和 CMO 的状态机；普通 MMIO store 通过 `mmioReq`，请求命令在 `StoreQueue.scala:872-881` 为 `MemoryOpConstants.M_XWR`，数据来自 SQ。
-
-management CBO 在 `StoreQueue.scala:872` 被显式排除出 `mmioReq`，之后由 `StoreQueue.scala:981-1000` 发出 `cmoOpReq`，opcode 来自 `fuOpType`，地址是 cache block 基地址。NC store 则走另一组 `ncReq`（`StoreQueue.scala:934-955`）。因此三者共用等待响应和 ROB 写回，但“写内存”“非 cacheable store”和“cache-block management”不会使用同一条外部请求语义。
-
-### Q18. 这个 bug 应该用哪些断言和 directed tests 固化？
+### Q10. 这个 bug 应该用哪些断言和 directed tests 固化？
 
 源码已经给出了可以直接转化为验证点的边界：
 
@@ -654,13 +601,7 @@ management CBO 在 `StoreQueue.scala:872` 被显式排除出 `mmioReq`，之后�
 
 测试矩阵至少应覆盖 management CBO 在 R-only、RW、无 R、无 W 的 PTE/PMP/G-stage 区域，另加 CBO.ZERO 和普通 store 回归；并交错注入 TLB miss、redirect、StoreQueue backpressure。只测试 RW 页无法区分旧版 write command 的错误行为。
 
-### Q19. 多个连续 CBO，或 CBO 与普通 store 交错执行时，会不会发生顺序错误？
-
-旧版 StoreQueue 的设计是串行化 CMO 状态机：只有一个 `mmioState`（`StoreQueue.scala:823-839`），只有 `deqPtr` 对应的 `deqCanDoCbo` 才能发起请求（`StoreQueue.scala:957-1000`），请求完成并 `mmioStout.fire` 后才推进后续状态（`StoreQueue.scala:1024-1041`）。CBO 发起前还必须等待 `flushSbuffer`（`StoreQueue.scala:1002-1006`），所以它不会越过尚未排空的老 store。
-
-对于 ZERO，源码还用 `cboZeroValid/cboZeroWaitFlushSb` 管理独立写回，并用 `PopCount(isCboZeroToSbVec) > 1.U` 断言禁止同时执行多个 ZERO（`StoreQueue.scala:963-979`、`974`）。这说明当前实现优先选择保守的单操作序列化，以换取 cache 副作用和 ROB 顺序的清晰性。
-
-### Q20. 这个 bug 暴露了昆明湖哪一种设计风险？
+### Q11. 这个 bug 暴露了昆明湖哪一种设计风险？
 
 风险不是“不能复用 StoreUnit”，而是**执行载体的默认控制信号被误当成了指令语义**。代码链条非常直接：
 
