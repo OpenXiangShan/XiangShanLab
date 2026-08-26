@@ -1,0 +1,19 @@
+emu compiled at Jul 30 2026, 11:20:10
+[INFO] init for constantin: loaded from init.
+PMA entry 0: [0x80003000, 0x80004000), cfg=0x5b (C=1 W=1 R=1 atomic=0)
+enable_pmp
+timer interrupt inc 2048
+CTE store/AMO AccessFault handler registered before AMO
+Before amoadd.d: address=0x80003000 value=0x1122334455667788 addend=0x10
+[AccessFault] store/AMO access fault: scause=0x7, sepc=0x800003a0, stval=0x80003000
+After amoadd.d: handler_count=1 old=0xbad0bad0bad0bad0 memory=0x1122334455667788
+AMO was skipped after entering the AccessFault handler
+Using simulated 1048576B flash
+Core  0's Commit SHA is: 222f993edf, dirty: 1
+Using simulated 8386560MB RAM
+The image is ../nexus-am/apps/amo-analysis/build/amo-analysis-riscv64-xs.bin
+Core 0: [32mHIT GOOD TRAP at pc = 0x8000041e
+[0m[35mCore-0 instrCnt = 15,016, cycleCnt = 67,091, IPC = 0.223815
+[0m[34mSeed=0 Guest cycle spent: 67,097 (this will be different from cycleCnt if emu loads a snapshot)
+[0m[34mHost time spent: 175,976ms
+[0m
