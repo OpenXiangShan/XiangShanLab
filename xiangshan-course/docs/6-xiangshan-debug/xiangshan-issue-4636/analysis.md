@@ -18,7 +18,7 @@
 | PR 源码 diff | GitHub API 报告 `changed_files=1, additions=1, deletions=1`；本地 `acf3dcce... -> 6a3636fd...` 同样只改 `LoadUnit.scala` 一行 |
 | Design Doc baseline | 未使用；本地没有 `XiangShan-Design-Doc` checkout |
 | XiangShanLab baseline | `679eb9d4476c7ecc4935b2ebb36a97f8a8a76ba7`，只作理论和既有课程导航，不作实现证据 |
-| 动态验证状态 | 未 elaboration、未运行 RTL 仿真、未采集本问题波形 |
+| 动态验证状态 | 已用 WaveKit 分析旧版基线的最新 FST，`PREFETCH.R -> NC read` 已动态闭环；target 尚未采集同激励 A/B 波形 |
 
 按用户明确要求，本次**跳过 weekly sync**，没有运行 `weekly_sync.py`、`git fetch`、`git pull` 或任何会改变提交节点的同步操作。当前源码工作树原有 `difftest` 修改和 `src/main/resources/aia/` 未跟踪目录也没有被改动。
 
@@ -26,8 +26,9 @@
 
 - **[Git/PR 事实]**：由本地提交对象、父提交关系和精确 diff 直接证明。
 - **[代码事实]**：由当前提交中的有效 Chisel 赋值、握手、状态转移或模块连接直接证明。
+- **[波形事实]**：由指定 FST 中同一 `PC/robIdx/lqIdx/paddr` 的逐周期信号、`valid && ready` 握手和最终 commit 直接证明。
 - **[静态推导]**：由多段有效连接联合推出；成立条件会随结论给出。
-- **[待仿真]**：实际总线握手、refill、精确周期和前进性尚未用生成 RTL/波形确认。
+- **[待仿真]**：target 的同激励 A/B 波形，以及未被本次定向程序覆盖的 fault、redirect 和资源竞争 corner case 尚未确认。
 - **[开放问题]**：代码表明行为会变化，但是否符合体系结构或设计意图仍需规范、测试或维护者确认。
 
 本文的 Scala 代码块均注明来源。除明确标为“PR 合入结果（target）”的一处外，代码块都摘自当前 checkout 的提交 `acf3dcce...`；代码块是对应行的逐字源码节选，省略的外围 `when`、函数或表达式闭合不代表实现缺失。
@@ -1189,7 +1190,7 @@ PR 的变化恰好发生在这个边界：base 对 PBMT.NC line 设置 `cancel`�
 
 ## 10. 控制时序图
 
-以下是按源码级阶段关系画出的**预期时序模板**，不是采集到的 FST 波形。图中补出了关键 Decoupled 的 `valid/ready/fire`、identity payload 和 normal-case `redirect/replay`；为了保持可读性，full/backpressure 与 redirect corner case 仍应使用第 13 节信号清单单独采波形。`ready`、总线等待长度和具体层级名必须以 elaborated RTL 为准；追踪时应以同一 `robIdx` 和 `paddr` 关联两遍 LoadUnit 流。
+以下第 10.1-10.3 节是按源码级阶段关系画出的**预期时序模板**，不是采集到的 FST 波形；本次旧版基线的实际逐周期证据见第 16 节。图中补出了关键 Decoupled 的 `valid/ready/fire`、identity payload 和 normal-case `redirect/replay`；为了保持可读性，full/backpressure 与 redirect corner case 仍应使用第 13 节信号清单单独采波形。`ready`、总线等待长度和具体层级名必须以 elaborated RTL 为准；追踪时应以同一 `robIdx` 和 `paddr` 关联两遍 LoadUnit 流。
 
 ### 10.1. Base：PBMT.NC 触发 NC round-trip
 
@@ -1399,3 +1400,216 @@ PR 的变化恰好发生在这个边界：base 对 PBMT.NC line 设置 `cancel`�
 PR #4636 改变的不是 LoadUnit 的接口或流水级数，而是 **S1 对 memory type 与 prefetch身份的组合分类**。这一位 `nc` 向后控制 DCache cancel、safe wakeup、prefetch training、LoadQueueUncache分配、真实Uncache请求和第二遍LoadUnit回灌，所以一行逻辑修改跨越了 cache path、queue capacity、总线副作用和uop完成时序。
 
 从资源和 hint 语义看，它消除了“software prefetch 变成真实 NC read”的反直觉路径；从内存类型正确性看，它又让 PBMT.NC software prefetch 保留为 DCache request 候选。前一个结果可由源码链完整证明，后一个结果的最终 cache/bus表现和架构合理性仍应由定向 A/B 仿真、波形与规范审查闭环。
+
+## 15. 演示程序解析
+
+### 15.1. 本次使用的固定产物
+
+本节只分析用户指定的已有程序和 `build` 目录中时间戳最新的波形，没有重新编译或重新运行 emu。分析对象固定如下：
+
+| 项目 | 路径/值 |
+| --- | --- |
+| AM 程序 | `/home/yanyusong/prefetch-env/nexus-am/apps/prefetch-replay` |
+| C 入口 | [main.c](/home/yanyusong/prefetch-env/nexus-am/apps/prefetch-replay/main.c:10) |
+| 特权级、页表和被测指令 | [replay.S](/home/yanyusong/prefetch-env/nexus-am/apps/prefetch-replay/replay.S:32) |
+| 已编译 ELF | `/home/yanyusong/prefetch-env/nexus-am/apps/prefetch-replay/build/prefetch-replay-riscv64-xs.elf` |
+| emu 镜像 | `/home/yanyusong/prefetch-env/nexus-am/apps/prefetch-replay/build/prefetch-replay-riscv64-xs.bin`，40968 bytes，SHA-256 `d420099ef646f0627181e4e889a47f1872d924213920367176b98635033f658f` |
+| 最新且唯一的 FST | `/home/yanyusong/prefetch-env/XiangShan/build/2026-08-27@15:29:17.fst`，113327364 bytes，mtime `2026-08-27 15:30:37 +0800` |
+| FST SHA-256 | `a25621e291e4fd0e145c787b167c7fc02106f9297ae38940db5b8b10e8554762` |
+| 旧版 XiangShan | `acf3dcce41edb40ff57765e343984bd8a58510eb`，即 PR #4636 合入结果的直接父提交 |
+
+ELF 反汇编把被测符号固定在物理链接地址 `0x80002018`：
+
+```text
+0000000080002018 <measured_prefetch_r>:
+    80002018: 02166013    .word 0x02166013
+```
+
+进入 S-mode 后代码页映射到 VA `0x0000`，所以流水线和 ROB 中记录的被测 PC 是 `0x18`。二者表示同一条静态指令，不是两个不同样本。
+
+### 15.2. PMP 只授权，Svpbmt PTE 才产生 NC
+
+程序先配置全地址 NAPOT PMP entry，使 S-mode 获得 R/W/X 权限；随后建立两个 Sv39 末级页表项。代码页 VA `0x0000` 使用普通 PBMT，数据页 VA `0x1000` 的 PTE `[62:61]` 被写为 `01`，即 `PBMT.NC`。关键代码位于 [replay.S](/home/yanyusong/prefetch-env/nexus-am/apps/prefetch-replay/replay.S:37) 和 [replay.S](/home/yanyusong/prefetch-env/nexus-am/apps/prefetch-replay/replay.S:62)：
+
+```asm
+  # PMP：只给 S-mode 访问权限
+  li t0, -1
+  csrw pmpaddr0, t0
+  li t0, PMP_NAPOT_RWX
+  csrw pmpcfg0, t0
+
+  # Svpbmt：把数据页标记为 PBMT.NC
+  la t0, nc_data_page
+  srli t0, t0, 2
+  ori t0, t0, PTE_DATA
+  li t2, 1
+  slli t2, t2, 61
+  or t0, t0, t2
+  sd t0, 8(t1)
+```
+
+因此这里不能表述为“PMP 把内存变成 NC”。PMP 负责权限，实际命中 PR 修改中 `Pbmt.isNC(s1_pbmt)` 分支的是 Svpbmt PTE。香山对编码的定义也明确把 `01` 解释为 NC，见 [MMUBundle.scala](/home/yanyusong/prefetch-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:398)。
+
+### 15.3. 预热访问和被测访问的隔离
+
+S-mode payload 位于 [replay.S](/home/yanyusong/prefetch-env/nexus-am/apps/prefetch-replay/replay.S:121)。它先用普通 `ld` 访问 VA `0x1040`，预热 DTLB 并得到 PA `0x80009040`；随后把该 load 返回的 `t3` 加到预取基址，形成真数据依赖，再执行原始编码 `0x02166013`：
+
+```asm
+  li a1, 0x1000
+  ld t3, 0x40(a1)       # warm VA 0x1040 -> PA 0x80009040
+  bnez t3, s_mode_fail
+
+  li a2, 0x1160
+  add a2, a2, t3        # 等待预热 NC load 真正返回
+measured_prefetch_r:
+  .word 0x02166013      # PREFETCH.R 32(a2)
+                       # target VA 0x1180 -> PA 0x80009180
+```
+
+[main.c](/home/yanyusong/prefetch-env/nexus-am/apps/prefetch-replay/main.c:10) 打印的运行时标识也从波形中的 UART 恢复为：
+
+```text
+PFNC warm_pa=80009040 target_pa=80009180 prefetch_pc=18
+```
+
+后续分析始终用 `PC=0x18`、`ROB=(flag=0,value=0x99)`、`LQ=(flag=1,value=0x40)` 和 `PA=0x80009180` 关联被测 prefetch。预热 load 的 PA 为 `0x80009040`，不会被误计为目标 NC read。
+
+## 16. 演示程序执行结果-波形图分析
+
+### 16.1. 分析方法与结论
+
+本节使用 `/home/yanyusong/wavekit/.venv/bin/python`、`PYTHONPATH=/home/yanyusong/wavekit/src` 和开源 WaveKit `FstReader` 直接读取上述 FST；在 `TOP.clock` 上升沿采样，核心层级前缀为 `TOP.SimTop.l_soc.core_with_l2.core`。下表中的 `time` 是 FST 文件原生时间单位，不换算成 `ns`；`cycle` 是按 `TOP.clock` 上升沿编号得到的周期。
+
+除 `ValidIO` 或源码中 `ready := true.B` 被优化掉的边界外，本文只把 `valid && ready` 同拍为 1 称为 `fire`。对被优化掉的 ready，会同时给出波形中的 valid 和对应源码常量，不把单独 valid 当作握手。
+
+**[波形事实] 最终结论：演示成功。** 同一被测 uop 在 S1 命中 `PBMT.NC` 且 `s1_prf=1`，下一拍 `s2_in.nc=1`；随后它没有进入 DCache MissQueue，而是沿 `LoadQueueUncache -> Uncache` 发出 `cmd=M_XRD`，并在 TileLink A 通道对 `0x80009180` 发出 `opcode=Get` 的真实握手。响应返回后，同一 ROB/LQ uop 经 `ncOut` 第二次进入 LoadUnit 并提交。
+
+### 16.2. Decode 到 Commit 的身份闭环
+
+| cycle | time | 层级/握手 | 与目标 uop 相关的波形值 |
+| ---: | ---: | --- | --- |
+| 12913 | 25826 | Decode lane 0 `in.valid && in.ready`、`out.valid && out.ready` | `instr=0x02166013` |
+| 12914 | 25828 | Rename lane 0 `in.fire`、`out.fire` | `instr=0x02166013`，`robIdx.value=0x99` |
+| 12915 | 25830 | Dispatch `io_toIssueQueues_28.fire`、MemScheduler `io_fromDispatch_uops_8.fire`、`IssueQueueLdu_2.io_enq_0.fire` | `PC=0x18`，`ROB=0x99`，`LQ=0x40` |
+| 12920/12921 | 25840/25842 | 第一次 `deqBeforeDly_0.fire` / `io_deqDelay_0.fire` 尝试 | `ROB=0x99`，`LQ=0x40`，`fuOpType=9`；未到达最终 LoadUnit 执行链 |
+| 12930/12931 | 25860/25862 | 第二次 `deqBeforeDly_0.fire` / `io_deqDelay_0.fire` 尝试 | `ROB=0x99`，`LQ=0x40`，`fuOpType=9`；未到达最终 LoadUnit 执行链 |
+| 12982 | 25964 | `IssueQueueLdu_2.deqBeforeDly_0.fire` | `ROB=0x99`，`LQ=0x40`，`fuOpType=9` |
+| 12983 | 25966 | `IssueQueueLdu_2.io_deqDelay_0.fire` | `ROB=0x99`，`LQ=0x40`，`fuOpType=9` |
+| 12984 | 25968 | DataPath `io_toMemExu_4_0.fire` | `ROB=0x99`，`LQ=0x40`，`fuOpType=9` |
+| 12985 | 25970 | `inner_LoadUnit_2.io_ldin.fire` | `PC=0x18`，`ROB=0x99`，`LQ=0x40`，`src0=0x1160`，`imm=0x20` |
+| 13042 | 26084 | ROB commit lane 0 | `PC=0x18`，`instr=0x02166013`，`ROB=0x99`，`commit_valid=1`，`commit_wen=1`，`rfWen=0` |
+
+从 issue queue 入队到最终成功进入首遍 LoadUnit 相隔 70 个周期；其间同一 `ROB/LQ/fuOpType` 在 issue queue 有三次发射尝试。本次提取的信号足以识别三次尝试，但不足以把前两次没有到达最终 LoadUnit 的原因归结为某个 source-ready、TLB miss 或执行条件，因此保留为未知，不作猜测。程序中的 `t3` 真依赖仍用于确保被测地址依赖预热 NC load 的返回。IssueQueue 后的 PC debug payload 没有保留有效值，所以 12920-12984 的关联使用 `ROB/LQ/fuOpType`，到 12985 再用恢复出的 `PC/src0/imm` 与目标地址闭环。
+
+### 16.3. 首遍 LoadUnit：prefetch 身份和 NC 位同时存在
+
+首遍执行发生在 `inner_LoadUnit_2`：
+
+| cycle | time | 波形事实 |
+| ---: | ---: | --- |
+| 12985 | 25970 | `io_ldin.valid=1 && ready=1`；同拍 TLB request `valid=1,isPrefetch=1,vaddr=0x1180`；DCache request `valid=1,ready=1,cmd=2(M_PFR),vaddr=0x1180`。 |
+| 12986 | 25972 | `s1_valid=1,s1_fire=1,s1_prf=1`；TLB response `valid=1,miss=0,pbmt=1(PBMT.NC)`。 |
+| 12987 | 25974 | `s2_valid=1,s2_fire=1,paddr=0x80009180,s2_in.nc=1,s2_in.isPrefetch=1`；`s2_actually_uncache=1`，但 `s2_uncache=0`，因为后者还有 `!s2_prf` 门控；`io.dcache.s2_kill=1`，真实异常和 redirect 均为 0。 |
+| 12988 | 25976 | S3/LSQ `io_lsq_ldin.valid=1`，payload 保持 `PC=0x18,ROB=0x99,LQ=0x40,paddr=0x80009180,nc=1,nc_with_data=0`。该接口在此处是 `Valid` 语义，不虚构不存在的 ready。 |
+
+直接组合信号 `s1_out.nc` 没有作为独立 leaf 保留在 FST 中，但这不构成证据缺口。旧版源码在 [LoadUnit.scala](/home/yanyusong/prefetch-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:997) 中把它写入下一拍的 `s2_in`：
+
+```scala
+  s1_out := s1_in
+  // ...
+  s1_out.nc := s1_nc || Pbmt.isNC(s1_pbmt)
+```
+
+周期 12986 已直接观察到同一 uop 的 `s1_prf=1`、`s1_pbmt=1` 和 TLB hit；周期 12987 又直接观察到对应寄存后 payload 的 `s2_in.nc=1`。所以波形证明旧版该拍的 `s1_out.nc` 确实为 1。PR #4636 的 target 只把这一行改为：
+
+```scala
+  s1_out.nc := (s1_nc || Pbmt.isNC(s1_pbmt)) && !s1_prf
+```
+
+在同样的 `s1_prf=1` 条件下，target 应得到 `s1_out.nc=0`；这是由精确源码 diff 推出的 A/B 预期，本次没有把它冒充成 target 波形事实。
+
+### 16.4. DCache miss 被取消，没有分配或合并 MSHR
+
+旧版 `nc=1` 在 S2 同时影响 DCache 路径。当前源码 [LoadUnit.scala](/home/yanyusong/prefetch-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1200) 和 [LoadUnit.scala](/home/yanyusong/prefetch-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:1488) 为：
+
+```scala
+  val s2_actually_uncache = /* PMA/PMP term */ || s2_in.nc || s2_in.mmio
+  val s2_uncache = !s2_prf && s2_actually_uncache
+  // ...
+  io.dcache.s2_kill := s2_pmp.ld || s2_pmp.st || s2_actually_uncache || s2_kill
+```
+
+周期 12987，DCache 对目标地址报告 `resp.valid=1,miss=1`；同拍 load-pipe miss request 为 `valid=1,ready=1,cmd=M_PFR,addr=0x80009180,cancel=1`。`cancel` 来自 [LoadPipe.scala](/home/yanyusong/prefetch-env/XiangShan/src/main/scala/xiangshan/cache/dcache/loadpipe/LoadPipe.scala:419) 的 `io.lsu.s2_kill`。所有 MissQueue entry 的目标 alloc/merge 观测均为 0，这与 [MissQueue.scala](/home/yanyusong/prefetch-env/XiangShan/src/main/scala/xiangshan/cache/dcache/mainpipe/MissQueue.scala:476) 要求 `!io.req.bits.cancel` 完全一致。
+
+因此，后面出现的总线读不是 DCache refill 伪装出来的结果：目标 DCache miss 已被语义取消，真正下游访问来自另一条 LoadQueueUncache 路径。
+
+### 16.5. LoadQueueUncache 到 TileLink Get 的真实读
+
+目标请求落入 `LoadQueueUncache` entry 2。该 entry 的状态编码为 `0=s_idle,1=s_req,2=s_resp,3=s_wait`，实际转移和握手如下：
+
+| cycle | time | 层级/状态 | 关键波形 |
+| ---: | ---: | --- | --- |
+| 12988 | 25976 | LoadQueueUncache input 2 | `valid=1,PC=0x18,ROB=0x99,LQ=0x40,paddr=0x80009180,nc=1` |
+| 12989 | 25978 | allocation pipeline | `s2_enqueue_2=1` |
+| 12991 | 25982 | entry 2 `s_req` | entry request `valid=1,ready=1`，发生 fire |
+| 12992 | 25984 | entry 2 `s_resp`；aggregate uncache request | `valid=1,ready=1,cmd=0(M_XRD),addr=0x80009180,nc=1,id=2`，发生 fire |
+| 12993 | 25986 | physical Uncache LSQ input | `valid=1,ready=1,cmd=M_XRD,addr=0x80009180,nc=1`，发生 fire |
+| 12994 | 25988 | TileLink A | `valid=1,ready=1,opcode=4(Get),address=0x80009180,size=1,source=0`，发生真实总线请求 fire |
+| 13033 | 26066 | TileLink D | `valid=1,source=0,data=0,denied=0,corrupt=0`；ready leaf 被常量优化，[Uncache.scala](/home/yanyusong/prefetch-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:450) 将 `mem_grant.ready := true.B`，所以该响应在此拍被接收 |
+| 13034 | 26068 | physical Uncache response | `valid=1,ready=1,id=0,nc=1`，发生 fire |
+| 13035 | 26070 | aggregate response/entry 2 | response valid 到达 entry；entry `io.uncache.resp.ready` 在源码中恒为 1 |
+| 13036 | 26072 | entry 2 `s_wait` | entry `ncOut.valid=1,ready=1`，发生 fire |
+| 13037 | 26074 | aggregate `ncOut_1` 到 `inner_LoadUnit_1` | 两端 `valid=1,ready=1`；payload 仍为 `PC=0x18,ROB=0x99,LQ=0x40,fuOpType=9,paddr=0x80009180,data=0`，`s0_nc_fire=1` |
+
+这条命令退化关系直接对应 [LoadQueueUncache.scala](/home/yanyusong/prefetch-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueUncache.scala:167)：
+
+```scala
+  io.uncache.req.valid     := uncacheState === s_req && !needFlush
+  io.uncache.req.bits.cmd  := MemoryOpConstants.M_XRD
+  io.uncache.req.bits.addr := req.paddr
+  io.uncache.req.bits.nc   := req.nc
+```
+
+物理 Uncache 再根据 `M_XRD` 选择 `edge.Get`，见 [Uncache.scala](/home/yanyusong/prefetch-env/XiangShan/src/main/scala/xiangshan/cache/dcache/Uncache.scala:404)：
+
+```scala
+  val q0_load = edge.Get(fromSource = q0_canSentIdx, toAddress = q0_entry.addr, lgSize = lgSize)._2
+  val q0_isStore = q0_entry.cmd === MemoryOpConstants.M_XWR
+  mem_acquire.valid := q0_canSent
+  mem_acquire.bits := Mux(q0_isStore, q0_store, q0_load)
+```
+
+波形中的 `M_XRD.fire` 和后续 TileLink `Get.fire` 都携带目标 PA `0x80009180`，这是“真实 NC read”最直接的动态证据。
+
+### 16.6. NC 响应回灌、第二遍 LoadUnit 与最终提交
+
+`ncOut` 回灌后，同一 uop 改走 `inner_LoadUnit_1`。源码 `fromNcSource` 会用 NC response 构造新的 pipeline source，并以 `nc_with_data` 区分“已有返回数据的第二遍”，避免再次分配 Uncache entry。
+
+| cycle | time | 第二遍波形事实 |
+| ---: | ---: | --- |
+| 13038 | 26076 | `s1_valid=1,s1_fire=1,PC=0x18`；回灌 source 已不再携带 software-prefetch 标记，`s1_prf=0`。 |
+| 13039 | 26078 | `s2_valid=1,s2_fire=1,paddr=0x80009180,nc=1,isPrefetch=0,s2_actually_uncache=1,s2_uncache=1`。 |
+| 13040 | 26080 | LSQ payload `nc=1,nc_with_data=1`；`io_ldout.valid=1,ready=1`，目标 `ROB=0x99,LQ=0x40,rfWen=0` 完成。 |
+| 13041 | 26082 | ROB ValidIO writeback port 21 对目标 `ROB=0x99` 有效，异常向量全为 0。 |
+| 13042 | 26084 | ROB 提交 `PC=0x18,instr=0x02166013,ROB=0x99`；`rfWen=0` 符合 prefetch 不写 GPR。 |
+| 13045 | 26090 | Difftest commit 对该指令记录 `skip=1`，与周期 13040 写回侧的 `debug_isNC=1` 一致。 |
+| 13165 | 26330 | AM good-trap：`hasTrap=1,code=0,pc=0x2c`。 |
+
+目标 uop 从首遍 LoadUnit fire 到提交共 57 周期。aggregate uncache request fire 到 physical response fire 相隔 42 周期，TileLink `Get.fire` 到 D response 被接收相隔 39 周期；关键 Decoupled 边界在事件拍都没有额外 ready backpressure。NC 等待期间，程序末尾的计数循环分支分别在周期 12992、13009、13026 产生了全局 redirect，但它们属于不同 ROB identity；目标 `ROB=(0,0x99)` 的 `needFlush` 始终为 0。目标的 writeback/commit 事件拍也没有 exception、trap 或针对自身的 redirect/flush，并在周期 13042 成功提交，所以该 NC 访问不是错误路径副作用。
+
+软件 prefetch 的 `rfWen=0` 意味着 NC 返回数据不会写入架构 GPR，但不能据此把总线访问当作“没有发生”。本次没有枚举完整 CSR/GPR difftest 数组，因此不宣称所有架构状态逐位不变；这里已经闭环的是该指令的身份、无 redirect/exception、真实读请求/响应和单次 ROB commit。
+
+### 16.7. 与 PR #4636 修改路径的最终对应
+
+本次波形把第 4-6 节原先的静态路径逐项落实为动态事实：
+
+1. `PREFETCH.R` 首遍确实发出 `M_PFR`，DTLB 确实返回 `PBMT.NC`；
+2. 同一 uop 同时保持 `isPrefetch=1` 和 `nc=1`，证明旧版没有在 S1 用 prefetch 身份清掉 NC；
+3. `s2_actually_uncache=1` 使 DCache miss `cancel=1`，MissQueue 没有 alloc/merge；
+4. LSQ 首遍以 `nc=1,nc_with_data=0` 分配 LoadQueueUncache entry；
+5. entry 确实把原来的 `M_PFR` 语义退化成 `M_XRD`，物理 Uncache 确实发出并完成 TileLink `Get`；
+6. 响应经 `ncOut` 回灌，第二遍以 `nc_with_data=1` 完成并提交，且没有 GPR 写回。
+
+**结论：由于旧版 `s1_out.nc` 没有因为该 uop 是 prefetch 而取消，波形在下一拍确实记录到同一 uop 的 `nc=1`，并沿 LoadQueueUncache 发出 `M_XRD` 和 TileLink `Get`；因此这里真正观察到了 `PREFETCH.R` 导致的 NC read。**
+
+本次只验证了 PR 合入前基线的成功演示。PR 合入后的 `&& !s1_prf` 会在同一条件下阻断这条 NC 路径，但 target 对 PBMT.NC 地址的 DCache prefetch 最终是否被接受、合并或 refill，仍需另采同程序、同配置的 target FST 才能作为动态 A/B 结论。
