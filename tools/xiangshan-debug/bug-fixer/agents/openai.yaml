@@ -1,0 +1,4 @@
+interface:
+  display_name: "香山 Bug 修复器"
+  short_description: "复现香山 Issue，结合日志与波形定位源码并验证修复方案"
+  default_prompt: "Use $xiangshan-bug-fixer to reproduce a XiangShan issue, diagnose it from logs and waveforms, propose or apply a source-level fix, and validate the result."
