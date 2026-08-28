@@ -1,0 +1,4 @@
+interface:
+  display_name: "XiangShan Difftest Tracer"
+  short_description: "Trace XiangShan difftest failures to root instructions"
+  default_prompt: "Use $difftest-tracer to analyze my XiangShan difftest log and RISC-V program artifacts."
