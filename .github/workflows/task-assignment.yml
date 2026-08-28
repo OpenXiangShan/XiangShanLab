@@ -1,0 +1,176 @@
+name: Task Assignment
+
+on:
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: task-assignment
+  cancel-in-progress: false
+
+jobs:
+  handle-command:
+    name: Handle assignment command
+    if: github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process command
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const command = context.payload.comment.body.trim().toLowerCase();
+            if (!['/assign', '/confirm'].includes(command) || issue.pull_request) {
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = issue.number;
+            const actor = context.payload.comment.user.login;
+            const markerPattern = /<!-- task-assignment:(pending|resolved) claimant=([A-Za-z0-9-]+) -->/;
+            const sameUser = (left, right) => left.toLowerCase() === right.toLowerCase();
+
+            async function reply(body) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body
+              });
+            }
+
+            if (!/^\[TASK\]\s+\S/.test(issue.title)) {
+              await reply('认领命令只适用于标题以 `[TASK]` 开头的任务 Issue。');
+              return;
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: issueNumber,
+              per_page: 100
+            });
+            const lastState = [...comments].reverse().find(comment =>
+              comment.user?.login === 'github-actions[bot]' && markerPattern.test(comment.body || '')
+            );
+            const stateMatch = lastState?.body.match(markerPattern);
+            const pendingClaimant = stateMatch?.[1] === 'pending' ? stateMatch[2] : null;
+            const assignees = issue.assignees.map(assignee => assignee.login);
+
+            if (command === '/assign') {
+              if (assignees.length) {
+                await reply(`该任务已由 ${assignees.map(login => `@${login}`).join('、')} 认领。`);
+                return;
+              }
+              if (pendingClaimant) {
+                await reply(`@${pendingClaimant} 的认领请求正在等待 Issue 发布者确认。`);
+                return;
+              }
+
+              const marker = `<!-- task-assignment:pending claimant=${actor} -->`;
+              await reply(`${marker}\n@${issue.user.login}，@${actor} 请求认领该任务。请回复 \`/confirm\` 确认；确认前每隔 2 小时会再次提醒。`);
+              return;
+            }
+
+            if (!sameUser(actor, issue.user.login)) {
+              await reply(`只有 Issue 发布者 @${issue.user.login} 可以使用 \`/confirm\` 确认认领。`);
+              return;
+            }
+            if (!pendingClaimant) {
+              await reply('当前没有等待确认的认领请求。');
+              return;
+            }
+
+            const resolvedMarker = `<!-- task-assignment:resolved claimant=${pendingClaimant} -->`;
+            if (assignees.length && !assignees.some(login => sameUser(login, pendingClaimant))) {
+              await reply(`${resolvedMarker}\n认领未完成：该任务已经分配给 ${assignees.map(login => `@${login}`).join('、')}。`);
+              return;
+            }
+
+            if (!assignees.some(login => sameUser(login, pendingClaimant))) {
+              try {
+                await github.rest.issues.addAssignees({
+                  owner,
+                  repo,
+                  issue_number: issueNumber,
+                  assignees: [pendingClaimant]
+                });
+              } catch (error) {
+                await reply(`${resolvedMarker}\n无法将 @${pendingClaimant} 设为 Assignee。请确认该成员具有仓库协作权限后重新评论 \`/assign\`。`);
+                core.setFailed(error.message);
+                return;
+              }
+            }
+
+            const refreshed = await github.rest.issues.get({ owner, repo, issue_number: issueNumber });
+            const assigned = refreshed.data.assignees.some(assignee =>
+              sameUser(assignee.login, pendingClaimant)
+            );
+            if (!assigned) {
+              await reply(`${resolvedMarker}\n无法将 @${pendingClaimant} 设为 Assignee。请确认该成员具有仓库协作权限后重新评论 \`/assign\`。`);
+              core.setFailed(`GitHub did not assign ${pendingClaimant}`);
+              return;
+            }
+
+            await reply(`${resolvedMarker}\n认领已确认：@${pendingClaimant} 现为该任务的执行人。`);
+
+  remind-publisher:
+    name: Remind task publishers
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remind pending confirmations
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const interval = 2 * 60 * 60 * 1000;
+            const markerPattern = /<!-- task-assignment:(pending|resolved) claimant=([A-Za-z0-9-]+) -->/;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            for (const issue of issues) {
+              if (issue.pull_request || !/^\[TASK\]\s+\S/.test(issue.title) || issue.assignees.length) {
+                continue;
+              }
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: issue.number,
+                per_page: 100
+              });
+              const lastState = [...comments].reverse().find(comment =>
+                comment.user?.login === 'github-actions[bot]' && markerPattern.test(comment.body || '')
+              );
+              const stateMatch = lastState?.body.match(markerPattern);
+              if (!lastState || stateMatch?.[1] !== 'pending') {
+                continue;
+              }
+
+              const elapsed = Date.now() - Date.parse(lastState.created_at);
+              if (elapsed < interval) {
+                continue;
+              }
+
+              const claimant = stateMatch[2];
+              const marker = `<!-- task-assignment:pending claimant=${claimant} -->`;
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body: `${marker}\n@${issue.user.login}，@${claimant} 的认领请求仍在等待确认。请回复 \`/confirm\`。`
+              });
+            }

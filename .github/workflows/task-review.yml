@@ -1,0 +1,176 @@
+name: Task Review
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: task-review-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  handle-review:
+    name: Handle review command
+    if: github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const currentComment = context.payload.comment;
+            const command = currentComment.body.trim();
+            if (issue.pull_request || !/^\[TASK\]\s+\S/.test(issue.title)) {
+              return;
+            }
+            if (command.toLowerCase() !== '/complete' && command.toUpperCase() !== 'LGTM') {
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = issue.number;
+            const actor = currentComment.user.login;
+            const markerPattern = /<!-- task-review:(pending|resolved) executor=([A-Za-z0-9-]+) -->/;
+            const sameUser = (left, right) => left.toLowerCase() === right.toLowerCase();
+
+            async function reply(body) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body
+              });
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: issueNumber,
+              per_page: 100
+            });
+            if (!comments.some(comment => comment.id === currentComment.id)) {
+              comments.push(currentComment);
+            }
+
+            const lastState = [...comments].reverse().find(comment =>
+              comment.user?.login === 'github-actions[bot]' && markerPattern.test(comment.body || '')
+            );
+            const stateMatch = lastState?.body.match(markerPattern);
+            const reviewPending = stateMatch?.[1] === 'pending';
+            const executor = reviewPending ? stateMatch[2] : null;
+
+            if (command.toLowerCase() === '/complete') {
+              const isAssignee = issue.assignees.some(assignee => sameUser(assignee.login, actor));
+              if (!isAssignee) {
+                await reply(`只有当前 Assignee 可以使用 \`/complete\` 发起审查。`);
+                return;
+              }
+              if (reviewPending) {
+                await reply(`@${executor} 已发起审查，请等待 3 位不同用户评论 \`LGTM\`。`);
+                return;
+              }
+              if (stateMatch?.[1] === 'resolved') {
+                await reply('该任务的审查已经通过。');
+                return;
+              }
+
+              const marker = `<!-- task-review:pending executor=${actor} -->`;
+              await reply(`${marker}\n@${actor} 已提交任务，请至少 3 位不同用户分别评论 \`LGTM\`。执行人自己的意见不计票。`);
+              return;
+            }
+
+            if (!reviewPending || currentComment.user.type === 'Bot') {
+              return;
+            }
+            if (sameUser(actor, executor)) {
+              await reply(`@${actor} 是任务执行人，自己的 \`LGTM\` 不计入审查票数。`);
+              return;
+            }
+
+            const reviewStart = comments.findIndex(comment => comment.id === lastState.id);
+            const eligibleVotes = comments.slice(reviewStart + 1).filter(comment =>
+              comment.user?.type !== 'Bot' &&
+              !sameUser(comment.user.login, executor) &&
+              comment.body.trim().toUpperCase() === 'LGTM'
+            );
+            const reviewers = new Map();
+            for (const vote of eligibleVotes) {
+              const key = vote.user.login.toLowerCase();
+              if (!reviewers.has(key)) {
+                reviewers.set(key, vote.user.login);
+              }
+            }
+
+            const actorVoteCount = eligibleVotes.filter(vote =>
+              sameUser(vote.user.login, actor)
+            ).length;
+            if (actorVoteCount > 1) {
+              await reply(`@${actor} 已经投过有效的 \`LGTM\`，每位用户只能计一票。当前进度：${reviewers.size}/3。`);
+              return;
+            }
+
+            if (reviewers.size < 3) {
+              await reply(`已记录 @${actor} 的 \`LGTM\`。当前进度：${reviewers.size}/3。`);
+              return;
+            }
+
+            await github.rest.issues.update({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              state: 'closed',
+              state_reason: 'completed'
+            });
+            const resolvedMarker = `<!-- task-review:resolved executor=${executor} -->`;
+            const reviewerList = [...reviewers.values()].map(login => `@${login}`).join('、');
+            await reply(`${resolvedMarker}\n审查通过：${reviewerList} 已提交有效 \`LGTM\`，Issue 自动关闭。`);
+
+  guard-close:
+    name: Guard premature closure
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reopen unapproved task
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            if (!/^\[TASK\]\s+\S/.test(issue.title)) {
+              return;
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              per_page: 100
+            });
+            const markerPattern = /<!-- task-review:(pending|resolved) executor=([A-Za-z0-9-]+) -->/;
+            const lastState = [...comments].reverse().find(comment =>
+              comment.user?.login === 'github-actions[bot]' && markerPattern.test(comment.body || '')
+            );
+            const state = lastState?.body.match(markerPattern)?.[1];
+            if (state === 'resolved') {
+              return;
+            }
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              state: 'open'
+            });
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: '关闭已撤销：任务必须由 Assignee 使用 `/complete` 发起审查，并取得 3 位不同用户的有效 `LGTM` 后才能关闭。'
+            });

@@ -1,0 +1,113 @@
+name: Issue Template Check
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate-task:
+    name: Validate task request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required task fields
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+            const errors = [];
+
+            if (!/^\[TASK\]\s+\S/.test(issue.title)) {
+              errors.push('标题必须以 `[TASK] ` 开头，并在其后填写任务名称。');
+            }
+
+            function section(label) {
+              const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const pattern = new RegExp(
+                `(?:^|\\n)### ${escaped}\\r?\\n([\\s\\S]*?)(?=\\r?\\n### |$)`
+              );
+              return body.match(pattern)?.[1].trim() || '';
+            }
+
+            function requiredSection(label) {
+              const value = section(label);
+              if (!value || value === '_No response_') {
+                errors.push(`“${label}”不能为空。`);
+              }
+              return value;
+            }
+
+            requiredSection('任务背景与目标');
+
+            const deliverables = requiredSection('交付清单');
+            if (deliverables && !/^\s*-\s*\[ \]\s+\S/m.test(deliverables)) {
+              errors.push('“交付清单”至少需要一个未完成的 Markdown 子项，例如 `- [ ] 交付物`。');
+            }
+
+            const difficulty = requiredSection('任务难度');
+            if (difficulty && !['低', '中', '高'].includes(difficulty)) {
+              errors.push('“任务难度”只能是低、中或高。');
+            }
+
+            const hours = requiredSection('预估工时');
+            if (hours && (!/^\d+(?:\.\d+)?$/.test(hours) || Number(hours) <= 0)) {
+              errors.push('“预估工时”必须是大于 0 的数字，单位为小时。');
+            }
+
+            const stake = requiredSection('质押积分');
+            if (stake && (!/^\d+$/.test(stake) || Number(stake) <= 0)) {
+              errors.push('“质押积分”必须是大于 0 的整数。');
+            }
+
+            const ddl = requiredSection('截止时间（DDL）');
+            const ddlMatch = ddl.match(
+              /^(\d{4})-(\d{2})-(\d{2}) ([01]\d|2[0-3]):([0-5]\d)$/
+            );
+            if (ddl && !ddlMatch) {
+              errors.push('“截止时间（DDL）”格式必须为 `YYYY-MM-DD HH:mm`，无需填写时区。');
+            } else if (ddlMatch) {
+              const [, year, month, day] = ddlMatch.map(Number);
+              const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+              if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
+                errors.push('“截止时间（DDL）”必须是有效的日期。');
+              }
+            }
+
+            const marker = '<!-- task-template-check -->';
+            const result = errors.length
+              ? `${marker}\n## Issue 模板检测未通过\n\n${errors.map(error => `- ${error}`).join('\n')}\n\n请编辑 Issue 修正以上内容，CI 会自动重新检测。`
+              : `${marker}\n## Issue 模板检测通过\n\n任务标题和必填字段均符合规范。`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              per_page: 100
+            });
+            const previous = comments.find(comment =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: previous.id,
+                body: result
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: result
+              });
+            }
+
+            if (errors.length) {
+              core.setFailed(errors.join('\n'));
+            }
