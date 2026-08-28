@@ -25,7 +25,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const reminderWindow = 12 * 60 * 60 * 1000;
-            const ddlPattern = /^(\d{4})-(\d{2})-(\d{2}) ([01]\d|2[0-3]):([0-5]\d)$/;
+            const ddlPattern = /^(\d{4})-(\d{2})-(\d{2}) ((?:[01]\d|2[0-3]):[0-5]\d|24:00)$/;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner,
               repo,
@@ -56,7 +56,8 @@ jobs:
                 continue;
               }
 
-              const [, year, month, day, hour, minute] = match.map(Number);
+              const [, year, month, day, hm] = match;
+              const [hour, minute] = hm.split(':');
               const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
               if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
                 core.warning(`Skip #${issue.number}: invalid DDL date`);
