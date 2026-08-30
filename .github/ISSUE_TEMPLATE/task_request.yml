@@ -1,0 +1,73 @@
+name: 任务发布
+description: 发布一个需要认领、质押和按期交付的任务
+title: "[TASK] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请完整填写以下内容。执行人评论 `/assign` 后，由 Issue 发布者回复 `/confirm` 确认认领；完成后由执行人评论 `/complete` 发起审查。
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 任务背景与目标
+      description: 说明为什么需要该任务、预期结果，以及它与整体目标的关系。
+      placeholder: 描述任务背景、目标和范围。
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: 交付清单
+      description: 每项交付物必须写成可勾选的子项。
+      placeholder: |
+        - [ ] 交付项 1
+        - [ ] 交付项 2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: difficulty
+    attributes:
+      label: 任务难度
+      description: 按任务复杂度和风险选择难度。
+      options:
+        - 低
+        - 中
+        - 高
+    validations:
+      required: true
+
+  - type: input
+    id: estimated_hours
+    attributes:
+      label: 预估工时
+      description: 填写大于 0 的小时数，可使用小数。
+      placeholder: "8"
+    validations:
+      required: true
+
+  - type: input
+    id: stake_points
+    attributes:
+      label: 质押积分
+      description: 填写大于 0 的整数，例如低难度 10 分、高难度 50 分。
+      placeholder: "10"
+    validations:
+      required: true
+
+  - type: input
+    id: ddl
+    attributes:
+      label: 截止时间（DDL）
+      description: 精确到分钟即可，无需填写时区；CI 将统一按北京时间（UTC+8）解释。
+      placeholder: "2026-08-30 23:59"
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 补充信息
+      description: 填写依赖、参考资料、验收环境或其他说明；没有可留空。
