@@ -15,7 +15,7 @@
   - [`README.md`](./xiangshan-course/README.md) - 中文说明
   - [`README_en.md`](./xiangshan-course/README_en.md) - English version
   - `docs/` - 课程文档
-  - `user-guide/` - 学习与提交指南
+  - `user-guide/` - 学习与提交指南 请访问[学习路径指引](./xiangshan-course/user-guide/XiangShanLab‑Learning‑Path‑Guide.md)
   - `assets/` - 图片与资源文件
 
 - `xiangshan-programming-practice/` - 香山编程实践与实验工程
