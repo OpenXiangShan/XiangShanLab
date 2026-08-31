@@ -3,9 +3,6 @@
 > 仓库地址：https://github.com/OpenXiangShan/XiangshanLab
 > 官方网站：openxiangshan.cc
 
-
-> 更好的阅读体验可访问 [本文档对应PDF](./XiangShanLab‑Learning‑Path‑Guide.pdf)
-
 ---
 
 ## 写在前面
@@ -320,6 +317,8 @@ github.com/OpenXiangShan/XiangShanLab/tree/master/tools
 
 ## 第三部分：任务领取指南
 
+> 详细可访问[本目录下XiangShan-Community-Decentralized-Governance-Strategy](./XiangShan-Community-Decentralized-Governance-Strategy.md)
+
 本课程设置了开放式的任务领取机制。无论你来自哪里、基础如何，只要你想锻炼自己，都可以来这里领取任务、大展身手！下面，就为大家详细讲解任务的领取指南
 
 一切操作都通过 Issue 完成。记住一句话：本仓库里没有"聊天群布置任务"，所有事都写在 Issue 里。五步闭环：
@@ -342,7 +341,6 @@ https://github.com/OpenXiangShan/XiangShanLab/issues
 4. **执行人创建 [DELIVERY] 交付 Issue**（模板选"任务交付"）
 5. **3 名 Reviewer 各自创建审查 Issue**（模板选"审查清单"）
 
-> *（图示：发起人创建任务）*
 
 ### XS-Lab-Status 认领任务指南
 
@@ -354,7 +352,6 @@ https://github.com/OpenXiangShan/XiangShanLab/issues
 
 点击 Comment 提交。
 
-> *（图示：任务发布者确认任务示意）*
 
 **前提条件：** 你当前可用积分 ≥ 质押额。每人初始 100 分，质押 = 复杂度 × 10（比如复杂度 3，质押 30 分）。
 
