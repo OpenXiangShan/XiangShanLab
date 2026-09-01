@@ -1,0 +1,49 @@
+
+smc_fencei_direct_probe.elf:     file format elf64-littleriscv
+
+
+Disassembly of section .text:
+
+0000000080000000 <_start>:
+    80000000:	00000417          	auipc	s0,0x0
+    80000004:	08040413          	addi	s0,s0,128 # 80000080 <target_func>
+    80000008:	00001597          	auipc	a1,0x1
+    8000000c:	ff858593          	addi	a1,a1,-8 # 80001000 <probe_array>
+    80000010:	070000ef          	jal	80000080 <target_func>
+    80000014:	00050493          	mv	s1,a0
+    80000018:	05a002b7          	lui	t0,0x5a00
+    8000001c:	5132829b          	addiw	t0,t0,1299 # 5a00513 <PROBE_SHIFT+0x5a00507>
+    80000020:	00008337          	lui	t1,0x8
+    80000024:	0673031b          	addiw	t1,t1,103 # 8067 <PROBE_SHIFT+0x805b>
+    80000028:	00542023          	sw	t0,0(s0)
+    8000002c:	00642223          	sw	t1,4(s0)
+    80000030:	00042423          	sw	zero,8(s0)
+    80000034:	00001597          	auipc	a1,0x1
+    80000038:	fcc58593          	addi	a1,a1,-52 # 80001000 <probe_array>
+    8000003c:	00300393          	li	t2,3
+    80000040:	00c39393          	slli	t2,t2,0xc
+    80000044:	007585b3          	add	a1,a1,t2
+    80000048:	0330000f          	fence	rw,rw
+    8000004c:	0000100f          	fence.i
+    80000050:	030000ef          	jal	80000080 <target_func>
+    80000054:	05a00e13          	li	t3,90
+    80000058:	01c51863          	bne	a0,t3,80000068 <fail>
+
+000000008000005c <pass>:
+    8000005c:	000061b7          	lui	gp,0x6
+    80000060:	00d1819b          	addiw	gp,gp,13 # 600d <PROBE_SHIFT+0x6001>
+    80000064:	ff9ff06f          	j	8000005c <pass>
+
+0000000080000068 <fail>:
+    80000068:	000011b7          	lui	gp,0x1
+    8000006c:	bad1819b          	addiw	gp,gp,-1107 # bad <PROBE_SHIFT+0xba1>
+    80000070:	ff9ff06f          	j	80000068 <fail>
+    80000074:	00000013          	nop
+    80000078:	00000013          	nop
+    8000007c:	00000013          	nop
+
+0000000080000080 <target_func>:
+    80000080:	0005bf03          	ld	t5,0(a1)
+    80000084:	01100513          	li	a0,17
+    80000088:	00008067          	ret
+    8000008c:	00000013          	nop
