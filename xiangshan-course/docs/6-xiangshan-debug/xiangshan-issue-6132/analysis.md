@@ -1,5 +1,13 @@
 # 香山昆明湖 V3 Issue #6132 分析：自修改代码下的 `fence.i` 与旧 `cfVec`
 
+## High-Level 总结：这个问题是什么
+
+#6132 关注的是自修改代码场景下，`fence.i` 对旧指令的清理时序。程序先覆盖一段已经进入 ICache 的代码，再执行 `fence.i`；V3 Issue 的波形显示，ICache 收到失效信号后，修改前的旧指令字仍连续两拍出现在前端到后端的 `cfVec` 接口上。
+
+从实现机制看，ICache 全量失效和流水线清除由两条路径完成：专用 `fencei/flushAll` 清除 ICache 有效状态，随后 backend redirect 清除仍在前端和后端早期流水中的推测条目。两条路径存在时间差，因此失效前已经在途的取指结果可能在 redirect 生效前短暂到达 `cfVec`。
+
+当前 PoC 最终执行的是修改后的新代码，且没有观察到旧 load 进入 LSQ、写回或退休。因此，现有证据确认的是“旧指令在内部接口上瞬时可见”，尚未确认架构功能错误或可利用的侧信道。真正需要继续验证的是：这些旧条目能否越过 redirect 的失效边界并产生不可回滚的微架构副作用。
+
 ## 1. 核心结论与证据边界
 
 Issue #6132 记录了一个容易误判的现象：自修改代码执行 `fence.i` 后，修改前的指令字仍短暂出现在前端送往后端的 `cfVec` 接口。内部接口出现旧数据不等于该指令仍然有效，更不等于它已经执行或退休；判断正确性必须继续追踪 redirect、动态指令身份和微架构副作用。
@@ -83,7 +91,7 @@ Issue 的原始声明也只覆盖 `cfVec` 的旧输出，没有声称旧指令�
 
 自修改代码先从数据侧写入新指令，再从指令侧读取同一地址。数据写入完成并不保证 ICache 已丢弃旧 tag/data，也不保证此前发出的取指或预取响应不会在稍后返回。因此实现需要同时处理：
 
-- **指令存储一致性**：恢复后的有效取指不能命中旧 ICache 元数据，失效前在途 miss 的迟到响应也不能把旧内容重新安装为有效 line。
+- **指令存储一致性**：恢复后的有效取指不能命中旧 ICache 元数据，失效前在途 miss 的迟到响应也不能把旧内容重新填入 ICache 并置为有效。
 - **推测流水失效**：程序顺序位于 `fence.i` 后、但已提前进入 IFU、IBuffer 或后端早期级的条目必须被清除；`fence.i` 前的指令和 `fence.i` 本身仍要完成。
 
 架构保证关注的是恢复后的有效执行，不要求所有内部接口在同一周期清零。反过来，架构结果正确也不自动证明没有瞬时微架构副作用。本文使用下列最小术语集区分这些层次：
@@ -124,7 +132,7 @@ Issue 对应设计的契约是：每条按序执行的 `fence.i` 都伴随 backe
 
 | 路径 | 主要作用 |
 | --- | --- |
-| Fence FU -> `io.fencei` -> MetaArray/MissUnit | 清除 ICache 有效元数据，使本地在途结果失效或禁止安装；已下发到下层的事务仍可能完成 |
+| Fence FU -> `io.fencei` -> MetaArray/MissUnit | 清除 ICache 有效元数据，使本地在途结果失效或禁止写入 Cache；已下发到下层的事务仍可能完成 |
 | ROB `flushPipe` -> FTQ redirect -> `io.flush` | 清除 MainPipe、PrefetchPipe、WayLookup、IFU/IBuffer 等推测流水状态，并从顺序后继 PC 恢复 |
 
 官方设计文档据此没有把专用 `io.fencei` 重复连接到所有前端流水级。若 redirect 契约、队列优先级和同拍握手在所有路径上成立，`cfVec` 短暂出现旧数据可以只是随后被清除的推测状态；但不可回滚的 Cache、预测器或预取器更新仍须单独验证。
@@ -272,7 +280,7 @@ missUnit.io.fencei := io.fencei
 missUnit.io.flush  := io.flush
 ```
 
-MetaArray 在 `flushAll` 时清除全部 way 的 valid bitmap。MissUnit 则禁止相关本地请求继续安装到 Meta/Data SRAM，并清理 priority FIFO。这里的“清理”不等于撤销已经下发的 TileLink 事务；按设计契约，返回 grant 不得重新成为有效 L1I 内容，但同拍及已离开 MSHR 的响应仍需结合下游验证。
+MetaArray 在 `flushAll` 时清除全部 way 的 valid bitmap。MissUnit 则禁止相关本地请求继续写入 Meta/Data SRAM，并清理 priority FIFO。这里的“清理”不等于撤销已经下发的 TileLink 事务；按设计契约，返回 grant 不得重新成为有效 L1I 内容，但同拍及已离开 MSHR 的响应仍需结合下游验证。
 
 `flushPipe` 的恢复链在直接失效之后发生：
 
@@ -640,7 +648,7 @@ assert(release -> done_seen && redirect_seen)
 
 - `fencei_hint -> boundary`、`boundary -> req`、`req -> done`、`done -> first_new_fetch` 和 `first_new_fetch -> retire` 的延迟；
 - 屏障期间 boundary 后的 `cfVec.fire` 数及对应 ROB/LSQ/EXU/DCache 事件数；
-- 所有 L1I/L1D/L2 refill 的发起者、发起周期、动态指令提交状态和安装周期；
+- 所有 L1I/L1D/L2 refill 的发起者、发起周期、动态指令提交状态和填充完成周期；
 - redirect 后仍存在的 tag、一致性、PLRU、预取痕迹及其来源；
 - 是否出现重复失效、过期响应写入或 request ID 提前复用。
 
