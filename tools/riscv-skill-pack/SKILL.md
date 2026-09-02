@@ -4,17 +4,18 @@ version: "1.0"
 updated: "2026-07-21"
 description: >
   One-stop RISC-V skill pack covering specification learning, gap analysis,
-  requirement analysis, and ecosystem governance. Points to four specialized
-  sub-skills under sub-skills/. Activate whenever a task touches RISC-V ISA
-  specs, feature gap analysis, CPU requirement management, or upstream Task
-  Group governance.
+  requirement analysis, ecosystem governance, and legacy-issue-to-requirement
+  conversion. Points to five specialized sub-skills under sub-skills/. Activate
+  whenever a task touches RISC-V ISA specs, feature gap analysis, CPU
+  requirement management, upstream Task Group governance, or turning
+  previous-generation legacy issues into next-generation requirements.
 license: Apache-2.0
 ---
 
 # RISC-V Skill Pack
 
 > **Meta-skill / entry point.** This file is a dispatcher: it tells you which
-> sub-skill to load for a given task. The actual workflows live in the four
+> sub-skill to load for a given task. The actual workflows live in the five
 > files under `sub-skills/`. Always load the relevant sub-skill before
 > executing — this file only routes.
 
@@ -22,10 +23,11 @@ license: Apache-2.0
 
 ## 概述 (Overview)
 
-RISC-V **规范学习、Gap 分析、需求分析、治理跟进** 的一站式 skill pack。
+RISC-V **规范学习、Gap 分析、需求分析、治理跟进、遗留问题转化** 的一站式 skill pack。
 
-The pack consolidates four previously separate skills into a single,
-role-aware entry point. Each sub-skill is self-contained and can be loaded
+The pack routes to five specialized sub-skills from a single, role-aware
+entry point (originally four merged skills, since extended with newly
+distilled additions). Each sub-skill is self-contained and can be loaded
 independently. This file helps you pick the right one.
 
 **Design principles**
@@ -48,6 +50,7 @@ independently. This file helps you pick the right one.
 | **gap-analysis** | `sub-skills/gap-analysis.md` | Single-feature Gap Analysis doc (9-section markdown, §1 Exec Summary → §9 Revision Log) + strict 3-slides-per-feature PPTX review deck sourced exclusively from the doc | Feature 差距 deep-dive (MMIO Outstanding, HW Profiling, Vectorization, I/D Coherent); red-line conflict resolution; F{N} gap docs; review 评审 PPT |
 | **requirement-analysis** | `sub-skills/requirement-analysis.md` | Requirement analysis workflow (spec → feature-mapping CSV with source tags & mapping types) + feature list reference (SoC features, platform requirements, Rx Arch Freeze) + requirement document query | SoC 功能规划; release gate freeze; consultant-visible vs internal release zip; V2R2→V3R3 delta queries; member-need cross-referencing |
 | **governance** | `sub-skills/governance.md` | Task Group (TG) spec maturity tracking + ratification milestone monitoring + partner requirement transmission (9-dimension framework, 7-step process) + bilingual (CN↔EN) technical glossary | "Will spec X ratify before delivery milestone Y?"; partner requirement baseline transmission; acceptance-failure root cause; architecture document translation |
+| **legacy-issues-requirements** | `sub-skills/legacy-issues-requirements.md` | Legacy-issues→requirements methodology (V(n)→V(n+1) generation transition): five-source taxonomy (product risk register / gap matrix / unclosed review items / member & internal feedback / delivery-doc gaps) + five-stage pipeline (harvest → normalize → requirementability triage (three-question pre-check) → candidate generation (source chain + acceptance criteria) → handoff to requirement-analysis CSV discipline) + not-converted register + ghost-ID guard | 把上一代风险登记册/文档体系差距/评审未闭环项系统性转化为下一代需求候选; 审计"V2 遗留问题在 V3 需求中是否均有归宿"; 编制/修订期需求输入基线建设 |
 
 > **Loading convention**: reference sub-skills by relative path from this
 > file, e.g. `sub-skills/spec-learning.md`. Do not hardcode absolute paths.
@@ -61,7 +64,7 @@ independently. This file helps you pick the right one.
 | **Software Developer** (软件开发) | `spec-learning`, `requirement-analysis` | `gap-analysis` | 查询 ISA spec / CSR 语义; 理解 SoC feature 需求; 确认 Linux/toolchain 支持状态 |
 | **Hardware Developer** (硬件开发) | `spec-learning`, `gap-analysis` | `requirement-analysis` | 规范映射 (RISC-V ↔ Arm/x86); feature gap 分析; 红线冲突识别 |
 | **Verification Engineer** (验证) | `spec-learning`, `gap-analysis` | `requirement-analysis` | 规范验证 (MUST/SHOULD/MAY); gap 文档证据复核; GitHub 仓库实现状态交叉验证 |
-| **Product Manager** (PM) | `requirement-analysis`, `governance` | `spec-learning`, `gap-analysis` | 需求矩阵管理; Rx Arch Freeze; TG 跟进; 会员/伙伴协作; release zip 打包 |
+| **Product Manager** (PM) | `requirement-analysis`, `legacy-issues-requirements`, `governance` | `spec-learning`, `gap-analysis` | 需求矩阵管理; Rx Arch Freeze; 上一代遗留问题→下一代需求候选; TG 跟进; 会员/伙伴协作; release zip 打包 |
 | **Architect** (架构师) | `spec-learning`, `gap-analysis`, `requirement-analysis` | `governance` | 竞品架构对比; Tier-1 证据映射; V2R2→V3R3 delta; 投资与竞争分析 |
 
 > **Cross-role note**: `spec-learning` is the foundational skill — every role
@@ -78,6 +81,9 @@ Load **this entry file** when a task involves any of:
 - Building, refreshing, or querying a CPU requirement matrix.
 - Tracking a Task Group's spec maturity or transmitting requirements to a partner.
 - Translating architecture documents (CN ↔ EN) with consistent terminology.
+- Converting previous-generation legacy issues (product risk register, gap
+  matrix, unclosed review items, member/internal feedback, delivery-doc
+  gaps) into next-generation requirement candidates.
 
 Then **dispatch** to the matching sub-skill using the Feature Overview table
 above. Do not execute the workflow from this file — load the sub-skill.
@@ -158,7 +164,8 @@ riscv-skill-pack/
 │   ├── spec-learning.md              ← ISA spec navigation + Tier-1 mapping
 │   ├── gap-analysis.md               ← Gap doc (Part 1) + review slides (Part 2)
 │   ├── requirement-analysis.md       ← Requirement workflow + feature list + query
-│   └── governance.md                 ← TG tracking + partner comms + glossary
+│   ├── governance.md                 ← TG tracking + partner comms + glossary
+│   └── legacy-issues-requirements.md ← Legacy issues → next-gen requirement candidates
 ├── examples/                         ← (populated in later task)
 ├── README.md                         ← public-facing readme (populated in later task)
 └── LICENSE                           ← Apache-2.0
