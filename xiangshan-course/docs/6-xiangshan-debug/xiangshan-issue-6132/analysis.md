@@ -8,29 +8,29 @@
 
 1. Issue 中的波形确实证明，ICache 注册后的 `fence.i` 信号出现后，`cfVec` 仍连续两拍携带修改前的指令字。这个微架构现象本身没有争议。
 2. 该现象不能单独证明功能错误。昆明湖 V3 的设计把 `fence.i` 的工作拆成两部分：专用 `fence.i` 通路失效 ICache 元数据并处理在途 miss；与 `fence.i` 必然伴随的后端重定向负责冲刷前端流水和 WayLookup。
-3. 本地 FST 还揭示了一个 **96 周期的 speculative window `[C4235, C4331)`**：共有 11 条动态指令越过 `cfVec`。它们没有进入年轻的 ROB/IQ/EXU/LSQ，但 Rename、前端队列和 cache 层次在窗口内都发生了真实状态变化。
+3. 本地 FST 还揭示了一个 **96 周期的推测窗口（speculative window）`[C4235, C4331)`**：共有 11 条动态指令越过 `cfVec`。它们没有进入年轻的 ROB/IQ/EXU/LSQ，但 Rename、前端队列和 cache 层次在窗口内都发生了真实状态变化。
 4. 这个窗口应被定性为安全相关暴露面，而不只是性能现象。窗口内 L1D 安装了两条新 cache line，L2 安装了六条新 line，合计 8 次 line 安装、7 个唯一地址；部分 L2 footprint 在 redirect 后仍保留并会影响后续访问。因此，“最终没有旧指令退休”不能推出“没有安全风险”。
 5. 当前波形把这些 cache 安装追溯到更老的 load/store 和窗口前已经发出的 ICache prefetch，而不是 11 条年轻错误路径指令本身。已证实的是：旧指令可见性与持久微架构状态变化重叠，形成了真实的潜在侧信道面；尚未证实的是：年轻旧指令亲自造成秘密相关 cache 副作用，或已经形成可稳定利用的侧信道。
-6. 维护侧据此不把它认定为已证明的功能 bug，而把它归为安全相关的功能增强请求。但从安全审计角度，96 周期窗口仍应被视为需要收敛的攻击面：cache 状态不会像 speculative RAT 那样随 redirect 自动回滚，缩短窗口、隔离过期请求并增加断言具有明确的纵深防御价值。
-7. 本地 `kunminghu-v2` 对照波形进一步展示了 `fence.i` 的两条不同路径：Fence FU 到 ICache `flushAll` 的直接失效路径，以及退休后通过 ROB/FTQ redirect 冲刷流水的恢复路径。该结果支持讨论中的机制解释，但因分支和测试场景不同，不能替代 #6132 的 V3 直接复现。
+6. Issue 的最终分类不是已证明的功能 bug，而是安全相关的功能增强请求。但从安全审计角度，96 周期窗口仍应被视为需要收敛的攻击面：cache 状态不会像 speculative RAT 那样随 redirect 自动回滚，缩短窗口、隔离过期请求并增加断言具有明确的纵深防御价值。
+7. 本地 `kunminghu-v2` 对照波形进一步展示了 `fence.i` 的两条不同路径：Fence FU 到 ICache `flushAll` 的直接失效路径，以及退休后通过 ROB/FTQ redirect 冲刷流水的恢复路径。该结果支持源码分析中的机制解释，但因分支和测试场景不同，不能替代 #6132 的 V3 直接复现。
 
 这篇文档最重要的方法论是：**内部总线上“看见旧指令”，不等于该指令在重定向之后仍然有效，更不等于它被执行或退休。**
 
 ## 2. 全文框架
 
-本文按下面的路径展开：
+本文按“背景 -> Issue 事实 -> 实现机制 -> 波形归因 -> 安全方案 -> 验证计划”的顺序展开。初次阅读可以先看第 1、3、4、6、7.9、8 和 11 章；需要复核证据时，再查阅第 7.3-7.8 节的完整周期表。
 
 | 章节 | 目的 | 当前状态 |
 | --- | --- | --- |
 | 背景知识 | 建立自修改代码、`fence.i`、重定向和 `cfVec` 的基本概念 | 已完成 |
-| Issue 内容复述 | 整理最小 PoC、关键周期、对照实验和报告方主张 | 已完成 |
-| 讨论内容 | 还原双方分歧以及最终分类 | 已完成 |
+| Issue 内容复述 | 整理最小 PoC、关键周期、对照实验和 issue 中提出的主张 | 已完成 |
+| 讨论结论 | 说明实现契约、证据边界和最终分类 | 已完成 |
 | Issue 分析 | 区分已证事实、设计约束、推断和未证安全影响 | 已完成 |
 | 源码执行链分析 | 从译码一直追到 ICache、IFU 和后端冲刷 | 已完成 V2 对照分析；V3 待核对 |
-| 96 周期 speculative window | 追踪错误路径指令、Rename 状态和 cache footprint 的真实来源 | 已完成 V2 深度分析；确认存在安全相关微架构暴露面，V3 待核对 |
+| 96 周期推测窗口 | 追踪错误路径指令、Rename 状态和缓存痕迹的真实来源 | 已完成 V2 深度分析；确认存在安全相关微架构暴露面，V3 待核对 |
 | 独立复现 | 固化构建、运行和监视器流程 | 已有 V2 控制链对照；#6132 PoC 待复现 |
 | 波形分析 | 以 redirect、flush、uop 生命周期和副作用为主线验证 | 已完成 V2 `fence.i` 个案；V3 旧指令生命周期待验证 |
-| 改进方案评估 | 比较注释澄清、监视器增强和硬件纵深防御 | 已完成：包含 predecode/barrier/epoch/ICache 握手的设计评审与测试计划 |
+| 安全硬化方案 | 设计 predecode、前端屏障、取指世代和 ICache 完成握手 | 已完成实现与测试计划 |
 
 ## 3. 背景知识
 
@@ -85,6 +85,21 @@ Issue 所用提交中的 ICache 顶层连接可概括为：
 官方 ICache 设计文档对此有明确说明：`fence.i` 在逻辑上需要冲刷 MainPipe、PrefetchPipe 和 WayLookup，但实现保证 `io.fencei` 必然伴随后端重定向，所以这些结构复用重定向冲刷通路，不需要再把专用 `io.fencei` 重复接入。
 
 在 MainPipe 内，s0/s1 的 flush 条件包含 `io.flush`；输出 `toIfu.valid` 来自 `s1_fire`，而 `s1_fire` 又要求 `!s1_flush`。这说明 redirect flush 到达 MainPipe 后，该级响应不会继续作为有效响应发给 IFU。不过，端到端正确性仍要结合 redirect 的实际周期、下游队列和后端 kill 条件验证，不能只看这一段局部代码。
+
+### 3.4 本文常用术语
+
+| 术语 | 本文中的含义 |
+| --- | --- |
+| predecode（预译码） | 前端在完整后端译码之前，先识别指令长度、控制流类型等少量属性 |
+| fetch block（取指块） | 前端一次预测和取指覆盖的一组连续指令槽位 |
+| speculative window（推测窗口） | 一条指令已被前端观察到，但其路径仍可能被更老事件撤销的时间区间 |
+| redirect/flush（重定向/冲刷） | 放弃旧取指世代并从新 PC 恢复取指的控制动作 |
+| epoch（世代号） | 区分重定向或屏障前后请求的标识，用来拒绝迟到的旧响应 |
+| barrier（前端屏障） | 在 `fence.i` 完成前阻止更年轻取指和指令继续前进的控制状态 |
+| MSHR | 记录尚未完成的 cache miss 的硬件表项 |
+| uop（微操作） | 后端调度和执行所使用的一条内部操作 |
+| `fire`（握手成功） | Decoupled 接口上的 `valid && ready`，表示本周期真正完成传输 |
+| cache footprint（缓存痕迹） | cache tag、有效位、一致性、替换状态或访问延迟留下的可观测变化 |
 
 ## 4. Issue 内容复述
 
@@ -142,7 +157,7 @@ slot 1: pc=0x80000084, instr=0x01100513
 slot 2: pc=0x80000088, instr=0x00008067
 ```
 
-报告方据此把“ICache 注册后的 `fence.i` 最后一拍”作为分界，定义了 `post-fence stale cfVec` 谓词，并推测专用 `fence.i` 没有覆盖 MainPipe、WayLookup 和预取响应路径，导致在途旧响应逃逸到 `cfVec`。
+Issue 报告据此把“ICache 注册后的 `fence.i` 最后一拍”作为分界，定义了 `post-fence stale cfVec` 谓词，并推测专用 `fence.i` 没有覆盖 MainPipe、WayLookup 和预取响应路径，导致在途旧响应逃逸到 `cfVec`。
 
 ### 4.4 两个补充实验
 
@@ -162,19 +177,19 @@ Issue 还提供了两个有价值的变体：
 - 没有声称已经形成 Spectre 风格侧信道。
 - 没有声称程序得到错误的架构结果。
 
-这个限定很重要。Issue 标题描述的是一个真实的接口现象，但标题中的 “stale” 不能自动解释为“架构上仍然有效”。
+这个限定很重要：标题中的 “stale” 描述的是接口上观察到的旧数据，不能自动解释为“架构上仍然有效”。
 
-## 5. 讨论内容与结论
+## 5. Issue 讨论结论
 
-讨论围绕“`cfVec` 上的旧指令是否本来就应由 redirect 清除”展开，脉络如下：
+Issue 讨论的核心问题是：“`cfVec` 上的旧指令是否应由 redirect 清除？”相关实现结论如下：
 
-1. 维护侧指出，每条 `fence.i` 都会伴随后端重定向，也就是 ICache 的 `io.flush` 来源。因此，专用 `fence.i` 只需冲刷 MetaArray 和 MissUnit，避免旧数据继续保留或被重新填入 ICache；流水中的旧条目由随后的 redirect 清除。
+1. 现有实现约定每条 `fence.i` 都会伴随后端重定向，也就是 ICache 的 `io.flush` 来源。因此，专用 `fence.i` 只需冲刷 MetaArray 和 MissUnit，避免旧数据继续保留或被重新填入 ICache；流水中的旧条目由随后的 redirect 清除。
 2. 在这个设计契约下，`cfVec` 短暂携带旧数据被视为正常的推测流水现象，后端应在它产生功能影响前将其冲掉，因此现有证据不构成功能 bug。
-3. 对安全顾虑，讨论指出 `FENCE_I` 在译码表中同时带有 `noSpec = true`、`blockBack = true` 和 `flushPipe = true`。其设计意图是阻止更年轻指令越过屏障执行。不过，讨论没有把这一点当作完整形式化证明，PoC 的无副作用结果也只覆盖了本次观测窗口和监视信号。
-4. 报告方接受将问题改为功能增强请求，并把剩余诉求收敛为两点：更清楚地记录该冲刷契约，以及把 `fence.i` 直接纳入更多前端失效路径作为纵深防御。
-5. 维护侧随后给出官方设计文档的位置。文档中的 ICache 冲刷表及脚注明确记录了 `fence.i` 依赖后端重定向冲刷流水的行为；讨论认为仍可在源码中添加注释，降低误读概率。
+3. `FENCE_I` 在译码表中同时带有 `noSpec = true`、`blockBack = true` 和 `flushPipe = true`。这些属性表达了阻止更年轻指令越过屏障并触发流水刷新的设计意图，但不是完整的形式化安全证明；PoC 的无副作用结果也只覆盖了本次观测窗口和监视信号。
+4. Issue 最终被归为功能增强请求，诉求集中在两点：更清楚地记录冲刷契约，以及把 `fence.i` 直接纳入更多前端失效路径作为纵深防御。
+5. 官方设计文档的 ICache 冲刷表及脚注明确记录了 `fence.i` 依赖后端重定向冲刷流水的行为；在源码中补充注释和断言可以降低误读概率。
 
-最终，issue 保持 open，并带有安全主题和功能增强请求标签。讨论形成的共识不是“波形没看到旧指令”，而是“看到旧指令不等于发现功能错误”。
+最终，issue 保持 open，并带有安全主题和功能增强请求标签。核心结论是：看到旧指令不等于发现功能错误，但仍需检查它们是否在被 kill 前改变了不可回滚的微架构状态。
 
 ## 6. Issue 分析
 
@@ -198,7 +213,7 @@ fence.i -> 后端 redirect -> redirectFlush
                          -> 后端丢弃错误路径条目
 ```
 
-如果这个不变量始终成立，那么把 `io.fencei` 再直接接到所有流水级只是冗余的纵深防御，而不是架构正确性的必要条件。反过来，如果能找到 `fence.i` 没有产生 redirect、redirect 漏冲某个队列，或旧条目在 kill 前产生不可撤销副作用的路径，才会推翻维护侧的判断。
+如果这个不变量始终成立，那么把 `io.fencei` 再直接接到所有流水级只是冗余的纵深防御，而不是架构正确性的必要条件。反过来，如果能找到 `fence.i` 没有产生 redirect、redirect 漏冲某个队列，或旧条目在 kill 前产生不可撤销副作用的路径，就需要重新评估现有实现。
 
 ### 6.2 “时间上在 fence 之后”不等于“逻辑上属于 fence 之后”
 
@@ -260,7 +275,7 @@ noSpec = true, blockBack = true, flushPipe = true
 
 ### 6.6 对可能改进方案的评价
 
-Issue 提议把 `fence.i` 作为完整前端失效点，直接加入 MainPipe、WayLookup、预取响应和 IFU/IBuffer 的清理条件。这个方向的价值主要是：
+一种改进方向是把 `fence.i` 作为完整前端失效点，直接加入 MainPipe、WayLookup、预取响应和 IFU/IBuffer 的清理条件。这个方向的价值主要是：
 
 - 减少专用 `fence.i` 与 redirect 之间的短暂窗口。
 - 降低实现对“每次 `fence.i` 必然产生且正确传播 redirect”这一跨模块不变量的依赖。
@@ -268,13 +283,13 @@ Issue 提议把 `fence.i` 作为完整前端失效点，直接加入 MainPipe、
 
 但它不是免费的改动。需要评估重复 flush 的同拍优先级、时序路径、在途 refill 响应以及是否可能丢失 redirect 后的新请求。若没有先证明当前路径存在可观察副作用，就应把它定位为 hardening/feature，而不是未经验证地称为功能修复。
 
-成本最低且已经得到讨论支持的改进，是在 ICache 连接处添加注释，明确写出“MainPipe/PrefetchPipe/WayLookup 的 `fence.i` 逻辑冲刷由伴随的 backend redirect 实现”，并为这个不变量增加断言或定向测试。
+成本最低的改进，是在 ICache 连接处添加注释，明确写出“MainPipe/PrefetchPipe/WayLookup 的 `fence.i` 逻辑冲刷由伴随的 backend redirect 实现”，并为这个不变量增加断言或定向测试。
 
 ## 7. 本地对照实验：`kunminghu-v2` 的 `fence.i` 波形与源码链
 
 ### 7.1 实验对象及其与 Issue #6132 的关系
 
-本节合入另一份基于本地 FST 的分析。实验程序是当前目录下的 [smc_fencei_direct_probe.S](/nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-6132/bug-replay/smc_fencei_direct_probe.S)，其旧目标函数、补丁内容和 `fence rw,rw; fence.i; jal` 序列与 issue 中的直接加载 PoC 相同。波形文件为：
+本节使用本地 FST 对照实验分析 `fence.i` 的控制链。实验程序是当前目录下的 [smc_fencei_direct_probe.S](/nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-6132/bug-replay/smc_fencei_direct_probe.S)，其旧目标函数、补丁内容和 `fence rw,rw; fence.i; jal` 序列与 issue 中的直接加载 PoC 相同。波形文件为：
 
 ```text
 /nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/
@@ -591,11 +606,13 @@ io.icacheFlush := redirectVec.map(r => r.valid).reduce(_ || _)
 
 但该实验尚未回答 #6132 最关键的 V3 问题：C16750-C16751 的旧目标函数条目带有什么 FTQ 世代，它们是否真正被后端接收，以及在哪一级被 kill。这个问题仍需要在 issue 对应提交或等价 V3 构建上追踪 `cfVec -> dispatch -> ROB/LSQ -> retire`。
 
-### 7.8 96 周期 speculative window 的完整波形事件表
+### 7.8 96 周期推测窗口的完整波形事件表
 
 下面完整保留 [deep-analysis.md](/nfs/home/yanyusong/xs-analysis-env/XiangShan/deep-analysis.md) 中的周期/事件表。主窗口定义为 **`[C4235, C4331)`**：包含第一次目标 `fence.i` 的 `cfVec.fire`，排除第二次、实际存活的 `cfVec.fire`。窗口共 96 个周期；如果严格采用开区间 `C4235 < C < C4331`，只需去掉 C4235 的两条记录，其他因果判断不变。
 
 这些表格统一遵循同一个判定口径：只有 `valid && ready` 才算 `Decoupled` 传输；周期中的残留数据字段不算事件；动态身份由 PC、指令编码、FTQ pointer/offset 和 ROB 身份联合确定。这样可以把“波形上曾出现过的条目”“真正进入后端的条目”和“最终产生副作用的请求”分开。
+
+阅读这些长表时，建议先看 7.8.1 的动态指令清单、7.8.2 的总时间线和 7.8.9 的状态汇总；需要核对具体因果关系时，再进入 7.8.3-7.8.8 查看后端、SQ/SBuffer、L1D、L1I 和 L2 的端口证据。
 
 #### 7.8.1 窗口内进入后端的完整指令清单
 
@@ -833,7 +850,7 @@ L1D[0x80000080]：C4309 新装入并由 store 覆盖，状态 Dirty
 2. **cache 状态确实发生变化。** L1D 在 C4282、C4309 安装两条 line；L2 在 C4238、C4243、C4250、C4253、C4258、C4276 安装六条 line。到 C4331 前，L1D Dirty line 和 L2 TIP/TRUNK line 仍存在，redirect 没有把它们恢复到窗口前状态。
 3. **这构成安全相关的微架构暴露面。** cache 的 tag、coherence 状态、替换状态和访问延迟可能被后续代码观测；与可回滚的 speculative RAT 不同，已经完成的 refill、write-allocate 和 L2 metadata 更新不会因为 C4318 的 redirect 自动撤销。即使没有旧指令退休，也不能据此排除状态型侧信道或跨上下文信息泄露风险。
 4. **因果归因仍需谨慎。** 当前 V2 波形的端口级扫描显示，11 条年轻指令没有进入 LSQ/EXU，也没有发出 DCache 请求；上述 line 的直接来源是更老的 ROB11 load、ROB17-19 committed stores，以及窗口前发出的 ICache prefetch。因此已确认的是“speculative window 与持久 cache 状态变化重叠，攻击面真实存在”，尚未确认的是“被 `cfVec` 观察到的年轻旧 `ld` 已亲自造成秘密相关 cache 访问”。
-5. **对 #6132 的工程含义。** 即便维护侧依据 redirect 契约认为不存在功能错误，仍有充分理由把 96 周期窗口作为 hardening 目标：在 `fence.i` 或其伴随 redirect 之前隔离旧请求，阻止过期 prefetch 的下层落地，或在安全边界上清理/标记不可观察的 cache 状态，并为这些不变量增加波形断言和定向测试。
+5. **对 #6132 的工程含义。** 即便现有 redirect 契约足以避免已观察到的功能错误，仍有充分理由把 96 周期窗口作为安全硬化目标：在 `fence.i` 或其伴随 redirect 之前隔离旧请求，阻止过期 prefetch 的下层落地，或在安全边界上清理/标记不可观察的 cache 状态，并为这些不变量增加波形断言和定向测试。
 
 风险证据可以分成三层：
 
@@ -843,78 +860,67 @@ L1D[0x80000080]：C4309 新装入并由 store 覆盖，状态 Dirty
 | **合理担忧：潜在利用链** | 过期前端活动可越过 L1I 的 MSHR flush 并落到 L2；旧代码和新数据在不同 cache 层同时存在 | 在不同压力、参数或实现版本下，若旧指令在 kill 前获得 issue 机会，秘密相关访问可能把这类状态差异转化为侧信道；需要 V3 和攻击者可控实验验证 |
 | **尚未证实：完整漏洞** | 本窗口 11 条年轻指令均未进入 LSQ/EXU/DCache；未观察到选定探针访问、写回或退休 | 不能声称已形成可稳定利用的 Spectre 风格侧信道，也不能声称年轻旧 `ld` 是这些 cache line 的直接来源 |
 
-因此，本节的安全结论不是“已证明可利用”，也不是“没有风险”，而是：**96 周期 speculative window 内存在真实且部分持久的 cache 状态变化，这足以构成需要审计和收敛的安全暴露面；利用链是否能由年轻旧指令稳定控制，仍需在 issue 对应的 `kunminghu-v3` 波形上继续验证。**
+因此，本节的安全结论不是“已证明可利用”，也不是“没有风险”，而是：**96 周期推测窗口内存在真实且部分持久的 cache 状态变化，这足以构成需要审计和收敛的安全暴露面；利用链是否能由年轻旧指令稳定控制，仍需在 issue 对应的 `kunminghu-v3` 波形上继续验证。**
 
-## 8. 对话方案的设计评审：把 `fence.i` 纳入前端 predecode
+## 8. `fence.i` 前端安全硬化方案
 
-### 8.1 结论先行：可以早识别和隔离，但不能在推测态直接刷 ICache
+本章回答一个具体工程问题：能否在前端预译码阶段识别 `fence.i`，尽早阻止更年轻指令继续前进，从而缩短第 7 章观察到的推测窗口？
 
-这段对话提出的目标有两个不同层次，必须拆开处理：
+答案是：**可以在预译码阶段早识别、早截断，但真正的 ICache 全量失效仍必须由后端按序授权。** 推荐方案遵循三条原则：
 
-1. **前端早期识别**：在 predecode 发现 `fence.i` 后，截断同一个 fetch block 中更年轻的槽位，并阻止新的年轻取指/`cfVec` 传输。
-2. **架构顺序的 ICache 失效**：确认 `fence.i` 已经按序执行、此前的 store 已经满足可见性要求后，再失效 ICache，并在失效真正完成后恢复取指。
+1. 预译码负责发现 `fence.i`，并阻止更年轻的取指和指令进入后端。
+2. Fence FU 负责等待更老的 store 排空，再发出 ICache 失效请求。
+3. ICache 负责拒绝旧世代响应，并在失效完成后返回确认；前端收到确认和后端重定向后才能恢复取指。
 
-第一个目标可行，而且是减少 issue 所示瞬时窗口的合理 hardening；第二个目标不能由一个推测性的 predecode 结果直接触发。推荐的结论是：
+### 8.1 设计目标与总体结论
 
-| 问题 | 结论 | 原因 |
+前端早期隔离和按序失效是两个不同职责：
+
+- **前端早期隔离**：预译码发现 `fence.i` 后，保留该指令，截断同一个取指块中位于它之后的槽位，并停止建立新的年轻取指世代。
+- **按序 ICache 失效**：确认 `fence.i` 已经进入正确路径，而且此前的 store 已满足可见性要求后，再失效 ICache；完成后从 `fence.i` 的下一条指令恢复取指。
+
+| 措施 | 是否采用 | 原因 |
 | --- | --- | --- |
-| 在 predecode 中加入 `isFenceI` | **可行，建议做** | 只产生标记和同包截断，不改变架构状态 |
-| predecode 看到后立即 `flushAll` ICache | **不建议，不能直接合入** | predecode 可能位于错误路径；还不能证明旧 store 已排空；会产生错误路径的持久副作用 |
-| 在 `fence.i` 被后端按序接受后失效 ICache | **可行，保留现有语义** | 当前 Fence FU 已在 SBuffer 清空后发出 `fencei` |
-| 失效期间禁止年轻指令到后端 | **可行，但需要新 barrier/epoch 协议** | 现有 `fixedRange` 只覆盖当前包，现有 IBuffer/FTQ 没有 fence 专用状态 |
-| 以 `invalidateDone` 作为恢复条件 | **建议增加** | 当前 `fencei` 是一拍脉冲，前端没有完成应答，无法严谨表达“cache 已刷完” |
+| 在预译码信息中增加 `isFenceI` | 是 | 只产生前端标记，不直接改变 cache 状态 |
+| 截断同一取指块中位于 `fence.i` 之后的槽位 | 是 | 能立即缩小送入 IBuffer 的年轻指令范围 |
+| 预译码一识别就直接执行 `flushAll` | 否 | 预译码仍处于推测路径，且此时不能保证更老 store 已排空 |
+| 用前端屏障和取指世代阻止更年轻指令 | 是 | `fixedRange` 只能约束当前取指块，无法覆盖 FTQ、IBuffer 和迟到响应 |
+| 为 ICache 增加请求/完成握手 | 建议 | 当前一拍 `fencei` 脉冲不能向前端表达完整失效何时结束 |
 
-因此，安全目标应写成：**从一个被接受的 `fence.i` 标记开始，任何比它年轻的指令都不能在 ICache 失效完成前进入 `cfVec`、后端执行或产生新的取指请求；失效完成后再从屏障后的顺序 PC 开始建立新的前端世代。** 这里的“任何指令”不包括更老的指令和 `fence.i` 自身；否则会把正常的按序排空过程误判为死锁。
+目标安全属性可以写成：
 
-### 8.2 对话方案中的关键校正
+> 从有效的 `fence.i` 屏障标记建立开始，任何比它年轻的指令都不能在 ICache 失效完成前产生 `cfVec.fire`、进入执行或发起新的取指请求；完成后必须从屏障后的顺序 PC 建立新取指世代。
 
-#### 8.2.1 `fence.i` 的 opcode/funct3 不能写错
+更老的指令和 `fence.i` 本身仍要按序排空。若把它们也一起阻塞，反而可能使 `fence.i` 永远无法到达后端，形成死锁。
 
-对话中给出的示例：
+### 8.2 为什么不能由预译码直接失效 ICache
 
-```scala
-BitPat("b000000000000_00000_000_00000_1110011")
-```
-
-把 `funct3=000` 和 SYSTEM opcode `1110011` 当成了 `fence.i`，这是错误编码。当前工程复用 Rocket 的定义 `[Instructions.scala:192-193](https://github.com/OpenXiangShan/XiangShan/blob/0fa7bb8259a7922481289d8d5932797afce84030/rocket-chip/src/main/scala/rocket/Instructions.scala#L192-L193)`：
-
-```scala
-FENCE   = BitPat("b?????????????????000?????0001111")
-FENCE_I = BitPat("b?????????????????001?????0001111")
-```
-
-也就是说，关键字段是 opcode `0001111` (`0x0f`) 和 `funct3=001`；PoC 中的规范编码 `0x0000100f` 是一个具体例子。实现应直接复用后端的 `FENCE_I`/共享解码常量，避免前后端出现两个不一致的定义。若平台把 `imm`、`rs1`、`rd` 的保留位限制为零，应把这一限制作为独立的合法性检查；不能因为一个 canonical word 就误删当前后端已经接受的合法变体。
-
-标准 RVC 没有 `c.fence.i` 指令。因此，除非项目另有自定义压缩扩展，不应把“`c.fence.i`”列为普通功能测试；压缩指令只需要作为相邻/跨半字的边界干扰项，确认不会被误识别。
-
-#### 8.2.2 “看到 fence.i 就刷”会把推测结果变成持久副作用
-
-当前 predecode 运行在预测取指世代中。一个错误路径也可能包含比特模式恰好为 `fence.i` 的字。如果这个结果直接驱动 `MetaArray.flushAll` 或清空 MSHR，就会出现以下问题：
+预译码运行在预测取指世代中，尚未获得后端的按序确认。若它直接驱动 `MetaArray.flushAll` 或清空 MSHR，会产生以下问题：
 
 - 错误路径的 `fence.i` 造成真实 cache 失效，之后即使被更老的 branch redirect kill，失效也不能回滚；
 - 在前序 store 尚未排空时就失效 ICache，后续 refill 可能重新看到旧内存内容，破坏 `fence.i` 的顺序语义；
-- 多个错误路径副本可能重复触发失效，和现有 backend redirect 形成优先级/活锁问题；
-- 前端等待“刷完”时，如果 backend 正在等待该 `fence.i` 进入或提交，可能形成环形等待。
+- 同一静态指令的多个动态副本可能重复触发失效，并与现有后端重定向产生优先级或活锁问题；
+- 如果前端在等待“失效完成”的同时阻止 `fence.i` 自身进入后端，就会形成环形等待。
 
-因此，predecode 信号只能是 **advisory hint**。它可以无副作用地截断当前包、建立一个可取消的屏障候选；真正的 ICache 请求必须由后端按序路径授权。
+因此，预译码只能产生无副作用的 `fencei_hint`：它可以截断当前取指块、建立可取消的前端屏障候选，但不能直接发出真正的 ICache 失效请求。实际请求必须由后端按序路径授权。
 
-#### 8.2.3 只改 `fixedRange` 还不够
+### 8.3 为什么只修改 `fixedRange` 还不够
 
-当前 [PreDecode.scala:361-375](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/PreDecode.scala:361) 的 `remaskFault/fixedRange` 只根据 `jal/jalr/ret` 预测错误计算掩码；[IFU.scala:953-960](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/IFU.scala:953) 再用这个掩码生成 IBuffer 入队。把 `fenceiFault` 加进去，最多能保证同一个 fetch 包中 marker 之后的槽位不入队，不能自动清除：
+当前 [PreDecode.scala:361-375](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/PreDecode.scala:361) 的 `remaskFault/fixedRange` 只根据 `jal/jalr/ret` 预测错误计算掩码；[IFU.scala:953-960](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/IFU.scala:953) 再用这个掩码生成 IBuffer 入队。即使把 `fence.i` 纳入该掩码，也只能保证同一个取指块中屏障标记之后的槽位不入队，不能自动清除：
 
 - 已经位于 IBuffer 的更年轻条目；
-- FTQ 中已经分配的后续 entry；
-- IFU 各级寄存器和 last-half 状态；
+- FTQ 中已经分配的后续表项；
+- IFU 各级寄存器和跨取指块半条指令状态；
 - 在 `fence.i` 之前发出、但在之后才返回的 ICache/MSHR 响应；
-- 已经向 L2 发出的 prefetch/Acquire。
+- 已经向 L2 发出的预取或 Acquire 请求。
 
-要达成安全属性，必须增加屏障状态和取指世代（epoch）/响应丢弃规则，而不是把一个普通 CFI fault 改名为 `fenceiFault` 就结束。
+要达成安全属性，必须增加前端屏障状态和取指世代号，并为迟到响应定义丢弃规则。`fixedRange` 只是包内截断机制，不是完整的前端隔离协议。
 
-### 8.3 修改前：当前源码中的真实处理链
+### 8.4 当前实现：前端、后端和 ICache 的处理链
 
-下表是基于当前本地源码快照的实际路径；V3 合入前仍需用 issue 对应 commit 做一次接口 diff。
+下表基于第 7 章使用的 `kunminghu-v2` 源码快照，目的是说明现有控制链。实施 V3 修改前，仍需在 issue 对应提交上逐项核对接口名称和时序。
 
-| 位置 | 修改前行为 | 关键证据 |
+| 位置 | 当前行为 | 关键证据 |
 | --- | --- | --- |
 | 前端 PreDecode | `PreDecodeInfo` 只有 `valid/isRVC/brType/isCall/isRet`，`brTable` 只识别跳转/分支；`fence.i` 被当作非 CFI 普通字 | [PreDecode.scala:72-82](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/PreDecode.scala:72)、[predecode.scala:22-43](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/backend/decode/isa/predecode/predecode.scala:22) |
 | F3 重算 | F3Predecoder 只复制 branch/call/ret 字段；若新增字段，必须同步复制，否则 `f3PdDiff` 会报错或信息丢失 | [PreDecode.scala:264-278](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/PreDecode.scala:264)、[IFU.scala:625-637](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/IFU.scala:625) |
@@ -929,147 +935,147 @@ FENCE_I = BitPat("b?????????????????001?????0001111")
 
 现有链路的要点是：**后端 `blockBack` 和 redirect 负责指令世代的淘汰，专用 `fencei` 负责 ICache 元数据/MSHR 失效；两者是互补路径而不是同一个脉冲。** 当前接口没有 `invalidateDone`，所以“直到 cache 刷完”并不是前端可观察的协议状态。
 
-### 8.4 修改后建议路径：两阶段屏障和显式完成握手
+### 8.5 推荐方案：两阶段屏障和显式完成握手
 
-推荐把修改后的路径定义为下面的状态机，而不是把 predecode 直接接到 `flushAll`：
+推荐把硬化后的路径定义为下面的状态机，而不是把预译码结果直接接到 `flushAll`：
 
 ```text
-前端 predecode
+前端预译码
   └─ fencei_hint（无副作用）
-       ├─ 当前 fetch block：保留 fence.i，清除其后槽位
-       └─ 建立可取消的 frontend barrier/epoch
-            ├─ 停止新的年轻取指、prefetch 和 cfVec 输出
-            ├─ 清理/标记 IBuffer、FTQ、IFU 中 marker 之后的条目
+       ├─ 当前取指块：保留 fence.i，清除其后槽位
+       └─ 建立可取消的前端屏障和取指世代
+            ├─ 停止新的年轻取指、预取和 cfVec 输出
+            ├─ 清理或标记 IBuffer、FTQ、IFU 中屏障之后的条目
             └─ 等待后端按序 fence.i
 
-后端 Decode/Fence FU（保留现有语义）
-  └─ blockBackward + 等待 SBuffer empty
-       └─ fencei_req（握手，而非无条件脉冲）
-            └─ ICache invalidate
-                 ├─ 清 valid、取消/封存相关 MSHR
-                 ├─ 丢弃旧 epoch 的响应和新写 SRAM
+后端译码/Fence FU（保留现有语义）
+  └─ blockBackward + 等待 SBuffer 清空
+       └─ fencei_req（带握手的失效请求）
+            └─ ICache 执行失效
+                 ├─ 清有效位、取消或封存相关 MSHR
+                 ├─ 丢弃旧世代响应，禁止其写入 L1I SRAM
                  └─ fencei_done
-                      └─ 后端完成/redirect + 前端释放 barrier
-                           └─ 从 fence.i 后顺序 PC 建立新 epoch
+                      └─ 后端完成/重定向 + 前端释放屏障
+                           └─ 从 fence.i 后顺序 PC 建立新世代
 ```
 
 修改前后关键差异如下：
 
 | 阶段 | 修改前 | 推荐修改后 | 安全意义 |
 | --- | --- | --- | --- |
-| 前端识别 | 不识别，继续按普通非 CFI 取指 | 标记 `isFenceI`，同包只保留到 marker | 缩短 `cfVec` 窗口，不产生 cache 副作用 |
-| 当前包之后 | 可能继续进入 IBuffer/后端早期级 | barrier/epoch 阻止 marker 后的年轻条目 | 防止 kill 前进入可观测接口 |
-| FTQ/IBuffer | 只有普通 redirect 才全局 flush | 对 marker 后 entry 做选择性 kill 或世代过滤 | 覆盖 predecode 到 backend redirect 的空档 |
+| 前端识别 | 不识别，继续按普通非 CFI 取指 | 标记 `isFenceI`，同一取指块只保留到屏障标记 | 缩短 `cfVec` 窗口，不产生 cache 副作用 |
+| 当前取指块之后 | 可能继续进入 IBuffer/后端早期级 | 前端屏障和世代号阻止更年轻条目 | 防止其在被丢弃前进入可观测接口 |
+| FTQ/IBuffer | 只有普通重定向才全局冲刷 | 对屏障后的表项做选择性清理或世代过滤 | 覆盖预译码到后端重定向之间的空档 |
 | 后端译码 | `FuType.fence + fencei`, `noSpec/blockBack/flushPipe` | 保持不变，作为架构授权点 | 保证顺序执行和前序 store 排空 |
-| Fence 信号 | `fencei: Bool` 一拍脉冲 | `fencei_req`/`fencei_done` 握手，或等价 pending/ack | 可表达真实完成，避免重复/丢失请求 |
-| ICache | MetaArray/MissUnit 失效；完成时间不可回传 | 失效期间阻塞请求，杀旧 epoch 响应，明确 done | 防止 stale response 再进入 IFU/L1I |
-| 恢复取指 | 依赖 backend redirect 的时序 | `done` 后配合唯一 redirect 从顺序 PC 重启 | 避免重复 redirect、错误路径重放 |
+| Fence 信号 | `fencei: Bool` 一拍脉冲 | `fencei_req`/`fencei_done` 握手，或等价的等待/应答状态 | 可表达真实完成，避免重复或丢失请求 |
+| ICache | MetaArray/MissUnit 失效；完成时间不可回传 | 失效期间阻塞请求，丢弃旧世代响应，并明确完成时刻 | 防止过期响应再次进入 IFU/L1I |
+| 恢复取指 | 依赖后端重定向的时序 | 完成后配合唯一重定向从顺序 PC 重启 | 避免重复重定向和错误路径重放 |
 
-### 8.5 Implementation Plan
+### 8.6 实现计划
 
-#### Phase 0：先固定不变量、接口和失败语义
+#### 阶段 0：先固定安全不变量和接口语义
 
 在改 RTL 前写下并评审以下不变量，并给每个不变量分配波形信号：
 
-- `fence.i` marker 本身可以到达后端，但比它年轻的 uop 不能在 invalidate 完成前产生 `cfVec.fire`、dispatch fire、ROB/IQ/LSQ 分配、EXU issue 或 DCache/ICache 新请求。
-- 只有后端按序的 `fence.i` 才能发出实际 `fencei_req`；错误路径 marker 只能取消自己的 barrier 候选。
-- ICache 在收到请求后，不再接受新的旧世代 fetch/prefetch；所有旧世代 response 必须被丢弃，不能写 MetaArray/DataArray，也不能作为有效指令送给 IFU。
-- `fencei_req` 至多对应一次 `fencei_done`；任何 reset、老 redirect 或异常都能解除一个尚未授权的 speculative barrier，不得活锁。
-- 释放条件是 `fencei_done` 与正确的 backend redirect/顺序 PC 都已建立，而不是只看一个组合 `flushAll` 信号。
+- `fence.i` 屏障标记本身可以到达后端，但比它年轻的 uop 不能在失效完成前产生 `cfVec.fire`、dispatch fire、ROB/IQ/LSQ 分配、EXU issue 或 DCache/ICache 新请求。
+- 只有后端按序的 `fence.i` 才能发出实际 `fencei_req`；错误路径上的屏障候选只能被取消，不能驱动 ICache 失效。
+- ICache 收到请求后，不再接受旧世代的新取指或预取；旧世代响应不能写 MetaArray/DataArray，也不能作为有效指令送给 IFU。
+- 一个 `fencei_req` 只能对应一个 `fencei_done`；复位、更老的重定向或异常都能解除尚未获得后端授权的屏障候选，不得活锁。
+- 释放条件是 `fencei_done` 和正确的后端重定向/顺序 PC 都已建立，而不是只看到一次组合 `flushAll` 信号。
 
 建议显式建模 `NONE -> SEEN -> WAIT_COMMIT -> INVALIDATING -> RELEASE` 五个状态，并定义老 redirect 对 `SEEN/WAIT_COMMIT` 的取消优先级。
 
-#### Phase 1：共享的 `fence.i` predecode 元数据
+#### 阶段 1：增加共享的 `fence.i` 预译码元数据
 
 修改范围：
 
-1. 在 [PreDecode.scala:72-82](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/PreDecode.scala:72) 的 `PreDecodeInfo` 增加 `isFenceI`（或更明确的 `isFenceIHint`），并更新所有 `DontCare`/默认赋值。
-2. 在主 PreDecode 和 [F3Predecoder:267-278](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/PreDecode.scala:267) 使用与后端一致的 `FENCE_I` pattern；不要复制一套容易漂移的魔数。
+1. 在 [PreDecode.scala:72-82](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/PreDecode.scala:72) 的 `PreDecodeInfo` 增加 `isFenceI`（或更明确的 `isFenceIHint`），并更新所有 `DontCare` 和默认赋值。
+2. 主 PreDecode 和 [F3Predecoder:267-278](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/PreDecode.scala:267) 应复用与后端一致的 `FENCE_I` 解码定义，避免前后端规则随版本演进而不一致。
 3. 检查 `PreDecodeInfo` 宽度变化对 [IFU.scala:636](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/IFU.scala:636) 的 `f3PdDiff`、触发器接口、调试打印和任何 `asUInt` 比较的影响。
-4. 如果 marker 要跨 FTQ predecode writeback 保存，扩展 [NewFtq.scala:95-129](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/NewFtq.scala:95) 的 `Ftq_pd_Entry`；否则应明确保证 barrier 使用原始 F3/IFU 信息，不依赖会丢字段的 `toPd` 重建。
+4. 如果屏障标记需要跨 FTQ 预译码写回保存，扩展 [NewFtq.scala:95-129](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/NewFtq.scala:95) 的 `Ftq_pd_Entry`；否则应明确保证前端屏障使用原始 F3/IFU 信息，不依赖会丢字段的 `toPd` 重建。
 5. 为 MMIO/跨页/last-half 路径定义一致结果。标准 `fence.i` 通常是 cacheable instruction，不应因为只测主 ICache 路径而遗漏异常路径。
 
-交付物：一个只做解码、不改变时序/缓存状态的 `isFenceI` patch，以及单元测试中对 `FENCE`、SYSTEM、非法编码和 canonical `0x0000100f` 的正负样本。
+交付物：一个只增加解码元数据、不改变 cache 状态的 `isFenceI` 补丁，以及覆盖 `FENCE_I`、其他屏障/系统指令和非法指令的正反例单元测试。
 
-#### Phase 2：同一 fetch block 的安全截断
+#### 阶段 2：截断同一取指块中的年轻槽位
 
 修改 [PredChecker.scala 的现有逻辑（实际位于 PreDecode.scala:361-375）](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/frontend/PreDecode.scala:361)：
 
-- 计算 `fenceiIdx`，只选当前 `instrRange/instrValid` 中最早的有效 `isFenceI`；
-- 将 `fixedRange` 截断为“包含 marker 槽位、清除所有更高槽位”；
+- 计算 `fenceiIdx`，只选择当前 `instrRange/instrValid` 中最早的有效 `isFenceI`；
+- 将 `fixedRange` 截断为“包含屏障槽位、清除所有更年轻槽位”；
 - 不把它伪装成 jal/jalr，不生成普通 `wb_redirect`，也不更新 BTB/RAS；
-- 检查 marker 位于 packet 首/尾、RVC 邻接、last-half 和 cache-line 边界的所有组合；
-- 明确同拍已有的 CFI fault、异常和老 redirect 的优先级：老 redirect 应取消该包，而不是让错误路径 marker 锁住前端。
+- 检查屏障位于取指块首/尾、16/32 位指令邻接、跨块半条指令和 cache-line 边界的所有组合；
+- 明确同拍 CFI fault、异常和更老重定向的优先级：更老重定向应取消该取指块，不能让错误路径屏障锁住前端。
 
 这一步只保证 `io.toIbuffer.bits.enqEnable` 的包内行为，不能单独声称已经完成全前端隔离。
 
-#### Phase 3：Frontend barrier、选择性清理和 epoch
+#### 阶段 3：增加前端屏障、选择性清理和取指世代
 
 在 IFU/Frontend/IBuffer/FTQ 之间增加一个专用控制协议：
 
-1. 在 F3/predecode 看到有效 marker 时先置位一个 **可取消的 `fencei_seen`**，立即阻止下一个取指世代；marker 所在 packet 必须保持稳定直到 `io.toIbuffer.fire`，再把 `ftqPtr + ftqOffset + PC + epoch` 提交为 `fencei_pending`。若老 redirect/异常先到，取消 `fencei_seen`，不能留下死锁状态。
-2. marker packet 被接受后，`fence.i` 自身和它之前的更老指令保留，marker 后槽位不得 bypass 到 `cfVec`；如果 IBuffer 已经含有更年轻条目，必须按 epoch/序号选择性过滤，而不是假设 FIFO 中不存在它们。
-3. 停止从 FTQ 接受新的年轻 fetch 请求和 prefetch 请求；已经在 IFU 管线中的响应以 epoch 检查后丢弃。
-4. 对 IBuffer 中 marker 后的条目使用选择性清理或 epoch 过滤。不能无条件复用现有 `ibuffer.io.flush`，因为它会把 `fence.i` 自身和可能仍需完成的更老指令一起清掉；若硬件上只能全清，应设计“保存 marker、清空其余、再按序重放”的明确机制。
-5. FTQ 的后续 entry 要么在分配时带 epoch、在 barrier 时失效，要么由一个 fence barrier pointer 限制；不能只依赖 `io.icacheFlush` 的普通 redirect。
-6. `cfVec` 输出端不能简单地把所有 lane 置零：应只屏蔽 marker 后的年轻 epoch，允许更老指令和 marker 本身按序排空，并保持 Decoupled 握手稳定性；测试中必须证明 backpressure 不会让 marker 自身丢失。
+1. F3 预译码看到有效屏障时，先置位一个 **可取消的 `fencei_seen`**，立即阻止下一个取指世代。屏障所在取指包必须保持稳定直到 `io.toIbuffer.fire`，再把 `ftqPtr + ftqOffset + PC + epoch` 提交为 `fencei_pending`。若更老的重定向或异常先到，应取消 `fencei_seen`，不能留下死锁状态。
+2. 屏障取指包被接受后，保留 `fence.i` 自身和它之前的更老指令；屏障后的槽位不得旁路到 `cfVec`。如果 IBuffer 已经含有更年轻条目，必须按世代号或序号选择性过滤。
+3. 停止从 FTQ 接受新的年轻取指和预取请求；已经位于 IFU 管线中的响应通过世代检查丢弃。
+4. 对 IBuffer 中屏障后的条目使用选择性清理或世代过滤。不能无条件复用现有 `ibuffer.io.flush`，因为它会把 `fence.i` 自身和可能仍需完成的更老指令一起清掉。若硬件只能全清，应明确设计“保存屏障、清空其余、再按序重放”的机制。
+5. FTQ 后续表项要么在分配时携带世代号、在屏障时失效，要么由一个 fence 屏障指针限制；不能只依赖 `io.icacheFlush` 的普通重定向。
+6. `cfVec` 输出端不能简单地把所有 lane 置零：只能屏蔽屏障后的年轻世代，允许更老指令和屏障本身按序排空，并保持 Decoupled 握手稳定性。测试必须证明后端背压不会让屏障本身丢失。
 
-建议优先使用世代标记和过滤，因为它能处理“旧请求晚返回”而不要求物理撤销已经发出的 TileLink 事务。世代宽度可以很小，但必须覆盖 wraparound 的未完成请求寿命，或者在 wrap 前等待所有旧请求清空。
+建议优先使用世代标记和过滤，因为它能处理“旧请求晚返回”，而不要求物理撤销已经发出的 TileLink 事务。世代号位宽可以很小，但必须覆盖未完成请求的最长寿命；世代号回绕前应保证同号旧请求已经清空。
 
-#### Phase 4：后端授权与 ICache 完成握手
+#### 阶段 4：增加后端授权与 ICache 完成握手
 
 后端 Decode 的 `FENCE_I` 属性暂不改变。改动重点在 [Fence.scala:64-87](/nfs/home/yanyusong/xs-analysis-env/XiangShan/src/main/scala/xiangshan/backend/fu/Fence.scala:64)：
 
 - 保留 `s_wait` 对 SBuffer 的排空要求；
-- 将 `fencei` 从无条件一拍脉冲改为 `Valid/Decoupled fencei_req`，或者增加 pending/ack 状态，使 Fence FU 在 ICache 确认前不会报告完成；
-- 在 `XSCore -> Frontend -> ICache` 增加 `fencei_done` 返回路径。若为了时序必须继续用一拍 pulse，也要定义精确的“接受周期、最后一个旧 response 周期、done 周期”，并用寄存器隔离组合环；
-- ICache 在 `fencei_req.fire` 后执行 MetaArray 全相失效、MSHR 标记/取消、MainPipe/PrefetchPipe/WayLookup 的请求禁止和旧 epoch response kill；`done` 只能在这些动作都满足后产生；
-- 现有 MissUnit 注释说明“flush/fencei 同拍仍可能送响应”。安全实现必须在 IFU/PrefetchPipe 入口再加 epoch/valid 门控，不能把“不写 SRAM”误当成“不产生可观察响应”；
+- 将 `fencei` 从无条件一拍脉冲改为 `Valid/Decoupled fencei_req`，或者增加等待/应答状态，使 Fence FU 在 ICache 确认前不会报告完成；
+- 在 `XSCore -> Frontend -> ICache` 增加 `fencei_done` 返回路径。若为了时序必须继续用一拍脉冲，也要定义精确的“接受周期、最后一个旧响应周期、完成周期”，并用寄存器隔离组合环；
+- ICache 在 `fencei_req.fire` 后执行 MetaArray 全相失效、MSHR 标记/取消，以及 MainPipe/PrefetchPipe/WayLookup 的请求禁止和旧世代响应丢弃；只有这些动作全部满足后才能产生 `done`；
+- `done` 至少应保证两件事：全部 L1I 有效位已经清除；每个旧 MSHR 要么已经排空，要么已被永久标为旧世代，之后的返回只能被吸收，不能重新进入 L1I/IFU。这里的“完成”不表示下层 cache 已撤销所有在途事务；
+- 现有 MissUnit 注释说明 `flush/fencei` 同拍仍可能送出响应。安全实现必须在 IFU/PrefetchPipe 入口增加世代/有效位门控，不能把“不写 SRAM”误当成“不产生可观察响应”；
 - 只允许一个模块负责发起实际全相失效，避免既由 predecode 又由 Fence FU 发出两次 invalidate。
 
 数据阵列清零/随机化可以作为独立安全模式评估。架构正确性通常只需要清 valid；但如果威胁模型包含 SRAM 残留的功耗/电磁观测，清零或随机化应有单独的面积、功耗和时序预算，不能把它混入第一版功能修复的必要条件。
 
-#### Phase 5：完成后的唯一恢复路径
+#### 阶段 5：只保留一条恢复路径
 
 恢复顺序建议固定为：
 
 ```text
 fencei_done
   -> Fence FU 完成 fence.i
-  -> backend 产生唯一的 flushPipe/redirect
-  -> FTQ/IFU/IBuffer 清理旧 epoch
+  -> 后端产生唯一的 flushPipe/redirect
+  -> FTQ/IFU/IBuffer 清理旧世代
   -> 从 fence.i 顺序后 PC 重新取指
-  -> 新 epoch 的第一条目标指令允许进入 cfVec
+  -> 新世代的第一条目标指令允许进入 cfVec
 ```
 
-不要用对话中建议的“内部 `wbRedirect` 到 `PC+4`”替代这一流程：它会混入预测故障统计、可能更新 FTQ/BPU，并和后端 canonical redirect 产生双重重定向。若实现确实需要提前停止流水，应使用不参与预测器训练的专用 barrier 控制。
+不要为 `fence.i` 复用普通预测故障的 `wbRedirect`：这种重定向会混入预测故障统计，可能更新 FTQ/BPU，并与后端的正式重定向重复。需要提前停止流水时，应使用不参与预测器训练的专用前端屏障控制。
 
-#### Phase 6：性能、兼容性和发布门槛
+#### 阶段 6：检查性能、兼容性和发布门槛
 
-- 将 `isFenceI` 的组合匹配放在现有 predecode 关键路径评估之外，必要时用共享 decode ROM 或打一拍；
-- 对无 `fence.i` 的程序，barrier 状态必须保持零，不能改变普通 fetch/IBuffer 时序；
+- 评估 `isFenceI` 组合匹配对现有预译码关键路径的影响，必要时复用共享译码逻辑或增加寄存级；
+- 对无 `fence.i` 的程序，前端屏障状态必须保持空闲，不能改变普通取指/IBuffer 时序；
 - 确认多核语义仍遵循 RISC-V：本地 `fence.i` 不替代跨 hart 的 IPI/同步协议；
 - 先以断言和波形通过为发布门槛，再评估 data-array 清零等更强策略。
 
-### 8.6 Test Plan
+### 8.7 测试计划
 
-测试应同时覆盖功能、协议、性能和侧信道可观察状态。所有测试都要记录 `fencei_hint`、`fencei_req`、`fencei_done`、barrier/epoch、FTQ/IBuffer、`cfVec`、redirect、ROB/LSQ/EXU 和 ICache/L1D/L2 事件，不能只看最终寄存器值。
+测试应同时覆盖功能、协议、性能和侧信道可观察状态。所有测试都要记录 `fencei_hint`、`fencei_req`、`fencei_done`、屏障/世代、FTQ/IBuffer、`cfVec`、重定向、ROB/LSQ/EXU 和 ICache/L1D/L2 事件，不能只看最终寄存器值。
 
-#### A. 解码与前端单元测试
+#### 8.7.1 解码与前端单元测试
 
 | 用例 | 覆盖点 | 通过条件 |
 | --- | --- | --- |
-| `fencei_decode_canonical` | `0x0000100f` | 主 PreDecode、F3Predecoder、后端 Decode 都标记为 fence.i |
-| `fence_vs_fencei` | `funct3=000/001` | `FENCE` 不触发 `isFenceI`，`FENCE_I` 触发 |
-| `system_negative` | `0x73` SYSTEM、CSR、ECALL/EBREAK | 不误报 fence.i |
-| `reserved_fields_policy` | imm/rs1/rd 非零变体 | 结果与后端 `FENCE_I` 合法性策略完全一致 |
-| `packet_position` | lane 0、中间、最后一个 lane | marker 保留，所有更年轻 lane 的 `enqEnable=0` |
-| `last_half_and_rvc` | 16/32 位邻接、跨 fetch block/line | 不丢 marker、不误截断前一条指令；不假设存在标准 `c.fence.i` |
-| `f3_pd_consistency` | F2/F3 相同 packet | `f3PdDiff` 不触发，`isFenceI` 在两级一致 |
-| `ftq_pd_roundtrip` | predecode writeback 后 `toPd` | 若字段跨 FTQ 保存，marker 不丢；若不保存，barrier 不依赖重建字段 |
-| `mmio_fault_priority` | MMIO/取指异常与 marker 同拍 | 老异常/redirect 优先，不会留下不可取消 barrier |
+| `fencei_decode` | PoC 使用的 `fence.i` 指令 | 主 PreDecode、F3Predecoder 和后端 Decode 的识别结果一致 |
+| `other_instruction_negative` | `FENCE`、CSR、ECALL/EBREAK 和非法指令 | 均不误报为 `fence.i` |
+| `decode_policy_match` | 后端接受和拒绝的边界样本 | 前端提示与后端合法性策略一致 |
+| `packet_position` | lane 0、中间和最后一个 lane | 保留屏障槽位，所有更年轻 lane 的 `enqEnable=0` |
+| `last_half_and_rvc` | 16/32 位指令邻接、跨取指块和 cache line | 不丢失屏障，也不误截断前一条指令 |
+| `f3_pd_consistency` | F2/F3 处理相同取指包 | `f3PdDiff` 不触发，`isFenceI` 在两级一致 |
+| `ftq_pd_roundtrip` | 预译码写回后调用 `toPd` | 若字段跨 FTQ 保存则不能丢失；若不保存则屏障不得依赖重建字段 |
+| `mmio_fault_priority` | MMIO/取指异常与屏障同拍 | 更老异常或重定向优先，不留下不可取消的屏障 |
 
-#### B. 架构功能与自修改代码测试
+#### 8.7.2 架构功能与自修改代码测试
 
 | 用例 | 场景 | 通过条件 |
 | --- | --- | --- |
@@ -1079,96 +1085,98 @@ fencei_done
 | `smc_no_store` | 无前序 store 的 fence.i | 不死锁，仍只发生一次 invalidate |
 | `smc_many_stores` | SQ/SBuffer 满、合并和延迟 drain | `fencei_req` 只能在 `sbIsEmpty` 后出现 |
 | `fencei_consecutive` | 连续两个/多个 fence.i | 每个请求一一对应 done，不重复或遗漏 |
-| `fencei_exception_redirect` | marker 前异常、老 branch mispredict、老 backend redirect | 老事件取消候选 barrier，架构路径可恢复 |
-| `fencei_page/cache_race` | 页边界、ITLB miss、cache miss 同时发生 | 无 stale response 进入新 epoch |
+| `fencei_exception_redirect` | 屏障前异常、更老分支预测错误或后端重定向 | 更老事件取消候选屏障，架构路径可恢复 |
+| `fencei_page/cache_race` | 页边界、ITLB miss、cache miss 同时发生 | 过期响应不能进入新取指世代 |
 | `multi_hart` | 一个 hart 修改代码，另一个 hart 通过同步后取指 | 只验证架构规定的本地/跨 hart 语义，不把本地 fence.i 当全局 IPI |
 
-#### C. 握手、并发和死锁测试
+#### 8.7.3 握手、并发和死锁测试
 
 | 用例 | 强制条件 | 通过条件 |
 | --- | --- | --- |
-| `mshr_inflight_on_fencei` | 多个 fetch/prefetch MSHR 已 issued | 请求停止，旧 response 被标 stale，不写 SRAM、不发有效 IFU 指令 |
-| `grant_same_cycle` | TileLink grant 与 fencei_req/done 同拍 | 优先级确定，既不重复写也不丢 done |
-| `mshr_full` | Fence 到达时 MSHR 满 | barrier 最终释放，无环形 backpressure |
-| `ibuffer_full` | marker 到达时 IBuffer 满或 output stall | marker 不丢；年轻 entry 不 bypass；最终能排空 |
-| `ftq_ahead` | FTQ 已有多个后续预测 entry | 所有 marker 后 entry 被 epoch kill 或过滤 |
-| `redirect_race` | IFU redirect、backend redirect、fencei_done 同拍/相邻拍 | 只有一个 canonical 恢复 PC，FTQ 指针不回退到错误世代 |
-| `reset_during_barrier` | barrier/invalidate 中 reset | 状态清零，重启后无残留 pending 请求 |
-| `random_backpressure` | 对 ICache/IBuffer/后端 ready 注入随机 stall | 在公平 ready 假设下最终 `done`，无 livelock/timeout |
+| `mshr_inflight_on_fencei` | 多个取指/预取 MSHR 已发出 | 停止新请求；旧响应不写 L1I SRAM，也不产生有效 IFU 指令 |
+| `grant_same_cycle` | TileLink grant 与 `fencei_req/done` 同拍 | 优先级确定，既不重复写也不丢失完成确认 |
+| `mshr_full` | Fence 到达时 MSHR 满 | 屏障最终释放，无环形背压 |
+| `ibuffer_full` | 屏障到达时 IBuffer 满或输出停顿 | 屏障不丢；年轻表项不旁路；最终能够排空 |
+| `ftq_ahead` | FTQ 已有多个后续预测表项 | 屏障后的表项全部被世代过滤或清理 |
+| `redirect_race` | IFU 重定向、后端重定向和 `fencei_done` 同拍或相邻拍 | 只有一个恢复 PC，FTQ 指针不返回错误世代 |
+| `reset_during_barrier` | 屏障或失效过程中复位 | 状态清零，重启后没有残留请求 |
+| `random_backpressure` | 对 ICache、IBuffer 和后端注入随机停顿 | 在公平响应假设下最终完成，无活锁或超时 |
 
 建议在 RTL 中加入以下断言（名称可按项目风格调整）：
 
 ```text
 assert(fencei_done -> prior_fencei_req_pending)
 assert(no_duplicate_done_per_req)
-assert(fencei_req -> sbIsEmpty)
+assert(fencei_req -> prior_sb_drain_complete)
 assert(fencei_block && younger_epoch -> !cfVec.fire)
 assert(fencei_block && younger_epoch -> !ROB_alloc && !LSQ_alloc && !EXU_issue)
 assert(old_epoch_response -> !ICache_meta_write && !ICache_data_write && !IFU_valid)
-assert(release -> fencei_done && canonical_redirect_seen)
+assert(release -> fencei_done && ordered_redirect_seen)
 ```
 
-其中 `younger_epoch` 必须由 FTQ/ROB 世代或 marker 的序号计算，不能用“当前周期大于 fence 周期”代替；正是 96 周期分析中最容易误判的地方。
+其中 `younger_epoch` 必须由 FTQ/ROB 世代或屏障序号计算，不能用“当前周期大于 fence 周期”代替；后者正是分析 96 周期窗口时最容易出现的误判。
 
-#### D. 安全/侧信道波形测试
+#### 8.7.4 安全与侧信道波形测试
 
-安全测试的核心不是证明“`cfVec` 永远全零”，而是证明 **marker 之后的年轻世代没有在不可回滚资源上留下未授权活动**。每个测试至少做下面四组对照：
+安全测试的核心不是证明“`cfVec` 永远全零”，而是证明 **屏障之后的年轻世代没有在不可回滚资源上留下未授权活动**。每个测试至少做下面四组对照：
 
 1. **基线**：当前实现的 #6132/V2 对照波形，标出 96 周期窗口 `[C4235,C4331)` 以及窗口内 L1D 两次、L2 六次 line 安装。
-2. **仅 predecode 截断**：确认 `cfVec`/后端年轻 uop 数减少，但已经发出的旧 MSHR/L2 footprint 是否仍存在；这能避免把“少了 cfVec”误当成“cache 风险消失”。
-3. **barrier + done + epoch**：检查从 marker 接受至 done 之间，年轻世代没有 `cfVec.fire`、ROB/IQ/LSQ/EXU、DCache 请求，且旧 response 不写 L1I/L2 可见结构。
-4. **压力变体**：改变 MSHR 数、prefetch 开关、cache 命中率、后端 stall 和秘密地址，寻找旧请求在 barrier 期间落入 L2/DCache 的差异。
+2. **仅做预译码截断**：确认 `cfVec`/后端年轻 uop 数减少，同时检查已经发出的旧 MSHR/L2 缓存痕迹是否仍存在，避免把“少了 `cfVec`”误当成“cache 风险消失”。
+3. **加入屏障、完成握手和世代过滤**：检查从屏障接受到完成之间，年轻世代没有 `cfVec.fire`、ROB/IQ/LSQ/EXU 或 DCache 请求，且过期响应不能写入 L1I 或成为有效 IFU 响应。
+4. **压力变体**：改变 MSHR 数、预取开关、cache 命中率、后端停顿和秘密地址，寻找旧请求在屏障期间落入 L2/DCache 的差异。
 
 波形判据应明确区分：
 
 | 观察对象 | 必须满足的安全条件 | 不应使用的过强/错误判据 |
 | --- | --- | --- |
-| `cfVec` | marker 后的年轻 epoch 在 `done` 前不能 fire | 不能要求更老指令和 fence.i 自身也消失 |
-| IBuffer/FTQ | marker 后 entry 被 kill/过滤，不能 bypass | 不能只看 valid 位在某一拍为 0 |
-| ICache MSHR | 旧请求不再产生有效 IFU response；完成后无旧 epoch 写 SRAM | “收到 flush 就代表所有 TileLink 事务已撤销”不成立 |
+| `cfVec` | 屏障后的年轻世代在 `done` 前不能 fire | 不能要求更老指令和 `fence.i` 自身也消失 |
+| IBuffer/FTQ | 屏障后表项被清理或过滤，不能旁路 | 不能只看 valid 位在某一拍为 0 |
+| ICache MSHR | 旧请求不再产生有效 IFU 响应；旧世代不能写 L1I SRAM | “收到 flush 就代表所有 TileLink 事务已撤销”不成立 |
 | L1I | fence.i 后新取指不命中旧 valid line；旧 refill 不得重新写入 | 不应把 data SRAM 物理残留自动等同于架构命中 |
-| L1D/L2 | 记录 line install、coherence、PLRU/metadata 和持久时间，检查是否与年轻秘密访问有因果关系 | 不能因为 redirect 后 cache 没回滚就断言一定可利用 |
+| L1D/L2 | 记录 line 安装、一致性、PLRU/元数据和持久时间，检查是否与年轻秘密访问有因果关系 | 不能因为重定向后 cache 没回滚就断言一定可利用 |
+
+世代过滤只能阻止过期响应继续进入 L1I/IFU，不能自动撤销已经发往 L2 的 TileLink 事务。若安全目标要求同时消除 L2 预取痕迹，还需要跨 cache 层的取消、隔离或分区机制，并单独验证其一致性和死锁性质。
 
 针对本次深度分析，验收报告应至少给出：
 
-- `fencei_hint` 到 barrier 建立的周期数；
-- barrier 建立到 `fencei_req`、`fencei_done`、canonical redirect 的周期数；
+- `fencei_hint` 到前端屏障建立的周期数；
+- 前端屏障建立到 `fencei_req`、`fencei_done` 和唯一后端重定向的周期数；
 - 窗口长度相对 96 周期的变化；
 - 窗口内年轻 `cfVec.fire` 数、年轻 ROB/LSQ/EXU/DCache 事件数；
 - L1I/L1D/L2 新 line 安装数及其请求发起世代；
-- redirect 后仍存留的 tag/coherence/PLRU/prefetch footprint；
-- 所有 stale response 是否被过滤，以及是否有重复 invalidate。
+- 重定向后仍存留的 tag、一致性、PLRU 和预取痕迹；
+- 所有过期响应是否被过滤，以及是否发生重复失效。
 
-#### E. DiffTest 和性能回归
+#### 8.7.5 DiffTest 与性能回归
 
 - 以 Spike/QEMU 为架构参考，验证自修改代码、异常优先级、连续 fence.i 和普通无 fence.i 程序的寄存器/内存结果。
 - 无 `fence.i` 的 SPEC/微基准：比较 IPC、前端气泡和 predecode 时序，设定项目可接受的回归阈值（建议先要求功能零回归，再单独评估 <1% 的性能目标是否现实）。
-- `fencei_heavy`：统计每次 barrier 的平均/最大延迟、吞吐和功耗代理；确认频繁 fence.i 不会饥饿普通取指。
+- `fencei_heavy`：统计每次前端屏障的平均/最大延迟、吞吐和功耗代理；确认频繁 fence.i 不会饥饿普通取指。
 - `icache_invalidate_latency`：分别测量 `req->done`、`done->first_new_fetch` 和 `first_new_fetch->retire`，避免把 cache 清 valid 的一拍误报为完整恢复延迟。
 - 用不同 `PredictWidth/DecodeWidth/IBufSize/MSHR` 参数做至少一轮参数化回归，因为窗口大小和同拍握手优先级会随配置变化。
 
-### 8.7 方案的安全边界与最终建议
+### 8.8 方案的安全边界与最终建议
 
-把 `fence.i` 加入 predecode 是有价值的纵深防御，但它解决的是“尽早发现并隔离年轻取指”这一层，不会自动解决所有 cache 侧信道：
+把 `fence.i` 加入预译码是有价值的纵深防御，但它解决的是“尽早发现并隔离年轻取指”这一层，不会自动解决所有 cache 侧信道：
 
-1. **能直接解决的部分**：同包后缀、尚未进入 IBuffer 的年轻指令，以及 barrier 期间新发起的取指请求。
-2. **必须另外处理的部分**：已经进入 IBuffer/FTQ 的条目、旧 MSHR 的延迟响应、已经发往 L2 的 prefetch/Acquire、L2 metadata/替换状态和 DCache write-allocate footprint。
+1. **能直接解决的部分**：同一取指块的年轻后缀、尚未进入 IBuffer 的年轻指令，以及前端屏障期间新发起的取指请求。
+2. **必须另外处理的部分**：已经进入 IBuffer/FTQ 的表项、旧 MSHR 的延迟响应、已经发往 L2 的预取/Acquire、L2 元数据/替换状态和 DCache 写分配痕迹。
 3. **不能仅靠此方案证明的部分**：攻击者是否能控制秘密相关地址、年轻旧指令是否在 kill 前 issue、以及是否形成跨上下文可稳定测量的侧信道。
 
 结合本报告的 96 周期结果，建议采用以下发布顺序：
 
 ```text
-先加 isFenceI 解码和同包截断
-  -> 再加 barrier/epoch，禁止年轻 cfVec/后端事件
+先加 isFenceI 解码和同块截断
+  -> 再加前端屏障/世代号，禁止年轻 cfVec/后端事件
   -> 保留后端按序 SBuffer 排空
-  -> 为 ICache 增加 req/done 和 stale-response kill
+  -> 为 ICache 增加 req/done 和过期响应过滤
   -> 用波形断言证明窗口内没有未授权年轻副作用
-  -> 最后再评估 data-array 清零/随机化等高成本策略
+  -> 最后再评估数据阵列清零或随机化等高成本策略
 ```
 
-如果只能选择一个最小改动，优先是 **predecode 标记 + 同包截断 + 对伴随 backend redirect/ICache flush 契约增加断言和注释**；如果目标是明确的侧信道 hardening，则至少需要 Phase 3/4 的 barrier、epoch 和完成握手。**“predecode 到 fence.i 后直接 `flushAll`，并以一个组合 ready 等 cache 刷完”不应作为第一版实现。**
+如果只能选择一个最小改动，优先实施 **预译码标记 + 同块截断 + 为后端重定向/ICache 冲刷契约增加断言和注释**。如果目标是明确的侧信道安全硬化，则至少需要阶段 3、4 的前端屏障、世代过滤和完成握手。**预译码识别后立即 `flushAll`，再用组合 ready 等待 cache 完成，不应作为第一版实现。**
 
-## 11. Issue 对应 V3 的后续独立复现计划
+## 9. Issue 对应 V3 的后续独立复现计划
 
 第 7 章已经完成 V2 上直接加载程序的 `fence.i` 控制链对照，但 issue 对应的 V3 独立复现仍应包含三组程序：直接加载 PoC、秘密索引 PoC 和顺序落入对照组。每组需要记录：
 
@@ -1180,7 +1188,7 @@ assert(release -> fencei_done && canonical_redirect_seen)
 
 复现结果应允许回答两个独立问题：接口现象能否稳定重现，以及旧条目是否越过预期的失效边界。
 
-## 12. Issue 对应 V3 的后续波形分析计划
+## 10. Issue 对应 V3 的后续波形分析计划
 
 波形分析将以“因果链”而不是单一信号截图组织：
 
@@ -1197,7 +1205,7 @@ store 修改代码
 
 如果旧条目曾进入后端，还要继续追踪其 ROB/LSQ 身份，证明它在何处被清除；如果发现 Cache、预测器或预取器副作用，则需要单独评估该副作用是否可被攻击者稳定区分。
 
-## 13. 教学小结
+## 11. 教学小结
 
 这个案例并不是简单的“报告错误”或“实现错误”，而是一次观察边界与正确性边界不一致的典型调试：
 
@@ -1209,7 +1217,7 @@ store 修改代码
 
 截至本次阅读，最符合证据的分层定性是：**已确认前端旧指令瞬时暴露，以及 96 周期窗口内真实、部分持久的 cache 状态变化；未确认架构功能错误、年轻旧指令直接造成的秘密相关访问或可利用侧信道；该问题仍应作为文档澄清、断言增强和纵深防御议题继续保留。**
 
-合入的 V2 对照波形没有改变这一定性，但把实现机制具体化了：ICache 全量失效与前端 redirect 是两条不同且错时发生的路径；分析内部旧数据时，必须同时追踪动态指令身份和最终 kill/commit 结果。
+V2 对照波形没有改变这一定性，但把实现机制具体化了：ICache 全量失效与前端 redirect 是两条不同且错时发生的路径；分析内部旧数据时，必须同时追踪动态指令身份和最终 kill/commit 结果。
 
 ## 参考资料
 
@@ -1218,6 +1226,6 @@ store 修改代码
 - [昆明湖 V3 ICache 设计文档：`fence.i` 冲刷脚注](https://docs.xiangshan.cc/projects/design/zh-cn/kunminghu-v3/frontend/ICache/#fn:redirect_tab_fencei)
 - [Issue 所用提交中的 ICacheImp.scala](https://github.com/OpenXiangShan/XiangShan/blob/3931c5112c528299a23c256bdd77fb90813afa6e/src/main/scala/xiangshan/frontend/icache/ICacheImp.scala)
 - [Issue 所用提交中的 ICacheMainPipe.scala](https://github.com/OpenXiangShan/XiangShan/blob/3931c5112c528299a23c256bdd77fb90813afa6e/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala)
-- [讨论引用的 FENCE_I 译码定义](https://github.com/OpenXiangShan/XiangShan/blob/96c3f568f943a096ffd3d712dc6f462ac4b1ba33/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala#L250)
+- [FENCE_I 译码定义](https://github.com/OpenXiangShan/XiangShan/blob/96c3f568f943a096ffd3d712dc6f462ac4b1ba33/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala#L250)
 - [本地 V2 对照程序](/nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-6132/bug-replay/smc_fencei_direct_probe.S)
 - [本地 V2 对照波形](/nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-6132/bug-replay/2026-08-31-11-43-57.fst)
