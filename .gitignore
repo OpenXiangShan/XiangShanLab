@@ -78,7 +78,7 @@ myworkspace
 *.so
 *.so.*
 *.dylib
-*# .dll
+*.dll
 # *.elf
 *.exe
 *.out
@@ -97,6 +97,7 @@ ucli.key
 vc_hdrs.h
 
 # Logs and reports produced by build/simulation tools
+# *.log
 # *.log
 *.jou
 *.pb
