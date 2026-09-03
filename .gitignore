@@ -79,7 +79,7 @@ myworkspace
 *.so.*
 *.dylib
 *.dll
-*.elf
+# *.elf
 *.exe
 *.out
 *.app
@@ -97,7 +97,7 @@ ucli.key
 vc_hdrs.h
 
 # Logs and reports produced by build/simulation tools
-*.log
+# *.log
 *.jou
 *.pb
 *.rpt
