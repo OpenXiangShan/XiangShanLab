@@ -79,41 +79,37 @@ jobs:
                 }
               }
             } else {
-              const ddlMonth = section('截止时间（DDL）· 月份');
-              const ddlDay = section('截止时间（DDL）· 日期');
-              if (!ddlMonth || !ddlDay) {
+              const ddlYear = section('截止时间（DDL）· 年');
+              const ddlMonth = section('截止时间（DDL）· 月');
+              const ddlDay = section('截止时间（DDL）· 日');
+              if (!ddlYear || !ddlMonth || !ddlDay) {
                 errors.push('“截止时间（DDL）”不能为空。');
+              } else if (!/^\d{4}$/.test(ddlYear) || !/^\d{2}$/.test(ddlMonth) || !/^\d{2}$/.test(ddlDay)) {
+                errors.push('“截止时间（DDL）”格式无效。');
               } else {
+                const year = Number(ddlYear);
                 const month = Number(ddlMonth);
                 const day = Number(ddlDay);
                 const now = new Date();
-                const beijingYear = Number(
-                  new Intl.DateTimeFormat('en-US', {
-                    timeZone: 'Asia/Shanghai',
-                    year: 'numeric',
-                  }).format(now)
-                );
-                const daysIn = (y) => new Date(Date.UTC(y, month, 0)).getUTCDate();
-                const validAt = (y) => month >= 1 && month <= 12 && day >= 1 && day <= daysIn(y);
-                for (const y of [beijingYear, beijingYear + 1]) {
-                  if (!validAt(y)) continue;
-                  const text = `${String(y).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} 23:59`;
+                const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+                if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth) {
+                  errors.push('“截止时间（DDL）”不是有效的日期。');
+                } else {
+                  const text = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} 23:59`;
                   const date = new Date(`${text.replace(' ', 'T')}:00+08:00`);
-                  if (date.getTime() > now.getTime()) {
+                  if (date.getTime() <= now.getTime()) {
+                    errors.push('“截止时间（DDL）”必须晚于当前时间。');
+                  } else {
                     resolvedDdl = text;
-                    break;
                   }
-                }
-                if (!resolvedDdl) {
-                  errors.push('“截止时间（DDL）”不是有效的日期，请重新选择。');
                 }
               }
             }
 
             if (resolvedDdl) {
-              const monthHeading = '### 截止时间（DDL）· 月份';
-              const dayHeading = '### 截止时间（DDL）· 日期';
-              const start = body.indexOf(monthHeading);
+              const yearHeading = '### 截止时间（DDL）· 年';
+              const dayHeading = '### 截止时间（DDL）· 日';
+              const start = body.indexOf(yearHeading);
               const dayStart = body.indexOf(dayHeading, start);
               if (start !== -1 && dayStart !== -1) {
                 const afterDay = body.indexOf('\n### ', dayStart + dayHeading.length);
