@@ -64,14 +64,16 @@ jobs:
             }
 
             const ddl = requiredSection('截止时间（DDL）');
-            const m = ddl.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?: \(UTC\+8\))?$/);
-            if (!m) {
-              errors.push('“截止时间（DDL）”格式无效，应为 YYYY-MM-DD HH:mm。');
-            } else {
-              const [, y, mo, d, h, mi] = m.map(Number);
-              const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
-              if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth || h > 23 || mi > 59) {
-                errors.push('“截止时间（DDL）”不是有效的日期或时间。');
+            const ddlMatch = ddl.match(
+              /^(\d{4})-(\d{2})-(\d{2}) ((?:[01]\d|2[0-3]):[0-5]\d|24:00)$/
+            );
+            if (ddl && !ddlMatch) {
+              errors.push('“截止时间（DDL）”格式必须为 `YYYY-MM-DD HH:mm`，无需填写时区。');
+            } else if (ddlMatch) {
+              const [, year, month, day] = ddlMatch.map(Number);
+              const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+              if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
+                errors.push('“截止时间（DDL）”必须是有效的日期。');
               }
             }
 

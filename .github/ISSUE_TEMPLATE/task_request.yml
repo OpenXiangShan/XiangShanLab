@@ -61,8 +61,8 @@ body:
     id: ddl
     attributes:
       label: 截止时间（DDL）
-      description: 填写任务截止时间，格式为 YYYY-MM-DD HH:mm，按北京时间（UTC+8）计。
-      placeholder: "2026-09-30 23:59"
+      description: 精确到分钟即可，无需填写时区；CI 将统一按北京时间（UTC+8）解释。
+      placeholder: "2026-08-30 23:59"
     validations:
       required: true
 
