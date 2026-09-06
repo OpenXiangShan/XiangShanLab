@@ -50,7 +50,7 @@ jobs:
               }
 
               const ddl = section(issue.body, '截止时间（DDL）');
-              const match = ddl.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+              const match = ddl.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?: \(UTC\+8\))?$/);
               if (!match) {
                 core.warning(`Skip #${issue.number}: invalid or missing DDL`);
                 continue;
@@ -76,7 +76,7 @@ jobs:
                 continue;
               }
 
-              const marker = `<!-- ddl-reminder:${ddl.replace(' ', 'T')}+08:00 -->`;
+              const marker = `<!-- ddl-reminder:${y}-${mo}-${d}T${h}:${mi}+08:00 -->`;
               const comments = await github.paginate(github.rest.issues.listComments, {
                 owner,
                 repo,
@@ -93,6 +93,6 @@ jobs:
                 owner,
                 repo,
                 issue_number: issue.number,
-                body: `${marker}\n${mentions}，距离任务 DDL 已不足 12 小时。截止时间：\`${ddl}\`（北京时间 UTC+8），请及时完成交付。`
+                body: `${marker}\n${mentions}，距离任务 DDL 已不足 12 小时。截止时间：\`${y}-${mo}-${d} ${h}:${mi} (UTC+8)\`，请及时完成交付。`
               });
             }

@@ -57,76 +57,12 @@ body:
     validations:
       required: true
 
-  - type: dropdown
-    id: ddl_year
+  - type: input
+    id: ddl
     attributes:
-      label: 截止时间（DDL）· 年
-      description: 选择截止年份。当前年份排在第一项。
-      options:
-        - "2026"
-        - "2027"
-      default: 0
-    validations:
-      required: true
-
-  - type: dropdown
-    id: ddl_month
-    attributes:
-      label: 截止时间（DDL）· 月
-      description: 选择截止月份。
-      options:
-        - "01"
-        - "02"
-        - "03"
-        - "04"
-        - "05"
-        - "06"
-        - "07"
-        - "08"
-        - "09"
-        - "10"
-        - "11"
-        - "12"
-    validations:
-      required: true
-
-  - type: dropdown
-    id: ddl_day
-    attributes:
-      label: 截止时间（DDL）· 日
-      description: 选择截止日期。系统会校验日期是否合法，截止时刻统一为北京时间 23:59。
-      options:
-        - "01"
-        - "02"
-        - "03"
-        - "04"
-        - "05"
-        - "06"
-        - "07"
-        - "08"
-        - "09"
-        - "10"
-        - "11"
-        - "12"
-        - "13"
-        - "14"
-        - "15"
-        - "16"
-        - "17"
-        - "18"
-        - "19"
-        - "20"
-        - "21"
-        - "22"
-        - "23"
-        - "24"
-        - "25"
-        - "26"
-        - "27"
-        - "28"
-        - "29"
-        - "30"
-        - "31"
+      label: 截止时间（DDL）
+      description: 填写任务截止时间，格式为 YYYY-MM-DD HH:mm，按北京时间（UTC+8）计。
+      placeholder: "2026-09-30 23:59"
     validations:
       required: true
 

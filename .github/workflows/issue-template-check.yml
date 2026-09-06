@@ -63,64 +63,15 @@ jobs:
               errors.push('“质押积分”必须是大于 0 的整数。');
             }
 
-            const ddlLabel = '截止时间（DDL）';
-            let resolvedDdl = '';
-
-            const combinedDdl = section(ddlLabel);
-            if (combinedDdl) {
-              const m = combinedDdl.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
-              if (!m) {
-                errors.push('“截止时间（DDL）”格式无效。');
-              } else {
-                const [, y, mo, d] = m.map(Number);
-                const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
-                if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth) {
-                  errors.push('“截止时间（DDL）”不是有效的日期。');
-                }
-              }
+            const ddl = requiredSection('截止时间（DDL）');
+            const m = ddl.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?: \(UTC\+8\))?$/);
+            if (!m) {
+              errors.push('“截止时间（DDL）”格式无效，应为 YYYY-MM-DD HH:mm。');
             } else {
-              const ddlYear = section('截止时间（DDL）· 年');
-              const ddlMonth = section('截止时间（DDL）· 月');
-              const ddlDay = section('截止时间（DDL）· 日');
-              if (!ddlYear || !ddlMonth || !ddlDay) {
-                errors.push('“截止时间（DDL）”不能为空。');
-              } else if (!/^\d{4}$/.test(ddlYear) || !/^\d{2}$/.test(ddlMonth) || !/^\d{2}$/.test(ddlDay)) {
-                errors.push('“截止时间（DDL）”格式无效。');
-              } else {
-                const year = Number(ddlYear);
-                const month = Number(ddlMonth);
-                const day = Number(ddlDay);
-                const now = new Date();
-                const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-                if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth) {
-                  errors.push('“截止时间（DDL）”不是有效的日期。');
-                } else {
-                  const text = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} 23:59`;
-                  const date = new Date(`${text.replace(' ', 'T')}:00+08:00`);
-                  if (date.getTime() <= now.getTime()) {
-                    errors.push('“截止时间（DDL）”必须晚于当前时间。');
-                  } else {
-                    resolvedDdl = text;
-                  }
-                }
-              }
-            }
-
-            if (resolvedDdl) {
-              const yearHeading = '### 截止时间（DDL）· 年';
-              const dayHeading = '### 截止时间（DDL）· 日';
-              const start = body.indexOf(yearHeading);
-              const dayStart = body.indexOf(dayHeading, start);
-              if (start !== -1 && dayStart !== -1) {
-                const afterDay = body.indexOf('\n### ', dayStart + dayHeading.length);
-                const end = afterDay === -1 ? body.length : afterDay;
-                const newBody = body.slice(0, start) + `### ${ddlLabel}\n\n${resolvedDdl}\n` + body.slice(end);
-                await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: newBody
-                });
+              const [, y, mo, d, h, mi] = m.map(Number);
+              const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+              if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth || h > 23 || mi > 59) {
+                errors.push('“截止时间（DDL）”不是有效的日期或时间。');
               }
             }
 
