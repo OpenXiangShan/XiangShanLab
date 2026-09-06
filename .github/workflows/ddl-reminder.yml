@@ -25,7 +25,6 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const reminderWindow = 12 * 60 * 60 * 1000;
-            const ddlPattern = /^(\d{4})-(\d{2})-(\d{2}) ((?:[01]\d|2[0-3]):[0-5]\d|24:00)$/;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner,
               repo,
@@ -33,9 +32,10 @@ jobs:
               per_page: 100
             });
 
-            function ddlSection(body) {
+            function section(body, label) {
+              const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
               const match = (body || '').match(
-                /(?:^|\n)### 截止时间（DDL）\r?\n([\s\S]*?)(?=\r?\n### |$)/
+                new RegExp(`(?:^|\\n)### ${escaped}\\r?\\n([\\s\\S]*?)(?=\\r?\\n### |$)`)
               );
               return match?.[1].trim() || '';
             }
@@ -49,23 +49,40 @@ jobs:
                 continue;
               }
 
-              const ddl = ddlSection(issue.body);
-              const match = ddl.match(ddlPattern);
-              if (!match) {
-                core.warning(`Skip #${issue.number}: invalid DDL format`);
+              const ddlMonth = section(issue.body, '截止时间（DDL）· 月份');
+              const ddlDay = section(issue.body, '截止时间（DDL）· 日期');
+              const ddlHour = section(issue.body, '截止时间（DDL）· 小时');
+              const ddlMinute = section(issue.body, '截止时间（DDL）· 分钟');
+              if (!ddlMonth || !ddlDay || !ddlHour || !ddlMinute) {
+                core.warning(`Skip #${issue.number}: missing DDL fields`);
                 continue;
               }
 
-              const [, year, month, day, hm] = match;
-              const [hour, minute] = hm.split(':');
+              const year = Number(
+                new Intl.DateTimeFormat('en-US', {
+                  timeZone: 'Asia/Shanghai',
+                  year: 'numeric',
+                }).format(new Date())
+              );
+              const month = Number(ddlMonth);
+              const day = Number(ddlDay);
+              const hour = Number(ddlHour);
+              const minute = Number(ddlMinute);
               const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
               if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
                 core.warning(`Skip #${issue.number}: invalid DDL date`);
                 continue;
               }
 
+              const y = String(year).padStart(4, '0');
+              const mo = String(month).padStart(2, '0');
+              const d = String(day).padStart(2, '0');
+              const h = String(hour).padStart(2, '0');
+              const mi = String(minute).padStart(2, '0');
+              const ddl = `${y}-${mo}-${d} ${h}:${mi}`;
+
               const deadline = new Date(
-                `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+08:00`
+                `${y}-${mo}-${d}T${h}:${mi}:00+08:00`
               );
               const remaining = deadline.getTime() - Date.now();
               if (remaining <= 0 || remaining > reminderWindow) {

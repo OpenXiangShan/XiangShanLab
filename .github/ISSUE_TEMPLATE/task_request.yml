@@ -57,12 +57,118 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: ddl
+  - type: dropdown
+    id: ddl_month
     attributes:
-      label: 截止时间（DDL）
-      description: 精确到分钟即可，无需填写时区；CI 将统一按北京时间（UTC+8）解释。
-      placeholder: "2026-08-30 23:59"
+      label: 截止时间（DDL）· 月份
+      description: 选择月份。年份由 CI 自动按北京时间（UTC+8）当前年份填写。
+      options:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ddl_day
+    attributes:
+      label: 截止时间（DDL）· 日期
+      description: 选择日期（1–31）。
+      options:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+        - 17
+        - 18
+        - 19
+        - 20
+        - 21
+        - 22
+        - 23
+        - 24
+        - 25
+        - 26
+        - 27
+        - 28
+        - 29
+        - 30
+        - 31
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ddl_hour
+    attributes:
+      label: 截止时间（DDL）· 小时
+      description: 选择小时（24 小时制）。
+      options:
+        - "00"
+        - "01"
+        - "02"
+        - "03"
+        - "04"
+        - "05"
+        - "06"
+        - "07"
+        - "08"
+        - "09"
+        - "10"
+        - "11"
+        - "12"
+        - "13"
+        - "14"
+        - "15"
+        - "16"
+        - "17"
+        - "18"
+        - "19"
+        - "20"
+        - "21"
+        - "22"
+        - "23"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ddl_minute
+    attributes:
+      label: 截止时间（DDL）· 分钟
+      description: 选择分钟（每 5 分钟一档）。
+      options:
+        - "00"
+        - "05"
+        - "10"
+        - "15"
+        - "20"
+        - "25"
+        - "30"
+        - "35"
+        - "40"
+        - "45"
+        - "50"
+        - "55"
     validations:
       required: true
 

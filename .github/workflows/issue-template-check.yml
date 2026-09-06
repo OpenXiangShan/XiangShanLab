@@ -63,17 +63,30 @@ jobs:
               errors.push('“质押积分”必须是大于 0 的整数。');
             }
 
-            const ddl = requiredSection('截止时间（DDL）');
-            const ddlMatch = ddl.match(
-              /^(\d{4})-(\d{2})-(\d{2}) ((?:[01]\d|2[0-3]):[0-5]\d|24:00)$/
+            const ddlYear = Number(
+              new Intl.DateTimeFormat('en-US', {
+                timeZone: 'Asia/Shanghai',
+                year: 'numeric',
+              }).format(new Date())
             );
-            if (ddl && !ddlMatch) {
-              errors.push('“截止时间（DDL）”格式必须为 `YYYY-MM-DD HH:mm`，无需填写时区。');
-            } else if (ddlMatch) {
-              const [, year, month, day] = ddlMatch.map(Number);
-              const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-              if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
-                errors.push('“截止时间（DDL）”必须是有效的日期。');
+            const ddlMonth = requiredSection('截止时间（DDL）· 月份');
+            const ddlDay = requiredSection('截止时间（DDL）· 日期');
+            const ddlHour = requiredSection('截止时间（DDL）· 小时');
+            const ddlMinute = requiredSection('截止时间（DDL）· 分钟');
+
+            if (ddlMonth && ddlDay && ddlHour && ddlMinute) {
+              const month = Number(ddlMonth);
+              const day = Number(ddlDay);
+              const hour = Number(ddlHour);
+              const minute = Number(ddlMinute);
+              const daysInMonth = new Date(Date.UTC(ddlYear, month, 0)).getUTCDate();
+              const valid =
+                month >= 1 && month <= 12 &&
+                day >= 1 && day <= daysInMonth &&
+                Number.isInteger(hour) && hour >= 0 && hour <= 23 &&
+                Number.isInteger(minute) && minute >= 0 && minute <= 59 && minute % 5 === 0;
+              if (!valid) {
+                errors.push('“截止时间（DDL）”不是有效的日期时间，请重新选择。');
               }
             }
 
