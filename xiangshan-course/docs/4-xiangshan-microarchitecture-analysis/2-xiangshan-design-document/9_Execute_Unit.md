@@ -845,4 +845,3 @@ def needOg2: Boolean = isVecArith || fuType == FuType.vsetfwf || isVecMem
 
 
 > 更新: 2026-07-01 17:35:11  
-> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/nwksndztdhde83p9>

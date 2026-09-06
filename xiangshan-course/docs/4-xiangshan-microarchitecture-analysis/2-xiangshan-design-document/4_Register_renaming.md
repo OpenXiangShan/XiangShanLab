@@ -778,4 +778,3 @@ vl 拥有独立的 FreeList（<code>**vlFreeList**</code>）和 RAT（<code>**vl
 
 
 > 更新: 2026-06-22 11:06:43  
-> 原文: <https://bosc.yuque.com/staff-xmw8rg/fb7qy3/elk8qkx27stlorvf>
