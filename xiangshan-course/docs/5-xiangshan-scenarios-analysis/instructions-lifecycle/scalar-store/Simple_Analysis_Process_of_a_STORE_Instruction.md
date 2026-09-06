@@ -232,7 +232,7 @@
 
 因为对于 store 指令，它需要“写地址”和“写数据”两类信息，而在香山中，这两类数据的计算会被分开、独立进行发射。
 
-具体到架构图中：![1774337008924-947f75af-cf64-44bc-aee9-c1c58bfd3c57.png](../../img/simple-analysis-process-of-an-add-instruction/figure-063-store-execute-address.png)
+具体到架构图中：![1774337008924-947f75af-cf64-44bc-aee9-c1c58bfd3c57.png](../../img/simple-analysis-process-of-a-store-instruction/figure-018-dispatch-stage-store-address.png)
 
 * **STA (Store Address)** 队列负责发射地址计算。
 * **STD (Store Data)** 队列负责发射数据计算。

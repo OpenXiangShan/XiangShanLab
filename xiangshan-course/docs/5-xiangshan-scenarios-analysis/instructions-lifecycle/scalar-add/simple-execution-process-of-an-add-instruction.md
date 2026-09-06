@@ -21,37 +21,37 @@
 
 （1）下载并安装波形查看软件：[surfer软件链接](https://surfer-project.org/)
 
-![1773641037463-2e18316b-1bb7-43a6-b297-7a9379d745e7.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-001-setup-install-viewer.png)
+![1773641037463-2e18316b-1bb7-43a6-b297-7a9379d745e7.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-001-setup-install-viewer.png)
 
 （2）打开波形文件及状态文件
 
 首先，运行可执行文件（.exe）：
 
-![1773641070447-068af2b5-1147-4e32-a61d-f6b1bfce6f65.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-002-setup-run-execute.png)
+![1773641070447-068af2b5-1147-4e32-a61d-f6b1bfce6f65.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-002-setup-run-execute.png)
 
-![1773715365367-580f5cb0-8081-4e11-9e91-cc518829ebbb.jpeg](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-003-setup-run-execute.jpeg)
+![1773715365367-580f5cb0-8081-4e11-9e91-cc518829ebbb.jpeg](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-003-setup-run-execute.jpeg)
 
 然后，打开波形文件：
 
-![1773641147814-9c1a2d1b-32d9-44e8-8d32-f3ab155162c2.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-004-setup-open-state.png)
+![1773641147814-9c1a2d1b-32d9-44e8-8d32-f3ab155162c2.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-004-setup-open-state.png)
 
 此时，软件会自动检测到一个状态文件。这个文件实际上就是压缩包内的 `hello.surf.ron`文件，用于保存对波形所做的各项操作状态，例如显示哪些波形、设置的标记等。请点击“使用”这个状态文件。：
 
-![1773641182033-06ce7780-f9cb-4073-a36c-4b7f59c39e9b.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-005-setup-state-open.png)
+![1773641182033-06ce7780-f9cb-4073-a36c-4b7f59c39e9b.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-005-setup-state-open.png)
 
 成功打开后的界面截图如下：
 
-![1773641380552-88e26312-32b1-45f2-82fd-6e4fb44548a1.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-006-setup-open-screenshot.png)
+![1773641380552-88e26312-32b1-45f2-82fd-6e4fb44548a1.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-006-setup-open-screenshot.png)
 
 # 2.找到一条合适的 `add`指令
 
 打开反汇编文件（即压缩包中的 `hello-riscv64-xs.txt`文件）：
 
-![1773641519830-3ae34d08-778e-44ed-bc4a-6150050c3178.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-007-add-open-disassembly.png)
+![1773641519830-3ae34d08-778e-44ed-bc4a-6150050c3178.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-007-add-open-disassembly.png)
 
 此处选择位于程序计数器（pc）地址 `0x80000122`的指令，其内容为 `0x006f0133`。单独分析这条指令，对照指令集手册：
 
-![1773641630350-ca2bac29-79bf-4e13-9564-4610c906d6ea.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-008-add-select-pc.png)
+![1773641630350-ca2bac29-79bf-4e13-9564-4610c906d6ea.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-008-add-select-pc.png)
 
 （ 本图来源于 [链接](https://ai-embedded.com/risc-v/riscv-isa-manual/) ）
 
@@ -93,27 +93,27 @@
 
 目前只对后端进行分析，分析的起点显然是 `CtrlBlock`模块
 
-![1773642856838-5f8f97e3-076c-4220-b62a-d886b2a83551.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-009-start-backend-analysis.png)
+![1773642856838-5f8f97e3-076c-4220-b62a-d886b2a83551.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-009-start-backend-analysis.png)
 
 通过阅读设计手册可知，指令在进入后端时，首先会进入译码阶段。在译码阶段，由 6 个 `DecodeUnit`模块负责对输入的 6 条指令进行译码。
 
-![1773642951648-fe1a3c4f-ddd8-42fb-a6c6-f3e1f2291333.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-010-start-manual-backend.png)
+![1773642951648-fe1a3c4f-ddd8-42fb-a6c6-f3e1f2291333.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-010-start-manual-backend.png)
 
 首先查看 `DecodeStage`中的代码以验证此猜想：
 
-![1773643134048-b5acf657-d9b9-4ec9-afce-0390d0736f86.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-011-start-inspect-decode.png)
+![1773643134048-b5acf657-d9b9-4ec9-afce-0390d0736f86.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-011-start-inspect-decode.png)
 
 由此可知，系统生成了 6 个 `DecodeUnit`实例，并分别向其输入了数据。因此，当前的观察重点应放在 `DecodeUnit`模块上。为此，我们首先查看该模块的代码：
 
-![1773643329438-e196b47d-86db-4d99-9870-66052937b81a.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-012-start-decode-unit.png)
+![1773643329438-e196b47d-86db-4d99-9870-66052937b81a.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-012-start-decode-unit.png)
 
 如上图所示，我们已定位到该模块的 IO 端口。接下来查看这些端口的定义：
 
-![1773643434168-2a9af6a3-2e90-4d1e-b12e-288c733187ea.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-013-start-io-port.png)
+![1773643434168-2a9af6a3-2e90-4d1e-b12e-288c733187ea.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-013-start-io-port.png)
 
 由此可知，`DecodeUnitEnqIO`是该模块的输入接口，`DecodeUnitDeqIO`是其输出接口。查阅这两组接口的定义如下：
 
-![1773643499568-4d03ac37-c634-45e5-8862-614ca60d7d5d.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-014-start-decode-unit.png)
+![1773643499568-4d03ac37-c634-45e5-8862-614ca60d7d5d.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-014-start-decode-unit.png)
 
 因此，对 `DecodeUnit`模块的研究将主要聚焦于这两组信号。
 
@@ -123,11 +123,11 @@
 
 查看第 0 个 DecodeUnit 的输入和输出：
 
-![1773643892501-9ef6eb5a-0517-42f9-8337-81365b07da30.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-015-decode-stage-unit-inspect.png)
+![1773643892501-9ef6eb5a-0517-42f9-8337-81365b07da30.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-015-decode-stage-unit-inspect.png)
 
 该模块的输入与输出内容如下：
 
-![1773644859068-ebea2c8e-7678-41f1-82c1-ae38386fcd61.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-016-decode-stage-unit-chisel.png)
+![1773644859068-ebea2c8e-7678-41f1-82c1-ae38386fcd61.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-016-decode-stage-unit-chisel.png)
 
 | chisel | verilog | 含义 |
 | --- | --- | --- |
@@ -168,7 +168,7 @@
 
 \*\*首先，理解这两个 \*\*<code>**srcType**</code>\*\*的意义。\*\*我们先看 DecodeUnit 模块如何为这条 add 指令写入该值：
 
-![1773645487182-07046b71-df60-4511-991b-ad194e9dc4b8.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-017-decode-stage-unit-type.png)
+![1773645487182-07046b71-df60-4511-991b-ad194e9dc4b8.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-017-decode-stage-unit-type.png)
 
 在代码中很容易发现，`srcType_0`之所以为 `0x1`以及 `srcType_1`之所以为 `0x1`，是因为 DecodeUnit 为这两个位置写入了 `SrcType.reg`这个值。
 
@@ -176,11 +176,11 @@
 
 为了确认“来源于寄存器”的指示信号是否确实对应“0x1”，我们继续查看关于 `srcType`的定义：
 
-![1773644762490-05bed4a2-1569-4e80-bd04-29061d834cd5.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-018-decode-stage-unit-register.png)
+![1773644762490-05bed4a2-1569-4e80-bd04-29061d834cd5.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-018-decode-stage-unit-register.png)
 
 查找结果如下：
 
-![1773645310882-95b69030-14b4-429d-a983-c291361bdcdd.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-019-decode-stage-unit-result.png)
+![1773645310882-95b69030-14b4-429d-a983-c291361bdcdd.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-019-decode-stage-unit-result.png)
 
 从代码中可以看到，定义了：
 
@@ -193,11 +193,11 @@ def reg = this.xp
 
 \*\*接着，分析 \*\*<code>**fuType**</code>\*\*为 \*\*<code>**0x40**</code>\*\*与 \*\*<code>**fuOpType**</code>\*\*为 \*\*<code>**0x21**</code>**所代表的意义。**
 
-![1773646069416-02f6d047-b710-4d7d-835e-cc70bdd5801e.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-020-decode-stage-unit-analysis.png)
+![1773646069416-02f6d047-b710-4d7d-835e-cc70bdd5801e.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-020-decode-stage-unit-analysis.png)
 
 结果如下：
 
-![1773646163390-bc4b2a70-bf29-48d5-9281-2788a1f5b631.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-021-decode-stage-unit-result.png)
+![1773646163390-bc4b2a70-bf29-48d5-9281-2788a1f5b631.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-021-decode-stage-unit-result.png)
 
 可以看出，这个值采用独热编码。`fuType`为 `0x40`，即二进制 `8b0100_0000`，意味着下标为 6 的位置是 `1b1`。
 
@@ -211,13 +211,13 @@ val alu = addType(name = "alu")
 
 紧接着，分析 `fuOpType`为 `0x21`的含义。可以推测，这个值指示了 ALU 执行的具体操作是加法。我们来验证一下：
 
-![1773646502266-a0ce1c71-1adb-490c-b52b-717564fa2af5.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-022-decode-stage-unit-analysis.png)
+![1773646502266-a0ce1c71-1adb-490c-b52b-717564fa2af5.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-022-decode-stage-unit-analysis.png)
 
 在定义 `fuOpType`的代码处，可以看到当值为 `0x21`时，其注释表明它代表普通的加法操作。
 
 通过以上分析，相信你对输入 DecodeUnit 模块的信号以及该模块输出的信号，都有了较深入的理解，对于其他指令也能独立判断这些信号的意义了。
 
-![1773644859068-ebea2c8e-7678-41f1-82c1-ae38386fcd61.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-016-decode-stage-unit-chisel.png)
+![1773644859068-ebea2c8e-7678-41f1-82c1-ae38386fcd61.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-016-decode-stage-unit-chisel.png)
 
 总结如下：
 
@@ -232,27 +232,27 @@ val alu = addType(name = "alu")
 
 至此，对译码模块的探索可以暂时告一段落。在学习初期，我们只需要了解香山架构是如何对简单指令进行译码的。即在下图中：
 
-![1773711982179-77c0d600-b23b-47ec-ba2f-773d7a379ba6.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-023-rename-stage-decode.png)
+![1773711982179-77c0d600-b23b-47ec-ba2f-773d7a379ba6.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-023-rename-stage-decode.png)
 
 在紫色板块（DecodeStage）中，我们只需理解被红色方框框出的部分。因为其他部分主要服务于向量指令，而学习初期我们暂不关注此类复杂指令。因此，可以认为译码模块的探究已经完成，接下来应转向对重命名（Rename）阶段的探究。
 
 在探究重命名的实现之前，强烈建议先熟悉其理论基础，这将帮助你更好地理解此处的架构设计。理论学习可参考《香山源代码剖析 第二册》P1011，或直接阅读下方图片：
 
-![1773712880661-a4fa527a-2b32-4ead-8982-48a3aae340fe.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-024-rename-stage-inspect-architecture.png)
+![1773712880661-a4fa527a-2b32-4ead-8982-48a3aae340fe.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-024-rename-stage-inspect-architecture.png)
 
-![1773712889737-f2cb0cbd-6d0f-4a62-a13b-15e63126fc70.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-025-rename-stage-inspect-architecture.png)
+![1773712889737-f2cb0cbd-6d0f-4a62-a13b-15e63126fc70.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-025-rename-stage-inspect-architecture.png)
 
-![1773712907621-6686d9b4-b98b-46aa-8c46-688ac255506c.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-026-rename-stage-inspect-architecture.png)
+![1773712907621-6686d9b4-b98b-46aa-8c46-688ac255506c.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-026-rename-stage-inspect-architecture.png)
 
 熟悉了上述理论知识后，接下来需要查看架构图：
 
-![1773712285764-776c1ecc-6fa5-4d1f-bf31-f30298d87676.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-027-rename-stage-inspect-architecture.png)
+![1773712285764-776c1ecc-6fa5-4d1f-bf31-f30298d87676.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-027-rename-stage-inspect-architecture.png)
 
 可以发现，在 DecodeStage 译码结束后，会大致将两类信号向外传递，即上图中标红的数字 1 和 2。接下来，我们将主要从这两类信号开始，分析指令进入后续流水级的具体行为。
 
 在查看此架构图时，需要注意一个关键点：图中所有用橙色标示的区域，通常都可以认为内部包含寄存器。例如下图框出的这些部分：
 
-![1773807937411-95884ed2-9fe7-4b84-9658-19482d6f094a.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-028-rename-stage-inspect-architecture.png)
+![1773807937411-95884ed2-9fe7-4b84-9658-19482d6f094a.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-028-rename-stage-inspect-architecture.png)
 
 而其他部分通常只包含组合逻辑。
 
@@ -287,15 +287,15 @@ val alu = addType(name = "alu")
 
 查看架构图可知，在重命名（Rename）模块与分发（Dispatch）模块之间也存在一个 `RenamePipeDispatch`模块。基本可以确认，这是两级流水线之间的流水线寄存器。其行为模式与我们前面分析过的 `DecodePipeRename`模块几乎完全相同，因此这里不再赘述。读者可自行查看该模块相关的输入、输出信号波形。
 
-![1773971578279-11d87699-666b-47b9-b42f-efbaa2b7f758.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-053-signal-inspect-architecture-diagram.png)
+![1773971578279-11d87699-666b-47b9-b42f-efbaa2b7f758.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-053-signal-inspect-architecture-diagram.png)
 
 此处直接观察进入分发模块的数据信号，定位到该模块：
 
-![1773971988477-c34a5e7c-d2f3-43d9-a9e1-38acb1909b57.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-054-signal-dispatch-stage.png)
+![1773971988477-c34a5e7c-d2f3-43d9-a9e1-38acb1909b57.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-054-signal-dispatch-stage.png)
 
 提取以下相关信号进行观察：
 
-![1773972050846-ce217155-c58e-45e1-95e8-59da04638e41.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-055-signal-waveform-ps-dispatch.png)
+![1773972050846-ce217155-c58e-45e1-95e8-59da04638e41.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-055-signal-waveform-ps-dispatch.png)
 
 在波形中可以观察到，在仿真时间 2337 ps 这一时刻，第 0 路进入分发阶段的指令主要包含以下信息：
 
@@ -323,11 +323,11 @@ val alu = addType(name = "alu")
 
 进入分发阶段后，如上节所示，指令已经知晓其两个源操作数分别来自物理寄存器 10 号和 7 号。那么，进入此阶段后，它的重要任务之一自然是查询这两个所需数据的状态，即检查 10 号和 7 号物理寄存器的数据是否就绪，是否仍处于繁忙状态。因此，它需要读取分发阶段下的子模块 `intBusyTable`，以获取这两个物理寄存器的状态信息。
 
-![1773972999812-bd84702e-f2cf-46f0-8867-ae3d886d0b78.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-056-busy-table-dispatch-stage.png)
+![1773972999812-bd84702e-f2cf-46f0-8867-ae3d886d0b78.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-056-busy-table-dispatch-stage.png)
 
 拉取此模块的如下信号：
 
-![1773972967879-d83c19b9-5589-4187-ba07-a10aeee50464.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-057-busy-table-signal-rename.png)
+![1773972967879-d83c19b9-5589-4187-ba07-a10aeee50464.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-057-busy-table-signal-rename.png)
 
 重命名到分发模块的信号：
 
@@ -386,7 +386,7 @@ busy table 查询信号：
 
 现在，我们拉出以下信号进行查看
 
-![1773973821424-d758ba16-d700-436d-9c1b-cf28c573e5bd.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-058-busy-table-signal-inspect.png)
+![1773973821424-d758ba16-d700-436d-9c1b-cf28c573e5bd.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-058-busy-table-signal-inspect.png)
 
 | 信号名 | 波形数值 | 核心功能 | 与全链路信号的联动关系 |
 | --- | --- | --- | --- |
@@ -410,11 +410,11 @@ busy table 查询信号：
 
 因此，观察此模块的信号：
 
-![1773974763523-ea010c15-8d04-4125-a24a-74904c5c214a.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-059-rob-signal-inspect.png)
+![1773974763523-ea010c15-8d04-4125-a24a-74904c5c214a.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-059-rob-signal-inspect.png)
 
 提取以下信号进行查看：
 
-![1773974571338-e9e67f8b-a3c5-4e5f-bf8e-2b19429b4fe6.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-060-rob-signal-inspect.png)
+![1773974571338-e9e67f8b-a3c5-4e5f-bf8e-2b19429b4fe6.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-060-rob-signal-inspect.png)
 
 首先是 ROB 入队的请求信号
 
@@ -460,11 +460,11 @@ busy table 查询信号：
 
 首先，需要确定指令具体可进入哪个发射队列。这个判断由分发（dispatch）模块中的以下信号决定
 
-![1773975798498-b2b9dbe6-839d-424b-ada2-963645cf9ddf.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-061-issue-dispatch-signal-inspect.png)
+![1773975798498-b2b9dbe6-839d-424b-ada2-963645cf9ddf.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-061-issue-dispatch-signal-inspect.png)
 
 我们先来弄清楚这里为什么会有编号 0 到 16 一共 17 个发射队列。可以查看架构图：
 
-![1773975913411-cfd2bc9a-a17d-4338-941a-bf329715661b.png](../../../img/simple-analysis-process-of-a-store-instruction/figure-017-dispatch-stage-analysis-add.png)
+![1773975913411-cfd2bc9a-a17d-4338-941a-bf329715661b.png](../../img/simple-analysis-process-of-a-store-instruction/figure-017-dispatch-stage-analysis-add.png)
 
 波形中的 17 个发射队列指的就是上图这些。你可能会数一数，发现图中一共画了 19 个方块，为什么数量对不上呢？对此，笔者暂时也没有完全弄懂原因，推测可能是在 `memScheduler`中有队列进行了合并。但对于前面的 `IntScheduler`部分，其序号应该是能对应上的。
 
@@ -472,7 +472,7 @@ busy table 查询信号：
 
 看完store指令的执行过程后，就明白了这里为什么数量对不上了。因为对于store指令，是需要写数据、写地址两类的，所以这两类数据分别会进行发射。
 
-也就是说在图中的：![1774337008924-947f75af-cf64-44bc-aee9-c1c58bfd3c57.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-063-store-execute-address.png)
+也就是说在图中的：![1774337008924-947f75af-cf64-44bc-aee9-c1c58bfd3c57.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-063-store-execute-address.png)
 
 1（"sta":store address算地址的队列）、3（"std":store data算数据的队列）是一对；同理2、4队列是一对。
 
@@ -482,11 +482,11 @@ busy table 查询信号：
 
 例如，在上面的波形图中，你会发现给这条加法指令的信号中，只有 `uopSelIQ_0_3`被拉高了。这表明这条加法指令将被填入到上图中下标为 3（即第 4 个）的队列中。数一下就能确定，就是那个叫做 `IssueQueueAluCsrFenceDiv`的队列：
 
-![1773976234716-b29c3156-9ab9-4b4b-a9da-7b1aba67cc34.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-064-issue-waveform-add-signal.png)
+![1773976234716-b29c3156-9ab9-4b4b-a9da-7b1aba67cc34.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-064-issue-waveform-add-signal.png)
 
 此外，还需要明白一点：每一个发射队列都会有两个写端口。因此，如果我们的加法指令是被发射到下标为 3 的发射队列中，那么它只可能通过下标为 6 或 7 的写端口对该队列进行写入。明白这一点后，就可以拉出这部分的写信号，确认它具体使用的是哪一个端口：
 
-![1773976482752-0fe8601d-25f2-4a22-b2a4-fc2f0acff86b.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-065-port-add-signal.png)
+![1773976482752-0fe8601d-25f2-4a22-b2a4-fc2f0acff86b.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-065-port-add-signal.png)
 
 **发射队列选择信号：**
 
@@ -542,15 +542,15 @@ busy table 查询信号：
 
 在前面的分析中，我们已经完全完成了ctrlBlock模块里面如何处理一条简单的ALU的大致流程，这三级流水都是顺序执行，指令一直到分发阶段都是有序的，进入IQ之后，也就将会变得无序了。所以现在要开始分析一条简单的ALU指令从分发阶段出去后到执行、到回写的全过程。
 
-![1782721372549-6f9a053b-2756-4429-8134-37d505e24e0f.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-067-simple-analysis-process-of-an-add-instruction.png)
+![1782721372549-6f9a053b-2756-4429-8134-37d505e24e0f.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-067-simple-analysis-process-of-an-add-instruction.png)
 
 从下标为6的端口往外发射，所以会进入到6/2=3，进入到下标为3的那个IQ，在架构图的位置也就是：
 
-![1782717062030-69c53ba3-46f6-4a7e-8f45-a65a29125fbd.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-068-simple-analysis-process-of-an-add-instruction.png)
+![1782717062030-69c53ba3-46f6-4a7e-8f45-a65a29125fbd.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-068-simple-analysis-process-of-an-add-instruction.png)
 
 直接去拉到这个IQ的入队信号核验。6号端口对应的是这个IQ的第一个端口，所以直接拉第一个端口就行：
 
-![1782801583292-1c6755c6-f72d-449b-b295-f57953f7b43a.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-069-simple-analysis-process-of-an-add-instruction.png)
+![1782801583292-1c6755c6-f72d-449b-b295-f57953f7b43a.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-069-simple-analysis-process-of-an-add-instruction.png)
 
 可以看到这个叫做“IssueQueueAluCsrFenceDiv”的这个IQ的第0个端口成功接收到了发来的请求入队信息。可以通过robIdx=0x35来判断出他是那条我们一直在追踪的加法指令；
 
@@ -562,13 +562,13 @@ busy table 查询信号：
 
 （好啰嗦~~因为笔者现在比较累，不太想动脑子了，就先写写这些啰里啰唆的东西磨磨时间~）
 
-![1782801558504-63b2ab63-9a25-41cd-9b47-c5d69b818463.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-070-simple-analysis-process-of-an-add-instruction.png)
+![1782801558504-63b2ab63-9a25-41cd-9b47-c5d69b818463.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-070-simple-analysis-process-of-an-add-instruction.png)
 
 欸!继续看，前面看到了这个叫做“IssueQueueAluCsrFenceDiv”的IQ接收到之前的请求信息之后又有什么样的动作呢。所以就看上面的这个波形图吧。
 
 当这个IQ接收到请求之后，紧接着在下一个周期，可以看到相关的入队信息被填入了*enqEntries*中。在图中的结构大概是这样的：
 
-![1782805619712-3a61b3be-f278-49ac-ac65-dccd15a88dcf.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-071-simple-analysis-process-of-an-add-instruction.png)
+![1782805619712-3a61b3be-f278-49ac-ac65-dccd15a88dcf.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-071-simple-analysis-process-of-an-add-instruction.png)
 
 每一个IQ中，都会有两个enqEntries，其实就是对应着两个入队端口，当新的指令进入IQ的时候，都是先存到这个enqEntries中，如果不能够立马发射，那么就会转移到其他的表项中去，例如上图中的“ otherEntries\* ”相关的表项。（可能转移的条件等说法不是很准确，但大概就是这么个意思）
 
@@ -578,7 +578,7 @@ busy table 查询信号：
 
 ## （5）读寄存器、执行
 
-![1782801639281-213088c5-d2c0-475f-a6f9-b91b6395c3bb.png](../../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-072-simple-analysis-process-of-an-add-instruction.png)
+![1782801639281-213088c5-d2c0-475f-a6f9-b91b6395c3bb.png](../../img/simple-analysis-process-of-an-add-instruction/original-figures/figure-072-simple-analysis-process-of-an-add-instruction.png)
 
 重点肯定是要关注一下两个源操作数的状态是怎么样的。可以看到有一个源操作数也就是“srcStatus\_1\_psrc”，其实也就是物理寄存器7号的值，大概过了两三个周期之后，可以看到state被拉高了，其实就是说明这个时候物理寄存器7号的值已经就绪了。但是再看看另一个操作数呢，也就是“srcStatus\_0\_psrc”的值，也就是物理寄存器0x0a的值，这个时候还没有准备好呢。但是又过了若干个周期之后，可以看到“srcStatus\_0\_srcState”被拉高了。也就是说，这个时候两个源操作数都是已经就绪的状态了，这条操作本身就已经具备的发射的条件。
 
