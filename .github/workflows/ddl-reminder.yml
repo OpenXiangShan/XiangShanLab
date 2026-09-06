@@ -49,25 +49,14 @@ jobs:
                 continue;
               }
 
-              const ddlMonth = section(issue.body, '截止时间（DDL）· 月份');
-              const ddlDay = section(issue.body, '截止时间（DDL）· 日期');
-              const ddlHour = section(issue.body, '截止时间（DDL）· 小时');
-              const ddlMinute = section(issue.body, '截止时间（DDL）· 分钟');
-              if (!ddlMonth || !ddlDay || !ddlHour || !ddlMinute) {
-                core.warning(`Skip #${issue.number}: missing DDL fields`);
+              const ddl = section(issue.body, '截止时间（DDL）');
+              const match = ddl.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+              if (!match) {
+                core.warning(`Skip #${issue.number}: invalid or missing DDL`);
                 continue;
               }
 
-              const year = Number(
-                new Intl.DateTimeFormat('en-US', {
-                  timeZone: 'Asia/Shanghai',
-                  year: 'numeric',
-                }).format(new Date())
-              );
-              const month = Number(ddlMonth);
-              const day = Number(ddlDay);
-              const hour = Number(ddlHour);
-              const minute = Number(ddlMinute);
+              const [, year, month, day, hour, minute] = match.map(Number);
               const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
               if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
                 core.warning(`Skip #${issue.number}: invalid DDL date`);
@@ -79,8 +68,6 @@ jobs:
               const d = String(day).padStart(2, '0');
               const h = String(hour).padStart(2, '0');
               const mi = String(minute).padStart(2, '0');
-              const ddl = `${y}-${mo}-${d} ${h}:${mi}`;
-
               const deadline = new Date(
                 `${y}-${mo}-${d}T${h}:${mi}:00+08:00`
               );

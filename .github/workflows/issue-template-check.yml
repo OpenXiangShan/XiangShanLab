@@ -63,30 +63,68 @@ jobs:
               errors.push('“质押积分”必须是大于 0 的整数。');
             }
 
-            const ddlYear = Number(
-              new Intl.DateTimeFormat('en-US', {
-                timeZone: 'Asia/Shanghai',
-                year: 'numeric',
-              }).format(new Date())
-            );
-            const ddlMonth = requiredSection('截止时间（DDL）· 月份');
-            const ddlDay = requiredSection('截止时间（DDL）· 日期');
-            const ddlHour = requiredSection('截止时间（DDL）· 小时');
-            const ddlMinute = requiredSection('截止时间（DDL）· 分钟');
+            const ddlLabel = '截止时间（DDL）';
+            let resolvedDdl = '';
 
-            if (ddlMonth && ddlDay && ddlHour && ddlMinute) {
-              const month = Number(ddlMonth);
-              const day = Number(ddlDay);
-              const hour = Number(ddlHour);
-              const minute = Number(ddlMinute);
-              const daysInMonth = new Date(Date.UTC(ddlYear, month, 0)).getUTCDate();
-              const valid =
-                month >= 1 && month <= 12 &&
-                day >= 1 && day <= daysInMonth &&
-                Number.isInteger(hour) && hour >= 0 && hour <= 23 &&
-                Number.isInteger(minute) && minute >= 0 && minute <= 59 && minute % 5 === 0;
-              if (!valid) {
-                errors.push('“截止时间（DDL）”不是有效的日期时间，请重新选择。');
+            const combinedDdl = section(ddlLabel);
+            if (combinedDdl) {
+              const m = combinedDdl.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+              if (!m) {
+                errors.push('“截止时间（DDL）”格式无效。');
+              } else {
+                const [, y, mo, d] = m.map(Number);
+                const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+                if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth) {
+                  errors.push('“截止时间（DDL）”不是有效的日期。');
+                }
+              }
+            } else {
+              const ddlMonth = section('截止时间（DDL）· 月份');
+              const ddlDay = section('截止时间（DDL）· 日期');
+              if (!ddlMonth || !ddlDay) {
+                errors.push('“截止时间（DDL）”不能为空。');
+              } else {
+                const month = Number(ddlMonth);
+                const day = Number(ddlDay);
+                const now = new Date();
+                const beijingYear = Number(
+                  new Intl.DateTimeFormat('en-US', {
+                    timeZone: 'Asia/Shanghai',
+                    year: 'numeric',
+                  }).format(now)
+                );
+                const daysIn = (y) => new Date(Date.UTC(y, month, 0)).getUTCDate();
+                const validAt = (y) => month >= 1 && month <= 12 && day >= 1 && day <= daysIn(y);
+                for (const y of [beijingYear, beijingYear + 1]) {
+                  if (!validAt(y)) continue;
+                  const text = `${String(y).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} 23:59`;
+                  const date = new Date(`${text.replace(' ', 'T')}:00+08:00`);
+                  if (date.getTime() > now.getTime()) {
+                    resolvedDdl = text;
+                    break;
+                  }
+                }
+                if (!resolvedDdl) {
+                  errors.push('“截止时间（DDL）”不是有效的日期，请重新选择。');
+                }
+              }
+            }
+
+            if (resolvedDdl) {
+              const monthHeading = '### 截止时间（DDL）· 月份';
+              const dayHeading = '### 截止时间（DDL）· 日期';
+              const start = body.indexOf(monthHeading);
+              const dayStart = body.indexOf(dayHeading, start);
+              if (start !== -1 && dayStart !== -1) {
+                const afterDay = body.indexOf('\n### ', dayStart + dayHeading.length);
+                const end = afterDay === -1 ? body.length : afterDay;
+                const newBody = body.slice(0, start) + `### ${ddlLabel}\n\n${resolvedDdl}\n` + body.slice(end);
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: newBody
+                });
               }
             }
 
