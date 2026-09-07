@@ -78,8 +78,8 @@ myworkspace
 *.so
 *.so.*
 *.dylib
-*.dll
-*.elf
+*# .dll
+# *.elf
 *.exe
 *.out
 *.app
@@ -97,7 +97,7 @@ ucli.key
 vc_hdrs.h
 
 # Logs and reports produced by build/simulation tools
-*.log
+# *.log
 *.jou
 *.pb
 *.rpt
@@ -105,7 +105,7 @@ vc_hdrs.h
 *.summary
 *.tmp
 *.bak
-*.dump
+# *.dump
 
 # FPGA / EDA generated files
 *.bgn
