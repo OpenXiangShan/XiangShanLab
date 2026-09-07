@@ -1,0 +1,54 @@
+name: Weekly Status
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'
+  workflow_dispatch:
+    inputs:
+      week_start:
+        description: 'Week starting Monday (YYYY-MM-DD, Beijing time); empty for previous week'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: read
+
+concurrency:
+  group: weekly-status-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Test report generator
+        run: python3 -B -m unittest discover -s weekly-status/scripts -p 'test_*.py'
+      - name: Generate report
+        id: report
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WEEK_START: ${{ inputs.week_start }}
+        shell: bash
+        run: |
+          args=()
+          if [[ -n "$WEEK_START" ]]; then
+            args+=(--week-start "$WEEK_START")
+          fi
+          report=$(python3 -B weekly-status/scripts/generate_report.py "${args[@]}")
+          printf 'path=%s\n' "$report" >> "$GITHUB_OUTPUT"
+          cat "$report" >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive report
+        env:
+          REPORT_PATH: ${{ steps.report.outputs.path }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          git add -- "$REPORT_PATH"
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "add weekly status $(basename "$REPORT_PATH" .md)"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
