@@ -22,11 +22,11 @@ jobs:
   report:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.ref_name }}
       - name: Test report generator
-        run: python3 -m unittest discover -s weekly-status -p 'test_*.py'
+        run: python3 -B -m unittest discover -s weekly-status/scripts -p 'test_*.py'
       - name: Generate report
         id: report
         env:
@@ -38,7 +38,7 @@ jobs:
           if [[ -n "$WEEK_START" ]]; then
             args+=(--week-start "$WEEK_START")
           fi
-          report=$(python3 weekly-status/generate_report.py "${args[@]}")
+          report=$(python3 -B weekly-status/scripts/generate_report.py "${args[@]}")
           printf 'path=%s\n' "$report" >> "$GITHUB_OUTPUT"
           cat "$report" >> "$GITHUB_STEP_SUMMARY"
       - name: Archive report

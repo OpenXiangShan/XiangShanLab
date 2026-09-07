@@ -21,5 +21,5 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: python3 -m unittest discover -s weekly-status -p 'test_*.py'
+      - uses: actions/checkout@v5
+      - run: python3 -B -m unittest discover -s weekly-status/scripts -p 'test_*.py'

@@ -92,7 +92,7 @@ def display_directory(directory):
 
 def docs_directories(repo_root=None):
     """Return display name and repository-relative path for local docs children."""
-    root = Path(repo_root or Path(__file__).resolve().parent.parent)
+    root = Path(repo_root or Path(__file__).resolve().parents[2])
     docs_roots = [root / "xiangshan-course/docs"]
     directories = []
     for docs_root in docs_roots:
@@ -171,7 +171,7 @@ def extract_commits(texts):
 
 
 def analyze_comments(comments, start, end):
-    """Return weekly events and the final bot-derived review state."""
+    """Return weekly events, review state, executor and valid LGTM count."""
     events = []
     review_state = None
     executor = None
@@ -199,25 +199,17 @@ def analyze_comments(comments, start, end):
                 reviewers.add(key)
                 if created_at and in_week(created_at, start, end):
                     events.append(("有效LGTM", login))
-    return events, review_state, executor
+    return events, review_state, executor, len(reviewers)
 
 
 def is_task(issue):
     return not issue.get("pull_request") and bool(re.match(r"^\[TASK\]\s+\S", issue.get("title") or ""))
 
 
-def current_status(issue, review_state, overdue=False):
-    if issue.get("state") == "open":
-        if review_state == "pending":
-            status = "待验收"
-        elif review_state == "resolved":
-            status = "进行中（已重新打开）"
-        elif not issue.get("assignees"):
-            status = "待认领"
-        else:
-            status = "进行中"
-        return status + "（逾期）" if overdue else status
-    return "已交付（已关闭）"
+def current_status(issue, lgtm_count, overdue=False):
+    status = "已交付（已关闭）" if issue.get("state") == "closed" else "未交付（未关闭）"
+    status += "；LGTM %d/3" % lgtm_count
+    return status + "；逾期" if overdue else status
 
 
 def markdown_cell(value):
@@ -258,10 +250,18 @@ def task_directory_url(path, repo):
     return "https://github.com/%s/tree/HEAD/%s" % (repo, quote(path))
 
 
-def has_week_activity(issue, comments, start, end):
-    timestamps = [issue.get(field) for field in ("created_at", "updated_at", "closed_at")]
-    timestamps.extend(comment.get("created_at") for comment in comments)
-    return any(value and in_week(value, start, end) for value in timestamps)
+def week_reasons(issue, start, end):
+    if not is_task(issue):
+        return []
+    reasons = []
+    if issue.get("created_at") and in_week(issue["created_at"], start, end):
+        reasons.append("本周新增")
+    if issue.get("state") == "closed" and issue.get("closed_at") and in_week(issue["closed_at"], start, end):
+        reasons.append("本周交付")
+    deadline = parse_ddl(issue_section(issue.get("body") or "", "截止时间（DDL）"))
+    if deadline and start <= deadline < end:
+        reasons.append("本周到期")
+    return reasons
 
 
 def build_report(issues, comments_by_issue, start, end, repo="owner/repo", directories=None, now=None):
@@ -272,11 +272,14 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
     directory_contributors = defaultdict(set)
     delivered = []
     details = []
+    seen = set()
     for issue in issues:
-        if not is_task(issue):
+        reasons = week_reasons(issue, start, end)
+        if not reasons or issue["number"] in seen:
             continue
+        seen.add(issue["number"])
         comments = comments_by_issue.get(issue.get("number"), [])
-        events, review_state, _ = analyze_comments(comments, start, end)
+        events, _, _, lgtm_count = analyze_comments(comments, start, end)
         if issue.get("created_at") and in_week(issue["created_at"], start, end):
             creator = (issue.get("user") or {}).get("login")
             if creator:
@@ -286,18 +289,17 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
         ddl = issue_section(issue.get("body") or "", "截止时间（DDL）")
         deadline = parse_ddl(ddl)
         overdue = bool(issue.get("state") == "open" and deadline and deadline < now)
-        status = current_status(issue, review_state, overdue)
+        status = current_status(issue, lgtm_count, overdue)
         directory, directory_path = resolve_directory(issue_section(issue.get("body") or "", "所属目录"), directories)
         key = (directory, directory_path)
         counts = directory_counts.setdefault(key, defaultdict(int))
-        counts["任务总数"] += 1
-        if issue.get("created_at") and in_week(issue["created_at"], start, end):
-            counts["本周新增"] += 1
-        closed = issue.get("state") == "closed"
-        weekly_delivery = bool(closed and issue.get("closed_at") and in_week(issue["closed_at"], start, end))
-        counts["累计交付" if closed else "尚未关闭"] += 1
+        counts["本周任务数"] += 1
+        for reason in reasons:
+            counts[reason] += 1
+        if "本周到期" in reasons and issue.get("state") == "open":
+            counts["到期未关闭"] += 1
+        weekly_delivery = "本周交付" in reasons
         if weekly_delivery:
-            counts["本周交付"] += 1
             # Attribute delivery to assignees, never to the creator or closing bot.
             for login in {user["login"] for user in issue.get("assignees", []) if user.get("login")}:
                 contributions[login]["本周交付"] += 1
@@ -309,23 +311,20 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
             "directory": directory,
             "directory_path": directory_path,
             "ddl": ddl,
-            "status": status,
+            "status": status + "；" + "、".join(reasons),
             "commits": extract_commit_refs([issue.get("body") or ""] + [comment.get("body") or "" for comment in comments], repo),
             "repo": repo,
         }
         if weekly_delivery:
             delivered.append(task)
-        elif has_week_activity(issue, comments, start, end) or issue.get("state") == "open":
+        else:
             details.append(task)
         if issue.get("state") == "open" and issue.get("assignees"):
             for assignee in issue["assignees"]:
                 login = assignee.get("login")
                 if not login:
                     continue
-                if review_state == "pending":
-                    contributions[login]["当前待验收"] += 1
-                else:
-                    contributions[login]["当前进行中"] += 1
+                contributions[login]["当前未关闭"] += 1
                 if overdue:
                     contributions[login]["当前逾期"] += 1
 
@@ -338,25 +337,27 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
         if counts["执行人未记录"]:
             people = (people + "; " if people else "") + "执行人未记录：%d 项" % counts["执行人未记录"]
         directory_rows.append("| %s | %d | %d | %d | %d | %d | %s |" % (
-            heading, counts["任务总数"], counts["本周新增"], counts["本周交付"],
-            counts["累计交付"], counts["尚未关闭"], people or "无"))
+            heading, counts["本周任务数"], counts["本周新增"], counts["本周交付"],
+            counts["本周到期"], counts["到期未关闭"], people or "无"))
 
     contribution_rows = []
     for login in sorted(contributions, key=str.lower):
         counts = contributions[login]
-        contribution_rows.append("| @%s | %d | %d | %d | %d | %d | %d | %d | %d |" % (
+        contribution_rows.append("| @%s | %d | %d | %d | %d | %d | %d | %d |" % (
             login, counts["创建"], counts["认领确认"], counts["提交验收"], counts["本周交付"], counts["有效LGTM"],
-            counts["当前进行中"], counts["当前待验收"], counts["当前逾期"]))
-    contribution_table = "\n".join(contribution_rows) or "| - | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |"
+            counts["当前未关闭"], counts["当前逾期"]))
+    contribution_table = "\n".join(contribution_rows) or "| - | 0 | 0 | 0 | 0 | 0 | 0 | 0 |"
     template = """# Weekly Status: {date}
 
 统计区间：北京时间 {start}（含）至 {end}（不含）。
 
 ## 目录贡献汇总
 
-交付只看任务 Issue 是否关闭；本周交付按 `closed_at` 落在统计区间内计算，不再额外检查 LGTM 或验收评论。每个任务只归属一个目录，目录交付数按 Issue 计数。
+仅纳入本周发布、本周关闭、DDL 在本周的任务 Issue，三类取并集并按 Issue 编号去重。各分类可重叠，不能直接相加。仅有本周评论或更新不作为入选条件，不统计历史累计和范围外存量。
 
-| 所属目录 | 任务总数 | 本周新增 | 本周交付 | 累计交付（当前） | 尚未关闭（当前） | 本周交付贡献者 |
+交付只看任务 Issue 是否关闭；本周交付按 `closed_at` 落在统计区间内计算，不再额外检查 LGTM 或验收评论。每个任务只归属一个目录，目录交付数按 Issue 计数。到期未关闭是本周到期任务中当前仍开放的数量，不等于已经逾期。
+
+| 所属目录 | 本周任务数（去重） | 本周新增 | 本周交付 | 本周到期 | 到期未关闭（当前） | 本周交付贡献者 |
 | --- | --- | --- | --- | --- | --- | --- |
 {directory_summary}
 
@@ -368,22 +369,24 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
 
 ## 用户交付与参与
 
-| Contributor | 创建 | 认领确认 | 提交验收 | 本周交付 | 有效 LGTM | 当前进行中 | 当前待验收 | 当前逾期 |
+| Contributor | 创建 | 认领确认 | 提交验收 | 本周交付 | 有效 LGTM | 当前未关闭 | 当前逾期 |
 {contribution_separator}\n{contributions}
 
-创建、认领、提交验收、LGTM 仅表示参与活动，不算已交付贡献。多人共同负责时每人计一次，目录内该 Issue 仍只计一次。
+所有用户指标仅针对上述本周入选任务，当前未关闭和逾期也不含范围外存量。创建、认领、提交验收、LGTM 仅表示参与活动，不算已交付贡献。多人共同负责时每人计一次，目录内该 Issue 仍只计一次。
+
+Issue 进度只显示有效 LGTM 数量（n/3），不由认领或提交验收推断。有效票按现有审查流程计算：审查开始后、非机器人、非执行人、正文为 LGTM 的评论，每个用户只计一次；已关闭任务保留有效票数。若缺少审查记录则显示 0/3，不反推票数。交付只看关闭状态，DDL 仅用于范围筛选与逾期提示。
 
 ## 其他任务明细
 
-列出本周有任意评论、`updated_at`、`closed_at` 或创建活动，或当前仍为 open 的其余 `[TASK]` Issue；本周交付已单独列出。状态、累计交付、尚未关闭和执行人为生成时的当前快照，补跑历史周报不会还原当时状态。已重新打开的 Issue 不计交付。
+列出本周新增或本周到期的其余任务，本周交付已单独列出；Weekly Status 标注入选原因。状态、DDL 和执行人为生成时的当前快照，补跑历史周报不会还原当时状态。已重新打开的 Issue 不计交付，但仍可因本周新增或本周到期入选。
 
 {details}
 """
     return template.format(date=start.date().isoformat(), start=start.strftime("%Y-%m-%d %H:%M"),
             end=end.strftime("%Y-%m-%d %H:%M"), contributions=contribution_table,
             directory_summary="\n".join(directory_rows), delivered=render_task_groups(delivered),
-           details=render_task_groups(details),
-           contribution_separator="| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+            details=render_task_groups(details),
+            contribution_separator="| --- | --- | --- | --- | --- | --- | --- | --- |")
 
 
 def default_week_start(now=None):
@@ -416,9 +419,11 @@ def main(argv=None):
     start, end = week_range(week_start)
     client = GitHubClient(token)
     issues = client.get_paginated("/repos/%s/issues" % args.repo, {"state": "all"})
+    # DDL is a body field, so updated-since filtering would miss old tasks due this week.
+    issues = list({issue["number"]: issue for issue in issues if week_reasons(issue, start, end)}.values())
     comments_by_issue = {}
     for issue in issues:
-        if is_task(issue):
+        if issue.get("comments") != 0:
             comments_by_issue[issue["number"]] = client.get_paginated(
                 "/repos/%s/issues/%s/comments" % (args.repo, issue["number"]))
     report = build_report(issues, comments_by_issue, start, end, repo=args.repo)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 class DirectoryOptionsTest(unittest.TestCase):
     def test_options_match_directories(self):
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         form = (root / '.github/ISSUE_TEMPLATE/task_request.yml').read_text()
         field = form.split('id: course_directory\n', 1)[1].split('    validations:', 1)[0]
         options = re.findall(r'^        - (.+)$', field, re.MULTILINE)
