@@ -68,9 +68,9 @@ class ReportTest(unittest.TestCase):
         ]
         events, state, executor = report.analyze_comments(comments, START, END)
         self.assertEqual(events, [("认领确认", "alice"), ("有效LGTM", "carol"),
-                                  ("有效LGTM", "dave"), ("验收通过", "alice")])
+                                  ("有效LGTM", "dave")])
         self.assertEqual((state, executor), ("resolved", "alice"))
-        self.assertEqual(report.current_status(issue(state="closed"), state), "验收通过")
+        self.assertEqual(report.current_status(issue(state="closed"), state), "已交付（已关闭）")
 
     def test_commit_urls_and_labeled_shas_are_deduplicated(self):
         sha = "abcdef1234567"
@@ -145,8 +145,8 @@ class ReportTest(unittest.TestCase):
     def test_contribution_header_and_separator_have_equal_columns(self):
         text = report.build_report([], {}, START, END)
         lines = text.splitlines()
-        header = lines[lines.index("## 本周贡献") + 2]
-        separator = lines[lines.index("## 本周贡献") + 3]
+        header = lines[lines.index("## 用户交付与参与") + 2]
+        separator = lines[lines.index("## 用户交付与参与") + 3]
         self.assertEqual(len(header.strip("|").split("|")), 9)
         self.assertEqual(len(header.strip("|").split("|")), len(separator.strip("|").split("|")))
         self.assertNotIn("## 存量：", text)
@@ -161,8 +161,58 @@ class ReportTest(unittest.TestCase):
                 return [{"id": 2}], ""
         self.assertEqual([item["id"] for item in Client().get_paginated("/test")], [1, 2])
 
-    def test_closed_without_resolved_is_not_approved(self):
-        self.assertEqual(report.current_status(issue(state="closed"), "pending"), "已关闭（未验收）")
+    def test_closed_without_resolved_is_delivered(self):
+        self.assertEqual(report.current_status(issue(state="closed"), "pending"), "已交付（已关闭）")
+
+    def test_all_directories_are_listed_without_tasks(self):
+        directories = report.docs_directories()
+        text = report.build_report([], {}, START, END, directories=directories)
+        for name, path in directories:
+            self.assertIn("| [%s](%s) | 0 | 0 | 0 | 0 | 0 | 无 |" % (
+                name, report.task_directory_url(path, "owner/repo")), text)
+
+    def test_directory_delivery_is_based_on_closure_and_assignees(self):
+        tasks = [
+            issue(state="closed", body="### 所属目录\nAI", closed_at="2026-09-01T00:00:00Z",
+                  assignees=[{"login": "alice"}, {"login": "bob"}]),
+            issue(number=2, body="### 所属目录\nAI", assignees=[{"login": "carol"}]),
+        ]
+        text = report.build_report(tasks, {2: [comment("<!-- task-review:resolved executor=carol -->")]},
+                                   START, END, directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
+        self.assertIn("| 2 | 2 | 1 | 1 | 1 | @alice, @bob |", text)
+        self.assertIn("| @alice | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |", text)
+        self.assertIn("| @bob | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |", text)
+        self.assertIn("| @carol | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |", text)
+        delivered = text.split("## 本周交付明细", 1)[1].split("## 用户交付与参与", 1)[0]
+        self.assertIn("[#1]", delivered)
+        self.assertNotIn("[#2]", delivered)
+
+    def test_delivery_week_uses_closed_at_not_comment_time(self):
+        tasks = [issue(number=i, state="closed", created_at="2026-08-01T00:00:00Z",
+                       closed_at=closed_at, body="### 所属目录\nAI", assignees=[{"login": "alice"}])
+                 for i, closed_at in enumerate([
+                     "2026-08-30T15:59:59Z", "2026-08-30T16:00:00Z",
+                     "2026-09-06T15:59:59Z", "2026-09-06T16:00:00Z"], 1)]
+        comments = {1: [comment("<!-- task-review:resolved executor=alice -->")]}
+        text = report.build_report(tasks, comments, START, END,
+                                   directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
+        self.assertIn("| 4 | 0 | 2 | 4 | 0 | @alice |", text)
+        self.assertIn("| @alice | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 0 |", text)
+
+    def test_unclassified_delivery_without_assignee_is_not_creator_credit(self):
+        task = issue(state="closed", closed_at="2026-09-01T00:00:00Z")
+        text = report.build_report([task], {}, START, END, directories=[])
+        self.assertIn("| 未分类 | 1 | 1 | 1 | 1 | 0 | 执行人未记录：1 项 |", text)
+        self.assertIn("| @creator | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |", text)
+
+    def test_pull_requests_and_non_tasks_do_not_count_as_delivery(self):
+        tasks = [issue(state="closed", pull_request={"url": "https://example.test/pr"}),
+                 issue(number=2, state="closed", title="Not a task")]
+        text = report.build_report(tasks, {}, START, END,
+                                   directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
+        self.assertIn("| 0 | 0 | 0 | 0 | 0 | 无 |", text)
+        self.assertNotIn("[#1]", text)
+        self.assertNotIn("[#2]", text)
 
     def test_api_failure_does_not_create_report(self):
         class FailingClient:

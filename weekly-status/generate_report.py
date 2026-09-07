@@ -188,8 +188,6 @@ def analyze_comments(comments, start, end):
                 reviewers = set()
                 if created_at and in_week(created_at, start, end):
                     events.append(("提交验收", executor))
-            elif created_at and in_week(created_at, start, end):
-                events.append(("验收通过", executor))
             continue
 
         user = comment.get("user") or {}
@@ -219,9 +217,7 @@ def current_status(issue, review_state, overdue=False):
         else:
             status = "进行中"
         return status + "（逾期）" if overdue else status
-    if review_state == "resolved":
-        return "验收通过"
-    return "已关闭（未验收）"
+    return "已交付（已关闭）"
 
 
 def markdown_cell(value):
@@ -272,6 +268,9 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
     now = now or datetime.now(BEIJING)
     directories = docs_directories() if directories is None else directories
     contributions = defaultdict(lambda: defaultdict(int))
+    directory_counts = {entry: defaultdict(int) for entry in directories}
+    directory_contributors = defaultdict(set)
+    delivered = []
     details = []
     for issue in issues:
         if not is_task(issue):
@@ -289,6 +288,22 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
         overdue = bool(issue.get("state") == "open" and deadline and deadline < now)
         status = current_status(issue, review_state, overdue)
         directory, directory_path = resolve_directory(issue_section(issue.get("body") or "", "所属目录"), directories)
+        key = (directory, directory_path)
+        counts = directory_counts.setdefault(key, defaultdict(int))
+        counts["任务总数"] += 1
+        if issue.get("created_at") and in_week(issue["created_at"], start, end):
+            counts["本周新增"] += 1
+        closed = issue.get("state") == "closed"
+        weekly_delivery = bool(closed and issue.get("closed_at") and in_week(issue["closed_at"], start, end))
+        counts["累计交付" if closed else "尚未关闭"] += 1
+        if weekly_delivery:
+            counts["本周交付"] += 1
+            # Attribute delivery to assignees, never to the creator or closing bot.
+            for login in {user["login"] for user in issue.get("assignees", []) if user.get("login")}:
+                contributions[login]["本周交付"] += 1
+                directory_contributors[key].add(login)
+            if not issue.get("assignees"):
+                counts["执行人未记录"] += 1
         task = {
             "issue": issue,
             "directory": directory,
@@ -298,7 +313,9 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
             "commits": extract_commit_refs([issue.get("body") or ""] + [comment.get("body") or "" for comment in comments], repo),
             "repo": repo,
         }
-        if has_week_activity(issue, comments, start, end) or issue.get("state") == "open":
+        if weekly_delivery:
+            delivered.append(task)
+        elif has_week_activity(issue, comments, start, end) or issue.get("state") == "open":
             details.append(task)
         if issue.get("state") == "open" and issue.get("assignees"):
             for assignee in issue["assignees"]:
@@ -312,30 +329,59 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
                 if overdue:
                     contributions[login]["当前逾期"] += 1
 
+    directory_rows = []
+    for key in sorted(directory_counts, key=lambda item: item[0].lower()):
+        name, path = key
+        counts = directory_counts[key]
+        heading = "[%s](%s)" % (name, task_directory_url(path, repo)) if path else name
+        people = ", ".join("@" + login for login in sorted(directory_contributors[key], key=str.lower))
+        if counts["执行人未记录"]:
+            people = (people + "; " if people else "") + "执行人未记录：%d 项" % counts["执行人未记录"]
+        directory_rows.append("| %s | %d | %d | %d | %d | %d | %s |" % (
+            heading, counts["任务总数"], counts["本周新增"], counts["本周交付"],
+            counts["累计交付"], counts["尚未关闭"], people or "无"))
+
     contribution_rows = []
     for login in sorted(contributions, key=str.lower):
         counts = contributions[login]
         contribution_rows.append("| @%s | %d | %d | %d | %d | %d | %d | %d | %d |" % (
-            login, counts["创建"], counts["认领确认"], counts["提交验收"], counts["验收通过"], counts["有效LGTM"],
+            login, counts["创建"], counts["认领确认"], counts["提交验收"], counts["本周交付"], counts["有效LGTM"],
             counts["当前进行中"], counts["当前待验收"], counts["当前逾期"]))
     contribution_table = "\n".join(contribution_rows) or "| - | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |"
     template = """# Weekly Status: {date}
 
 统计区间：北京时间 {start}（含）至 {end}（不含）。
 
-## 本周贡献
+## 目录贡献汇总
 
-| Contributor | 创建 | 认领确认 | 提交验收 | 验收通过 | 有效 LGTM | 当前进行中 | 当前待验收 | 当前逾期 |
+交付只看任务 Issue 是否关闭；本周交付按 `closed_at` 落在统计区间内计算，不再额外检查 LGTM 或验收评论。每个任务只归属一个目录，目录交付数按 Issue 计数。
+
+| 所属目录 | 任务总数 | 本周新增 | 本周交付 | 累计交付（当前） | 尚未关闭（当前） | 本周交付贡献者 |
+| --- | --- | --- | --- | --- | --- | --- |
+{directory_summary}
+
+## 本周交付明细
+
+按目录列出谁交付了哪些任务；贡献归属 Assignee，不归属发布者或执行关闭操作的机器人。未记录执行人的交付仍计入目录，但不猜测个人贡献。
+
+{delivered}
+
+## 用户交付与参与
+
+| Contributor | 创建 | 认领确认 | 提交验收 | 本周交付 | 有效 LGTM | 当前进行中 | 当前待验收 | 当前逾期 |
 {contribution_separator}\n{contributions}
 
-## 任务明细
+创建、认领、提交验收、LGTM 仅表示参与活动，不算已交付贡献。多人共同负责时每人计一次，目录内该 Issue 仍只计一次。
 
-仅列出本周有任意评论、`updated_at`、`closed_at` 或创建活动，或当前仍为 open 的 `[TASK]` Issue；按“所属目录”分组。状态为生成时的当前快照，补跑历史周报不会还原当时状态。
+## 其他任务明细
+
+列出本周有任意评论、`updated_at`、`closed_at` 或创建活动，或当前仍为 open 的其余 `[TASK]` Issue；本周交付已单独列出。状态、累计交付、尚未关闭和执行人为生成时的当前快照，补跑历史周报不会还原当时状态。已重新打开的 Issue 不计交付。
 
 {details}
 """
     return template.format(date=start.date().isoformat(), start=start.strftime("%Y-%m-%d %H:%M"),
-           end=end.strftime("%Y-%m-%d %H:%M"), contributions=contribution_table,
+            end=end.strftime("%Y-%m-%d %H:%M"), contributions=contribution_table,
+            directory_summary="\n".join(directory_rows), delivered=render_task_groups(delivered),
            details=render_task_groups(details),
            contribution_separator="| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
 
