@@ -1,0 +1,25 @@
+name: Weekly Status Checks
+
+on:
+  push:
+    paths:
+      - 'weekly-status/**'
+      - 'xiangshan-course/docs/**'
+      - '.github/ISSUE_TEMPLATE/task_request.yml'
+      - '.github/workflows/weekly-status*.yml'
+  pull_request:
+    paths:
+      - 'weekly-status/**'
+      - 'xiangshan-course/docs/**'
+      - '.github/ISSUE_TEMPLATE/task_request.yml'
+      - '.github/workflows/weekly-status*.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s weekly-status -p 'test_*.py'

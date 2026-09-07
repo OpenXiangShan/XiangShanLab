@@ -11,6 +11,7 @@ permissions:
 jobs:
   validate-task:
     name: Validate task request
+    if: startsWith(github.event.issue.title, '[TASK]') && !github.event.issue.pull_request
     runs-on: ubuntu-latest
     steps:
       - name: Check required task fields
@@ -42,6 +43,18 @@ jobs:
             }
 
             requiredSection('任务背景与目标');
+
+            const directory = requiredSection('所属目录');
+            const { data: entries } = await github.rest.repos.getContent({
+              ...context.repo,
+              path: 'xiangshan-course/docs',
+              ref: context.payload.repository.default_branch
+            });
+            const directories = entries.filter(entry => entry.type === 'dir')
+              .map(entry => entry.name.replace(/^\d+-/, '').replace(/^xiangshan-/, ''));
+            if (directory && !directories.includes(directory)) {
+              errors.push('“所属目录”必须选择有效的课程目录：' + directories.join('、'));
+            }
 
             const deliverables = requiredSection('交付清单');
             if (deliverables && !/^\s*-\s*\[ \]\s+\S/m.test(deliverables)) {

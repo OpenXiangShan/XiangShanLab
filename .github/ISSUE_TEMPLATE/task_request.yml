@@ -7,6 +7,25 @@ body:
       value: |
         请完整填写以下内容。执行人评论 `/assign` 后，由 Issue 发布者回复 `/confirm` 确认认领；完成后由执行人评论 `/complete` 发起审查。
 
+  - type: dropdown
+    id: course_directory
+    attributes:
+      label: 所属目录
+      description: 选择 xiangshan-course/docs/ 下对应的课程目录（省略编号和 xiangshan- 前缀）。
+      options:
+        - development-environment
+        - programming
+        - riscv-specification
+        - microarchitecture-analysis
+        - scenarios-analysis
+        - debug
+        - NoC
+        - AI
+        - AIA
+        - agile-tools
+    validations:
+      required: true
+
   - type: textarea
     id: goal
     attributes:
