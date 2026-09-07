@@ -1,6 +1,7 @@
 # 一条FADD指令的简单分析过程
 
-基于的波形的文件：【[附件: float-add-inst.zip](/scource-code/float-add-inst.zip)】
+基于的波形的文件：
+<a href="source-code/float-add-inst.zip" target="_blank">【附件: float-add-inst.zip】</a>
 
 基于的波形的测试程序：
 
@@ -21,5 +22,5 @@ int main() {
 
 ## 1.
 
-未完待续。。。
+未完待续。。。。。
 
