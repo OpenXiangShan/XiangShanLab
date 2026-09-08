@@ -1,0 +1,37 @@
+
+==> riscv64-unknown-elf-objdump -d /nfs/home/sunyuhang/bug-replay/6265/minimal/test.elf
+
+/nfs/home/sunyuhang/bug-replay/6265/minimal/test.elf:     file format elf64-littleriscv
+
+
+Disassembly of section .text:
+
+0000000080000000 <_start>:
+    80000000:	300022f3          	csrr	t0,mstatus
+    80000004:	00300313          	li	t1,3
+    80000008:	00b31313          	slli	t1,t1,0xb
+    8000000c:	0062e2b3          	or	t0,t0,t1
+    80000010:	30029073          	csrw	mstatus,t0
+    80000014:	00000297          	auipc	t0,0x0
+    80000018:	03c28293          	addi	t0,t0,60 # 80000050 <trap_entry>
+    8000001c:	30529073          	csrw	mtvec,t0
+    80000020:	fff00293          	li	t0,-1
+    80000024:	3b029073          	csrw	pmpaddr0,t0
+    80000028:	01f00293          	li	t0,31
+    8000002c:	3a029073          	csrw	pmpcfg0,t0
+    80000030:	3a201073          	csrw	pmpcfg2,zero
+    80000034:	00103083          	ld	ra,1(zero) # 1 <_start-0x7fffffff>
+    80000038:	00100513          	li	a0,1
+    8000003c:	00200593          	li	a1,2
+    80000040:	00300613          	li	a2,3
+    80000044:	00400693          	li	a3,4
+    80000048:	00500713          	li	a4,5
+    8000004c:	0000006f          	j	8000004c <_start+0x4c>
+
+0000000080000050 <trap_entry>:
+    80000050:	341022f3          	csrr	t0,mepc
+    80000054:	00428293          	addi	t0,t0,4
+    80000058:	34129073          	csrw	mepc,t0
+    8000005c:	30200073          	mret
+    80000060:	0000                	.insn	2, 0x
+	...
