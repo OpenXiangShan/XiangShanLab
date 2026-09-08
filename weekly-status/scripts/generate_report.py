@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 BEIJING = ZoneInfo("Asia/Shanghai")
 BOT_LOGIN = "github-actions[bot]"
-ASSIGNMENT_MARKER = re.compile(r"<!--\s*task-assignment:(pending|resolved) claimant=([A-Za-z0-9-]+)\s*-->")
+ASSIGNMENT_MARKER = re.compile(r"<!--\s*task-assignment:(pending|resolved|failed) claimant=([A-Za-z0-9-]+)\s*-->")
 REVIEW_MARKER = re.compile(r"<!--\s*task-review:(pending|resolved) executor=([A-Za-z0-9-]+)\s*-->")
 COMMIT_URL = re.compile(r"(?P<url>https?://github\.com/[^\s/]+/[^\s/]+/commit/(?P<sha>[0-9a-fA-F]{7,40}))(?=[/?#\s).,;:]|$)")
 LABELED_SHA = re.compile(r"(?:\bcommit\s*(?:sha|hash)?|\bsha|\b提交(?:的)?\s*(?:commit|SHA|哈希)?)\s*[:：#=]?\s*`?([0-9a-fA-F]{7,40})`?(?![0-9a-fA-F])", re.IGNORECASE)
@@ -181,7 +181,10 @@ def analyze_comments(comments, start, end):
         assignment = marker(comment, ASSIGNMENT_MARKER)
         review = marker(comment, REVIEW_MARKER)
         if assignment and assignment.group(1) == "resolved" and created_at and in_week(created_at, start, end):
-            events.append(("认领确认", assignment.group(2)))
+            # Older failure comments also used resolved; preserve their actual outcome.
+            message = (comment.get("body") or "")[assignment.end():].strip()
+            if not message.startswith(("认领未完成：", "无法将 @")):
+                events.append(("认领确认", assignment.group(2)))
         if review:
             review_state, executor = review.group(1), review.group(2)
             if review_state == "pending":

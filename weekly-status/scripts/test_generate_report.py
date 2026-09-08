@@ -81,6 +81,27 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(events, [])
         self.assertEqual(lgtm_count, 0)
 
+    def test_assignment_failures_do_not_count_as_confirmations(self):
+        for state in ("resolved", "failed"):
+            for message in (
+                "认领未完成：该任务已经分配给 @bob。",
+                "无法将 @alice 设为 Assignee。请确认该成员具有仓库协作权限后重新评论 `/assign`。",
+            ):
+                with self.subTest(state=state, message=message):
+                    body = "<!-- task-assignment:%s claimant=alice -->\n%s" % (state, message)
+                    events, _, _, _ = report.analyze_comments([comment(body)], START, END)
+                    self.assertEqual(events, [])
+
+    def test_assignment_retry_counts_only_success(self):
+        comments = [
+            comment("<!-- task-assignment:pending claimant=alice -->", id=1),
+            comment("<!-- task-assignment:failed claimant=alice -->", id=2),
+            comment("<!-- task-assignment:pending claimant=alice -->", id=3),
+            comment("<!-- task-assignment:resolved claimant=alice -->\n认领已确认：@alice 现为该任务的执行人。", id=4),
+        ]
+        events, _, _, _ = report.analyze_comments(comments, START, END)
+        self.assertEqual(events, [("认领确认", "alice")])
+
     def test_lgtm_is_deduplicated_and_excludes_executor_and_bots(self):
         comments = [
             comment("<!-- task-review:pending executor=alice -->", id=1),
