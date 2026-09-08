@@ -34,7 +34,7 @@ jobs:
             const repo = context.repo.repo;
             const issueNumber = issue.number;
             const actor = context.payload.comment.user.login;
-            const markerPattern = /<!-- task-assignment:(pending|resolved) claimant=([A-Za-z0-9-]+) -->/;
+            const markerPattern = /<!-- task-assignment:(pending|resolved|failed) claimant=([A-Za-z0-9-]+) -->/;
             const sameUser = (left, right) => left.toLowerCase() === right.toLowerCase();
 
             async function reply(body) {
@@ -89,8 +89,9 @@ jobs:
             }
 
             const resolvedMarker = `<!-- task-assignment:resolved claimant=${pendingClaimant} -->`;
+            const failedMarker = `<!-- task-assignment:failed claimant=${pendingClaimant} -->`;
             if (assignees.length && !assignees.some(login => sameUser(login, pendingClaimant))) {
-              await reply(`${resolvedMarker}\n认领未完成：该任务已经分配给 ${assignees.map(login => `@${login}`).join('、')}。`);
+              await reply(`${failedMarker}\n认领未完成：该任务已经分配给 ${assignees.map(login => `@${login}`).join('、')}。`);
               return;
             }
 
@@ -103,7 +104,7 @@ jobs:
                   assignees: [pendingClaimant]
                 });
               } catch (error) {
-                await reply(`${resolvedMarker}\n无法将 @${pendingClaimant} 设为 Assignee。请确认该成员具有仓库协作权限后重新评论 \`/assign\`。`);
+                await reply(`${failedMarker}\n无法将 @${pendingClaimant} 设为 Assignee。请确认该成员具有仓库协作权限后重新评论 \`/assign\`。`);
                 core.setFailed(error.message);
                 return;
               }
@@ -114,7 +115,7 @@ jobs:
               sameUser(assignee.login, pendingClaimant)
             );
             if (!assigned) {
-              await reply(`${resolvedMarker}\n无法将 @${pendingClaimant} 设为 Assignee。请确认该成员具有仓库协作权限后重新评论 \`/assign\`。`);
+              await reply(`${failedMarker}\n无法将 @${pendingClaimant} 设为 Assignee。请确认该成员具有仓库协作权限后重新评论 \`/assign\`。`);
               core.setFailed(`GitHub did not assign ${pendingClaimant}`);
               return;
             }
@@ -133,7 +134,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const interval = 2 * 60 * 60 * 1000;
-            const markerPattern = /<!-- task-assignment:(pending|resolved) claimant=([A-Za-z0-9-]+) -->/;
+            const markerPattern = /<!-- task-assignment:(pending|resolved|failed) claimant=([A-Za-z0-9-]+) -->/;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner,
               repo,
