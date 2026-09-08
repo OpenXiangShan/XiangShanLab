@@ -29,12 +29,12 @@ HN 为了完成请求还要做什么？
 
 ### 1.1 Read：Requester 取得数据
 
-Read 从 RN 向 HN 发送 REQ 开始。RN 的目标是取得 `X` 的数据，以及该请求所要求的缓存状态，例如 `SC` 或 `UC`。
+Read 从 RN 向 HN 发送 REQ 开始。RN 的目标是取得 `X` 的数据，以及该请求所要求的缓存权限，例如共享读权限或唯一权限。具体得到的 cache state 取决于 Read opcode 和 HN 的一致性处理结果。
 
 HN 决定数据来源：
 
 - 没有其他 RN-F 持有 `X` 时，数据可以来自 HN 的本地缓存或后端 SN；
-- 其他 RN-F 持有干净副本时，HN 可能只需要协调状态，数据仍可来自 HN 或 SN；
+- 其他 RN-F 持有干净副本时，HN 仍需根据请求的权限和目录状态协调副本，数据可以来自 HN、SN 或相关 RN-F；
 - 其他 RN-F 持有 `UD` 或负责最新数据的 `SD` 时，HN 必须从该 RN-F 取得最新数据，不能使用旧的 Memory 数据。
 
 Read 的结果是：Requester 收到所需 Data 和 Completion，并获得相应的 cache state。发出 REQ 只是开始，不是 Read 已经完成。
@@ -76,7 +76,7 @@ HN 收齐必要的 Snoop Response 后，才能继续完成原来的 Read、Datal
 
 Dataless 描述的是一次 Transaction 是否传输 cache line data，而不是一种独立的访问发起者。
 
-例如，RN0 和 RN1 都处于 `SC`，RN0 想写 `X`。RN0 已有 `X` 的完整数据，只缺唯一权限：
+例如，RN0 和 RN1 都处于 `SC`，RN0 想写 `X`。RN0 已经持有 `X` 的有效数据和共享读权限，但 RN1 仍持有共享副本，因此 RN0 还缺少修改该 cache line 所需的唯一写权限：
 
 ```text
 RN0 -> HN：MakeUnique
@@ -105,7 +105,7 @@ HN -> RN：匹配的 PCrdGrant
 RN -> HN：重新发送原 REQ
 ```
 
-`RetryAck` 和匹配的 `PCrdGrant` 都到达后，RN 才能重发。两者在链路上的到达顺序不必固定。重发前 RN 必须保留原请求和 Retry 关联信息；`RetryAck` 本身不提供数据、权限或最终错误结果。
+在该 Retry 流程中，`RetryAck` 和匹配的 `PCrdGrant` 都到达后，RN 才能重发。两者在链路上的到达顺序不必固定。重发前 RN 必须保留原请求和 Retry 关联信息；`RetryAck` 本身不提供数据、权限或最终错误结果。具体是否需要 `PCrdGrant` 以及它与 `RetryAck` 的关联规则，取决于协议配置和实现。
 
 ## 2. 场景与状态
 
@@ -139,7 +139,7 @@ Memory: X = 0，最新
 主流程经历：
 
 ```text
-RN0: I -> UC -> SC -> UC -> UD -> I
+RN0: I -> SC -> UC -> UD -> I
 RN1: I ------> SC -> I
 ```
 
@@ -161,7 +161,7 @@ RN0                     HN
  |-- REQ: ReadShared --->|  条件满足后重发
 ```
 
-`RetryAck` 表示当前请求未被接受。RN0 必须保留原请求和 `PCrdType` 等 Retry 上下文，在 `RetryAck` 与匹配的 `PCrdGrant` 都已到达后重发。
+`RetryAck` 表示当前请求未被接受。对于本例的 Retry 流程，RN0 必须保留原请求和 `PCrdType` 等 Retry 上下文，在 `RetryAck` 与匹配的 `PCrdGrant` 都已到达后重发；是否需要 `PCrdGrant` 以及具体关联规则取决于协议配置和实现。
 
 重发请求被接受后，HN 确认没有其他 RN-F 持有 `X`，从 SN 取得数据：
 
@@ -177,7 +177,7 @@ RN0                     HN                      SN
 结果：
 
 ```text
-RN0:    UC，X = 0
+RN0:    SC，X = 0
 RN1:    I
 Memory: X = 0
 ```
@@ -186,7 +186,7 @@ REQ 发出不代表 Read 完成。RN0 收到该请求要求的 Completion 和全
 
 ## 4. RN1 读取：Snoop
 
-RN1 也对 `X` 发起 `ReadShared`。HN 查到 RN0 为 `UC`，向 RN0 发送 Snoop，使其从唯一状态转为共享状态：
+RN1 也对 `X` 发起 `ReadShared`。HN 查到 RN0 为 `SC`，向 RN0 发送 Snoop，确认或协调其共享副本：
 
 ```text
 RN1                     HN                     RN0
@@ -197,7 +197,7 @@ RN1                     HN                     RN0
  |        X=0            |                      |
 ```
 
-RN0 的数据与 Memory 相同，因此该场景只需返回无数据的 `SnpResp`。数据由 HN 或 SN 路径返回 RN1。
+RN0 的数据与 Memory 相同，因此在该场景中只需返回无数据的 `SnpResp`，数据由 HN 或 SN 路径返回 RN1。若 HN 需要从 RN0 获取数据，则应使用带数据的 Snoop Response；具体取决于目录状态和 Snoop opcode。
 
 结果：
 
@@ -207,7 +207,7 @@ RN1:    SC，X = 0
 Memory: X = 0
 ```
 
-如果被 Snoop 的 RN-F 为 `UD`，或者为承担最新数据责任的 `SD`，Memory 中的数据可能已经过期。此时 RN-F 需要根据 Snoop 要求返回 `SnpRespData`，或把数据直接转发给原 Requester。
+如果被 Snoop 的 RN-F 为 `UD`，或者为承担最新数据责任的 `SD`，Memory 中的数据可能已经过期。此时 RN-F 需要在 Snoop opcode 要求提供数据，或 HN 判断其持有最新数据时，返回 `SnpRespData`，也可能把数据直接转发给原 Requester。
 
 ```text
 无数据 Snoop Response：RSP，例如 SnpResp
@@ -216,7 +216,7 @@ Memory: X = 0
 
 ## 5. RN0 获取写权限：Dataless
 
-RN0 当前为 `SC`，已经持有 `X=0`，但 RN1 也为 `SC`。RN0 必须先取得唯一权限，才能修改数据。
+RN0 当前为 `SC`，已经持有 `X=0`，但 RN1 也为 `SC`。RN0 已有数据，但必须先使 RN1 的共享副本失效，取得唯一写权限后才能修改数据。
 
 ```text
 RN0                     HN                     RN1
@@ -265,7 +265,7 @@ RN0                         HN
 1. `WriteBackFull` 指明写回地址和事务属性。
 2. `CompDBIDResp` 同时返回 Completion 和 `DBID`。
 3. RN0 使用该 `DBID` 发送 `CopyBackWrData`。
-4. HN 接收数据并更新目录、Home Cache 或后端 Memory。
+4. HN 接收数据后，按具体实现更新 Home Cache、目录或后端存储，并保证最新数据不丢失。
 
 结果：
 
@@ -288,8 +288,8 @@ Write Request 和 Write Data 位于不同 Channel：
 | 步骤 | 关键消息 | 状态变化 |
 |---|---|---|
 | RN0 首次读取被拒绝 | `ReadShared`、`RetryAck`、`PCrdGrant` | 状态不变，原请求重发 |
-| RN0 读取成功 | `ReadShared`、`CompData` | RN0：`I -> UC` |
-| RN1 读取 | Read REQ、SNP、`SnpResp`、`CompData` | RN0：`UC -> SC`；RN1：`I -> SC` |
+| RN0 读取成功 | `ReadShared`、`CompData` | RN0：`I -> SC` |
+| RN1 读取 | Read REQ、SNP、`SnpResp`、`CompData` | RN0：`SC -> SC`；RN1：`I -> SC` |
 | RN0 获取唯一权限 | `MakeUnique`、失效 SNP、`SnpResp`、`Comp` | RN0：`SC -> UC`；RN1：`SC -> I` |
 | RN0 本地写入 | 无 CHI 消息 | RN0：`UC -> UD` |
 | RN0 写回驱逐 | `WriteBackFull`、`CompDBIDResp`、`CopyBackWrData` | RN0：`UD -> I`；Memory 更新为 `X=1` |
@@ -314,13 +314,13 @@ sequenceDiagram
     HN->>SN: Read request
     SN-->>HN: Data X=0
     HN-->>RN0: DAT CompData, X=0
-    Note over RN0: I -> UC
+    Note over RN0: I -> SC
 
     RN1->>HN: REQ ReadShared
     HN->>RN0: SNP Snoop
     RN0-->>HN: RSP SnpResp
     HN-->>RN1: DAT CompData, X=0
-    Note over RN0,RN1: RN0: UC -> SC, RN1: I -> SC
+    Note over RN0,RN1: RN0: SC -> SC, RN1: I -> SC
 
     RN0->>HN: REQ MakeUnique
     HN->>RN1: SNP Invalidate
