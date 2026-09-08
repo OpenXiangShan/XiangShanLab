@@ -2,6 +2,8 @@
 
 CHI Transaction 是一次协议操作从请求发出到满足完成条件的完整过程。一个 Transaction 可以包含 `REQ`、`RSP`、`DAT` 和 `SNP` Channel 上的多条消息。
 
+本文通过一个代表性场景介绍 Read、Snoop、Dataless 和 Write 的协作关系，重点帮助读者建立事务和缓存状态的直觉，不试图覆盖所有 CHI opcode、响应组合和 Issue-specific 约束。涉及严格时序和合法性判断时，应以对应 CHI Issue 规范为准。
+
 ```text
 Transaction：完整的协议操作
 Message：Transaction 中的一条请求、响应、数据或 Snoop 消息
@@ -37,7 +39,7 @@ HN 决定数据来源：
 - 其他 RN-F 持有干净副本时，HN 仍需根据请求的权限和目录状态协调副本，数据可以来自 HN、SN 或相关 RN-F；
 - 其他 RN-F 持有 `UD` 或负责最新数据的 `SD` 时，HN 必须从该 RN-F 取得最新数据，不能使用旧的 Memory 数据。
 
-Read 的结果是：Requester 收到所需 Data 和 Completion，并获得相应的 cache state。发出 REQ 只是开始，不是 Read 已经完成。
+Read 的结果是：Requester 收到所需 Data 和 Completion，并获得相应的 cache state。对于本文场景，Requester 在收到 `CompData` 后发送 `CompAck`，确认完成响应已经被接收。发出 REQ 只是开始，不是 Read 已经完成。
 
 ### 1.2 Write：Requester 把数据交给 Home
 
@@ -76,13 +78,14 @@ HN 收齐必要的 Snoop Response 后，才能继续完成原来的 Read、Datal
 
 Dataless 描述的是一次 Transaction 是否传输 cache line data，而不是一种独立的访问发起者。
 
-例如，RN0 和 RN1 都处于 `SC`，RN0 想写 `X`。RN0 已经持有 `X` 的有效数据和共享读权限，但 RN1 仍持有共享副本，因此 RN0 还缺少修改该 cache line 所需的唯一写权限：
+例如，RN0 和 RN1 都处于 `SC`，RN0 想用一条完整的新 cache line 覆盖 `X`。RN0 已经持有 `X` 的有效数据和共享读权限，但 RN1 仍持有共享副本，因此 RN0 还需要先获得该 cache line 的唯一权限，才能写入：
 
 ```text
 RN0 -> HN：MakeUnique
 HN  -> RN1：Invalidate Snoop
 RN1 -> HN：SnpResp
 HN  -> RN0：Comp
+RN0 -> HN：CompAck
 ```
 
 整个过程只改变状态：
@@ -92,11 +95,15 @@ RN0: SC -> UC
 RN1: SC -> I
 ```
 
-没有任何 Node 需要传输 `X` 的数据，所以它是 Dataless；但它仍是一笔完整 Transaction，包含 REQ、SNP 和 RSP。
+没有任何 Node 需要传输 `X` 的数据，所以它是 Dataless；但它仍是一笔完整 Transaction，包含 REQ、SNP、RSP 和用于确认完成的 `CompAck`。
+
+`MakeUnique` 只负责撤销其他 RN 的副本并授予 RN0 唯一权限，不会为 RN0 补充 cache line 数据。本例假设 RN0 已经拥有完整的 `X`，并在获得 `UC` 后构造并覆盖整条 cache line。若只修改几个字节、需要保留其余字节，应根据具体 CHI Issue 和实现选择合适的写权限请求，例如 `CleanUnique`，不能把 `MakeUnique` 当作普通部分写的通用替代品。
 
 ### 1.5 Retry：请求未被接受时的重发流程
 
 Retry 发生在 HN 或其他目标暂时没有资源接收请求时。它不是“稍后返回数据”，而是明确表示当前 REQ 没有被接收。
+
+常见原因包括：HN 当前用于跟踪事务的资源已满，例如事务表、请求队列或 MSHR 没有空闲项；目标缓存或目录正在处理同一地址的其他事务，暂时不能再接受新的请求；下游节点或链路发生拥塞，接收方通过流控暂缓请求进入。Retry 通常表示当前时刻无法接收，并不表示访问本身出错；Requester 需要等待协议规定的条件满足后，重新发送原请求。
 
 ```text
 RN -> HN：REQ，且 AllowRetry=1
@@ -127,6 +134,20 @@ RN -> HN：重新发送原 REQ
 | `SC` | Shared Clean | 本地持有共享的干净副本 |
 | `UD` | Unique Dirty | 本地持有唯一的脏副本，数据比下层更新 |
 | `SD` | Shared Dirty | 本地持有共享的脏副本，并承担最新数据责任 |
+
+### CHI 与 MOESI 的近似对应
+
+CHI Cache State 可以与常见的 MOESI 状态做概念上的类比：
+
+| MOESI | CHI | 近似含义 |
+|---|---|---|
+| `I` | `I` | 没有有效副本 |
+| `E` | `UC` | 本地持有唯一的干净副本 |
+| `S` | `SC` | 存在多个共享的干净副本 |
+| `M` | `UD` | 本地持有唯一的脏副本，数据比内存更新 |
+| `O` | `SD` | 存在共享副本，并由某个节点承担最新脏数据责任 |
+
+该表仅用于帮助理解，不表示两套协议的状态机严格等价。CHI 中的实际状态和数据责任还由 HN、目录状态、Snoop 操作以及具体 CHI Issue 的规则共同决定。
 
 初始状态：
 
@@ -172,6 +193,7 @@ RN0                     HN                      SN
  |                       |<-- Data: X=0 ---------|
  |<-- DAT: CompData -----|                       |
  |        X=0            |                       |
+ |-- RSP: CompAck ------>|                       |
 ```
 
 结果：
@@ -182,7 +204,7 @@ RN1:    I
 Memory: X = 0
 ```
 
-REQ 发出不代表 Read 完成。RN0 收到该请求要求的 Completion 和全部 Data 后，才能完成 Read Transaction。
+REQ 发出不代表 Read 完成。RN0 收到该请求要求的 Completion 和全部 Data 后，还要发送 `CompAck` 确认完成响应；本文将这一确认作为该 Read Transaction 的收尾。HN 应保证从 RN 收到 `CompData` 到收到 `CompAck` 的收尾窗口内，同地址后续 Snoop 遵守对应 CHI Issue 的排序约束。
 
 ## 4. RN1 读取：Snoop
 
@@ -195,6 +217,7 @@ RN1                     HN                     RN0
  |                       |<-- RSP: SnpResp ------|
  |<-- DAT: CompData -----|                      |
  |        X=0            |                      |
+ |-- RSP: CompAck ------>|                      |
 ```
 
 RN0 的数据与 Memory 相同，因此在该场景中只需返回无数据的 `SnpResp`，数据由 HN 或 SN 路径返回 RN1。若 HN 需要从 RN0 获取数据，则应使用带数据的 Snoop Response；具体取决于目录状态和 Snoop opcode。
@@ -216,7 +239,7 @@ Memory: X = 0
 
 ## 5. RN0 获取写权限：Dataless
 
-RN0 当前为 `SC`，已经持有 `X=0`，但 RN1 也为 `SC`。RN0 已有数据，但必须先使 RN1 的共享副本失效，取得唯一写权限后才能修改数据。
+RN0 当前为 `SC`，已经持有 `X=0`，但 RN1 也持有 `SC` 副本。RN0 若要修改 `X`，必须先使 RN1 的共享副本失效，获得该 cache line 的唯一权限后才能写入。
 
 ```text
 RN0                     HN                     RN1
@@ -248,7 +271,7 @@ RN1:    I
 Memory: X = 0，过期
 ```
 
-`MakeUnique` 在 RN0 从 `SC` 转为 `UC` 时完成。本地写入使 RN0 从 `UC` 转为 `UD`，但这次本地写入本身不需要发送 CHI Write Request。
+`MakeUnique` 在 RN0 从 `SC` 转为 `UC`、并通过 `CompAck` 确认完成响应后完成。此时 RN0 拥有该 cache line 唯一且干净的副本；本地整行覆盖后，状态从 `UC` 转为 `UD`，但这次本地写入本身不需要发送 CHI Write Request。
 
 ## 6. RN0 驱逐脏行：Write
 
@@ -288,10 +311,10 @@ Write Request 和 Write Data 位于不同 Channel：
 | 步骤 | 关键消息 | 状态变化 |
 |---|---|---|
 | RN0 首次读取被拒绝 | `ReadShared`、`RetryAck`、`PCrdGrant` | 状态不变，原请求重发 |
-| RN0 读取成功 | `ReadShared`、`CompData` | RN0：`I -> SC` |
-| RN1 读取 | Read REQ、SNP、`SnpResp`、`CompData` | RN0：`SC -> SC`；RN1：`I -> SC` |
-| RN0 获取唯一权限 | `MakeUnique`、失效 SNP、`SnpResp`、`Comp` | RN0：`SC -> UC`；RN1：`SC -> I` |
-| RN0 本地写入 | 无 CHI 消息 | RN0：`UC -> UD` |
+| RN0 读取成功 | `ReadShared`、`CompData`、`CompAck` | RN0：`I -> SC` |
+| RN1 读取 | Read REQ、SNP、`SnpResp`、`CompData`、`CompAck` | RN0：`SC -> SC`；RN1：`I -> SC` |
+| RN0 获取唯一权限 | `MakeUnique`、失效 SNP、`SnpResp`、`Comp`、`CompAck` | RN0：`SC -> UC`；RN1：`SC -> I` |
+| RN0 整行覆盖 | 无 CHI 消息 | RN0：`UC -> UD` |
 | RN0 写回驱逐 | `WriteBackFull`、`CompDBIDResp`、`CopyBackWrData` | RN0：`UD -> I`；Memory 更新为 `X=1` |
 
 ## 8. 全局事务时空图
@@ -314,21 +337,24 @@ sequenceDiagram
     HN->>SN: Read request
     SN-->>HN: Data X=0
     HN-->>RN0: DAT CompData, X=0
+    RN0->>HN: RSP CompAck
     Note over RN0: I -> SC
 
     RN1->>HN: REQ ReadShared
     HN->>RN0: SNP Snoop
     RN0-->>HN: RSP SnpResp
     HN-->>RN1: DAT CompData, X=0
+    RN1->>HN: RSP CompAck
     Note over RN0,RN1: RN0: SC -> SC, RN1: I -> SC
 
     RN0->>HN: REQ MakeUnique
     HN->>RN1: SNP Invalidate
     RN1-->>HN: RSP SnpResp
     HN-->>RN0: RSP Comp
+    RN0->>HN: RSP CompAck
     Note over RN0,RN1: RN0: SC -> UC, RN1: SC -> I
 
-    Note over RN0: Local store X=1, UC -> UD
+    Note over RN0: Local full-line overwrite X=1, UC -> UD
 
     RN0->>HN: REQ WriteBackFull
     HN-->>RN0: RSP CompDBIDResp
