@@ -294,9 +294,20 @@ MMIO 不能安全拆分→access fault”（`afUnalignMMIO`），而非“地址
 | NEMU | MMIO 路径非对齐检查先行 | `0xf1` 在配置 MMIO 空间、未对齐、`MMIO_AC_SOFT=y` | cause 4 |
 
 RISC-V 特权架构手册规定，load/store/AMO 的地址未对齐异常相对于访问异常和页异常可以具有
-更高或更低的优先级，具体优先级由实现定义。因此，本例中 XiangShan 报告 cause 5、NEMU
-报告 cause 4，均属于规范允许的实现选择。参见 [RISC-V Privileged Specification：同步异常
-优先级](https://docs.riscv.org/reference/isa/v20260120/priv/machine.html#norm:exc_priority)。
+更高或更低的优先级，其相对优先级是 **implementation-defined（由实现定义）**。这里的
+“由实现定义”不是允许实现任意选择异常号，而是允许实现根据自身对非对齐访问的支持方式，
+选择先判定地址是否对齐，还是先完成地址转换及保护/属性检查。手册明确给出两个设计点：
+
+1. 从不支持非对齐访问的实现，可以无条件先报告 address-misaligned exception，无需执行地址
+   转换或保护检查。
+2. 只在部分物理地址支持非对齐访问的实现，需要先转换并检查地址，再判断该非对齐访问能否
+   继续；这种实现可以优先报告 page fault 或 access fault。
+
+本例正好体现了这两种合法选择：NEMU 在 MMIO 路径中先检查非对齐，采用第一种顺序并报告
+cause 4；XiangShan 先根据 PMA 将地址判为 MMIO，再把非对齐 MMIO 访问归为 access fault，
+采用第二种顺序并报告 cause 5。因此 DiffTest 的差异来自两侧实现优先级不同，两种结果均在
+手册允许范围内，并不表示 XiangShan 违反 ISA。参见 [RISC-V Privileged Specification：同步
+异常优先级](https://docs.riscv.org/reference/isa/v20260120/priv/machine.html#norm:exc_priority)。
 
 因果链：
 
