@@ -22,6 +22,11 @@ REVIEW_MARKER = re.compile(r"<!--\s*task-review:(pending|resolved) executor=([A-
 COMMIT_URL = re.compile(r"(?P<url>https?://github\.com/[^\s/]+/[^\s/]+/commit/(?P<sha>[0-9a-fA-F]{7,40}))(?=[/?#\s).,;:]|$)")
 LABELED_SHA = re.compile(r"(?:\bcommit\s*(?:sha|hash)?|\bsha|\b提交(?:的)?\s*(?:commit|SHA|哈希)?)\s*[:：#=]?\s*`?([0-9a-fA-F]{7,40})`?(?![0-9a-fA-F])", re.IGNORECASE)
 DDL = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) ((?:[01]\d|2[0-3]):[0-5]\d|24:00)$")
+# These labels describe combined topics in one directory, not nested paths.
+DIRECTORY_LABELS = {
+    "xiangshan-course/docs/8-xiangshan-AI": "AI/basic-algorithm",
+    "xiangshan-course/docs/11-xiangshang-verification": "verification/uvm",
+}
 
 
 class GitHubClient:
@@ -100,12 +105,16 @@ def docs_directories(repo_root=None):
             continue
         for child in docs_root.iterdir():
             if child.is_dir():
-                directories.append((display_directory(child.name), child.relative_to(root).as_posix()))
+                path = child.relative_to(root).as_posix()
+                directories.append((DIRECTORY_LABELS.get(path, display_directory(child.name)), path))
     return directories
 
 
 def resolve_directory(value, directories):
     raw = value.strip().strip("/")
+    for name, path in directories:
+        if raw == name:
+            return name, path
     for name, path in directories:
         if raw == path or raw.endswith("/" + path):
             return name, path
