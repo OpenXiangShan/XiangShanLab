@@ -11,7 +11,7 @@ body:
     id: course_directory
     attributes:
       label: 所属目录
-      description: 选择 xiangshan-course/docs/ 下对应的课程目录（省略编号和 xiangshan- 前缀）。
+      description: 选择 xiangshan-course/docs/ 下对应的课程目录；名称中的 / 表示同一目录包含两类内容，不表示子目录。
       options:
         - development-environment
         - programming
@@ -22,6 +22,7 @@ body:
         - NoC
         - AI/basic-algorithm
         - AIA
+        - security
         - agile-tools
         - verification/uvm
     validations:

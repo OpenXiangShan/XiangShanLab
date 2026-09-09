@@ -182,6 +182,27 @@ class ReportTest(unittest.TestCase):
                                    directories=[("development-environment", "xiangshan-course/docs/1-xiangshan-development-environment")])
         self.assertIn("[development-environment](https://github.com/org/repo/tree/HEAD/xiangshan-course/docs/1-xiangshan-development-environment)", text)
 
+    def test_combined_topic_labels_map_to_one_directory(self):
+        directories = report.docs_directories()
+        for name, path in (
+            ("AI/basic-algorithm", "xiangshan-course/docs/8-xiangshan-AI"),
+            ("verification/uvm", "xiangshan-course/docs/11-xiangshang-verification"),
+        ):
+            with self.subTest(name=name):
+                self.assertIn((name, path), directories)
+                for value in (name, path, Path(path).name):
+                    self.assertEqual(report.resolve_directory(value, directories), (name, path))
+                text = report.build_report([issue(body="### 所属目录\n" + name)], {}, START, END,
+                                           directories=directories)
+                self.assertIn("| [%s](%s) | 1 | 1 | 0 | 0 | 0 |" % (
+                    name, report.task_directory_url(path, "owner/repo")), text)
+                self.assertNotIn("未分类", text)
+
+    def test_combined_label_takes_precedence_over_path_leaf(self):
+        directories = [("uvm", "xiangshan-course/docs/uvm"),
+                       ("verification/uvm", "xiangshan-course/docs/11-xiangshang-verification")]
+        self.assertEqual(report.resolve_directory("verification/uvm", directories), directories[1])
+
     def test_all_directories_are_listed_without_tasks(self):
         directories = report.docs_directories()
         text = report.build_report([], {}, START, END, directories=directories)
