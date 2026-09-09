@@ -14,7 +14,7 @@
 
 - 内存中的 secret bit 选择两个不同的 call site，把 secret 相关的返回地址留在"已被禁用"的 RAS/µRAS 状态里；
 - 随后一条架构上应返回 `safe_return` 的 `ret`，被禁用的预测器将其预测为 secret 选定的 gadget 地址，且 FTQ/IFU **确实对这个 wrong path 发出了 fetch**（secret=0 经 S1 µRAS 预测并 fetch `gadget0`，secret=1 经 S3 主 RAS 预测并 fetch `gadget1`）；
-- 两次运行唯一不同的输入是 secret bit，fetch 流却分叉到不同地址——secret 相关的 wrong-path fetch 是 Spectre 类侧信道的前提条件（gadget 内含 probe load，可进一步在 cache 中留下痕迹；本报告只证实到 "secret 相关 fetch" 这一层，cache 副效应的量化见波形分析章节）。
+- 两次运行唯一不同的输入是 secret bit，fetch 流却分叉到不同地址——secret 相关的 wrong-path fetch 是 Spectre 类侧信道的前提条件（gadget 内含 probe load，可进一步在 cache 中留下痕迹；本报告只证实到 "secret 相关 fetch" 这一层）。
 
 **触发条件。** (a) `sbpctl.RAS_ENABLE=0`，其余预测器（uBTB/aBTB/mBTB/TAGE/SC/ITTAGE）保持使能——return 的识别依赖 BTB 元数据；(b) 存在由 secret 选择、且**不正常返回**的 call（污染 RAS 栈）；(c) 之后执行一条真正的 `ret`；(d) V3 微架构（µRAS 是 V3 新增结构；V2 的对照结论见下）。
 
