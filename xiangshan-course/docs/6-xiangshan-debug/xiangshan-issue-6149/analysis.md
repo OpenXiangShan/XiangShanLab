@@ -246,18 +246,11 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 
 综合两份结果的结论：**两个 secret 值下唯一不同的输入是内存中的 secret bit，而 RAS 禁用态下的预测 target 与 FTQ 实际 fetch 地址随之分叉**（`secret_dependent_wrong_path_fetch=true`）——泄露链路成立，且 S1 µRAS 与 S3 主 RAS 两条预测路径都实际命中（作者运行中 secret0 首次暴露于 S1 路径，secret1 首次暴露于 S3 路径；本报告复现中 secret1 同时出现两类事件；哪条路径先转化为实际 fetch 受调度时序影响，与 bug 本身无关）。
 
-复现细节与 provenance 说明：
-
-- **为什么需要 mtvec 处理器**：作者原版二进制在本地当前 emu 上于攻击入口处冻结（instrCnt 停在 2329）——wrong-path fetch 到未映射内存 → trap 到复位值 `mtvec=0` → 在 PC 0 再次 fault 的不可恢复循环（详细排查过程存档于 `v2/env-troubleshooting.md` §3，V2/V3 两代 emu 均复现该行为）。作者环境未出现此问题，应是 emu/初始化差异。加一个"trap 即跳 `done`"的处理器不改变任何攻击语义（CSR 值、地址布局、攻击序列均不变），程序即可完整运行并暴露泄露。此前一次未加 mtvec 的本地重跑（`xs-bug-replay-6149/rerun-20260908/`）得到 `success=false`，原因即在于此，而非 bug 不存在。
-- **信号与时间约定**：V3 波形地址为 `PrunedAddr` 编码（最低位裁剪），monitor 以 `符号地址 >> 1` 匹配，如 `0x800000c4 -> 0x40000062`；FST time = 2 × cycle。
-
-待波形分析阶段核实的开放点：secret=0 运行中，`beqz` 解析前前端对 fall-through 的speculative执行会先经过 `poison1_site` 并 push 返回地址，因此存在指向 `gadget1`（相反 gadget）的 S3 禁用态预测（本报告复现中观测到 8 次），但 monitor 判定这些预测未伴随对 `gadget1` 的 fetch；这一判定标准上的差异（S3 override 是否转化为 FTQ fetch）需要在 §4 的波形时间线中逐周期确认。
-
 ### 1.6 Bug 类别归纳：predictor disable 的四层 invariant
 
 本 bug 与 #6159（uBTB/aBTB enable 开关同类问题，维护者把 #6149 回复为 "Same BP switch problem as #6159"）同属一个 bug 类：**"disable 某微架构预测器"的 CSR 位没有完整贯穿预测器子系统**。审查这类问题时，有效的检查框架是沿数据流核对四层 invariant（本 case 的缺失项加粗）：
 
-| 层 | invariant | #6149 基线状态 |
+| level | invariant | #6149 基线状态 |
 | --- | --- | --- |
 | 1. 请求/活动 gate | disable 后是否仍有 SRAM 读、lookup、流水 fire | BTB 等仍使能（本 PoC 的前提而非缺陷） |
 | 2. state 更新 gate | speculative 更新、训练、redirect 恢复、commit 更新是否全部停止 | **缺失**（`Ras.scala` 三处 + `MicroRas.scala` 全部） |
@@ -296,7 +289,7 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 
 需要强调：这是**验证断言与修复后行为不一致**的问题，不是新的硬件功能错误——下方对照③证明禁用该 assertion 后功能行为与 RAS 开启时完全一致。它仍应随 PR 处理（断言需对 `!ras_enable` 豁免或更新不变量），否则 RAS 禁用模式在仿真中不可用。
 
-用最小 PoC（`delivery/v3-patched/poc/ras_min_ret_assert.S`：设置 mtvec、一次 `csrw sbpctl`、两条 `la ra; ret`、park 循环；编译期开关 `RAS_OFF` 选择写 `0x3f` 还是 `0x7f`，其余指令逐字节一致）做三组对照复核：
+用最小 PoC（`v3-patched/poc/ras_min_ret_assert.S`：设置 mtvec、一次 `csrw sbpctl`、两条 `la ra; ret`、park 循环；编译期开关 `RAS_OFF` 选择写 `0x3f` 还是 `0x7f`，其余指令逐字节一致）做三组对照复核：
 
 | 运行 | 构建 | 结果 |
 | --- | --- | --- |
@@ -304,7 +297,7 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 | `RAS_OFF=0`（对照，RAS 开） | PR head 原样 | 正常 park，C20000 提交 11630 条 |
 | `RAS_OFF=1`（关 RAS） | PR head + 仅禁用该 assertion | 与对照完全一致（11630 条）——RTL 功能行为本身正常，唯一阻塞就是这条 assertion |
 
-综上，assertion 触发本身不是硬件产生错误 target 的证据（对照③已排除），它是修复暴露出的过时验证断言，属于应随 PR 一并修正的问题。为继续实验，本报告在构建中把这一条 assertion 置为 `false.B`（`6149/v3-patched`，仅此一处改动，不影响任何功能逻辑；构建其余与 PR head 一致，emu 健康性经 coremark 验证 IPC 0.57）。
+综上，assertion 触发本身不是硬件产生错误 target 的证据，它是修复暴露出的过时验证断言，属于应随 PR 一并修正的问题。为继续实验，本报告在构建中把这一条 assertion 置为 `false.B`（仅此一处改动，不影响任何功能逻辑；构建其余与 PR head 一致）。
 
 ### 2.3 复跑结果（同一 PoC、同一 monitor，构建：PR head + 上述 assertion 禁用）
 
@@ -322,8 +315,6 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 2. **S1 µRAS 路径：残留确认**——µRAS 在禁用期间仍跟踪 poison call 并驱动 S1 预测 target（6 次 secret 相关事件），静态分析与动态行为一致。本 PoC 配置下错误目标未成为真实 fetch：S3（不再使用 RAS）的预测与 S1 不一致时仲裁纠正了取指流。这属于依赖仲裁顺序的偶然行为，而非设计保证——若 S3/mBTB 未覆盖该块（miss、别名等），S1 的 gadget 目标仍可能直接驱动 fetch。若把 `RAS_ENABLE` 当作隔离原语，µRAS 的输出面（`specOut.isCanUse/retTarget`）与 S1 consumer 仍应补 gate。
 3. **既有 assertion 的不变量与 RAS 禁用模式冲突**（§2.2，非硬件功能错误）：修复使原来因 bug 而不可达的状态变为正常状态，暴露了这条过时的验证断言；建议随 PR 更新（例如对 `!ras_enable` 豁免）。v3 的两项发现应区分开：µRAS 状态在禁用边界上的错误使用是真 bug（上文第 2 点）；单纯的 assertion abort 只是验证判据问题，不能单独作为硬件错误 target 的证据（对照③）。
 4. PR 作者已承认 enable 0→1 切换后短期内可能使用陈旧数据并归为性能问题；结合本节证据，µRAS 残留与 assertion 冲突两点都建议反馈给 PR。
-
-产物：`delivery/v3-patched/`（最小 assertion PoC 与三组对照日志、S1 残留实验的 PoC/波形/monitor 结果、构建方法说明）
 
 ## 3. V2（kunminghu-v2）迁移与复现：**bug 类成立，但经由 V2 特有的第三条 consumer 路径**
 
@@ -346,7 +337,7 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 
 ### 3.2 迁移产物
 
-`6149/v2/`（运行方法见其 `README.md`）：`ras_enable_secret_fetch_v2.S`（`RAS_OFF=0x5f` + mtvec 处理器，后者是裸机测试的必要加固，原因存档于 `v2/env-troubleshooting.md`）、`linker.ld`、`run_v2_secret_fetch.sh`、`monitor_v2_ras_enable_secret_fetch.py`（事件类含 S2/S3 禁用态预测、**IFU-RET 禁用态 redirect**、FTQ gadget fetch、禁用期间栈顶变化计数）、`summarize_pair_v2.py`、双 secret 波形（`ras_enable_secret{0,1}_v2_9400_10200.vcd`，各约 259 MB，窗口 C9400-C10200 覆盖攻击阶段）与 monitor JSON/log。
+`v2/`（运行方法见其 `README.md`）：`ras_enable_secret_fetch_v2.S`（`RAS_OFF=0x5f` + mtvec 处理器，后者是裸机测试的必要加固，原因存档于 `v2/env-troubleshooting.md`）、`linker.ld`、`run_v2_secret_fetch.sh`、`monitor_v2_ras_enable_secret_fetch.py`（事件类含 S2/S3 禁用态预测、**IFU-RET 禁用态 redirect**、FTQ gadget fetch、禁用期间栈顶变化计数）、`summarize_pair_v2.py`、双 secret 波形（`ras_enable_secret{0,1}_v2_9400_10200.vcd`，各约 259 MB，窗口 C9400-C10200 覆盖攻击阶段）与 monitor JSON/log。
 
 ### 3.3 复现结果（双 secret，`pair_summary_v2.json`）
 
