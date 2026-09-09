@@ -2,7 +2,7 @@ name: Weekly Status
 
 on:
   schedule:
-    - cron: '50 8 * * 1' # Monday 16:50 Beijing time (UTC+8)
+    - cron: '0 8 * * 1' # Monday 16:00 Beijing time (UTC+8)
   workflow_dispatch:
     inputs:
       week_start:
