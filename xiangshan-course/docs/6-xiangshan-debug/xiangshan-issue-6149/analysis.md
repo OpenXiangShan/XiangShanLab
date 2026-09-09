@@ -369,8 +369,6 @@ state 层（与 V3 同病）：RAS_ENABLE=0 期间，secret 选定的 poison jal
 
 注意被**排除**的路径：S2/S3 的 `jalr_target` 覆盖（`ras_drove_target_while_disabled=false` 全程成立）——V2 在这个 consumer 上确实有 gate，静态分析这部分结论正确；泄露经由的是旁路的 `topAddr` 输出与 IFU-RET redirect。按 §1.6 框架表述：V2 实现了"最终 consumer gate"的一个实例（jalr mux），但 RAS 的输出不止一个 consumer——**gate 了一个 mux，漏了另一个 mux**。
 
-环境与工具问题的排查过程（emu 构建甄别、flash 引导、波形格式、mtvec 问题等）已存档至 `6149/v2/env-troubleshooting.md`，此处不重复。
-
 ## 4. 波形分析
 
 ### 4.1 波形档案
