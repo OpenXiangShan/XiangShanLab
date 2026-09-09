@@ -20,9 +20,10 @@ body:
         - scenarios-analysis
         - debug
         - NoC
-        - AI
+        - AI/basic-algorithm
         - AIA
         - agile-tools
+        - verification/uvm
     validations:
       required: true
 
