@@ -18,9 +18,9 @@
 
 **触发条件。** (a) `sbpctl.RAS_ENABLE=0`，其余预测器（uBTB/aBTB/mBTB/TAGE/SC/ITTAGE）保持使能——return 的识别依赖 BTB 元数据；(b) 存在由 secret 选择、且**不正常返回**的 call（污染 RAS 栈）；(c) 之后执行一条真正的 `ret`；(d) V3 微架构（µRAS 是 V3 新增结构；V2 的对照结论见下）。
 
-**修复与现状。** PR #6461（`fix(Bpu): enable & debug-related fix & cleanup`，标记 `Fixes #6149`，截至 2026-09-07 仍是 open/draft）对 S3 主 RAS 路径的修复完整而直接：三类 state 更新全部加上 `io.enable` + `s3_useRas` 增加 `ras.io.enable` 的 consumer 侧检查 + 依赖关系重构（`ras/uras.enable := rasEnable && mbtbEnable`）。但 S1 µRAS 路径疑似仍有残留：`MicroRas.scala` 依旧不使用 `io.enable`，S1 的两个 target mux 依旧不检查 enable——`uras.io.enable` 的接线更像是仅仅把信号连到了输入端口，模块内部和 consumer 都没有真正使用它。这个判断来自静态分析（与 gpt 分析一致），待在应用补丁后的构建上复跑 PoC 验证（§2）。
+**修复与现状。** PR #6461（`fix(Bpu): enable & debug-related fix & cleanup`，标记 `Fixes #6149`，截至 2026-09-07 仍是 open/draft）对 S3 主 RAS 路径的修复完整而直接：三类 state 更新全部加上 `io.enable` + `s3_useRas` 增加 `ras.io.enable` 的 consumer 侧检查 + 依赖关系重构（`ras/uras.enable := rasEnable && mbtbEnable`）。但 S1 µRAS 路径仍有残留：`MicroRas.scala` 依旧不使用 `io.enable`，S1 的两个 target mux 依旧不检查 enable——`uras.io.enable` 的接线只是把信号连到了输入端口，模块内部和 consumer 都没有真正使用它。该残留已在 PR head 构建上动态验证（§2.3：6 次 secret 相关 S1 预测事件）。
 
-**V2 对照结果（动态实验已完成，§3）。** 同一个 bug 类**在 kunminghu-v2 上同样成立**（双 secret 实验 `secret_dependent_wrong_path_fetch=true`），但经由的是 V2 特有的第三条路径：V2 的 S2/S3 `jalr_target` 覆盖确实有 `ras_enable` gate（静态分析这部分正确），但 RAS 栈顶还通过 `last_stage_spec_info.topAddr`（无 gate）被存入 FTQ 的 `ftq_redirect_mem`，而 IFU predecode 写回发现 RET 时，FTQ 直接用这个栈顶替换 redirect target（`NewFtq.scala:1143-1145`，无 `ras_enable` 检查）——禁用期间压入的 secret 相关返回地址由此再次驱动 fetch。禁用期间 speculative 栈照常更新（state 层缺陷与 V3 相同）。这印证了 §1.6 框架的核心论点：**有状态预测器的输出不止一个 consumer，最终 consumer 的 gate 必须覆盖每一个 next-PC 来源**。
+**V2 对照结果（动态实验证实，§3）。** 同一个 bug 类**在 kunminghu-v2 上同样成立**（双 secret 实验 `secret_dependent_wrong_path_fetch=true`），但经由的是 V2 特有的第三条路径：V2 的 S2/S3 `jalr_target` 覆盖确实有 `ras_enable` gate，但 RAS 栈顶还通过 `last_stage_spec_info.topAddr`（无 gate）被存入 FTQ 的 `ftq_redirect_mem`，而 IFU predecode 写回发现 RET 时，FTQ 直接用这个栈顶替换 redirect target（`NewFtq.scala:1143-1145`，无 `ras_enable` 检查）——禁用期间压入的 secret 相关返回地址由此再次驱动 fetch。禁用期间 speculative 栈照常更新（state 层缺陷与 V3 相同）。这印证了 §1.6 框架的核心论点：**有状态预测器的输出不止一个 consumer，最终 consumer 的 gate 必须覆盖每一个 next-PC 来源**。
 
 一句话总结：一个"禁用某微架构预测器"的 CSR 位，只改写了 control plane 的寄存器值，没有传达到预测器的 state 更新逻辑和 next-PC 数据通路；被禁用的 RAS/µRAS 因此继续积累 secret 相关状态并继续驱动 fetch。#6461 的修复思路正是把 control plane、state 更新、consumer 三者重新对齐。
 
@@ -235,7 +235,7 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 | 事件时刻（FST time / cycle） | 23800 / C11900 | 16956 / C8478 |
 | FTQ 随后 fetch 该目标 | 是（ftq_idx=10，t=23802） | 是（ftq_idx=11，t=16958） |
 
-**结果二：本报告独立复现**（`v3`，同一 emu `e85a929a3`、同一参数；PoC 为作者原版**加一处 mtvec 处理器**，见下）：
+**结果二：本报告独立复现**（产物见 `bug-replay/v3.zip`；同一 emu `e85a929a3`、同一参数；PoC 为作者原版**加一处 mtvec 处理器**）：
 
 | 指标 | secret=0 | secret=1 |
 | --- | --- | --- |
@@ -270,7 +270,7 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 3. **enable 接线与依赖重构**（`Bpu.scala:101/108`）：`ras.io.enable := ctrl.rasEnable && ctrl.mbtbEnable`、`uras.io.enable := ctrl.rasEnable && ctrl.mbtbEnable`，并给 utage/tage/sc/ittage 增加依赖 gate，给各子预测器 `prediction.valid` 补 enable gate。
 4. **既有 assertion**（`frontend/Bundles.scala`，基线 `e85a929a3` 已存在，由更早的 #5639 引入）：分支解析为 return 时检查 prediction source 不得为 mBTB（`XSError(en && retError, "prediction source cannot be mbtb when resolved branch type is return")`）。其隐含不变量是"resolved return 的 S3 target 一定取自 RAS"。
 
-静态疑点（实验前）：`MicroRas.scala` 全文 0 处 `io.enable`，S1 的两个 target mux（`Bpu.scala:279/313`）仍只查 `isReturn && uras.io.specOut.isCanUse`——µRAS 的 enable 只是接线，模块和 consumer 都未消费。
+静态疑点：`MicroRas.scala` 全文 0 处 `io.enable`，S1 的两个 target mux（`Bpu.scala:279/313`）仍只查 `isReturn && uras.io.specOut.isCanUse`——µRAS 的 enable 只是接线，模块和 consumer 都未消费。
 
 ### 2.2 实验中的新发现：gate 修复使既有 assertion 的隐含不变量失效（非硬件功能错误）
 
@@ -281,15 +281,15 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
   prediction source cannot be mbtb when resolved branch type is return
 ```
 
-因果链需要准确表述（经基线源码核实，这条 assertion 并非 #6461 新增，基线 `Bundles.scala:411/440` 已有）：
+因果链如下（经基线源码核实，这条 assertion 并非 #6461 新增，基线 `Bundles.scala:411/440` 已有）：
 
 1. assertion 编码的不变量："resolved return 的 S3 source 必为 RAS，不得为 mBTB"；
-2. 基线上该不变量"成立"恰恰依赖 #6149 的 bug——`s3_useRas` 不检查 enable，return 的 target 恒由 RAS 提供（这正是泄露路径），因此 source 恒为 s3Ras，assertion 永不触发（本报告的基线复跑全程未触发，与此一致），**bug 掩盖了这条过时的验证断言**；
+2. 基线上该不变量"成立"恰恰依赖 #6149 的 bug——`s3_useRas` 不检查 enable，return 的 target 恒由 RAS 提供（这正是泄露路径），因此 source 恒为 s3Ras，assertion 永不触发（本报告的基线复现全程未触发，与此一致），**bug 掩盖了这条过时的验证断言**；
 3. #6461 修复 gate 后（`s3_useRas = isReturn && ras.io.enable`），RAS 禁用时 return 的 target 只能来自 mBTB，source=s3Mbtb 成为正常状态，旧不变量被暴露——**任何"关闭 RAS 后执行 ret"的程序都会触发这条 fatal assertion**，修复 #6149 的 patch 无法运行 #6149 自身的复现场景。
 
-需要强调：这是**验证断言与修复后行为不一致**的问题，不是新的硬件功能错误——下方对照③证明禁用该 assertion 后功能行为与 RAS 开启时完全一致。它仍应随 PR 处理（断言需对 `!ras_enable` 豁免或更新不变量），否则 RAS 禁用模式在仿真中不可用。
+需要强调：这是**验证断言与修复后行为不一致**的问题，不是新的硬件功能错误——下方第三组对照证明禁用该 assertion 后功能行为与 RAS 开启时完全一致。它仍应随 PR 处理（断言需对 `!ras_enable` 豁免或更新不变量），否则 RAS 禁用模式在仿真中不可用。
 
-用最小 PoC（`v3-patched/poc/ras_min_ret_assert.S`：设置 mtvec、一次 `csrw sbpctl`、两条 `la ra; ret`、park 循环；编译期开关 `RAS_OFF` 选择写 `0x3f` 还是 `0x7f`，其余指令逐字节一致）做三组对照复核：
+用最小 PoC（`bug-replay/v3-patched.zip` 内 `poc/ras_min_ret_assert.S`：设置 mtvec、一次 `csrw sbpctl`、两条 `la ra; ret`、park 循环；编译期开关 `RAS_OFF` 选择写 `0x3f` 还是 `0x7f`，其余指令逐字节一致）做三组对照复核：
 
 | 运行 | 构建 | 结果 |
 | --- | --- | --- |
@@ -297,9 +297,9 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 | `RAS_OFF=0`（对照，RAS 开） | PR head 原样 | 正常 park，C20000 提交 11630 条 |
 | `RAS_OFF=1`（关 RAS） | PR head + 仅禁用该 assertion | 与对照完全一致（11630 条）——RTL 功能行为本身正常，唯一阻塞就是这条 assertion |
 
-综上，assertion 触发本身不是硬件产生错误 target 的证据，它是修复暴露出的过时验证断言，属于应随 PR 一并修正的问题。为继续实验，本报告在构建中把这一条 assertion 置为 `false.B`（仅此一处改动，不影响任何功能逻辑；构建其余与 PR head 一致）。
+综上，assertion 触发本身不是硬件产生错误 target 的证据，它是修复暴露出的过时验证断言，属于应随 PR 一并修正的问题。验证所用构建将这一条 assertion 置为 `false.B`（仅此一处改动，不影响任何功能逻辑；构建其余与 PR head 一致）。
 
-### 2.3 复跑结果（同一 PoC、同一 monitor，构建：PR head + 上述 assertion 禁用）
+### 2.3 验证结果（同一 PoC、同一 monitor，构建：PR head + 上述 assertion 禁用）
 
 | 指标 | V3 基线（§1.5 本报告复现） | V3 + #6461 |
 | --- | --- | --- |
@@ -313,8 +313,8 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 
 1. **S3 主 RAS 路径：修复完整**——state 更新、S3 consumer、端到端 fetch 三层全部验证通过。
 2. **S1 µRAS 路径：残留确认**——µRAS 在禁用期间仍跟踪 poison call 并驱动 S1 预测 target（6 次 secret 相关事件），静态分析与动态行为一致。本 PoC 配置下错误目标未成为真实 fetch：S3（不再使用 RAS）的预测与 S1 不一致时仲裁纠正了取指流。这属于依赖仲裁顺序的偶然行为，而非设计保证——若 S3/mBTB 未覆盖该块（miss、别名等），S1 的 gadget 目标仍可能直接驱动 fetch。若把 `RAS_ENABLE` 当作隔离原语，µRAS 的输出面（`specOut.isCanUse/retTarget`）与 S1 consumer 仍应补 gate。
-3. **既有 assertion 的不变量与 RAS 禁用模式冲突**（§2.2，非硬件功能错误）：修复使原来因 bug 而不可达的状态变为正常状态，暴露了这条过时的验证断言；建议随 PR 更新（例如对 `!ras_enable` 豁免）。v3 的两项发现应区分开：µRAS 状态在禁用边界上的错误使用是真 bug（上文第 2 点）；单纯的 assertion abort 只是验证判据问题，不能单独作为硬件错误 target 的证据（对照③）。
-4. PR 作者已承认 enable 0→1 切换后短期内可能使用陈旧数据并归为性能问题；结合本节证据，µRAS 残留与 assertion 冲突两点都建议反馈给 PR。
+3. **既有 assertion 的不变量与 RAS 禁用模式冲突**（§2.2，非硬件功能错误）：修复使原来因 bug 而不可达的状态变为正常状态，暴露了这条过时的验证断言；建议随 PR 更新（例如对 `!ras_enable` 豁免）。V3 的两项发现应区分开：µRAS 状态在禁用边界上的错误使用是真 bug（上文第 2 点）；单纯的 assertion abort 只是验证判据问题，不能单独作为硬件错误 target 的证据（§2.2 第三组对照）。
+4. PR 作者已承认 enable 0→1 切换后短期内可能使用陈旧数据并归为性能问题；结合本节证据，µRAS 残留与 assertion 冲突两点都建议随 PR 一并处理。
 
 ## 3. V2（kunminghu-v2）迁移与复现：**bug 类成立，但经由 V2 特有的第三条 consumer 路径**
 
@@ -337,7 +337,7 @@ FTQ -> IFU 对 gadgetN 发出真实 fetch         <-- secret 相关的 wrong-pat
 
 ### 3.2 迁移产物
 
-`v2/`（运行方法见其 `README.md`）：`ras_enable_secret_fetch_v2.S`（`RAS_OFF=0x5f` + mtvec 处理器，后者是裸机测试的必要加固，原因存档于 `v2/env-troubleshooting.md`）、`linker.ld`、`run_v2_secret_fetch.sh`、`monitor_v2_ras_enable_secret_fetch.py`（事件类含 S2/S3 禁用态预测、**IFU-RET 禁用态 redirect**、FTQ gadget fetch、禁用期间栈顶变化计数）、`summarize_pair_v2.py`、双 secret 波形（`ras_enable_secret{0,1}_v2_9400_10200.vcd`，各约 259 MB，窗口 C9400-C10200 覆盖攻击阶段）与 monitor JSON/log。
+`bug-replay/v2.zip`（内含 README 与复现脚本）：`ras_enable_secret_fetch_v2.S`（`RAS_OFF=0x5f` + mtvec 处理器；mtvec 处理器的必要性见 §1.5 的说明）、`linker.ld`、`run_v2_secret_fetch.sh`、`monitor_v2_ras_enable_secret_fetch.py`（事件类含 S2/S3 禁用态预测、**IFU-RET 禁用态 redirect**、FTQ gadget fetch、禁用期间栈顶变化计数）、`summarize_pair_v2.py`、双 secret 波形（`ras_enable_secret{0,1}_v2_9400_10200.vcd`，各约 259 MB，窗口 C9400-C10200 覆盖攻击阶段）与 monitor JSON/log。
 
 ### 3.3 复现结果（双 secret，`pair_summary_v2.json`）
 
@@ -367,7 +367,7 @@ state 层（与 V3 同病）：RAS_ENABLE=0 期间，secret 选定的 poison jal
         -> 后端执行 ret（ra=safe_return）发现误预测 -> redirect 恢复，架构结果正确
 ```
 
-注意被**排除**的路径：S2/S3 的 `jalr_target` 覆盖（`ras_drove_target_while_disabled=false` 全程成立）——V2 在这个 consumer 上确实有 gate，静态分析这部分结论正确；泄露经由的是旁路的 `topAddr` 输出与 IFU-RET redirect。按 §1.6 框架表述：V2 实现了"最终 consumer gate"的一个实例（jalr mux），但 RAS 的输出不止一个 consumer——**gate 了一个 mux，漏了另一个 mux**。
+注意被**排除**的路径：S2/S3 的 `jalr_target` 覆盖（`ras_drove_target_while_disabled=false` 全程成立）——V2 在这个 consumer 上确实有 gate；泄露经由的是旁路的 `topAddr` 输出与 IFU-RET redirect。按 §1.6 框架表述：V2 实现了"最终 consumer gate"的一个实例（jalr mux），但 RAS 的输出不止一个 consumer——**gate 了一个 mux，漏了另一个 mux**。
 
 ## 4. 波形分析
 
@@ -375,16 +375,16 @@ state 层（与 V3 同病）：RAS_ENABLE=0 期间，secret 选定的 poison jal
 
 | 运行 | 波形文件 | 窗口 | 
 | --- | --- | --- |
-| V3 secret=0 | `v3/ras_enable_secret0_mtvec_6500_9000.fst` | C6500-C9000 |
-| V3 secret=1 | `v3/ras_enable_secret1_mtvec_6500_9000.fst` | C6500-C9000 |
-| V2 secret=0 | `v2/ras_enable_secret0_v2_9400_10200.vcd` | C9400-C10200 |
-| V2 secret=1 | `v2/ras_enable_secret1_v2_9400_10200.vcd` | C9400-C10200 |
+| V3 secret=0 | `bug-replay/v3.zip` 内 `waves/ras_enable_secret0_mtvec_6500_9000.fst` | C6500-C9000 |
+| V3 secret=1 | `bug-replay/v3.zip` 内 `waves/ras_enable_secret1_mtvec_6500_9000.fst` | C6500-C9000 |
+| V2 secret=0 | `bug-replay/v2.zip` 内 `waves/ras_enable_secret0_v2_9400_10200.vcd` | C9400-C10200 |
+| V2 secret=1 | `bug-replay/v2.zip` 内 `waves/ras_enable_secret1_v2_9400_10200.vcd` | C9400-C10200 |
 
 信号与时间约定：V3 地址为 `PrunedAddr`（`>>1`，如 `gadget1 0x80000084 -> 0x40000042`），V2 为完整 vaddr；两种波形的 time 都是 2 × cycle。
 
 ### 4.2 V3 泄露事件时间线（secret=1，S3 主 RAS 路径）
 
-背景：`beqz`（`0x80000070`）尚未解析，前端按 not-taken 预测走 fall-through，speculative执行 `poison1_site` 的 `jal ra, poison_common`。
+背景：`beqz`（`0x80000070`）尚未解析，前端按 not-taken 预测走 fall-through，speculative 执行 `poison1_site` 的 `jal ra, poison_common`。
 
 | time / cycle | 事件 | 波形证据 |
 | --- | --- | --- |
@@ -395,14 +395,14 @@ state 层（与 V3 同病）：RAS_ENABLE=0 期间，secret 选定的 poison jal
 | 13477-78 / C6739 | RAS 栈被 pop（`spec_pop`，同样无 enable gate） | `ras_top: 0x40000042 -> 0` |
 | 15433-34 / C7717 | 后端解析 `ret`（架构 target = `ra` = safe_return），redirect 转化为 FTQ fetch `0x400000a6`（`0x8000014c`） | `ftq_start=0x400000a6` |
 
-解读：从 push 到 wrong-path fetch 仅 10 个周期——禁用态下 RAS 栈顶在预测流水内写入后即被使用。恢复用了约 980 个周期，期间错误路径上的 `gadget1` probe load 与 `wrong_path1` 循环被speculative fetch/执行，最后由后端 redirect 清除；程序最终在 `done` 循环正常提交（C11000 时 5567 条）。secret=0 的对称事件：S3 预测 → `gadget0`（`0x40000062`）于 t=15404（C7702），FTQ fetch t=15406（idx10），机制相同。
+解读：从 push 到 wrong-path fetch 仅 10 个周期——禁用态下 RAS 栈顶在预测流水内写入后即被使用。恢复用了约 980 个周期，期间错误路径上的 `gadget1` probe load 与 `wrong_path1` 循环被 speculative fetch/执行，最后由后端 redirect 清除；程序最终在 `done` 循环正常提交（C11000 时 5567 条）。secret=0 的对称事件：S3 预测 → `gadget0`（`0x40000062`）于 t=15404（C7702），FTQ fetch t=15406（idx10），机制相同。
 
 ### 4.3 V2 泄露事件时间线（secret=1，IFU predecode RET redirect 路径）
 
 | time / cycle | 事件 | 波形证据 |
 | --- | --- | --- |
-| 19649 / C9824 | poison1 `jal ra` 的speculative push（`s2_spec_push`，无 `ras_enable` gate） | `s3_top -> 0x80000084`（禁用期间首次栈顶变化） |
-| 19652-57 / C9826 | 前端speculative fetch `ret_probe` 块（`0x80000140`，含 `la ra; ret`） | `ftq_start=0x80000140` |
+| 19649 / C9824 | poison1 `jal ra` 的 speculative push（`s2_spec_push`，无 `ras_enable` gate） | `s3_top -> 0x80000084`（禁用期间首次栈顶变化） |
+| 19652-57 / C9826 | 前端 speculative fetch `ret_probe` 块（`0x80000140`，含 `la ra; ret`） | `ftq_start=0x80000140` |
 | 19733-34 / C9867 | `ret` 到达 IFU predecode 写回：`pd_isRet=1`，FTQ 用保存的 RAS 栈顶替换 redirect target | `io_toBpu_redirect_bits_cfiUpdate_pd_isRet=1`，`cfiUpdate_target=0x80000084`（=`s3_top`），`ras_en=0` |
 | 19738-42 / C9869-71 | FTQ→IFU 对 `0x80000084`（gadget1）发出 fetch | `io_toIfu_req_bits_startAddr=0x80000084`（ftq_idx=13） |
 | 19741 / C9870 | RAS 栈被 pop | `s3_top: 0x80000084 -> 0` |
@@ -415,11 +415,11 @@ state 层（与 V3 同病）：RAS_ENABLE=0 期间，secret 选定的 poison jal
 1. **共同前提（state 层缺陷）**：V2/V3 两代的 speculative push 均不受 `ras_enable` 约束，secret 选定的返回地址都能在禁用期间入栈（V3 t=13456/C6728，V2 t=19649/C9824，均实测）。
 2. **差异在 consumer**：V3 在 BPU 预测级泄露——S1 µRAS / S3 主 RAS 的 target mux 不检查 enable，预测本身就指向 gadget；V2 在 redirect 环节泄露——预测级 mux 有 gate，但 IFU predecode RET redirect 将另一个无 gate 的 RAS 栈顶副本用作 target。
 3. **恢复路径相同**：均为后端执行 `ret`（target=`ra`=`safe_return`）发现误预测后 redirect，架构结果正确。wrong-path window：V3 约 980 周期，V2 约 12 周期。
-4. §1.5 开放点现状：secret=0 运行中 8 次指向 `gadget1` 的 S3 禁用态预测均未转化为 FTQ fetch（monitor `ftq_fetch_opposite_after_prediction=false`）；这些预测发生在 `beqz` 解析前的 fall-through speculative路径上，随后被分支解析 redirect 清除，S3 override 的 fetch 未及发出。
+4. 对 §1.5 记录现象的核对：secret=0 运行中 8 次指向 `gadget1` 的 S3 禁用态预测均未转化为 FTQ fetch（monitor `ftq_fetch_opposite_after_prediction=false`）；这些预测发生在 `beqz` 解析前的 fall-through speculative 路径上，随后被分支解析 redirect 清除，S3 override 的 fetch 未及发出。
 
 ### 4.5 侧信道证据边界
 
-本报告证实到"secret 相关的 wrong-path fetch"（FTQ→IFU 请求 + 地址分叉）。gadget 内 probe load（`ld t4, 0(t3)`，PROBE0/1_ADDR）是否确实speculative执行并留下可测量的 cache 差异，属于下一层证据，需要另做 flush+reload 类测量实验，不在讨论范围内。
+本报告证实到"secret 相关的 wrong-path fetch"（FTQ→IFU 请求 + 地址分叉）。gadget 内 probe load（`ld t4, 0(t3)`，PROBE0/1_ADDR）是否确实 speculative 执行并留下可测量的 cache 差异，属于下一层证据，需要另做 flush+reload 类测量实验，不在讨论范围内。
 
 ## 5. 结论
 
@@ -438,11 +438,21 @@ state 层（与 V3 同病）：RAS_ENABLE=0 期间，secret 选定的 poison jal
 **逐条结论。**
 
 1. **V3**：基线上 S1 µRAS 与 S3 主 RAS 两条泄露路径均被波形证实并完成逐周期时间线（§4.2）；issue 作者的原始数据与本地独立复现一致（§1.5）。
-2. **V2**：同一 bug 类成立但路径不同——S2/S3 `jalr_target` mux 有 gate（这部分静态分析与波形一致），泄露经由 `NewFtq.scala:1143-1145` 的 IFU predecode RET redirect：RAS 栈顶经无 gate 的 `last_stage_spec_info.topAddr` 存入 `ftq_redirect_mem`，被直接用作 redirect target。**同一个 bug 类在两代实现中以不同 consumer 出现**，说明这是"有状态预测器的输出面有多个 consumer、disable 语义必须覆盖每一个 next-PC 来源"这一结构性问题。
+2. **V2**：同一 bug 类成立但路径不同——S2/S3 `jalr_target` mux 有 gate（静态分析与波形一致），泄露经由 `NewFtq.scala:1143-1145` 的 IFU predecode RET redirect：RAS 栈顶经无 gate 的 `last_stage_spec_info.topAddr` 存入 `ftq_redirect_mem`，被直接用作 redirect target。**同一个 bug 类在两代实现中以不同 consumer 出现**，说明这是"有状态预测器的输出面有多个 consumer、disable 语义必须覆盖每一个 next-PC 来源"这一结构性问题。
 3. **#6461 修复评估**：S3 主 RAS 路径（state 更新、consumer、端到端 fetch）三层全部修复并验证；**S1 µRAS 路径残留**——`MicroRas.scala` 仍不消费 `io.enable`，S1 mux 仍不检查 enable，禁用态仍有 6 次 secret 相关的 S1 预测事件；本配置下未转化为实际 fetch，属于依赖仲裁顺序的偶然行为，若 mBTB 未覆盖该块，S1 目标仍可能直接驱动 fetch。建议随 PR 补 µRAS 输出面与 S1 consumer 的 gate。
 4. **修复暴露的验证断言缺陷**（非硬件功能错误）：既有 assertion "prediction source cannot be mbtb when resolved branch type is return"（#5639 引入，非 #6461 新增）在基线上被 #6149 的 bug 掩盖（return 恒由 RAS 提供 target，source 恒为 s3Ras）；#6461 修复 gate 后，RAS 禁用时 return 由 mBTB 提供成为正常状态，最小 PoC（关 RAS + 两条 ret）即触发 fatal abort。禁用该 assertion 后功能行为与 RAS 开启时完全一致（对照实验），故不属于硬件产生错误 target，但应随 PR 更新断言（对 `!ras_enable` 豁免）。
 
 **对使用者的建议。** 若软件依赖 `sbpctl.RAS_ENABLE` 做隔离（如密钥相关代码段），在 V3 基线与 V2 上都不能信任该位；在 #6461 合入后 V3 的 S3 路径可用，但 S1 µRAS 路径与 V2 的 IFU-RET redirect 路径仍在，应等待上述残留修复后再依赖该语义。
+
+## 6. 修复建议
+
+#6461 已完成主 RAS 侧的修复（enable 接线与依赖重构、三类 state 更新加 `io.enable`、S3 `s3_useRas` 的 consumer 检查）。要把 `RAS_ENABLE` 落实为可依赖的隔离语义，建议补齐以下各项：
+
+1. **µRAS 内部逻辑贯穿 enable**：`MicroRas.scala` 的 S1/S2/S3 push/pop 跟踪与 `retAddr`/`isCanUse` 更新全部加 `io.enable` 条件，并令 `uras.specOut.isCanUse := internal && io.enable`，禁用态输出强制失效（当前 µRAS 完全不消费 enable，是 §2.3 S1 残留的根因）。
+2. **补齐剩余 consumer gate**：V3 的 S1 uBTB/aBTB 两个 return target mux 增加 `&& ctrl.rasEnable`；V2 在 `NewFtq.scala:1143-1145` 为 IFU predecode RET redirect 的 target 选择增加 `ras_enable` 检查，禁用态不得以 `ftq_redirect_mem.topAddr` 替换 redirect target（V2 的泄露路径，§3.3）。
+3. **禁用时清理预测器状态**：enable 下降沿复位 RAS/µRAS 的栈指针与输出寄存器（`isCanUse` 清零、`topRetAddr` 失效），使禁用前写入的 secret 相关返回地址在 re-enable 后不可复用（封堵 secret 相关 call → disable → re-enable → `ret` 的跨窗口复用）；对 SRAM 型预测器（BTB 族，对应 `sbpctl` 其它位）采用 epoch/generation 计数器或 valid bitmap 清扫，读出时 epoch 不匹配按 miss 处理。
+4. **更新验证断言**：`Bundles.scala` 的 return-source 断言对 `!ras_enable` 豁免（§2.2），否则 RAS 禁用模式在仿真中直接 abort。
+5. **验收方式**：修复后可用 re-enable 场景复验（secret 相关 call → disable → re-enable → `ret`，旧栈顶不得再驱动预测/fetch），并以本文双 secret PoC 判据（§1.5/§3.3）与 §1.6 invariant 的 SVA 作为长期回归手段。
 
 ## 参考资料
 
