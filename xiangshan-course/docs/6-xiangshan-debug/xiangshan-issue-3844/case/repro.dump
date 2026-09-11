@@ -1,0 +1,16 @@
+
+/nfs/home/sunyuhang/bug-replay/3844/case/repro.elf:     file format elf64-littleriscv
+
+
+Disassembly of section .text:
+
+0000000080000000 <_start>:
+    80000000:	c00002b7          	lui	t0,0xc0000
+    80000004:	2295                	addiw	t0,t0,5 # ffffffffc0000005 <_start+0xffffffff40000005>
+    80000006:	02d6                	slli	t0,t0,0x15
+    80000008:	10528293          	addi	t0,t0,261
+    8000000c:	02b2                	slli	t0,t0,0xc
+    8000000e:	a0028293          	addi	t0,t0,-1536
+    80000012:	30029073          	csrw	mstatus,t0
+    80000016:	000114a7          	fsh	ft0,9(sp)
+    8000001a:	a001                	j	8000001a <_start+0x1a>
