@@ -32,6 +32,10 @@ int main() {
 
 **注意：** 结果在64位浮点寄存器中进行NaN-boxing
 
+boxing：可以理解为“把较小格式的数据放入较大容器中”。在浮点处理器中，通常是把 float32 或 float16 放入 64 位浮点寄存器。
+
+NaN-boxing 是 RISC-V 浮点寄存器采用的一种特殊表示规则：当较窄的浮点值存入较宽的浮点寄存器时，高位必须全部写成 1。
+
 （ 本图来源于 [链接](https://ai-embedded.com/risc-v/riscv-isa-manual/) ）
 
 - fa5 号寄存器的值为地址 0x80001634 中的值，也就是变量a的值
@@ -160,25 +164,25 @@ val opfff: Array[(BitPat, XSDecodeBase)] = Array(
 
 ![image-20260910162119451](img/fadd-wave2.png)
 
-| 字段               |       波形值 | 含义                   |
-| ------------------ | -----------: | ---------------------- |
+| 字段               | 波形值       | 含义                   |
+| :----------------- | :----------- | :--------------------- |
 | `pc`               | `0x80000144` | 目标 PC                |
 | `instr`            | `0x00d7f7d3` | 目标机器码             |
-| `lsrc_0`           |           15 | 逻辑浮点源 `f15`       |
-| `lsrc_1`           |           13 | 逻辑浮点源 `f13`       |
-| `srcType_0`        |       `0010` | FP 源寄存器            |
-| `srcType_1`        |       `0010` | FP 源寄存器            |
-| `ldest`            |           15 | 逻辑浮点目的 `f15`     |
-| `fpWen`            |            1 | 需要写浮点寄存器       |
-| `fuType`           |      `0x800` | `FuType.falu` 独热编码 |
-| `fuOpType`         |            0 | `VfaluType.vfadd`      |
-| `fpu_fmt`          |         `10` | FP32                   |
-| `fpu_rm`           |        `111` | 动态舍入               |
-| `fpu_wflags`       |            1 | 需要产生/更新 `fflags` |
-| `firstUop/lastUop` |          1/1 | 单 uop 指令            |
-| `numUops/numWB`    |          1/1 | 一个 uop，一次写回     |
+| `lsrc_0`           | 15           | 逻辑浮点源 `f15`       |
+| `lsrc_1`           | 13           | 逻辑浮点源 `f13`       |
+| `srcType_0`        | `0010`       | FP 源寄存器            |
+| `srcType_1`        | `0010`       | FP 源寄存器            |
+| `ldest`            | 15           | 逻辑浮点目的 `f15`     |
+| `fpWen`            | 1            | 需要写浮点寄存器       |
+| `fuType`           | `0x800`      | `FuType.falu` 独热编码 |
+| `fuOpType`         | 0            | `VfaluType.vfadd`      |
+| `fpu_fmt`          | `10`         | FP32                   |
+| `fpu_rm`           | `111`        | 动态舍入               |
+| `fpu_wflags`       | 1            | 需要产生/更新 `fflags` |
+| `firstUop/lastUop` | 1/1          | 单 uop 指令            |
+| `numUops/numWB`    | 1/1          | 一个 uop，一次写回     |
 
-`fuOpType=0` 不是“没有译码”。`VfaluType.vfadd` 的低 5 位使用`FaddOpCode.fadd`，其编码正好为零。
+`fuOpType=0` 不代表没有识别出指令。`VfaluType.vfadd` 的低 5 位使用`FaddOpCode.fadd`，其编码正好为零。
 
 
 
@@ -275,7 +279,7 @@ Rename 接收：
 ```
 rename.io.in.valid = 1
 rename.io.in.ready = 1
-rename.io.in.fire = 1
+rename.io.in.fire  = 1
 ```
 
 ## 5.Rename
@@ -1247,7 +1251,7 @@ rm = Mux(instRm =/= "b111".U, instRm, frm)
 
 因此本例 `1.25f + 2.50f = 3.75f` 是精确结果，改变合法舍入模式也不会改变结果，`fflags` 仍为 `00000`；对不能精确表示的结果，舍入模式才会影响低位和`NX`，并可能影响溢出时输出 infinity 还是最大有限数。
 
-### 0.4 NaN、Inf、subnormal 等操作数如何处理
+### 0.3 NaN、Inf、subnormal 等操作数如何处理
 
 `FloatPoint.decode` 根据 IEEE 编码分类：
 
@@ -1269,7 +1273,7 @@ rm = Mux(instRm =/= "b111".U, instRm, frm)
 
 在 `yunsuan/fpu/FloatFMA.scala` 中可以看到对应实现：`has_nan` 和 `has_inf`优先选择 NaN/Inf 结果，NaN 结果使用`Cat(0, exponent=全1, quiet-bit=1, ...)`；`fflags` 按照`Cat(NV,DZ,OF,UF,NX)` 输出。较早/另一套加法器实现`fudian/FADD.scala` 也明确将 sNaN 和相反无穷相加判为 invalid。
 
-### 0.5 Double -> Single 精度转换及高位处理
+### 0.4 Double -> Single 精度转换及高位处理
 
 `fcvt.s.d` 不是截取 Double 的低 32 位，而是由`backend/fu/wrapper/FCVT.scala` 调用 `yunsuan.scalar.FPCVT`，将 binary64 数值转换成 binary32 数值。转换过程会：
 
@@ -1296,7 +1300,7 @@ Cat(Fill(32, 1.U), fcvtResult(31, 0))
 0xffffffff40700000
 ```
 
-### 0.6 Floating load single source（`flw`）的高位如何处理
+### 0.5 Floating load single source（`flw`）的高位如何处理
 
 这里的 single source 是从内存加载一个单精度源值，即 `flw`。在`mem/lsqueue/LoadQueue.scala` 的 `HasLoadHelper.rdataHelper` 中，浮点写使能`fpWen` 为真时：
 
@@ -1316,7 +1320,7 @@ LSUOpType.lw -> Mux(fpWen, FPU.box(rdata, FPU.S), SignExt(...))
 
 对应地，`fld` 使用 `FPU.box(rdata, FPU.D)`，Double 占满 64 位，不需要额外NaN-boxing。半精度也遵循同一规则，高 48 位补全 1。
 
-### 0.7 计算结果 underflow/overflow 如何处理
+### 0.6 计算结果 underflow/overflow 如何处理
 
 香山在加法器中保留额外舍入位，并在舍入后判断指数是否超出目标格式范围。在 `yunsuan/fpu/FloatFMA.scala` 中：
 
@@ -1329,7 +1333,7 @@ LSUOpType.lw -> Mux(fpWen, FPU.box(rdata, FPU.S), SignExt(...))
 
 同样的结果选择在 `fudian/FADD.scala` 中写得更直接：`common_overflow` 检测溢出，`RoundingUnit.is_rmin` 决定 `common_overflow_exp` 和`common_overflow_sig`，从而在 infinity 与最大有限数之间选择；`common_underflow`和 `common_inexact` 分别生成 `UF`、`NX`。因此，underflow/overflow 一般不会变成整数异常或直接陷入；浮点指令仍写回一个按舍入模式确定的 IEEE 结果，并通过 `fflags` 报告状态。以单精度为例，overflow结果的低 32 位可能是 infinity，也可能是最大有限数，随后若写入 64 位浮点寄存器仍要再进行 Single 的 NaN-boxing。
 
-### 0.8 浮点除法除零是否有特殊处理
+### 0.7 浮点除法除零是否有特殊处理
 
 有。`fdiv.s` 通过 `backend/fu/wrapper/FDivSqrt.scala` 连接到`yunsuan.fpu.FloatDivider`。在
 `yunsuan/fpu/FloatDivider.scala` 中，单精度和双精度共用相同的特殊情况判断：
