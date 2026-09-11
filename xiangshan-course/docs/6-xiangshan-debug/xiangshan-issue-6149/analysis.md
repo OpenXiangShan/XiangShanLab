@@ -450,7 +450,7 @@ state 层（与 V3 同病）：RAS_ENABLE=0 期间，secret 选定的 poison jal
 
 1. **µRAS 内部逻辑贯穿 enable**：`MicroRas.scala` 的 S1/S2/S3 push/pop 跟踪与 `retAddr`/`isCanUse` 更新全部加 `io.enable` 条件，并令 `uras.specOut.isCanUse := internal && io.enable`，禁用态输出强制失效（当前 µRAS 完全不消费 enable，是 §2.3 S1 残留的根因）。
 2. **补齐剩余 consumer gate**：V3 的 S1 uBTB/aBTB 两个 return target mux 增加 `&& ctrl.rasEnable`；V2 在 `NewFtq.scala:1143-1145` 为 IFU predecode RET redirect 的 target 选择增加 `ras_enable` 检查，禁用态不得以 `ftq_redirect_mem.topAddr` 替换 redirect target（V2 的泄露路径，§3.3）。
-3. **禁用时清理预测器状态**：enable 下降沿复位 RAS/µRAS 的栈指针与输出寄存器（`isCanUse` 清零、`topRetAddr` 失效），使禁用前写入的 secret 相关返回地址在 re-enable 后不可复用（封堵 secret 相关 call → disable → re-enable → `ret` 的跨窗口复用）；对 SRAM 型预测器（BTB 族，对应 `sbpctl` 其它位）采用 epoch/generation 计数器或 valid bitmap 清扫，读出时 epoch 不匹配按 miss 处理。
+3. **禁用时冲刷预测器状态（寄存器+SRAM）**：enable 下降沿冲刷既有状态，使禁用前写入的 secret 相关返回地址/表项在 re-enable 后不可复用（封堵 secret 相关 call → disable → re-enable → `ret` 的跨窗口复用）。具体地：RAS/µRAS 的栈与跟踪状态为寄存器堆，直接复位栈指针与输出寄存器（`isCanUse` 清零、`topRetAddr` 失效）即可；SRAM 型表项（uBTB/aBTB/mBTB 等 BTB 族，对应 `sbpctl` 其它位）也需一并冲刷，但 SRAM 每端口每周期仅能写一项，应采用 epoch/generation 计数器（读出时 epoch 不匹配按 miss 处理）或 valid bitmap 清扫实现，而非逐地址写零。
 4. **更新验证断言**：`Bundles.scala` 的 return-source 断言对 `!ras_enable` 豁免（§2.2），否则 RAS 禁用模式在仿真中直接 abort。
 5. **验收方式**：修复后可用 re-enable 场景复验（secret 相关 call → disable → re-enable → `ret`，旧栈顶不得再驱动预测/fetch），并以本文双 secret PoC 判据（§1.5/§3.3）与 §1.6 invariant 的 SVA 作为长期回归手段。
 
