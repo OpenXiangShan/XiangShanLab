@@ -42,7 +42,9 @@ int main() {
 
 核为kunminghu-v2
 
-![img](https://docs.xiangshan.cc/projects/user-guide/zh-cn/kunminghu-v2/figs/kmh-multicore.svg)
+![](https://docs.xiangshan.cc/projects/user-guide/zh-cn/kunminghu-v2/figs/kmh-multicore.svg)
+
+通过架构图我们也能梳理出一条指令执行的流程以及经过的模块，以下为整体分析结束之后的流程图，在后文中会详细阐述：
 
 ```
 前端产生已展开指令
@@ -107,7 +109,7 @@ cfVec与DecodeWidth数量一致，每个 cfVec_i 对应一次并行发送的一�
 
 实例化`DecodeWidth`（6）个解码器；输入接受和输出 `DecodedInst` 的流水控制在 `DecodeStage.scala:195-247`。
 
- ### `FADD_S` 的主译码表项
+ ### 4.1`FADD_S` 的主译码表项
 
 ```
 val opfff: Array[(BitPat, XSDecodeBase)] = Array(
@@ -140,6 +142,12 @@ val opfff: Array[(BitPat, XSDecodeBase)] = Array(
 | `uopSplitType`   | `SCA_SIM`         | 标量、单 uop               |
 | `canRobCompress` | `true`            | 具备 ROB 压缩资格          |
 
+其中的`FuType` 与 `FuOpType`分别是 `功能单元的大类选择` 与 `功能单元内部的具体操作编码`。
+
+ `OPFFF.generate()` 固定设置`canRobCompress = true`，`RobCompress` 不是 RVC 指令压缩，而是多个相邻、满足条件的指令共享一个 ROB entry。`fadd.s` 具备 ROB 压缩资格，但是否会压缩不一定
+
+
+
 `yunsuan/src/main/scala/yunsuan/package.scala` 定义高位控制字段：
 
 ![image-20260911005906496](img/image-20260911005906496.png)
@@ -148,7 +156,7 @@ val opfff: Array[(BitPat, XSDecodeBase)] = Array(
 
 ![image-20260911010005830](img/image-20260911010005830.png)
 
-在 `8331 ps`，Decode lane 1 输出：
+在 `8331 ps`，Decode 输出：
 
 ![image-20260910162119451](img/fadd-wave2.png)
 
@@ -174,9 +182,7 @@ val opfff: Array[(BitPat, XSDecodeBase)] = Array(
 
 
 
-
-
-### Decode 到 Rename 的握手
+### 4.2 Decode 到 Rename 的握手
 
 在 CtrlBlock.scala 中完成，核心代码是：
 
@@ -274,7 +280,7 @@ rename.io.in.fire = 1
 
 ## 5.Rename
 
-### 1.为什么需要重命名
+### 5.1 为什么需要重命名
 
 源代码中 `fa5` 同时是源寄存器和目的寄存器：
 
@@ -290,7 +296,7 @@ f15 = f15 + f13
 写入新 f15 映射：p69
 ```
 
-### 2.读取 FP RAT
+### 5.2 读取 FP RAT
 
 逻辑寄存器到物理寄存器的查询由 Decode 阶段准备地址，RAT 返回物理寄存器号， CtrlBlock 再把返回值接到 Rename。Rename 根据 `srcType` 从整数、浮点或向量 读端口中选择对应结果：
 
@@ -317,7 +323,7 @@ Rename.scala:387
 
 ```
 
-### 3.从 FP FreeList 分配目的寄存器
+### 5.3 从 FP FreeList 分配目的寄存器
 
 判断指令需要 FP 目的寄存器，并请求 `FreeList`：
 
@@ -372,7 +378,7 @@ io.fpRenamePorts(i).data := fpFreeList.io.allocatePhyReg(i)
 rat.io.fpRenamePorts := rename.io.fpRenamePorts
 ```
 
-写入 FP 推测 RAT，最终更新 fpRat 的 spec_table：backend/rename/RenameTable.scala
+写入 FP 推测 RAT，最终更新 fpRat 的 spec_table：rename/RenameTable.scala
 
 ```
 for ((spec, rename) <- fpRat.io.specWritePorts.zip(io.fpRenamePorts)) {
@@ -394,7 +400,7 @@ wen  = 1
 
 也就是请求将 `fpRAT[f15]` 更新为 `p69`
 
-### 4.分配 ROB 编号
+### 5.4 分配 ROB 编号
 
 `Rename` 会预分配 `ROB index`，并把它附加到动态 `uop`：
 
@@ -404,7 +410,7 @@ robIdx = 56
 
 此时只是确定该指令以后使用 `ROB entry 56`。`ROB` 表项的实际写入请求由下一阶段`Dispatch` 产生。
 
-### 5.Rename 输出与握手
+### 5.5 Rename 输出与握手
 
 `Rename` 与 `Dispatch` 之间也不是直接连接，而是经过一个一拍的 `PipeGroupConnect`：
 
@@ -441,7 +447,7 @@ Rename -> Dispatch ------+
 
 ROB 保存程序顺序和精确状态，`Issue Queue` 负责等待操作数并乱序选择执行。
 
-### 1.向 ROB 发出入队请求
+### 6.1 向 ROB 发出入队请求
 
 `Dispatch` 源码：
 
@@ -467,7 +473,7 @@ robEntries_56_debug_pc    = 0x80000144
 robEntries_56_debug_instr = 0x00d7f7d3
 ```
 
-### 2.向 FP Issue Queue 分发
+### 6.2 向 FP Issue Queue 分发
 
 `fuType=FuType.falu` 使 Dispatch 把该 uop 导向到 FP Scheduler。波形中的链路为：
 
@@ -498,7 +504,7 @@ IssueQueue.io_enq_0.fire = io_enq_0_valid && io_enq_0_ready
 
 若 IQ 满，`ready` 会拉低并通过 Dispatch 反压到前级。
 
- ### 3.Dispatch 阶段读写 FP BusyTable
+ ### 6.3 Dispatch 阶段读写 FP BusyTable
 
  Dispatch 使用 Rename 传入的 psrc 作为 BusyTable 的查询地址：
 
@@ -534,7 +540,7 @@ resp = 0 -> 物理寄存器 busy，仍需等待结果产生
 
 对应的组合逻辑为：
 
-backend/rename/BusyTable.scala：174
+位置：backend/rename/BusyTable.scala：174
 
 ```
 res.resp := !(table(res.req) || readBypass.asUInt.orR)
@@ -630,7 +636,7 @@ fpBusyTable[p69] = busy
 
 ## 7.Issue Queue：等待、唤醒并乱序发射
 
-### 1.进入哪个队列
+### 6.1进入哪个队列
 
 本条指令进入IssueQueueFaluFmac（是一个浮点发射队列，名字由它支持的功能单元类型生成）
 
@@ -668,7 +674,7 @@ IssueBlockParams(Seq(
 
 源码中 Issue Queue 的输入和输出接口是：
 
-backend/issue/IssueQueue.scala
+位置：backend/issue/IssueQueue.scala
 
 ```
 val enq = Vec(params.numEnq, Flipped(DecoupledIO(new DynInst)))
@@ -726,7 +732,7 @@ FP Scheduler
   -> FP writeback port 2
 ```
 
-### 2.源操作数状态
+### 6.2 源操作数状态
 
 IQ entry 保存 `psrc0=66`、`psrc1=67` 以及两个源的 ready 状态。源可以通过两种主要
 方式变为 ready：
@@ -746,7 +752,7 @@ wakeup.valid
 距离很近，还可能通过 IQ/EXU 的快速唤醒和旁路网络提前取得数据，不必等数据已经稳定
 写入物理寄存器后再开始调度。
 
-### 3.为什么从 8333 ps 等到 8403 ps
+### 6.3 为什么从 8333 ps 等到 8403 ps
 
 目标指令在 `8333 ps` 入队，却到 `8403 ps` 才发射。其间 IQ 需要等待：
 
@@ -760,7 +766,7 @@ wakeup.valid
 精确归因，需要同时展开 entry 4 的每个 `srcStatus`、wakeup 命中、FU busy 和
 writeback busy table 信号。
 
-### 4.发射事件
+### 6.4 发射事件
 
 目标项最终位于 IQ entry 4。在 `8403 ps`：
 
@@ -835,7 +841,7 @@ p67 = 0xffffffff40200000
 
 ## 9.FEX4/FALU：执行单精度浮点加法
 
-### 1.FALU 输入
+### 9.1 FALU 输入
 
 在 `8405 ps`：
 
@@ -866,7 +872,7 @@ Decoupled 握手，因为 `FloatAdder` 接口没有 `ready`。
 
 真正处理反压的是外层 `FuncUnit.io.in` 和 `FuncUnit.io.out`。
 
-### 2.动态舍入模式
+### 9.2 动态舍入模式
 
 FALU 对舍入模式的选择为：
 
@@ -883,7 +889,7 @@ rm = Mux(instRm =/= "b111".U, instRm, frm)
 
 本条指令 `rm=111`，因此送入 FloatAdder 的实际 `round_mode` 来自 CSR `frm`。
 
-### 3.进入 F32Adder
+### 9.3 进入 F32Adder
 
 `fp_format=10` 表示 FP32。`FloatAdder` 同时实例化 F64 和 F32/F16 路径，再使用前一拍
 保存的格式选择结果。
@@ -909,7 +915,7 @@ Falu.falu.F32Adder.io_fire = 1
 9. 产生 `NV/DZ/OF/UF/NX` 五个 `fflags`；
 10. 把 FP32 结果重新 NaN-box 为 64 位。
 
-### 4.数值计算
+### 9.4 数值计算
 
 两个输入：
 
@@ -939,7 +945,7 @@ Falu.falu.F32Adder.io_fire = 1
 
 结果能够精确表示，不需要产生 inexact。
 
-### 5.FALU 输出
+### 9.5 FALU 输出
 
 在 `8406 ps`：
 
@@ -964,7 +970,7 @@ fflags 00000         = 无浮点异常
 
 ## 10.写回：结果写入 p69，并通知依赖者和 ROB
 
-### 1.FEX4 到 WbDataPath
+### 10.1 FEX4 到 WbDataPath
 
 FEX4 的输出是 Decoupled：
 
@@ -982,7 +988,7 @@ io_out_2_0.fire = valid && ready
 FALU 是确定延迟单元。WbDataPath 对这类 EXU 令外层输出 ready，并断言它在返回拍必须
 成功获得对应写回端口。
 
-### 2.FP 写回端口仲裁
+### 10.2 FP 写回端口仲裁
 
 FEX4 的配置指定：
 
@@ -1024,7 +1030,7 @@ addr = pdest = 69
 data = 0xffffffff40700000
 ```
 
-### 3.写入 FP Physical RegFile
+### 10.3 写入 FP Physical RegFile
 
 WbDataPath 的 `toFpPreg` 连接到 DataPath：
 
@@ -1062,7 +1068,7 @@ FP Physical RegFile[p69] = 0xffffffff40700000
 只能看到结果的 16 位切片；查看完整结果应优先使用 64 位的
 `io_toFpPreg_2_data/io_fromFpWb_2_data`。
 
-### 4.唤醒依赖指令
+### 10.4 唤醒依赖指令
 
 写回端口还把：
 
@@ -1079,7 +1085,7 @@ wen=1, fpWen=1, addr/pdest=69
 因此，“写寄存器堆”和“唤醒消费者”是同一个生产结果引起的两种效果，但对应的硬件
 状态并不相同。
 
-### 5.通知 ROB
+### 10.5 通知 ROB
 
 WbDataPath 不只生成寄存器堆写口，还把发生 `fire` 的 EXU 结果送给 CtrlBlock：
 
