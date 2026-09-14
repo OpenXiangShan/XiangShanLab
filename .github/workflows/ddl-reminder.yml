@@ -79,6 +79,9 @@ jobs:
                 issue_number: issue.number,
                 per_page: 100
               });
+              if (comments.some(comment => comment.body?.trim().toLowerCase() === '/complete')) {
+                continue;
+              }
               if (comments.some(comment => comment.body?.includes(marker))) {
                 continue;
               }
