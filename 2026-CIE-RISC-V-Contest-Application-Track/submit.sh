@@ -108,7 +108,7 @@ else
     echo "2. 手动导入公钥:"
     echo "   gpg --import contest/public-key.asc"
     echo "3. 手动加密:"
-    echo "   gpg --encrypt --recipient contest-admin@xiangshanlab.org --armor -o submission.asc 您的文件.txt"
+    echo "   gpg --encrypt --recipient 936E3DCCFEB2C1C1472BD43E11489B37147B12E1 --armor -o submission.asc 您的文件.txt"
     echo ""
     read -p "按回车键关闭此窗口..."
 fi
