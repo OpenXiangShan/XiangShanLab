@@ -715,6 +715,152 @@ Vim 是从 vi 发展出来的一个文本编辑器。代码补全、编译及错
 
 ### 2.6.1 Docker
 
+docker提供：Linux操作系统Ubuntu 20.04、香山开发环境(软件包和编译工具链)、香山和仿真相关工具的代码。
+
+香山kunminghu-v2 Docker
+链接下载： https://pan.baidu.com/s/1YoSv1ykkAlPTcy7yPCA9mg?pwd=vg5y 
+提取码: vg5y
+
+已自动设置：
+
+```bash
+NOOP_HOME=/work/XiangShan
+NEMU_HOME=/work/NEMU
+AM_HOME=/work/nexus-am
+```
+
+ **1.Windows环境要求：**
+
+1. Windows 10/11。
+2. 已安装并启动 Docker Desktop。
+3. 建议预留至少 8 GB 磁盘空间。
+4. 完整编译建议为 Docker/WSL 分配至少 12 GB 内存。当前 Makefile 默认 `JVM_XMX=8G`。
+
+在 PowerShell 中检查：
+
+```powershell
+wsl -l -v
+docker version
+docker info --format '{{.OSType}}/{{.Architecture}}'
+```
+
+第一条应显示docker-desktop处于运行状态。
+
+最后一条应显示 `linux/x86_64` 或等价的 Linux 信息。
+
+注：若为 Linux系统 不需要 Docker Desktop 或 WSL 2，直接使用 Docker Engine。
+
+**2.导入镜像：**
+
+```powershell
+docker load -i "path\to\xiangshan-kunminghu-v2.tar"
+docker images xiangshan
+```
+
+加载成功应显示：
+
+```text
+Loaded image: xiangshan:kunminghu-v2
+```
+
+**3.首次启动：**
+
+启动：
+
+```
+docker run --rm -it xiangshan:kunminghu-v2
+```
+
+进入容器后检查：
+
+```bash
+pwd
+echo "$NOOP_HOME"
+echo "$NEMU_HOME"
+echo "$AM_HOME"
+cat DELIVERY_INFO.txt
+cat /work/EXTRA_REPOS_INFO.txt
+java -version
+mill --version
+verilator --version
+ls
+```
+
+`pwd` 和 `NOOP_HOME` 均应指向 `/work/XiangShan`。
+
+**4.退出和再次进入：**
+
+退出容器：
+
+```bash
+exit
+```
+
+下次继续使用同一容器：
+
+```powershell
+docker start -ai xiangshan-dev
+```
+
+不用每次都执行新的 `docker run`。使用同一个命名容器可以保留源码目录中的修改；named volume 会保留 `build/` 和 `out/`。
+
+**5.常用构建命令**
+
+在容器的 `/work/XiangShan` 中执行：
+
+```bash
+make verilog
+```
+
+注意：这里的 `JVM_XMX` 为8GB， `JVM_XMX` 是 Java/Mill 构建进程允许使用的最大堆内存，对于寻常笔记本只有16GB的同学更友好。
+
+标准XiangShan编译使用的40GB，若想要更改可在输入时使用例如 `JVM_XMX=12G`的参数
+
+生成的主要 Verilog 文件为：
+
+```text
+build/XSTop.v
+```
+
+构建 MinimalConfig 仿真器：
+
+```bash
+make emu CONFIG=MinimalConfig EMU_TRACE=1 -j32
+```
+
+- `CONFIG=MinimalConfig`：使用最小配置，编译更快 (该配置移除了L2缓存, 有效降低了设计的复杂度, 但该配置下的香山核仍是乱序超标量处理器核)
+- `EMU_TRACE=1`：启用调试跟踪功能
+- `-j32`：并行编译，数字根据你的 CPU 核心数调整 (可以通过 `nproc`指令查询 CPU 核心数量, 建议保留 1-2 个 CPU 核心用于后台其他进程)
+
+**6.编译 Hello XiangShan 程序：**
+
+```bash
+cd $AM_HOME/apps/hello/
+
+make ARCH=riscv64-xs
+```
+
+产物位于：
+
+```text
+/work/nexus-am/apps/hello/build/hello-riscv64-xs.elf
+/work/nexus-am/apps/hello/build/hello-riscv64-xs.bin
+```
+
+NEMU 源码已完整放入 `/work/NEMU`，但它的 SoftFloat、nanopb、LibCheckpoint 和 LibCheckpointAlpha 是单独的上游依赖，不属于本次指定的两个源码仓库。首次构建某些 NEMU 配置时会尝试联网下载这些依赖；离线交付时需另外准备与该 NEMU 提交兼容的版本。
+
+运行：
+
+```bash
+./build/emu -i $AM_HOME/apps/hello/build/hello-riscv64-xs.bin --no-diff
+```
+
+编译时间较长，CPU、内存和磁盘不足时可能失败。可降低 `-j10` 的并行数，或在 Docker Desktop/WSL 配置中提高资源上限。
+
+如果一切正常，你应该看到输出：
+
+`Hello XiangShan!`
+
 ### 2.6.2 xs-pdb
 
 ## 2.7 常见新手错误
