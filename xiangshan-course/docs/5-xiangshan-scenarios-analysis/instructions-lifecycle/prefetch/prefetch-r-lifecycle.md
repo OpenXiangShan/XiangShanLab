@@ -5,7 +5,7 @@
 | 字段 | 内容 |
 |---|---|
 | **指令名称** | `prefetch.r offset(rs1)` |
-| **编码格式** | `imm[11:5]_00001_rs1_110_00000_0010011`；例如 `0x0212e013` 为 `prefetch.r 32(t0)` |
+| **编码格式** | `imm[11:5]_00001_rs1[4:0]_110_00000_0010011`，32 位；`imm[4:0]=00001`、`funct3=110`、`rd=00000`、`opcode=0010011`；属于 `ORI rd=x0` 的 hint 编码空间，`imm[4:0]` 为预取类型选择字段，预取偏移低 5 位隐含为零；例如 `0x0212e013` 为 `prefetch.r 32(t0)` |
 | **RISC-V 扩展** | `Zicbop`，数据读意图预取提示 |
 | **是否有压缩格式** | 本文指令为 32 位；基础 C 扩展没有对应编码 |
 | **指令分类** | 软件预取／数据侧读 hint，不是返回寄存器数据的普通 load |
@@ -74,7 +74,6 @@
 | **关键译码结果** | `fuType=ldu,fuOpType=prefetch_r,selImm=IMM_S,canRobCompress=false`；基址寄存器源、立即数源，无有效 GPR 目的 |
 | **代码位置** | [DecodeUnit][D] 1102–1106、1133–1146、1166–1175 行；[操作类型][OP] 560–567 行 |
 
-识别式要求 opcode=`0010011`、funct3=`110`、rd=0，并以 `inst.RS2===1` 区分读预取。这里 `RS2` 是编码切片 `[24:20]`，**不是第二个源寄存器**。`IMM_S` 从 `[31:25]` 与 rd 所在的五个零位形成偏移，因此偏移低五位为 0；`0x0212e013` 的偏移是 32，不是将 ORI 的 I 型立即数 33 直接作为地址偏移。最终 `rfWen=(ldest!=0)&&decodedInst.rfWen` 为假。[DecodeUnit][D]
 
 ### 2.2 重命名
 
@@ -283,46 +282,7 @@ $$T_{request\to fill}=T_{translation/cache}+T_{missAcceptance}+T_{lowerMemory/re
 | 目标靠近 cache line/页末 | 数据预取 | 对计算地址所在块提出提示，不进行普通跨界标量 load 的两段数据拼接；下一页不是自动额外预取范围 |
 | MMIO/NC 地址 | 目标访问 | 不执行有副作用的普通设备读；由内存属性/阶段 kill 约束 |
 
-## 6. 安全性分析
-
-### 6.1 推测执行窗口
-
-| 窗口 | 起始点 | 终止点 | 周期数 | 风险等级 |
-|---|---|---|---|---|
-| 推测软件预取 | LoadUnit 接受 | 取消或后端完成 | 可变 | 未测定，需场景验证 |
-| 缓存资源影响 | 缺失请求被接受 | 填充/替换/协议结束 | 可变 | 潜在时序观察面，非漏洞定论 |
-
-### 6.2 侧信道暴露面
-
-| 暴露面 | 类型 | 缓解措施 |
-|---|---|---|
-| DTLB、标签、MSHR 状态 | 微架构时序 | 权限和取消门控限制访问；不因此证明所有时序影响被隔离 |
-| 缓存污染和带宽竞争 | 资源竞争 | 控制预取频率及距离，区分有用填充与无效请求 |
-| 错误路径预取 | 推测状态 | ROB 保证按序架构效果，但不是缓存痕迹清除证明 |
-
-### 6.3 有序性保证
-
-| 保证 | 机制 | 代码依据 |
-|---|---|---|
-| 无架构结果写入 | rd=0 且 rfWen 门控 | [DecodeUnit][D] |
-| 读意图正确传播 | prf_rd 选择 M_PFR，instrtype 标记预取来源 | [LoadUnit S0][S0] |
-| 无效目标受取消约束 | s1_kill/s2_kill → miss_req.cancel | [S1][S1]、[S2][S2]、[LoadPipe][CACHE] |
-| 完成不等于填充 | 独立 ldout 与 MissQueue/refill 路径 | [完成][WB]、[MissQueue][MQ] |
-
-**验证特别注意**
-
-| Verification ID | 风险/不变量 | 定向激励 | 预期观察 | 检查与覆盖 |
-|---|---|---|---|---|
-| PFR_ENCODING | 立即数低位类型与地址混淆 | `0x0212e013`，已知 t0 | `isPreR=1`，地址 t0+32，cmd=M_PFR | 覆盖正负偏移及 rs1=x0 |
-| PFR_NO_RF | 完成误写寄存器 | 目标命中与缺失各一次 | ldout 可完成而 rfWen=0 | ROB 完成与 RF 写使能分别检查 |
-| PFR_TLB_MISS | 错套 demand replay | 冷 DTLB 目标 | s1_tlb_miss、缓存 s1_kill；常规 rep_info 门控 | 不以随后 PTW 活动推定原 hint 一定重试 |
-| PFR_MSHR_FULL | 把 hint 当可靠填充 | 占满缺失资源后发 hint | s2_mq_nack/ignored 可出现，普通 dcache_rep 不因 hint 置位 | 区分请求数、接受数与 refill 数 |
-| PFR_KILL | 取消与缺失同拍 | 更老 redirect 或属性检查失败 | s1/s2 kill 和 miss_req.cancel 按阶段起效 | 无年轻架构写回；缓存事务另跟踪 |
-| PFR_MMIO | 产生设备读副作用 | MMIO/PBMT NC 目标 | actually_uncache 取消，预取不走普通 MMIO 路径 | 检查 uncache 请求与目标块事务 |
-
-上述均为待执行的验证场景，不表示已获得仿真覆盖率或通过结论。
-
-## 7. 性能特征
+## 6. 性能特征
 
 | 指标 | 值 | 说明 |
 |---|---|---|
@@ -334,7 +294,7 @@ $$T_{request\to fill}=T_{translation/cache}+T_{missAcceptance}+T_{lowerMemory/re
 
 `s2_prefetch_hit/miss/accept/ignored` 是 LoadUnit 的阶段统计，并不只覆盖本条软件读预取；必须结合 `prefetch_r`、来源和命令筛选。`accept` 也不能替代 MissQueue 实际处理或 refill 完成证据。[计数器][PERF]
 
-## 8. 配置依赖
+## 7. 配置依赖
 
 | 参数 | 默认值 | 影响 | 配置位置 |
 |---|---|---|---|

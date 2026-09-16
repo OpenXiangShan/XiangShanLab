@@ -5,7 +5,7 @@
 | 字段 | 内容 |
 |---|---|
 | **指令名称** | `cbo.inval rs1` |
-| **编码格式** | CBO 指令使用 `opcode=0001111`、`funct3=010`、`rs1` 地址源和 `rd=00000`；`cbo.inval` 的本地 CMO 子操作编码为 `LSUOpType.cbo_inval = 0b1110`。具体指令匹配常量见 [DecodeUnit.scala][D] 与 [package.scala][OP] |
+| **编码格式** | `000000000000_rs1[4:0]_010_00000_0001111`，32 位；`imm[11:0]=000000000000`、`funct3=010`、`rd=00000`、`opcode=0001111`；`rs1` 为地址源；本地内部操作编码 `LSUOpType.cbo_inval=0b1110` 不属于上述指令位字段 |
 | **RISC-V 扩展** | `Zicbom`；本地构建还由 `HasCMO` 和 CSR 的 `cboCF` 能力控制 |
 | **是否有压缩格式** | 无 C 扩展压缩编码；CBO 指令本身是 32 位指令，前端仍可从启用 C 扩展的半字窗口中取出 |
 | **指令分类** | 缓存块管理 / CMO / inval |
@@ -318,40 +318,7 @@ ROB commit                                                                      
 
 ---
 
-## 6. 安全性分析
-
-### 6.1 推测执行窗口
-
-| 窗口 | 起始点 | 终止点 | 周期数 | 风险等级 |
-|---|---|---|---|---|
-| 前端窗口 | FTQ/IFU 取指 | redirect 或 IBuffer/后端拒绝 | 未测 | 可能产生前端微架构活动；不等于 CMO 已执行 |
-| 后端等待窗口 | Decode/Dispatch | `deqCanDoCbo` 成立且进入 ROB 头处理 | 可变 | 通过 ROB 头、无异常和地址有效条件阻止过早 CMO |
-| CMO 事务窗口 | `cmoOpReq.fire` | `cmoOpResp.fire` / 异常 | 可变 | 一旦下层接受请求，不能当作普通可撤销 ALU 操作；实现以顺序化和完成响应约束 |
-
-### 6.2 侧信道暴露面
-
-| 暴露面 | 类型 | 缓解措施 |
-|---|---|---|
-| StoreBuffer drain 时长 | 微架构时序 | CMO 等待写缓冲排空；这保证顺序但不提供常数时间 |
-| Cache block 是否脏、下层响应时延 | Cache/互连时序 | inval 路径统一等待 CMO 响应；脏/干块和一致性状态仍可能造成可观测差异 |
-| TileLink denied/corrupt | 错误状态 | 显式转异常，禁止把失败响应当作成功提交 |
-| 前端错误路径 | BPU/ICache 状态 | 通用 redirect 恢复控制流；不能据此声称清除所有微架构侧信道 |
-
-### 6.3 有序性保证
-
-| 保证 | 机制 | 代码依据 |
-|---|---|---|
-| 更老 store 先于 inval 对外可见 | CMO 请求前等待 `flushSbuffer.empty` | [StoreQueue.scala][SQ] 1031–1035 |
-| inval 只能在 ROB 头执行 | `deqCanDoCbo` 要求 pending ROB 项成为当前头部且无异常 | [StoreQueue.scala][SQ] 841–847、983–985 |
-| CMO 请求与普通 uncache 请求不混用 | `deqCanDoCbo` 时禁用 `io.uncache.req.valid` | [StoreQueue.scala][SQ] 1006–1025 |
-| 下层完成后才向 ROB 写回 | `cmoOpResp.fire → s_wb → mmioStout.fire` | [StoreQueue.scala][SQ] 1015–1019、1053–1058 |
-| inval 与 flush/inval 语义分离 | CMO opcode 分别编码为 0/1/2 | [DCacheWrapper.scala][CW] 619–627 |
-
-这些是该本地实现的控制路径保证；它们不替代对整个 RVWMO、I/O 域和多核一致性协议的形式化验证。
-
----
-
-## 7. 性能特征
+## 6. 性能特征
 
 | 指标 | 值 | 说明 |
 |---|---|---|
@@ -363,7 +330,7 @@ ROB commit                                                                      
 
 ---
 
-## 8. 配置依赖
+## 7. 配置依赖
 
 | 参数 | 默认值 | 影响 | 配置位置 |
 |---|---|---|---|

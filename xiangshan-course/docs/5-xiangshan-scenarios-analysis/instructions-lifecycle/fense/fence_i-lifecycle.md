@@ -5,7 +5,7 @@
 | 字段 | 内容 |
 |---|---|
 | **指令名称** | `fence.i` |
-| **编码格式** | `000000000000_00000_001_00000_0001111`，即常见机器码 `0x0000100f`；`fm=0000`、`pred=0000`、`succ=0000`、`rd=0`、`rs1=0` |
+| **编码格式** | `000000000000_00000_001_00000_0001111`，32 位；`imm[11:0]=000000000000`、`rs1=00000`、`funct3=001`、`rd=00000`、`opcode=0001111`；标准软件将保留字段置零，对应机器码 `0x0000100f`，本地译码不约束这些保留字段 |
 | **RISC-V 扩展** | `Zifencei` |
 | **是否有压缩格式** | 无对应 C 扩展编码；启用 C 时仍可从半字边界取出该 32 位指令 |
 | **指令分类** | 系统／内存顺序／指令缓存同步 |
@@ -14,7 +14,7 @@
 | **目标 FU** | Fence FU；输出到前端 ICache 和 SBuffer 控制 |
 | **分析日期** | 2026-09-06 |
 
-本文以本地 `/nfs/home/wanghao/emuByYuan/stable-kmh-v2` 源码为实现依据。`fence.i` 的架构作用是使该 hart 先前对指令内存的写入，在后续取指中可见；实现上不能简化为“清空 ICache 一拍”，因为它还要等待更老 store buffer 内容排空，并通过 ROB 的 `flushPipe` 保证顺序。现有 `fence_i-report.md` 中的波形属于另一套路径和环境，本文不把其中的绝对周期当作当前源码版本的实测结果。
+`fence.i` 的架构作用是使该 hart 先前对指令内存的写入，在后续取指中可见；实现上不能简化为“清空 ICache 一拍”，因为它还要等待更老 store buffer 内容排空，并通过 ROB 的 `flushPipe` 保证顺序。
 
 ## 1. 前端路径
 
@@ -294,36 +294,7 @@ ROB commit                                                                      
 | ICache miss | 前端取指 | fencei/flush期间抑制 miss 状态推进和 SRAM 写入，之后重新发起正常取指 |
 | 数据缓存 CMO | DCache 指令 | `fence.i` 不使用 CBO `CMOReq`，其目标是 ICache/取指一致性 |
 
-## 6. 安全性分析
-
-### 6.1 推测执行窗口
-
-| 窗口 | 起始点 | 终止点 | 周期数 | 风险等级 |
-|---|---|---|---|---|
-| 前端窗口 | FTQ 取指 | Fence 提交触发 flush | 可变 | 年轻指令可能被取指/译码，但不应越过提交顺序点产生架构提交 |
-| Fence 等待窗口 | Fence `in.fire` | `sbIsEmpty` | 可变 | Fence FU 保持状态，避免在更老写入未排空时刷新前端 |
-| ICache 刷新窗口 | `fencei=1` | ICache 完成控制转移 | 至少一个控制拍，内部可变 | miss/响应写入被抑制；不能将该窗口视作普通可撤销 ALU 执行 |
-
-### 6.2 侧信道暴露面
-
-| 暴露面 | 类型 | 缓解措施 |
-|---|---|---|
-| SBuffer drain 时长 | 微架构时序 | Fence 等待 `sbIsEmpty`，但不提供常数时间 |
-| ICache flush 后重新填充 | Cache 时序 | 失效后按正常取指重填；重填延迟可能暴露缓存状态 |
-| 前端在途指令 | 推测状态 | `flushPipe`/ROB redirect 清理年轻状态；不等于清除所有预测器历史 |
-| 自修改代码可见性 | 一致性/顺序 | 软件在写入指令后执行 `fence.i`；本文不扩展为多 hart 全系统一致性证明 |
-
-### 6.3 有序性保证
-
-| 保证 | 机制 | 代码依据 |
-|---|---|---|
-| 更老数据写入先完成排空 | Fence `s_wait` 拉高 `flushSb`，等待 `sbIsEmpty` | [Fence.scala][FENCE] 59–66、79–81 行 |
-| ICache 刷新发生在 Fence 顺序点 | `fencei` 只在 `s_icache` 拉高 | [Fence.scala][FENCE] 64–67 行 |
-| Fence 可以提交但会刷新年轻流水线 | `flushPipe=true` 随 uop 写入 ROB/ExceptionGen | [DecodeUnit.scala][D] 229 行；[Rob.scala][ROB] 1180、1217 行 |
-| ICache 不在刷新期间写入新 meta/data | `missUnit.fencei` 与 `write_sram_valid` 门控 | [ICacheMissUnit.scala][MISS] 141–161、394–399 行 |
-| 前端重新取指而非沿用旧 ICache valid 位 | `metaArray.io.flushAll := io.fencei` | [ICache.scala][IC] 635 行 |
-
-## 7. 性能特征
+## 6. 性能特征
 
 | 指标 | 值 | 说明 |
 |---|---|---|
@@ -333,7 +304,7 @@ ROB commit                                                                      
 | **流水线阻塞** | `blockBackward`、Fence FU busy、SBuffer drain、前端 flush 恢复 | 年轻指令不能安全地越过 Fence 顺序点 |
 | **关键路径影响** | 未做综合/STA，不能给频率结论 | 控制信号传播和 ICache 全表失效不等于组合路径必然成为关键路径 |
 
-## 8. 配置依赖
+## 7. 配置依赖
 
 | 参数 | 默认值 | 影响 | 配置位置 |
 |---|---|---|---|

@@ -5,7 +5,7 @@
 | 字段 | 内容 |
 |---|---|
 | **指令名称** | `prefetch.i offset(rs1)` |
-| **编码格式** | `imm[11:5]_00000_rs1_110_00000_0010011`，属于 `ORI rd=x0` 的 hint 编码空间；例如 `0x0007e013` 为 `prefetch.i 0(a5)` |
+| **编码格式** | `imm[11:5]_00000_rs1[4:0]_110_00000_0010011`，32 位；`imm[4:0]=00000`、`funct3=110`、`rd=00000`、`opcode=0010011`；属于 `ORI rd=x0` 的 hint 编码空间，`imm[4:0]` 为预取类型选择字段，预取偏移低 5 位隐含为零；例如 `0x0007e013` 为 `prefetch.i 0(a5)` |
 | **RISC-V 扩展** | `Zicbop`，软件指令预取提示 |
 | **是否有压缩格式** | 本文为 32 位编码，基础 C 扩展没有对应 `prefetch.i` 编码 |
 | **指令分类** | 软件预取／指令侧 hint，不是跳转或缓存一致性屏障 |
@@ -13,7 +13,6 @@
 | **FuOpType** | `LSUOpType.prefetch_i` |
 | **目标 FU** | 内存调度 → LoadUnit 地址生成；旁路提示到 Frontend/ICache/IPrefetch |
 
-本文以本地 `/nfs/home/wanghao/emuByYuan/stable-kmh-v2` 为实现依据，源码标识为 `abd0f867a86b66a92d4fc5d3c6d62944725c747f`。下文仅将代码可证明的时序作为推导，不采用其他源码环境的波形周期。必须区分两条路径：**后端 uop 完成并提交**，以及**异步提示被 ICache 接收并可能引发填充**。后者不是前者的完成应答。
 
 ## 1. 前端路径
 
@@ -293,34 +292,7 @@ IPrefetch请求 -        -        fire     ITLB/Meta/MSHR
 
 软件请求复用 IPrefetch 的双行机制，而不是一个普通 load 的字节拆分与数据合并。S2 对前缀异常/MMIO 一并门控，第一行失败时不继续对第二行发预取；软件提示不向 WayLookup 提交取指需求。[IPrefetch][IP] 32–53、174–183、362、547–554 行
 
-## 6. 安全性分析
-
-### 6.1 推测执行窗口
-
-| 窗口 | 起始点 | 终止点 | 周期数 | 风险等级 |
-|---|---|---|---|---|
-| 推测发出的软件提示 | LoadUnit 选择目标 | 前端消费/覆盖/flush | 可变 | 需验证，未测定 |
-| 异步缓存影响 | MSHR 请求 | 填充、替换或取消 | 可变 | 潜在时序观察面，不直接判定漏洞 |
-
-### 6.2 侧信道暴露面
-
-| 暴露面 | 类型 | 缓解措施 |
-|---|---|---|
-| 目标命中、翻译与填充差异 | Cache/TLB 时序 | ITLB/PMP 检查约束请求；不因此声称全部时序状态被隔离 |
-| 单槽覆盖和 FTQ 竞争 | 资源时序 | 控制提示密度；检查丢弃和阻塞计数器 |
-| 错误路径缓存活动 | 推测状态 | 架构按序提交不等于缓存无残留；需结合波形验证恢复范围 |
-
-### 6.3 有序性保证
-
-| 保证 | 机制 | 代码依据 |
-|---|---|---|
-| 提示地址与 valid 对齐 | 相同选择条件驱动 RegNext/RegEnable | [LoadUnit 提示][HINT] |
-| 后端无架构目的寄存器 | rd=0，输出 rfWen 门控 | [DecodeUnit][D] |
-| 无效目标不发普通预取 miss | 异常/MMIO/hit 门控 | [IPrefetch][IP] |
-| 同一 S2 行不重复发出 | `has_send` 在请求 fire 后记录 | [IPrefetch][IP] 565–589 行 |
-| 提交按序但不保证填充 | 独立 ROB 完成路径与 Valid-only 提示 | [Rob][ROB]、[Bundle][B] |
-
-## 7. 性能特征
+## 6. 性能特征
 
 | 指标 | 值 | 说明 |
 |---|---|---|
@@ -332,7 +304,7 @@ IPrefetch请求 -        -        fire     ITLB/Meta/MSHR
 
 可观测计数器包括 `softPrefetch_drop_not_ready`、`softPrefetch_drop_multi_req`、`softPrefetch_block_ftq`，以及 IPrefetch 的 `prefetch_req_receive_sw/prefetch_req_send_sw`。它们分别统计不同边界，不能都称为“预取完成数”。[ICache][IC] 751–755 行、[IPrefetch][IP] 597–602 行
 
-## 8. 配置依赖
+## 7. 配置依赖
 
 | 参数 | 默认值 | 影响 | 配置位置 |
 |---|---|---|---|

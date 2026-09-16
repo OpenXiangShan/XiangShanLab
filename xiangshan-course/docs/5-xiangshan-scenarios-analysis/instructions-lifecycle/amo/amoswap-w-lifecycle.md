@@ -12,11 +12,6 @@
 | **FuType** | `FuType.mou`，不是普通 `store` 或整数 ALU |
 | **FuOpType** | `LSUOpType.amoswap_w = "b001010".U`，见 [package.scala][OP]；不能把指令编码的 `aq/rl` 当作该内部操作码的高位 |
 | **目标 FU** | MemScheduler 的 STA/MOU 地址路径与 STD/MOUD 数据路径汇合到单个 [AtomicsUnit][A]，再访问 DCache 原子端口 |
-| **分析日期** | 2026-09-06 |
-
-**分析范围与证据等级。** 按用户要求，以本地 `/nfs/home/wanghao/emuByYuan/stable-kmh-v2` 为实现依据，记录其 HEAD 为 `abd0f867a86b66a92d4fc5d3c6d62944725c747f`，不与其他本地树或远程分支混用。以下行号指向本次读取的本地文件；参数默认值不等于某个历史仿真的实际 elaboration 配置。模板保留全部章节，但阶段名称、信号和延迟以该版本源码为准。
-
-现有 [AMO 教学材料](index.md) 的反汇编实例是 `PC=0x80000142`、`inst=0x08e7a7af`，即 `amoswap.w a5,a4,(a5)`，`rd=rs1=x15`、`rs2=x14`、`aq=rl=0`。其正文还出现少一位的 `0x8000142`，不能沿用为目标 PC。旁边的复杂 AMO 文档是另一个 `.aq` 自旋锁场景，不是同一次动态执行。本次没有建立与该实例匹配的原始波形、反汇编、仿真日志闭环；Task27 现有 `redirect/demo/learnRedirect/learn.c` 也不能直接作为该 AMO 实例的验证程序。因此本文是**源码核验后的生命周期分析，不是已经完成的逐周期波形报告**，不转录截图时间作为实测延迟。
 
 **数据语义。** 地址取进入本条指令时的 `X[rs1]`，旧内存字返回 `rd`，新内存字取 `X[rs2][31:0]`；RV64 上返回值是旧 32 位字的符号扩展。`rd=x0` 只丢弃寄存器结果，不取消原子访存或异常。对上述 `rd=rs1` 实例，重命名保证读旧地址映射、写新目标映射，不会拿返回值当地址。实现依据是 [Rename][R]、[AtomicsUnit][A] 和 [AMOALU][ALU]。
 
@@ -401,39 +396,7 @@ PRF / ROB / Commit                                                              
 
 ---
 
-## 6. 安全性分析
-
-### 6.1 推测执行窗口
-
-| 窗口 | 起始点 | 终止点 | 周期数 | 风险等级 |
-|---|---|---|---|---|
-| 前端错误路径 | FTQ/IFU 提前取指 | redirect 或等待派发 | 未测，非固定值 | 可存在取指／预测器状态变化；未验证攻击，不定级 |
-| 等待原子执行许可 | Decode/Rename 识别 AMO | ROB 为空后派发 | 未测 | waitForward 阻止在更老未退休指令之后进行原子内存更新 |
-| 原子事务在途 | AtomicsUnit in.fire | out.fire／异常处理 | 见第 4 节 | 不是普通可撤销投机窗口；安全性依赖串行化和权限门控，不能据此证明无侧信道 |
-
-### 6.2 侧信道暴露面
-
-| 暴露面 | 类型 | 缓解措施 |
-|---|---|---|
-| DTLB/PTW hit/miss | 微架构时序 | 本实现先检查翻译与权限再发原子 Cache 请求；这不清除已有 TLB/PTW 时序差异 |
-| SBuffer/Uncache drain、Cache miss/replay | 共享资源时序 | 串行化保证顺序，不提供常数时间保证；隔离／软件处理应结合实际威胁模型，本文不声称已有攻击证据 |
-| 取指／预测错误 | 前端微架构状态 | 通用 redirect 恢复控制流，不意味着恢复所有 Cache/BPU 状态 |
-
-### 6.3 有序性保证
-
-| 保证 | 机制 | 代码依据 |
-|---|---|---|
-| 不越过更老未退休指令开始原子执行 | `waitForward` 等 ROB 空 | [DecodeUnit][D]、[NewDispatch][DIS] |
-| 不让年轻指令进入后端并越过 AMO | 同组 blockBackward 与 ROB `hasBlockBackward` | [NewDispatch][DIS]、[Rob][ROB] |
-| 更老缓冲写在原子 Cache 请求前排空 | `s_pm/s_wait_flush_sbuffer_resp` 等待 `stIsEmpty` | [AtomicsUnit][A]、[MemBlock][MA] |
-| 交换不退化为两条可交错的普通访存 | `M_XA_SWAP` 经 MainPipe 原子读改写路径，响应返回旧数据 | [MainPipe][C]、[AMOALU][ALU] |
-| 排序位与实现串行化分开解释 | `.aq` 表示 acquire、`.rl` 表示 release；本例两位均 0，而本树仍统一对 AMOSWAP 串行化 | [DecodeUnit][D] 同一条 AMOSWAP_W 译码；不能把实现的保守顺序反写成无修饰指令的架构保证 |
-
-`aq/rl` 不是“清空所有缓存”开关，也不是独立 `fence.i`。本文验证的是这条本地实现路径，不宣称已完成 RVWMO 的全系统形式化证明或跨 memory/I/O 域排序验证。
-
----
-
-## 7. 性能特征
+## 6. 性能特征
 
 | 指标 | 值 | 说明 |
 |---|---|---|
@@ -445,7 +408,7 @@ PRF / ROB / Commit                                                              
 
 ---
 
-## 8. 配置依赖
+## 7. 配置依赖
 
 | 参数 | 默认值 | 影响 | 配置位置 |
 |---|---|---|---|

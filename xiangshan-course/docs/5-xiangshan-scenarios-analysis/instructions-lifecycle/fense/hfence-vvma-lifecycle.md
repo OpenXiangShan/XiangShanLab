@@ -5,7 +5,7 @@
 | 字段 | 内容 |
 |---|---|
 | **指令名称** | `hfence.vvma` |
-| **编码格式** | `0001001_?????_?????_111_?????_1110011`；本地译码使用 `HFENCE.VVMA`，具体 `rs1`/`rs2` 携带虚拟地址与 VS-stage context 选择信息 |
+| **编码格式** | `0010001_rs2[4:0]_rs1[4:0]_000_00000_1110011`，32 位；`funct7=0010001`、`funct3=000`、`rd=00000`、`opcode=1110011` |
 | **RISC-V 扩展** | Hypervisor 扩展 |
 | **是否有压缩格式** | 否；没有对应的 C 扩展编码 |
 | **指令分类** | 系统／虚拟内存管理／VS-stage 地址翻译缓存失效 |
@@ -14,7 +14,7 @@
 | **目标 FU** | Fence FU；经 `sfence` 接口通知 MMU/TLB |
 | **分析日期** | 2026-09-06 |
 
-本文以本地 `/nfs/home/wanghao/emuByYuan/stable-kmh-v2` 源码为准。`hfence.vvma` 不执行普通算术或访存，也不直接写回整数寄存器；它在 Fence FU 中等待 SBuffer 排空后，产生带有 `hv=1` 的 TLB 刷新请求。刷新范围由 `rs1`、`rs2` 的零值组合以及 VS-stage context、VS-stage 虚拟页号共同决定。
+`hfence.vvma` 不执行普通算术或访存，也不直接写回整数寄存器；它在 Fence FU 中等待 SBuffer 排空后，产生带有 `hv=1` 的 TLB 刷新请求。刷新范围由 `rs1`、`rs2` 的零值组合以及 VS-stage context、VS-stage 虚拟页号共同决定。
 
 ## 1. 前端路径
 
@@ -268,39 +268,7 @@ HFENCE.VVMA 的执行权限由 CSR 状态参与判定；本地 `DecodeUnit.scala
 | `hfence.vvma` / `sfence.vma` | VS-stage 或 guest 地址空间翻译 | 共享 Fence FU，但 `hv`/`hv` 标志不同，不能混淆刷新范围 |
 | `hinval.gvma` | Hypervisor 无效化路径 | 也映射到 `hfence_v` 操作码族，但其译码控制字段可能不同，不能直接当作同一架构指令解释 |
 
-## 6. 安全性分析
-
-### 6.1 推测执行窗口
-
-| 窗口 | 起始点 | 终止点 | 周期数 | 风险等级 |
-|---|---|---|---|---|
-| 前端在途窗口 | HFENCE 被取指至 ROB 顺序点 | `flushPipe` 生效并前端恢复 | 可变 | 中 |
-| SBuffer 等待窗口 | Fence FU 进入 `s_wait` | `sbIsEmpty=1` | `T_sb` | 低到中 |
-| TLB 刷新窗口 | 进入 `s_tlb` 并发出 `sfence.valid` | 各 MMU 接收路径完成其失效处理 | 配置相关 | 中 |
-
-HFENCE.VVMA 的架构效果依赖顺序点和参数匹配；文档不将“发出 `sfence.valid`”未经证据扩展为所有异步 MMU 结构已经同时完成刷新。
-
-### 6.2 侧信道暴露面
-
-| 暴露面 | 类型 | 缓解措施 |
-|---|---|---|
-| SBuffer 排空时长 | 微架构时序 | 在刷新前等待 `sbIsEmpty`，但耗时不是常数，软件不应依赖固定延迟 |
-| TLB/PageTableCache 命中状态 | Cache/MMU 时序 | 按地址、VS-stage context 和 VS-stage 标记进行选择性失效；刷新后重新翻译 |
-| 前端年轻指令 | 推测状态 | `flushPipe` 清除 HFENCE 之后的年轻流水线状态；仍需遵守实现的前端恢复边界 |
-| 虚拟化权限状态 | 权限侧信道 | 由 CSR 的非法/虚拟指令检查阻止不具备权限的 HFENCE 执行 |
-
-### 6.3 有序性保证
-
-| 保证 | 机制 | 代码依据 |
-|---|---|---|
-| 更老 store 先完成排空 | `s_wait` 保持 `flushSb`，直到 `sbIsEmpty` | [Fence.scala][FENCE] |
-| HFENCE 请求带有明确 VS-stage 标志 | `sfence.bits.hv := func === FenceOpType.hfence_v` | [Fence.scala][FENCE] |
-| VS-stage VMID 使用当前虚拟机上下文 | PageTableCache 使用 CSR 提供的 `hgatp.vmid` 匹配 VS-stage 项 | [PageTableCache.scala][PTC] |
-| 地址/VS-stage context 全范围选择可编码 | `rs1/rs2` 由立即数字段判断是否为零 | [Fence.scala][FENCE] |
-| TLB 按 VS-stage 和参数匹配失效 | PageTableCache 使用 `hv`、当前 `hgatp.vmid` 和 VS-stage 标记及 VPN 进行选择性失效 | [PageTableCache.scala][PTC] |
-| 年轻流水线不会越过 Fence 提交 | `flushPipe=true` 随 uop 进入 ROB | [DecodeUnit.scala][D]、[Rob.scala][ROB] |
-
-## 7. 性能特征
+## 6. 性能特征
 
 | 指标 | 值 | 说明 |
 |---|---|---|
@@ -310,7 +278,7 @@ HFENCE.VVMA 的架构效果依赖顺序点和参数匹配；文档不将“发�
 | **流水线阻塞** | `blockBack`、Fence FU 状态机、SBuffer drain 和 ROB flush | 目的在于维护翻译缓存失效的顺序边界 |
 | **关键路径影响** | 未进行综合/STA，不能给出频率结论 | 控制信号跨模块传播不等于必然构成时序关键路径 |
 
-## 8. 配置依赖
+## 7. 配置依赖
 
 | 参数 | 默认值 | 影响 | 配置位置 |
 |---|---|---|---|

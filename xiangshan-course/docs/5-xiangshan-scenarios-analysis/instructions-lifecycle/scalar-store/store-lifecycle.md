@@ -5,7 +5,7 @@
 | 字段 | 内容 |
 |---|---|
 | **指令名称** | `sb/sh/sw/sd rs2, imm(rs1)`；以 `sd` 为主线 |
-| **编码格式** | S 型：`imm[11:5]_rs2_rs1_funct3_imm[4:0]_0100011` |
+| **编码格式** | `sb`：`imm[11:5]_rs2[4:0]_rs1[4:0]_000_imm[4:0]_0100011`，32 位；`funct3=000`、`opcode=0100011`<br>`sh`：`imm[11:5]_rs2[4:0]_rs1[4:0]_001_imm[4:0]_0100011`，32 位；`funct3=001`、`opcode=0100011`<br>`sw`：`imm[11:5]_rs2[4:0]_rs1[4:0]_010_imm[4:0]_0100011`，32 位；`funct3=010`、`opcode=0100011`<br>`sd`：`imm[11:5]_rs2[4:0]_rs1[4:0]_011_imm[4:0]_0100011`，32 位；`funct3=011`、`opcode=0100011` |
 | **RISC-V 扩展** | RV64I；不包含浮点、向量、SC、AMO 和 CBO |
 | **是否有压缩格式** | C 扩展有受约束的 `c.sw/c.sd/c.swsp/c.sdsp`；不是每种 Store 都有对应 C 编码 |
 | **指令分类** | 整数数据写入；地址为 `rs1+sext(imm12)`，数据取 rs2 低 8/16/32/64 位 |
@@ -13,7 +13,7 @@
 | **FuOpType** | `LSUOpType.sb/sh/sw/sd` |
 | **目标 FU** | STA：MemBlock/StoreUnit；STD：MemBlock 中定义的 `Std`，由后端执行路径实例化；二者汇合到 StoreQueue |
 
-**实现依据：**本地 `/nfs/home/wanghao/emuByYuan/stable-kmh-v2` 的源码及默认参数声明。本文分别讨论源操作数准备、SQ 状态更新、ROB 退休、SQ 排出和缓存处理，不将其合并成一个“Store 完成”事件。时序为源码推导，没有使用其他配置的波形作为本实现实测。
+
 
 | 指令 | funct3 | 写入大小 | 源数据 |
 |---|---|---|---|
@@ -357,57 +357,7 @@ SBuffer 的行合并、分配与 DCache 发请求各自有容量及握手条件�
 
 Store 指令字也可能跨取指页/行：行末 2 B 的 32 位指令需另一半字和对应异常；IFU 在 flush 时清除 `f3_lastHalf.valid`。这是取指片段恢复，不是 StoreMisalignBuffer 的数据地址拆分。[IFU][IFU] 528–537、925–960 行
 
-## 6. 安全性分析
-
-### 6.1 推测执行窗口
-
-| 窗口 | 起始点 | 终止点 | 周期数 | 风险等级 |
-|---|---|---|---|---|
-| 推测地址/数据准备 | STA/STD 发射 | 取消或获得不可取消/排出资格 | 可变 | 需检查身份和权限隔离 |
-| SQ 转发 | 地址/数据可供查询 | SQ 释放或取消 | 可变 | 潜在时序观察面，未作漏洞判定 |
-| MMIO 事务 | ROB 头资格后请求接受 | 响应与专用完成/退休 | 可变 | 外部副作用，重点检查重复请求 |
-
-### 6.2 侧信道暴露面
-
-| 暴露面 | 类型 | 缓解措施 |
-|---|---|---|
-| 翻译与地址相关缓存活动 | 潜在时序差 | 不因未提交就推断完全无微架构痕迹；需定向测量 |
-| SQ 转发、SBuffer 行合并与资源占用 | 数据/地址相关竞争 | 覆盖同址、别名、字节 mask 和共享资源争用 |
-| MMIO/NC 分类错误 | 外部副作用 | 分别验证权限、内存类型、发送资格和响应归属 |
-| 取消与数据晚到竞争 | 队列项复用风险 | 联合检查 sqIdx 环绕、robIdx 年龄和 allocated 更新 |
-
-这些是验证方向，不代表已有利用结果或安全证明。ROB 精确退休也不意味着全部微架构状态在恢复时被擦除。
-
-### 6.3 有序性保证
-
-| 保证 | 机制 | 代码依据 |
-|---|---|---|
-| 地址与数据属于同一 Store | 共同 robIdx/sqIdx，独立有效位 | [Scheduler][SCH]、[StoreQueue][SQ] |
-| 未获资格数据不正常排出 | committed、allvalid、异常及内存类型门控 | [StoreQueue][SQ] 1190–1320 行 |
-| 不漏掉晚到数据 | ROB stdWritebacked 与 SQ datavalid | [ROB][ROB]、[StoreQueue][SQ] 618–625 行 |
-| 修复错误的 Store-Load 顺序 | 地址 nuke、RAW 检查及回滚 | [StoreUnit][STA]、[LoadQueueRAW][RAW] |
-| MMIO 不按普通缓存 Store 自由发出 | pendingst/ROB 头与有效性门槛 | [StoreQueue][SQ] 840 行 |
-| 跨页辅助状态不提前释放 | s_block 与 SQ doDeq | [StoreMisalignBuffer][MA] 322–340 行 |
-
-**验证特别注意**
-
-| Verification ID | 风险/不变量 | 定向激励 | 预期观察 | 检查与覆盖 |
-|---|---|---|---|---|
-| ST_SIZE_MASK | 大小和字节错位 | SB/SH/SW/SD、不同偏移、rs2=x0 | 只更新预期字节，不修改相邻数据 | 内存数据/mask scoreboard |
-| ST_TWO_PATHS | 两路身份错配 | 地址早/数据晚及反向组合，同组依赖 | robIdx/sqIdx 匹配，未就绪一路不被另一条替代 | 地址/数据 scoreboard |
-| ST_STD_BACKPRESSURE | 共享口丢数据 | 向量占口叠加标量 STD | 标量 ready 拉低，恢复后仅接受一次 | Handshake checker |
-| ST_SQ_WRAP_FLUSH | 取消后晚到覆盖新项 | SQ 环绕、redirect 与 STD 数据返回重叠 | 有效/年龄判定正确，不污染复用项 | Pointer-age、Occupancy checker |
-| ST_RAW_RECOVERY | 年轻 Load 读旧值 | Store 地址晚解析，同址年轻 Load 已执行 | RAW/nuke 恢复，错误值不进入最终架构状态 | Flush/replay checker |
-| ST_PAGE_FAULT | 次页权限漏查 | 页末 SD，次页 fault 或物理不连续 | 独立翻译，异常地址归属正确，无正常错误数据排出 | 架构异常和总线 scoreboard |
-| ST_LINE_SPLIT | 片段/mask 错误 | 跨行 SD，一行拥塞，另一行可用 | 两份地址/数据 mask 正确，不假定原子写两行 | 片段与缓存请求 scoreboard |
-| ST_UNCACHE_SPLIT | 误写设备 | 拆分第二片段为 MMIO/NC | 异常路径，不正常模拟两次设备写 | PMA/PBMT、FSM checker |
-| ST_MMIO_RESP | 重复事务/错误丢失 | ROB 头等待、请求背压、denied/corrupt | 发请求资格正确，错误按对应分支报告 | 事务计数、异常 scoreboard |
-| ST_SB_MERGE_FULL | 合并覆盖顺序错误 | 同行同字节双入队、满缓冲、DCache replay | ready 和 mask 优先级正确，重放不丢写 | 存储冲突、Occupancy checker |
-| ST_PROGRESS | 排空死锁/饥饿 | SQ/SBuffer 满后停生产者，释放下游 | 在响应与公平条件成立时最终排空 | Forward-progress checker |
-
-这些场景尚不代表已有仿真覆盖；尤其 SQ 授权与退休的时间关系应以对应配置波形核验。
-
-## 7. 性能特征
+## 6. 性能特征
 
 | 指标 | 值 | 说明 |
 |---|---|---|
@@ -419,7 +369,7 @@ Store 指令字也可能跨取指页/行：行末 2 B 的 32 位指令需另一�
 | **关键瓶颈** | 两路源依赖、TLB/PTW、SQ 满、SBuffer 满、缓存请求/响应 | 不笼统宣称一定慢于 ALU |
 | **物理关键路径** | 地址加法、转发查询、mask 合并等 | 未做综合/STA，不报告频率或裕量 |
 
-## 8. 配置依赖
+## 7. 配置依赖
 
 | 参数 | 默认值 | 影响 | 配置位置 |
 |---|---|---|---|
