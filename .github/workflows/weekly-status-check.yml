@@ -2,6 +2,7 @@ name: Weekly Status Checks
 
 on:
   push:
+    branches: [master]
     paths:
       - 'weekly-status/**'
       - 'xiangshan-course/docs/**'
