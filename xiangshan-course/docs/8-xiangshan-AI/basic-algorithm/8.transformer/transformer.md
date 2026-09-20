@@ -6,13 +6,13 @@
 
 RNN 和 LSTM 处理序列有一个根本限制：**必须按时间步顺序计算**。第 $t$ 步的隐状态依赖第 $t-1$ 步的结果，无法并行化。序列越长，训练越慢。
 
-更深层的困难是：RNN 中相隔 $n$ 步的两个 token 之间的信息路径长度为 $n$，长距离依赖难以建模。
+更深层的困难是：RNN 中相隔 $n$ 步的两个 token 之间的信息路径长度为 $n$ ，长距离依赖难以建模。
 
 Transformer（Vaswani et al., 2017）彻底抛弃了循环结构，用**自注意力机制**让序列中任意两个 token 直接交互，路径长度变为 $O(1)$。同时，由于没有时间步依赖，整个序列可以并行计算。
 
 **输入**：token 嵌入序列 $X \in \mathbb{R}^{T \times d}$ （ $T$ 个 token，每个 $d$ 维）。
 
-**输出**：上下文感知的表示序列 $Z \in \mathbb{R}^{T \times d}$，每个 token 的表示融合了整个序列的信息。
+**输出**：上下文感知的表示序列 $Z \in \mathbb{R}^{T \times d}$ ，每个 token 的表示融合了整个序列的信息。
 
 **适用边界**：机器翻译、文本生成、语言模型（BERT、GPT 均基于 Transformer）、语音识别、图像处理（ViT）。Transformer 已成为现代深度学习的通用架构。
 
@@ -52,7 +52,7 @@ $$Z' = \text{LayerNorm}(Z + \text{FFN}(Z))$$
 
 贯穿全章使用 2 个 token、2 维的例子：
 
-- 输入嵌入： $X = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$ （token 1 = $[1,0]$，token 2 = $[0,1]$ ）
+- 输入嵌入： $X = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$ （token 1 = $[1,0]$ ，token 2 = $[0,1]$ ）
 - 令 $W_Q = W_K = W_V = \mathbf{I}$ （单位矩阵），则 $Q = K = V = X$
 
 **注意力分数**（缩放点积）：
@@ -77,13 +77,13 @@ $$\text{out} = \text{attn} \cdot V = \begin{bmatrix} 0.669 & 0.331 \\ 0.331 & 0.
 
 $$\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{Q K^T}{\sqrt{d_k}}\right) V$$
 
-其中 $Q \in \mathbb{R}^{T \times d_k}$， $K \in \mathbb{R}^{T \times d_k}$， $V \in \mathbb{R}^{T \times d_v}$， $d_k$ 是 Key 的维度。
+其中 $Q \in \mathbb{R}^{T \times d_k}$ ， $K \in \mathbb{R}^{T \times d_k}$ ， $V \in \mathbb{R}^{T \times d_v}$ ， $d_k$ 是 Key 的维度。
 
 **Q、K、V 的计算**：
 
 $$Q = X W_Q, \quad K = X W_K, \quad V = X W_V$$
 
-其中 $X \in \mathbb{R}^{T \times d}$， $W_Q, W_K \in \mathbb{R}^{d \times d_k}$， $W_V \in \mathbb{R}^{d \times d_v}$。
+其中 $X \in \mathbb{R}^{T \times d}$ ， $W_Q, W_K \in \mathbb{R}^{d \times d_k}$ ， $W_V \in \mathbb{R}^{d \times d_v}$。
 
 **为什么除以 $\sqrt{d_k}$ **：当 $d_k$ 较大时， $QK^T$ 的值会很大，导致 softmax 进入饱和区（梯度趋近零）。除以 $\sqrt{d_k}$ 将分数缩放到合理范围，使梯度稳定。
 
@@ -125,7 +125,7 @@ $$Z = \text{LayerNorm}(X + \text{Sublayer}(X))$$
 
 $$\text{scores}_{\text{masked}} = \text{scores} + M$$
 
-其中 $M$ 是掩码矩阵，上三角部分（未来位置）填 $-\infty$，其余填 0。softmax 后被掩码位置的权重变为 0，确保生成第 $t$ 个 token 时只能看到位置 $\leq t$ 的信息。
+其中 $M$ 是掩码矩阵，上三角部分（未来位置）填 $-\infty$ ，其余填 0。softmax 后被掩码位置的权重变为 0，确保生成第 $t$ 个 token 时只能看到位置 $\leq t$ 的信息。
 
 ### 2.2 变量含义
 
@@ -158,13 +158,13 @@ $$\text{scores}_{\text{masked}} = \text{scores} + M$$
 
 **位置编码**：自注意力对位置完全无感——打乱 token 顺序，输出只是重新排列，内容不变。位置编码通过在每个位置的嵌入上加一个与位置相关的向量，让模型知道"每个 token 在哪里"。用正弦/余弦是因为它们有不同周期，不同维度可以编码不同粒度的位置信息。
 
-**FFN**：注意力的输出是"信息的混合"，但没有做非线性变换。FFN 对每个 token 独立施加两层 MLP + ReLU，增加模型的表达能力。FFN 的隐层维度通常是 $4d$ （原论文 $d=512$，FFN 隐层 $2048$ ）。
+**FFN**：注意力的输出是"信息的混合"，但没有做非线性变换。FFN 对每个 token 独立施加两层 MLP + ReLU，增加模型的表达能力。FFN 的隐层维度通常是 $4d$ （原论文 $d=512$ ，FFN 隐层 $2048$ ）。
 
 **LayerNorm vs BatchNorm**：BatchNorm 在 batch 维度归一化（不同样本的同一特征），需要 batch 内统计，不适合序列（序列长度可变）。LayerNorm 在特征维度归一化（同一样本的所有特征），每个 token 独立计算，与 batch 无关，适合序列建模。
 
 **残差连接**：与 ResNet 完全同构。 $X + \text{Sublayer}(X)$ 保证即使子层学不好，信息也能通过 $+X$ 直接传递。在堆叠 $N$ 层的 Transformer 中，残差连接是保证训练稳定的关键。
 
-**掩码**：Decoder 在生成第 $t$ 个 token 时，不能看到位置 $> t$ 的 token（那是"未来"）。通过将注意力分数矩阵的上三角设为 $-\infty$，softmax 后这些位置的权重为 0，实现了"因果"约束。这就是自回归生成的核心——每次只看到已经生成的部分。
+**掩码**：Decoder 在生成第 $t$ 个 token 时，不能看到位置 $> t$ 的 token（那是"未来"）。通过将注意力分数矩阵的上三角设为 $-\infty$ ，softmax 后这些位置的权重为 0，实现了"因果"约束。这就是自回归生成的核心——每次只看到已经生成的部分。
 
 ## 3. 代码示例
 
@@ -378,11 +378,11 @@ print("\n========== Transformer 全部验证通过 ==========")
 ### 3.2 输入输出说明
 
 **输入**：
-- `X`： $3 \times 4$ 嵌入矩阵，3 个 token 各 4 维。token 1 = $[1,0,0,0]$，token 2 = $[0,1,0,0]$，token 3 = $[1,1,0,0]$。
+- `X`： $3 \times 4$ 嵌入矩阵，3 个 token 各 4 维。token 1 = $[1,0,0,0]$ ，token 2 = $[0,1,0,0]$ ，token 3 = $[1,1,0,0]$。
 - 权重： $W_Q = W_K = W_V = W_O = \mathbf{I}_4$ （单位矩阵，便于验证）。
 - 2 个注意力头，每头 $d_k = 2$。
 
-**自注意力输出**： $3 \times 4$ 矩阵，每行是对所有 token 的 Value 的加权和。注意力权重矩阵 $3 \times 3$，每行和为 1。
+**自注意力输出**： $3 \times 4$ 矩阵，每行是对所有 token 的 Value 的加权和。注意力权重矩阵 $3 \times 3$ ，每行和为 1。
 
 **多头注意力输出**：与单头注意力相同（因权重为单位矩阵），形状 $3 \times 4$。
 
@@ -390,7 +390,7 @@ print("\n========== Transformer 全部验证通过 ==========")
 
 **FFN 输出**：`ReLU(2x) * 0.5`，对正输入放大后缩小，负输入截断为 0。
 
-**LayerNorm 输出**：每行均值 $\approx 0$ 、标准差 $\approx 1$，消除不同 token 间的数值尺度差异。
+**LayerNorm 输出**：每行均值 $\approx 0$ 、标准差 $\approx 1$ ，消除不同 token 间的数值尺度差异。
 
 **掩码注意力**：注意力权重矩阵上三角为 0，token 只能看到当前位置及之前的 token。
 

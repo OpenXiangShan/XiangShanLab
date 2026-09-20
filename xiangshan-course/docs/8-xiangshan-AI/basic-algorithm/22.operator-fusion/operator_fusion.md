@@ -20,7 +20,7 @@ X -> FusedAffineReLU -> Y
 
 ### 1.2 核心思想
 
-若连续算子为 $f_1,f_2,\ldots,f_k$，原计算为：
+若连续算子为 $f_1,f_2,\ldots,f_k$ ，原计算为：
 
 $$
 
@@ -113,7 +113,7 @@ $$
 
 ### 2.1 MatMul、Bias 与 ReLU
 
-设输入矩阵 $X\in\mathbb R^{N\times D}$，权重矩阵 $W\in\mathbb R^{D\times M}$，偏置 $b\in\mathbb R^M$。逐算子形式为：
+设输入矩阵 $X\in\mathbb R^{N\times D}$ ，权重矩阵 $W\in\mathbb R^{D\times M}$ ，偏置 $b\in\mathbb R^M$。逐算子形式为：
 
 $$
 
@@ -222,7 +222,7 @@ $$
 - $\epsilon$：加在方差上的正数，用于避免分母为零。
 - $a_j$：由 BatchNorm 参数和运行方差计算出的固定缩放系数。
 - $W'$ 、 $b'$：折叠 BatchNorm 后的新权重和新偏置。
-- $\circ$：函数复合符号， $g\circ f$ 表示先执行 $f$，再执行 $g$。
+- $\circ$：函数复合符号， $g\circ f$ 表示先执行 $f$ ，再执行 $g$。
 
 ### 2.4 公式怎么理解
 

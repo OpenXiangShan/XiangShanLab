@@ -257,7 +257,7 @@ compressed latent elements: 6
 
 ### 3.3 关键代码解释
 
-`x @ w_down` 对应 $c_t^{KV}=h_tW^{DKV}$，把 Key 和 Value 的共同内容压缩到低维空间。
+`x @ w_down` 对应 $c_t^{KV}=h_tW^{DKV}$ ，把 Key 和 Value 的共同内容压缩到低维空间。
 
 `latent_kv @ w_up_k` 和 `latent_kv @ w_up_v` 从同一潜向量生成内容 Key 和 Value。真实 MLA 在推理时可以进一步合并部分投影计算，但本例显式还原二者，便于观察数据形状。
 

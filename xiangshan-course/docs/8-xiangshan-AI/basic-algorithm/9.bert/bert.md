@@ -16,7 +16,7 @@ BERT（Bidirectional Encoder Representations from Transformers, Devlin et al., 2
 
 **输入**：token 序列 $X \in \mathbb{R}^{T \times d}$ （部分 token 被 [MASK] 替换）。
 
-**输出**：每个 token 的上下文感知表示 $Z \in \mathbb{R}^{T \times d}$，可用于分类、标注等下游任务。
+**输出**：每个 token 的上下文感知表示 $Z \in \mathbb{R}^{T \times d}$ ，可用于分类、标注等下游任务。
 
 **适用边界**：文本理解类任务（分类、NER、问答）。不适合文本生成——BERT 的双向注意力无法用于自回归生成（生成时未来 token 不存在）。
 
@@ -331,6 +331,6 @@ print("\n========== BERT 全部验证通过 ==========")
 
 2. **MLM 预测**：`Z[mask_pos] @ W_mlm` 将被遮挡位置的 4 维表示投影到词表维度，再 softmax 得到每个词的概率。`W_mlm` 的每一列是一个词的嵌入——预测本质上是"被遮挡位置的表示与哪个词的嵌入最相似"。
 
-3. **双向 vs 单向对比**：同一个输入分别通过无掩码（BERT）和因果掩码（GPT）的注意力，对比 [MASK] 位置是否能看到右侧 token。BERT 的权重 $>0$，GPT 的权重 $\approx 0$ ——这就是两种架构在注意力模式上的本质区别。
+3. **双向 vs 单向对比**：同一个输入分别通过无掩码（BERT）和因果掩码（GPT）的注意力，对比 [MASK] 位置是否能看到右侧 token。BERT 的权重 $>0$ ，GPT 的权重 $\approx 0$ ——这就是两种架构在注意力模式上的本质区别。
 
 4. **微调分类**：`cls_repr @ W_cls` 将 [CLS] 位置的表示投影到类别数。微调时 BERT 的所有参数和 $W_{\text{cls}}$ 一起训练，使 [CLS] 表示逐步适应分类任务。

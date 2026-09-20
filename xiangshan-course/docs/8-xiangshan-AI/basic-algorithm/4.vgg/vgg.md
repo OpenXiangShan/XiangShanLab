@@ -99,7 +99,7 @@ $$\text{Params}_{\text{big}} = C_{\text{in}} \times C_{\text{out}} \times k^2 + 
 
 $$\text{Params}_{\text{stack}} = n \times (C_{\text{in}} \times C_{\text{mid}} \times 3^2 + C_{\text{mid}}) + \text{后续层}$$
 
-以 VGG Block 3 为例（ $C_{\text{in}} = 256$，三层均为 $256 \to 256$ ）：
+以 VGG Block 3 为例（ $C_{\text{in}} = 256$ ，三层均为 $256 \to 256$ ）：
 - 等效 $7 \times 7$ 单层： $256 \times 256 \times 49 + 256 = 3{,}211{,}520$
 - 三层 $3 \times 3$ 堆叠： $3 \times (256 \times 256 \times 9 + 256) = 1{,}770{,}240$
 
@@ -259,13 +259,13 @@ print("\n========== 全部验证通过 ==========")
 
 **关键对比**：两方案感受野相同（ $7 \times 7$ ），但方案 B 参数少 44.9%，且多 2 层非线性变换。
 
-**VGG Block**： $8 \times 8$ 输入 → 两层 $3 \times 3$ conv → $8 \times 8$ → $2 \times 2$ max pool → $4 \times 4$，空间尺寸减半。
+**VGG Block**： $8 \times 8$ 输入 → 两层 $3 \times 3$ conv → $8 \times 8$ → $2 \times 2$ max pool → $4 \times 4$ ，空间尺寸减半。
 
 ### 3.3 关键代码解释
 
 1. **三层卷积堆叠**：依次调用 `conv2d` + `relu` 三次，每次 `padding=1` 保持尺寸不变。这正是 VGG Block 的核心结构。
 
-2. **`receptive_field` 函数**：递推公式 $R_l = R_{l-1} + (k-1)$ 的实现。 $n$ 层 $3 \times 3$ 卷积的感受野 $= 1 + 2n = 2n+1$，三层即 $7$。
+2. **`receptive_field` 函数**：递推公式 $R_l = R_{l-1} + (k-1)$ 的实现。 $n$ 层 $3 \times 3$ 卷积的感受野 $= 1 + 2n = 2n+1$ ，三层即 $7$。
 
 3. **参数量计算**：单通道时直接数权重个数（ $7 \times 7 = 49$ vs $3 \times 3 \times 3 = 27$ ）。多通道时考虑核在所有输入通道上做卷积，每层参数 $= C_{\text{in}} \times C_{\text{out}} \times k^2 + C_{\text{out}}$。
 

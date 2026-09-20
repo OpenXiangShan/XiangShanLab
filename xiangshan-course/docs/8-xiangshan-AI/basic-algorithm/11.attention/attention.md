@@ -30,8 +30,8 @@ Key 只负责“匹配”，Value 才是最后被汇总的“内容”。匹配�
 缩放点积注意力的计算顺序如下：
 
 1. 准备 Query 矩阵 $Q$ 、Key 矩阵 $K$ 和 Value 矩阵 $V$。
-2. 计算 $QK^\top$，得到所有 Query 与 Key 的点积匹配分数。
-3. 将分数除以 $\sqrt{d_k}$，其中 $d_k$ 是 Query 和 Key 的维度。
+2. 计算 $QK^\top$ ，得到所有 Query 与 Key 的点积匹配分数。
+3. 将分数除以 $\sqrt{d_k}$ ，其中 $d_k$ 是 Query 和 Key 的维度。
 4. 对每一行执行 Softmax，得到注意力权重。
 5. 将权重矩阵与 $V$ 相乘，得到输出。
 
@@ -55,7 +55,7 @@ V=\begin{bmatrix}
 
 $$
 
-Query 与第一、第三个 Key 的点积都是 $1$，与第二个 Key 的点积是 $0$。因此第一、第三个 Value 获得较高且相同的权重。最终输出不是直接选择某个 Value，而是将三个 Value 按权重混合。
+Query 与第一、第三个 Key 的点积都是 $1$ ，与第二个 Key 的点积是 $0$。因此第一、第三个 Value 获得较高且相同的权重。最终输出不是直接选择某个 Value，而是将三个 Value 按权重混合。
 
 ## 2. 公式讲解
 
@@ -126,9 +126,9 @@ A_{ij}\geq 0,\qquad \sum_{j=1}^{n_k}A_{ij}=1.
 
 $$
 
-最后计算 $AV$，也就是按这些权重混合所有 Value。
+最后计算 $AV$ ，也就是按这些权重混合所有 Value。
 
-将前面的例子代入， $d_k=2$，得到：
+将前面的例子代入， $d_k=2$ ，得到：
 
 $$
 
@@ -212,8 +212,8 @@ output: [[1.6044 0.7967]]
 
 ### 3.3 关键代码解释
 
-`query @ key.T` 对应 $QK^\top$，计算 Query 与所有 Key 的点积。
+`query @ key.T` 对应 $QK^\top$ ，计算 Query 与所有 Key 的点积。
 
 `/ np.sqrt(d_k)` 对分数进行缩放。`softmax(scores)` 将每行分数转换为总和为 $1$ 的权重。
 
-`weights @ value` 对应 $AV$，使用注意力权重对所有 Value 做加权求和。Softmax 实现先减去每行最大值，是为了降低指数计算溢出的风险，不会改变 Softmax 结果。
+`weights @ value` 对应 $AV$ ，使用注意力权重对所有 Value 做加权求和。Softmax 实现先减去每行最大值，是为了降低指数计算溢出的风险，不会改变 Softmax 结果。
