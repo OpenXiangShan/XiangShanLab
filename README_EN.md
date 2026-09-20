@@ -2,7 +2,7 @@
 
 [中文](./README.md) | [XiangShan Website](https://openxiangshan.cc/) | [GitHub Issues](https://github.com/OpenXiangShan/XiangShanLab/issues)
 
-XiangShanLab is an open repository for learning, developing, verifying, and researching the XiangShan processor. It contains the main course documentation together with programming exercises, question banks, bug cases, analysis tools, research papers, weekly reports, collaborator information, and contest materials.
+XiangShanLab is an open repository for learning, developing, verifying, and researching the XiangShan processor. It contains the main course documentation together with programming exercises, question banks, bug cases, analysis tools, research papers, weekly reports, collaborator information, externally contributed projects, and contest materials.
 
 ## Quick Start
 
@@ -29,6 +29,7 @@ git submodule update --init --recursive
 - **Studying XiangShan microarchitecture**: begin with [microarchitecture analysis](./xiangshan-course/docs-en/4-xiangshan-microarchitecture-analysis/).
 - **Analyzing runtime scenarios or bugs**: use the [scenario-analysis materials](./xiangshan-course/docs-en/5-xiangshan-scenarios-analysis/), [debugging materials](./xiangshan-course/docs-en/6-xiangshan-debug/), and [question bank](./xiangshan-question-bank/).
 - **Using AI-assisted source, waveform, or bug analysis**: see the [tool directory](./tools/README.md) and the `SKILL.md` file in each tool.
+- **Registering or exploring an external community project**: see the [external-contribution-project directory](./external-contribution-project/README.md) for a project's relationship to RISC-V, XiangShan, and its supporting areas.
 - **Preparing a 2026 CIE RISC-V Contest project**: read the [application-track description](./2026-CIE-RISC-V-Contest-Application-Track/README.md) and [submission guide](./2026-CIE-RISC-V-Contest-Application-Track/SUBMISSION_GUIDE.md).
 
 ## Course Structure
@@ -62,6 +63,7 @@ English coverage is currently smaller than the Chinese course. For the complete 
 | [`xiangshan-research/`](./xiangshan-research/) | XiangShan-related papers, research directions, and literature index | [Paper index](./xiangshan-research/xiangshan-related-papers.md) |
 | [`xiangshan-collaborators/`](./xiangshan-collaborators/) | XiangShan collaborators from universities and research institutions | [Collaborators](./xiangshan-collaborators/xiangshan-collaborators.md) |
 | [`weekly-status/`](./weekly-status/) | Weekly reports, status template, and report-generation scripts | [Weekly reports](./weekly-status/) |
+| [`external-contribution-project/`](./external-contribution-project/) | Registration materials for external projects contributed by the XiangShan community, collaborating organizations, and individuals | [Project guide](./external-contribution-project/README.md) |
 | [`2026-CIE-RISC-V-Contest-Application-Track/`](./2026-CIE-RISC-V-Contest-Application-Track/) | 2026 CIE RISC-V Contest application-track materials and submission files | [Contest description](./2026-CIE-RISC-V-Contest-Application-Track/README.md) |
 
 ## Programming Exercises
@@ -73,6 +75,12 @@ Projects under [`xiangshan-programming-practice/`](./xiangshan-programming-pract
 - `TwoToOneXbarSystem/`: a 2-to-1 XBar experiment with two AXI4 masters sharing a memory slave;
 - `NonBlockingCache/`: non-blocking cache design and tests;
 - `mmu-smmpt/`: MMU / SMMPT implementations, modules, and tests.
+
+## External Contribution Projects
+
+[`external-contribution-project/`](./external-contribution-project/) records external projects contributed by the XiangShan community, collaborating labs, universities, companies, and individuals, including experiments, tools, verification frameworks, extension modules, and research results. A project may use, extend, or verify XiangShan, or provide runtime, integration, or research infrastructure for it.
+
+For a new project, use the [contribution template](./external-contribution-project/CONTRIBUTION_TEMPLATE.md) in its project directory to document the project summary, public repository, required RISC-V extensions and XiangShan version, build or verification commands, maintaining organization, and contributors. The [external-contribution-project README](./external-contribution-project/README.md) contains the full registration rules, development-environment requirements, and current project list.
 
 ## Tools and Data
 
