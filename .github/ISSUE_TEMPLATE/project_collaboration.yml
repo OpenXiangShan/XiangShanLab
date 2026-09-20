@@ -12,7 +12,7 @@ body:
   - type: textarea
     id: background
     attributes:
-      label: 0. Project Background
+      label: 1. Project Background
       description: Why is this project needed? What problem does it solve? Provide the context and motivation.
       placeholder: |
         - Current state: ...
@@ -24,7 +24,7 @@ body:
   - type: input
     id: project_name
     attributes:
-      label: 1. Project Name
+      label: 2. Project Name
       description: A clear and concise name for the project.
       placeholder: e.g., Next-Gen NoC Router Optimization
     validations:
@@ -33,7 +33,7 @@ body:
   - type: dropdown
     id: project_type
     attributes:
-      label: 2. Project Type
+      label: 3. Project Type
       description: What kind of collaboration is this?
       options:
         - Code Development
@@ -48,7 +48,7 @@ body:
   - type: textarea
     id: project_plan
     attributes:
-      label: 3. Project Plan
+      label: 4. Project Plan
       description: Outline the timeline, milestones, and high-level execution strategy.
       placeholder: |
         - Phase 1 (Month 1): ...
@@ -57,10 +57,19 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: ddl
+    attributes:
+      label: 5. DDL (Project Deadline)
+      description: Specify the final deadline for this project (e.g., YYYY-MM-DD).
+      placeholder: e.g., 2025-12-31
+    validations:
+      required: true
+
   - type: dropdown
     id: project_direction
     attributes:
-      label: 4. Project Direction
+      label: 6. Project Direction
       description: Select the primary technical focus area for this project.
       options:
         - AI
@@ -75,7 +84,7 @@ body:
   - type: textarea
     id: deliverables
     attributes:
-      label: 5. Committed Project Deliverables
+      label: 7. Committed Project Deliverables
       description: List the specific, tangible outputs you commit to delivering. (e.g., source code, test reports, documentation).
       placeholder: |
         - [ ] Deliverable 1: ...
@@ -85,9 +94,18 @@ body:
       required: true
 
   - type: input
+    id: staking_points
+    attributes:
+      label: 8. Staking Points
+      description: Specify the staking points committed for this project.
+      placeholder: e.g., 100 points
+    validations:
+      required: true
+
+  - type: input
     id: project_link
     attributes:
-      label: 6. Project Link
+      label: 9. Project Link
       description: Provide the full URL to the project repository, branch, or tracking board.
       placeholder: e.g., https://github.com/OpenXiangShan/XiangShan
     validations:
@@ -96,7 +114,7 @@ body:
   - type: input
     id: project_tutorial
     attributes:
-      label: 7. Project Tutorial
+      label: 10. Project Tutorial
       description: Provide the full URL to the tutorial or onboarding guide for this project.
       placeholder: e.g., https://github.com/OpenXiangShan/XiangShanLab/tree/master/xiangshan-course
     validations:
