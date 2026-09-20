@@ -7,7 +7,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for reaching out! Please provide as much detail as possible so the community can help you efficiently.
+        ## About this template
+
+        Use this template for a specific technical question about XiangShan course materials, documentation, source code, or debugging.
+
+        Before submitting, search existing issues and include the exact document or code link, relevant commands, error messages, and what you have already tried. This helps the community give a focused answer.
 
   - type: dropdown
     id: consultation_direction

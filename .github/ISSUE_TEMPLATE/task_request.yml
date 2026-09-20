@@ -5,7 +5,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        请完整填写以下内容。执行人评论 `/assign` 后，由 Issue 发布者回复 `/confirm` 确认认领；完成后由执行人评论 `/complete` 发起审查。
+        ## 模板说明
+
+        使用本模板发布一个目标明确、可以被认领并按截止时间交付的任务。请把交付物写成可逐项验收的清单，并填写合理的工时、质押积分和 DDL。
+
+        执行人评论 `/assign` 后，由 Issue 发布者回复 `/confirm` 确认认领；完成后由执行人评论 `/complete` 发起审查。任务认领、同步和交付规则见[社区去中心化治理策略](https://github.com/OpenXiangShan/XiangShanLab/blob/master/XiangShanLab-user-guide/XiangShan-Community-Decentralized-Governance-Strategy.md)。
 
   - type: dropdown
     id: course_directory

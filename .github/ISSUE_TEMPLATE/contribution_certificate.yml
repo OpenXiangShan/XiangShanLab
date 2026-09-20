@@ -7,7 +7,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for your contribution to the XiangShan project! Please fill out the details below to apply for your contribution certificate.
+        ## About this template
+
+        Use this template to apply for a contribution certificate after completing a XiangShan-related project or contribution.
+
+        Describe the work clearly, provide a verifiable project or pull request link, and use the name and contact information that should be associated with the certificate. Maintainers may review the submitted information before processing the application.
 
   - type: dropdown
     id: contribution_direction

@@ -1,112 +1,90 @@
-# Xiangshan Processor Learning Course
+# XiangShan Processor Learning Course
 
-> Xiangshan Processor Learning Course documentation repository
-
-[中文版 README](./README.md)
+[中文 README](./README.md) | [Back to XiangShanLab](../README_EN.md)
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE-CODE)
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/Docs%20License-CC_BY--NC_4.0-lightgrey.svg)](docs/LICENSE)
+[![Docs License: CC BY-NC 4.0](https://img.shields.io/badge/Docs%20License-CC_BY--NC_4.0-lightgrey.svg)](docs/LICENSE)
 
-This repository is the documentation hub for the Xiangshan Processor Learning Course. It is intended for learners who want to systematically study the Xiangshan development environment, Chisel/Diplomacy programming, the RISC-V specification, Xiangshan microarchitecture, typical scenario analysis, debugging methods, and the development tools that follow.
+This directory contains the XiangShan Processor Learning Course in XiangShanLab. It is intended for learners who want to study the XiangShan development environment, Chisel/Diplomacy, RISC-V, microarchitecture, execution scenarios, debugging, and related development tools.
 
-The repository is currently centered on Markdown documents, images, attachments, and user guides. Course content is still being expanded, and some directories are reserved for future chapters.
+The course mainly consists of Markdown documents, with images, presentations, PDFs, code examples, and other learning attachments. Content is continuously evolving, and some chapters are still under construction.
 
-## Course Overview
+## Quick Start
 
-### 1. [Xiangshan Development Environment](./docs/1-xiangshan-development-environment/2.ENG/Introduction_Preface.md)
+Chinese materials are under [`docs/`](./docs/), and English materials are under [`docs-en/`](./docs-en/).
 
-- [Chinese Course](./docs/1-xiangshan-development-environment/1.CHN/)
-- [English Course](./docs/1-xiangshan-development-environment/2.ENG/)
-- [Environment FAQ](./docs/1-xiangshan-development-environment/FAQ/xs-env-FAQ.md)
+Recommended path:
 
-The main content includes the development environment overview, tool preparation, applications, instruction simulators, NEMU/Spike reference models, DRAMsim3, the Xiangshan simulation flow, GEM5, and the Difftest co-simulation framework.
+1. Start with the [XiangShan development environment](./docs-en/1-xiangshan-development-environment/Introduction_Preface.md) to understand the toolchain, simulators, and simulation flow.
+2. Continue with [XiangShan programming](./docs-en/2-xiangshan-programming/) for Scala, Chisel, Diplomacy, TileLink, and AXI.
+3. Select the RISC-V, microarchitecture, scenario-analysis, and debugging chapters according to your goals.
+4. Use the [learning-path guide](../XiangShanLab-user-guide/XiangShanLab‑Learning‑Path‑Guide.md) and [submission guide](../XiangShanLab-user-guide/how-to-commit-hello-xiangshan.md) for exercises and contributions.
 
-### 2. [Xiangshan Programming](./docs/2-xiangshan-programming/)
+## Chinese Course
 
-- [Chisel Programming](./docs/2-xiangshan-programming/1-chisel/Chapter_1_Basic_Scala_Syntax.md)
-- [Diplomacy and Protocol Extensions](./docs/2-xiangshan-programming/2-diplomacy/Chapter_10_An_Introduction_to_the_Basics_of_Diplomacy.md)
+The Chinese course currently contains 14 chapter directories:
 
-The main content includes basic Scala/Chisel syntax, engineering practice, common errors, Chisel fundamentals, Xiangshan Chisel coding standards, Diplomacy basics, TileLink/AXI extensions, and practical exercises.
+| Chapter | Topic | Entry |
+| --- | --- | --- |
+| 1 | Development environment, simulators, simulation flow, and Difftest | [Development Environment](./docs/1-xiangshan-development-environment/) |
+| 2 | Scala, Chisel, Diplomacy, TileLink, and AXI | [Programming](./docs/2-xiangshan-programming/) |
+| 3 | RISC-V instructions and specifications | [RISC-V Specification](./docs/3-riscv-specification/) |
+| 4 | Superscalar and out-of-order execution, frontend, backend, and memory subsystems | [Microarchitecture Analysis](./docs/4-xiangshan-microarchitecture-analysis/) |
+| 5 | Instruction lifecycles, prediction, prefetching, memory behavior, replay, and conflicts | [Scenario Analysis](./docs/5-xiangshan-scenarios-analysis/) |
+| 6 | Bug analysis, exceptions, CSRs, PMA/PMP, X-state, and debugging cases | [Debugging](./docs/6-xiangshan-debug/) |
+| 7 | NoC, cache coherence, CHI, XSCache, DDR, and deadlocks | [NoC and Caches](./docs/7-xiangshan-NoC/) |
+| 8 | XiangShan AI materials | [XiangShan AI](./docs/8-xiangshan-AI/) |
+| 9 | AIA specifications, design, integration, and isolation | [XiangShan AIA](./docs/9-xiangshan-AIA/) |
+| 10 | Security-related materials | [XiangShan Security](./docs/10-xiangshan-security/) |
+| 11 | DDR-related materials | [XiangShan DDR](./docs/11-xiangshan-ddr/) |
+| 12 | Workload and virtual-machine scenario analysis | [Workload Analysis](./docs/12-workload-analysis/) |
+| 13 | Verification-related materials | [XiangShan Verification](./docs/13-xiangshang-verification/) |
+| 14 | XiangShan agile tools | [Agile Tools](./docs/14-xiangshan-aglie-tools/) |
 
-### 3. [RISC-V Specification](./docs/3-riscv-specification/)
+Chapters 1 through 6 currently contain the most complete foundational and advanced materials. Chapters 7 through 14 are being expanded.
 
-- [RISC-V Specification](./docs/3-riscv-specification/)
+## English Course
 
-This section is used to collect course-related learning materials for the RISC-V specification.
+The English course currently contains the following chapters:
 
-### 4. [Xiangshan Microarchitecture Analysis](./docs/4-xiangshan-microarchitecture-analysis/)
+| Chapter | Topic | Entry |
+| --- | --- | --- |
+| 1 | XiangShan development environment, simulators, and Difftest | [Development Environment](./docs-en/1-xiangshan-development-environment/) |
+| 2 | Scala, Chisel, Diplomacy, TileLink, and AXI | [Programming](./docs-en/2-xiangshan-programming/) |
+| 3 | RISC-V specification materials | [RISC-V Specification](./docs-en/3-riscv-specification/) |
+| 4 | Microarchitecture fundamentals, design documents, and source analysis | [Microarchitecture Analysis](./docs-en/4-xiangshan-microarchitecture-analysis/) |
+| 5 | Pipeline and instruction execution scenarios | [Scenario Analysis](./docs-en/5-xiangshan-scenarios-analysis/) |
+| 6 | Debugging and bug-analysis materials | [Debugging](./docs-en/6-xiangshan-debug/) |
+| 7 | XiangShan development materials (reserved) | [Development](./docs-en/7-xiangshan-development/) |
+| 8 | XiangShan development tools (reserved) | [Development Tools](./docs-en/8-xiangshan-development-tools/) |
 
-- [Superscalar Basics](./docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md)
-- [Xiangshan Design Documents](./docs/4-xiangshan-microarchitecture-analysis/2-xiangshan-design-document/)
-- [Xiangshan Source Code Analysis](./docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/)
+The English tree also contains a standalone [XiangShan microarchitecture collection](./docs-en/xiangshan-microarchitecture/). English coverage is currently smaller than the Chinese course; the directory structure is the source of truth.
 
-The main content includes pipelines, hazards, dependencies, superscalar issue, out-of-order execution, Tomasulo/Scoreboard, register renaming, dispatch queues, issue queues, bypass networks, execution units, physical registers, CSR, ROB, and source code analysis of the frontend/backend/memory subsystems.
+## Repository Layout
 
-### 5. [Xiangshan Scenario Analysis](./docs/5-xiangshan-scenarios-analysis/)
+```text
+xiangshan-course/
+├── README.md
+├── README_EN.md
+├── LICENSE-CODE
+├── assets/
+│   ├── diagrams/
+│   └── images/
+├── docs/                 # Chinese course, 14 chapter directories
+└── docs-en/              # English course, 8 chapter directories and a microarchitecture topic
+```
 
-- [Scenario Descriptions](./docs/5-xiangshan-scenarios-analysis/scenarios-description/)
-- [Scenario Analysis](./docs/5-xiangshan-scenarios-analysis/scenarios-analysis/)
-
-The main content includes scalar load/store/add, vector load/store/add, AMO, CBO, DIV, FENCE, JAL/JALR, prefetching, BPU, instruction cache, MDP, and related scenarios.
-
-### 6. [Xiangshan Debugging](./docs/6-xiangshan-debug/)
-
-- [Upper Beginner Level](./docs/6-xiangshan-debug/Upper_Beginner_Level/)
-
-The main content includes bug analysis categories, instruction generator issues, Xiangshan RTL issues, exception triggering, CSR, PMA/PMP, X-state, uninitialized state, and incorrect instruction execution results.
-
-### 7-8. Development and Tools
-
-- [Xiangshan Development](./docs/7-xiangshan-development/)
-- [Xiangshan Development Tools](./docs/8-xiangshan-development-tools/)
-
-These two directories are currently empty and reserved for future course content.
-
-## Repository Structure
-
-- `docs/`: main course documentation
-  - `1-xiangshan-development-environment/`: development environment
-  - `2-xiangshan-programming/`: Chisel / Diplomacy programming
-  - `3-riscv-specification/`: RISC-V specification
-  - `4-xiangshan-microarchitecture-analysis/`: Xiangshan microarchitecture analysis
-  - `5-xiangshan-scenarios-analysis/`: typical scenario analysis
-  - `6-xiangshan-debug/`: debugging methods and issue analysis
-  - `7-xiangshan-development/`: future development content
-  - `8-xiangshan-development-tools/`: future development tools content
-- `user-guide/`: task submission and issue reporting guides
-- `assets/`: shared repository assets
-
-## Course Outline
-
-1. [Xiangshan Development Environment](./docs/1-xiangshan-development-environment/1.CHN/Introduction_Preface.md)
-2. [Xiangshan Programming](./docs/2-xiangshan-programming/1-chisel/Chapter_1_Basic_Scala_Syntax.md)
-3. [RISC-V Specification](./docs/3-riscv-specification/)
-4. [Xiangshan Microarchitecture Analysis](./docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md)
-5. [Xiangshan Scenario Analysis](./docs/5-xiangshan-scenarios-analysis/scenarios-description/scalar-load-scenarios.md)
-6. [Xiangshan Debugging](./docs/6-xiangshan-debug/Upper_Beginner_Level/Bug_Analysis_Categories.md)
-7. [Xiangshan Development](./docs/7-xiangshan-development/)
-8. [Xiangshan Development Tools](./docs/8-xiangshan-development-tools/)
-
-## Suggested Learning Path
-
-1. Start with `docs/1-xiangshan-development-environment/` for environment setup and basic workflow.
-2. Continue with `docs/2-xiangshan-programming/` for Chisel and Diplomacy.
-3. Read `docs/3` through `docs/6` to go deeper into architecture, scenarios, and debugging.
-4. Use `user-guide/` for task submission and issue reporting.
-
-## Documentation Notes
-
-- `docs/1-xiangshan-development-environment/1.CHN/`: Chinese materials
-- `docs/1-xiangshan-development-environment/2.ENG/`: English materials
-- Most other chapters are currently Chinese-first, with some bilingual or English-titled files.
-
-## Licenses
-
-- Documentation: see `docs/LICENSE`
-- Code and repository scripts: see `LICENSE-CODE`
+Images, attachments, and code examples are generally kept beside the chapter that uses them. Shared assets are stored under `assets/`.
 
 ## Related Links
 
-- [Hello Xiangshan submission guide](./user-guide/how-to-commit-hello-xiangshan.md)
-- [Documentation issue guide](./user-guide/how-to-report-document-issues.md)
+- [XiangShanLab learning-path guide](../XiangShanLab-user-guide/XiangShanLab‑Learning‑Path‑Guide.md)
+- [Hello XiangShan submission guide](../XiangShanLab-user-guide/how-to-commit-hello-xiangshan.md)
+- [Documentation issue guide](../XiangShanLab-user-guide/how-to-report-document-issues.md)
+- [XiangShanLab root README](../README_EN.md)
 
+## Licenses
+
+- Course and repository code follow [`LICENSE-CODE`](./LICENSE-CODE).
+- Course documentation follows [`docs/LICENSE`](./docs/LICENSE).
+- When a file or subdirectory provides additional license information, follow that local notice.

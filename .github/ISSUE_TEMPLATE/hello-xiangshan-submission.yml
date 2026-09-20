@@ -8,12 +8,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        恭喜完成 hello xiangshan 任务！🎉
-        
-        请填写以下信息，分享您的学习成果：
-        - 您的成果将在社区中展示
-        - 有助于我们了解不同学习者的进展
-        - 为其他学习者提供参考
+        ## 模板说明
+
+        本模板用于提交已完成的 `hello xiangshan` 基础任务，分享学习成果并供课程社区展示。
+
+        请先完成课程任务，再上传能够完整显示运行命令和输出结果的截图或相关文件。提交前请确认公开展示和信息使用相关选项。
+
+        详细步骤请参考[Hello XiangShan 提交指南](https://github.com/OpenXiangShan/XiangShanLab/blob/master/XiangShanLab-user-guide/how-to-commit-hello-xiangshan.md)
         
         ---
         

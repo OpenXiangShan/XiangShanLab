@@ -33,25 +33,26 @@ git submodule update --init --recursive
 
 ## 课程目录
 
-课程主体位于 [`xiangshan-course/`](./xiangshan-course/)，中文资料位于 `docs/`，英文资料位于 `docs-en/`。
+课程主体位于 [`xiangshan-course/`](./xiangshan-course/)，中文资料位于 `docs/`，英文资料位于 `docs-en/`。中文课程当前包含 14 个章节目录；英文课程当前包含 8 个章节目录，另有一个独立的微架构资料目录。
 
 | 章节 | 内容 | 入口 |
 | --- | --- | --- |
 | 1 | 香山开发环境、模拟器、仿真流程与 Difftest | [开始学习](./xiangshan-course/docs/1-xiangshan-development-environment/) |
 | 2 | Scala、Chisel、Diplomacy、TileLink 与 AXI | [开始学习](./xiangshan-course/docs/2-xiangshan-programming/) |
-| 3 | RISC-V 指令、异常和相关规范资料 | [开始学习](./xiangshan-course/docs/3-riscv-specification/) |
+| 3 | RISC-V 指令集与规范资料 | [开始学习](./xiangshan-course/docs/3-riscv-specification/) |
 | 4 | 超标量、乱序执行、前端、后端和存储子系统 | [开始学习](./xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/) |
 | 5 | 指令生命周期、预测、预取、访存、重放和冲突 | [开始学习](./xiangshan-course/docs/5-xiangshan-scenarios-analysis/) |
 | 6 | Bug 分析、异常、CSR、PMA/PMP、X-state 和调试案例 | [开始学习](./xiangshan-course/docs/6-xiangshan-debug/) |
-| 7 | NoC、Cache 一致性、CHI、XSCache、DDR 和死锁 | [开始学习](./xiangshan-course/docs/7-xiangshan-NoC/) |
+| 7 | NoC、Cache 一致性、CHI、XSCache、DDR 和死锁 | [进入目录](./xiangshan-course/docs/7-xiangshan-NoC/) |
 | 8 | 香山 AI 相关资料 | [进入目录](./xiangshan-course/docs/8-xiangshan-AI/) |
-| 9 | AIA 规范、设计、集成和隔离 | [开始学习](./xiangshan-course/docs/9-xiangshan-AIA/) |
-| 10 | 安全方向资料，包括 Zicfilp、Zicfiss 和时序 FENCE | [进入目录](./xiangshan-course/docs/10-xiangshan-security/) |
-| 11 | 验证方向资料，包括 UVM 模板 | [进入目录](./xiangshan-course/docs/11-xiangshang-verification/) |
-| 12 | 工作负载分析资料 | [进入目录](./xiangshan-course/docs/12-workload-analysis/) |
-| 13 | 香山敏捷工具资料 | [进入目录](./xiangshan-course/docs/13-xiangshan-aglie-tools/) |
+| 9 | AIA 规范、设计、集成和隔离 | [进入目录](./xiangshan-course/docs/9-xiangshan-AIA/) |
+| 10 | 安全方向资料 | [进入目录](./xiangshan-course/docs/10-xiangshan-security/) |
+| 11 | DDR 相关资料 | [进入目录](./xiangshan-course/docs/11-xiangshan-ddr/) |
+| 12 | 工作负载和虚拟机运行场景 | [进入目录](./xiangshan-course/docs/12-workload-analysis/) |
+| 13 | 验证方向资料 | [进入目录](./xiangshan-course/docs/13-xiangshang-verification/) |
+| 14 | 香山敏捷工具资料 | [进入目录](./xiangshan-course/docs/14-xiangshan-aglie-tools/) |
 
-课程仓库的详细说明、许可证和中英文资料入口见[`xiangshan-course/README.md`](./xiangshan-course/README.md)。
+课程仓库的详细说明、许可证和中英文资料入口见 [`xiangshan-course/README.md`](./xiangshan-course/README.md)。
 
 ## 仓库结构
 
@@ -104,6 +105,21 @@ git submodule update --init --recursive
 4. 如果暂时无法修复问题，可通过 [GitHub Issues](https://github.com/OpenXiangShan/XiangShanLab/issues) 报告。
 
 任务认领、同步和交付规则见[社区去中心化治理策略](./XiangShanLab-user-guide/XiangShan-Community-Decentralized-Governance-Strategy.md)，Hello XiangShan 的提交流程见[提交指南](./XiangShanLab-user-guide/how-to-commit-hello-xiangshan.md)。
+
+## Issue 模板
+
+仓库已关闭空白 Issue。请根据问题类型选择合适的模板，并在提交前搜索已有 Issue，补充可复现的上下文、相关链接和验证结果。
+
+| 模板 | 适用场景 |
+| --- | --- |
+| [任务发布](./.github/ISSUE_TEMPLATE/task_request.yml) | 发布可被认领、需要质押并按 DDL 交付的课程或工程任务；请把交付物写成可验收清单。 |
+| [hello xiangshan 作业提交](./.github/ISSUE_TEMPLATE/hello-xiangshan-submission.yml) | 提交已完成的 `hello xiangshan` 基础任务；请上传完整运行截图，并阅读[提交指南](./XiangShanLab-user-guide/how-to-commit-hello-xiangshan.md)。 |
+| [报告文档问题](./.github/ISSUE_TEMPLATE/documentation-issue.yml) | 报告课程文档中的错误、过时内容、失效链接或表述不清。 |
+| [Technical Q&A](./.github/ISSUE_TEMPLATE/technical_qa.yml) | 咨询课程材料、文档、源码或调试相关的具体技术问题；请提供准确链接、命令和错误信息。 |
+| [Project Collaboration Proposal](./.github/ISSUE_TEMPLATE/project_collaboration.yml) | 提议新的协作项目；请说明背景、范围、里程碑、交付物和参与方式。 |
+| [Contribution Certificate Application](./.github/ISSUE_TEMPLATE/contribution_certificate.yml) | 为已完成的香山项目或贡献申请贡献证明；请提供可核验的项目链接和证书信息。 |
+
+任务发布、认领、同步和交付规则见[社区去中心化治理策略](./XiangShanLab-user-guide/XiangShan-Community-Decentralized-Governance-Strategy.md)。如果模板无法覆盖你的问题，请先在对应模板中补充说明；`config.yml` 已禁用空白 Issue。
 
 ## 许可与相关项目
 

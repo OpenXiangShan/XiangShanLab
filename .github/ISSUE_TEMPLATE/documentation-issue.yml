@@ -5,7 +5,12 @@ labels: ["documentation","bug"]
 body:
   - type: markdown
     attributes:
-      value: "请填写以下信息来报告文档问题"
+      value: |
+        ## 模板说明
+
+        使用本模板报告课程文档中的错误、过时内容、链接失效或表述不清。请尽量提供准确的文档路径、章节位置和问题上下文。
+
+        如果已经有明确的修改建议，也请一并填写；提交前可先搜索已有 Issue，避免重复报告。
       
   - type: input
     id: doc-path
