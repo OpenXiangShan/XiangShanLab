@@ -1,0 +1,123 @@
+name: 🤝 Project Collaboration Proposal
+description: Propose a new collaborative project, define its scope, deliverables, and request contributors.
+title: "[Project] <Project Name>"
+labels: ["collaboration", "project-proposal"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for proposing a collaborative project! Please fill out the details below as thoroughly as possible to help others understand the scope and join the effort.
+        
+  - type: textarea
+    id: background
+    attributes:
+      label: 0. Project Background
+      description: Why is this project needed? What problem does it solve? Provide the context and motivation.
+      placeholder: |
+        - Current state: ...
+        - Problem to solve: ...
+        - Expected impact: ...
+    validations:
+      required: true
+
+  - type: input
+    id: project_name
+    attributes:
+      label: 1. Project Name
+      description: A clear and concise name for the project.
+      placeholder: e.g., Next-Gen NoC Router Optimization
+    validations:
+      required: true
+
+  - type: dropdown
+    id: project_type
+    attributes:
+      label: 2. Project Type
+      description: What kind of collaboration is this?
+      options:
+        - Code Development
+        - Documentation / Translation
+        - Design / UI / UX
+        - Testing / QA
+        - Research / Academic
+        - Other (Please specify in the description)
+    validations:
+      required: true
+
+  - type: textarea
+    id: project_plan
+    attributes:
+      label: 3. Project Plan
+      description: Outline the timeline, milestones, and high-level execution strategy.
+      placeholder: |
+        - Phase 1 (Month 1): ...
+        - Phase 2 (Month 2-3): ...
+        - Final Deadline: ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: project_direction
+    attributes:
+      label: 4. Project Direction
+      description: Select the primary technical focus area for this project.
+      options:
+        - AI
+        - NoC (Network-on-Chip)
+        - Security
+        - CPU Performance Optimize
+        - Verification
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: 5. Committed Project Deliverables
+      description: List the specific, tangible outputs you commit to delivering. (e.g., source code, test reports, documentation).
+      placeholder: |
+        - [ ] Deliverable 1: ...
+        - [ ] Deliverable 2: ...
+        - [ ] Deliverable 3: ...
+    validations:
+      required: true
+
+  - type: input
+    id: project_link
+    attributes:
+      label: 6. Project Link
+      description: Provide the full URL to the project repository, branch, or tracking board.
+      placeholder: e.g., https://github.com/OpenXiangShan/XiangShan
+    validations:
+      required: true
+
+  - type: input
+    id: project_tutorial
+    attributes:
+      label: 7. Project Tutorial
+      description: Provide the full URL to the tutorial or onboarding guide for this project.
+      placeholder: e.g., https://github.com/OpenXiangShan/XiangShanLab/tree/master/xiangshan-course
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **📌 Submission Note:** 
+        It is highly recommended to submit your final project deliverables to the XiangShan Lab Course repository:
+        **https://github.com/OpenXiangShan/XiangShanLab/tree/master/xiangshan-course**
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Proposer Confirmation
+      options:
+        - label: I confirm this project complies with the repository's open-source license and Code of Conduct.
+          required: true
+        - label: I agree to act as the project lead, maintaining progress and coordinating with contributors.
+          required: true
+        - label: I understand that final deliverables are recommended to be submitted to the XiangShan Lab Course repository at https://github.com/OpenXiangShan/XiangShanLab/tree/master/xiangshan-course.
+          required: true
