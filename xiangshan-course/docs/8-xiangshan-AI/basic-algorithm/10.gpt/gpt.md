@@ -10,9 +10,9 @@ BERT 的双向注意力要求所有 token 同时可见，但生成时——当�
 
 GPT（Generative Pre-trained Transformer, Radford et al., 2018）只用 Transformer 的 **Decoder** 部分，通过**因果掩码**实现自回归生成：每个 token 只能看到它之前的内容，逐步预测下一个 token。
 
-**输入**：已生成的 token 序列 $ [x_1, x_2, \dots, x_t] $。
+**输入**：已生成的 token 序列 $[x_1, x_2, \dots, x_t]$。
 
-**输出**：下一个 token 的概率分布 $ P(x_{t+1} \mid x_1, \dots, x_t) $。
+**输出**：下一个 token 的概率分布 $P(x_{t+1} \mid x_1, \dots, x_t)$。
 
 **适用边界**：文本生成、对话、代码生成、翻译、摘要、问答。现代大语言模型（GPT-4、LLaMA、Claude 等）均基于 GPT 的自回归架构。
 
@@ -20,13 +20,13 @@ GPT（Generative Pre-trained Transformer, Radford et al., 2018）只用 Transfor
 
 GPT 的核心思想是**自回归生成 + 统一接口**。
 
-**自回归语言建模**：给定前 $ t $ 个 token，预测第 $ t+1 $ 个 token。生成过程是迭代的：每步预测一个 token，将其拼到序列末尾，再预测下一个。
+**自回归语言建模**：给定前 $t$ 个 token，预测第 $t+1$ 个 token。生成过程是迭代的：每步预测一个 token，将其拼到序列末尾，再预测下一个。
 
-$$ P(x_1, x_2, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_1, \dots, x_{t-1})$$
+$$P(x_1, x_2, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_1, \dots, x_{t-1})$$
 
 这是"链式法则"的直接应用——一个句子的概率等于各 token 在给定前文条件下的条件概率之积。
 
-**因果掩码**：在自注意力中，将注意力分数矩阵的上三角（未来位置）设为 $ -\infty $，softmax 后权重为 0。这确保生成第 $ t $ 个 token 时只能看到位置 $ 1 \sim t $ 的内容。
+**因果掩码**：在自注意力中，将注意力分数矩阵的上三角（未来位置）设为 $-\infty$，softmax 后权重为 0。这确保生成第 $t$ 个 token 时只能看到位置 $1 \sim t$ 的内容。
 
 **统一接口**：所有任务都转化为"文本续写"。翻译是"English: I love NLP. French:" 后续写 French 翻译；摘要是"Article: ... Summary:" 后续写摘要。不需要像 BERT 那样为每个任务设计特定的输出层——一个生成模型就能做所有事。
 
@@ -36,7 +36,7 @@ $$ P(x_1, x_2, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_1, \dots, x_{t-1})$$
 
 **预训练**：
 
-1. 从大量文本中取一段序列 $ [x_1, \dots, x_T] $。
+1. 从大量文本中取一段序列 $[x_1, \dots, x_T]$。
 2. 通过 Decoder（因果掩码自注意力 + FFN + 残差 + LayerNorm）。
 3. 每个位置的输出预测下一个 token。
 4. 损失 = 所有位置的标准语言模型损失（交叉熵）。
@@ -53,7 +53,7 @@ $$ P(x_1, x_2, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_1, \dots, x_{t-1})$$
 
 贯穿全章使用与 BERT 章相同的词汇表，展示自回归生成：
 
-- 词汇表：`["I", "love", "math", "NLP", "<tool_call>"]`，嵌入维度 $ d=4$
+- 词汇表：`["I", "love", "math", "NLP", "<tool_call>"]`，嵌入维度 $d=4$
 - 提示词：`["I", "love"]`
 - 目标：逐步生成后续 token
 
@@ -71,47 +71,47 @@ $$ P(x_1, x_2, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_1, \dots, x_{t-1})$$
 
 **因果掩码自注意力**：
 
-$$ \text{Attn}_{\text{causal}}(Q, K, V) = \text{softmax}\!\left(\frac{Q K^T}{\sqrt{d_k}} + M\right) V$$
+$$\text{Attn}_{\text{causal}}(Q, K, V) = \text{softmax}\!\left(\frac{Q K^T}{\sqrt{d_k}} + M\right) V$$
 
-其中掩码矩阵 $ M $ 的上三角为 $ -\infty $，下三角和对角线为 0。
+其中掩码矩阵 $M$ 的上三角为 $-\infty$，下三角和对角线为 0。
 
-$$ M_{ij} = \begin{cases} 0 & j \leq i \\ -\infty & j > i \end{cases}$$
+$$M_{ij} = \begin{cases} 0 & j \leq i \\ -\infty & j > i \end{cases}$$
 
 **GPT Decoder Block**：
 
-$$ Z = \text{LayerNorm}(X + \text{CausalAttn}(X))$$
+$$Z = \text{LayerNorm}(X + \text{CausalAttn}(X))$$
 
-$$ Z' = \text{LayerNorm}(Z + \text{FFN}(Z))$$
+$$Z' = \text{LayerNorm}(Z + \text{FFN}(Z))$$
 
 与 Transformer 章的 Decoder Block 的前两层相同（无交叉注意力层，因为 GPT 只有 Decoder）。
 
 **自回归语言模型损失**：
 
-$$ L = -\sum_{t=1}^{T-1} \log P(x_{t+1} \mid x_1, \dots, x_t)$$
+$$L = -\sum_{t=1}^{T-1} \log P(x_{t+1} \mid x_1, \dots, x_t)$$
 
-每个位置 $ t $ 预测 $ x_{t+1} $，损失为所有位置的平均交叉熵。
+每个位置 $t$ 预测 $x_{t+1}$，损失为所有位置的平均交叉熵。
 
 **生成概率（链式法则）**：
 
-$$ P(x_1, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_{<t})$$
+$$P(x_1, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_{<t})$$
 
 ### 2.2 变量含义
 
 | 符号 | 含义 |
 |------|------|
-| $ X $ | 输入 token 嵌入序列 |
-| $ M $ | 因果掩码矩阵（上三角 $ -\infty $ ） |
-| $ Z $ | Decoder 输出（上下文感知表示） |
-| $ Z_t $ | 位置 $ t $ 的表示，编码了 $ x_1, \dots, x_t $ 的信息 |
-| $ P(x_{t+1} \mid x_{\leq t}) $ | 给定前 $ t $ 个 token 预测第 $ t+1 $ 个的概率 |
-| $ W_{\text{vocab}} $ | 词表投影矩阵，$ d \times \|V\| $ |
-| $ \|V\| $ | 词汇表大小 |
+| $X$ | 输入 token 嵌入序列 |
+| $M$ | 因果掩码矩阵（上三角 $-\infty$ ） |
+| $Z$ | Decoder 输出（上下文感知表示） |
+| $Z_t$ | 位置 $t$ 的表示，编码了 $x_1, \dots, x_t$ 的信息 |
+| $P(x_{t+1} \mid x_{\leq t})$ | 给定前 $t$ 个 token 预测第 $t+1$ 个的概率 |
+| $W_{\text{vocab}}$ | 词表投影矩阵， $d \times \|V\|$ |
+| $\|V\|$ | 词汇表大小 |
 
 ### 2.3 公式怎么理解
 
-**因果掩码**：$ M $ 的上三角为 $ -\infty $ 意味着位置 $ i $ 对位置 $ j > i $ 的注意力分数为 $ -\infty $，softmax 后权重为 0。这是"看不到未来"的硬约束——生成时未来 token 还不存在，所以必须屏蔽。对比 BERT 的 Encoder 无此约束（双向）。
+**因果掩码**： $M$ 的上三角为 $-\infty$ 意味着位置 $i$ 对位置 $j > i$ 的注意力分数为 $-\infty$，softmax 后权重为 0。这是"看不到未来"的硬约束——生成时未来 token 还不存在，所以必须屏蔽。对比 BERT 的 Encoder 无此约束（双向）。
 
-**自回归链式法则**：$ P(x_1, \dots, x_T) = \prod P(x_t | x_{<t}) $ 将联合概率分解为条件概率之积。模型不需要一步生成整个序列，而是逐步生成——每步只预测一个 token。这正是 GPT 生成的数学基础。
+**自回归链式法则**： $P(x_1, \dots, x_T) = \prod P(x_t | x_{<t})$ 将联合概率分解为条件概率之积。模型不需要一步生成整个序列，而是逐步生成——每步只预测一个 token。这正是 GPT 生成的数学基础。
 
 ### 2.4 BERT vs GPT：架构对比与应用差异
 
@@ -135,7 +135,7 @@ $$ P(x_1, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_{<t})$$
 **3. 规模化（Scaling Laws）。** 研究发现 GPT 架构的模型性能随参数量、数据量、计算量的增长而可预测地提升（Kaplan et al., 2020）。BERT 架构的双向注意力在规模化时没有表现出同样的收益——因为 MLM 的任务与"生成式理解"之间有鸿沟，模型规模再大也无法直接生成。
 
 **4. BERT 的局限性。** BERT 的双向注意力要求所有位置同时可见，这意味着：
-   - **无法自回归生成**：生成第 $ t $ 个 token 时，$ t+1 $ 之后的 token 不存在，双向注意力无意义。
+   - **无法自回归生成**：生成第 $t$ 个 token 时， $t+1$ 之后的 token 不存在，双向注意力无意义。
    - **微调成本**：每个新任务都需要标注数据和训练流程，不像 GPT 可以用 prompt 适配。
    - **任务碎片化**：分类、NER、问答需要不同的输出头和微调策略，缺乏统一接口。
    - **预训练-微调鸿沟**：MLM 预训练（填空）与下游任务（分类/生成）的目标不一致，微调需要弥合这一差距。GPT 的预训练目标（续写）与生成任务天然一致。
@@ -333,7 +333,7 @@ print("\n========== GPT 全部验证通过 ==========")
 - 步 3：继续生成。
 - 每步只有最后一个位置的输出用于预测，但整个序列都被编码（提供上下文）。
 
-**因果掩码**：注意力矩阵上三角为 0——位置 $ i $ 只关注 $ j \leq i $ 的位置。
+**因果掩码**：注意力矩阵上三角为 0——位置 $i$ 只关注 $j \leq i$ 的位置。
 
 **自回归损失**：对句子 `["I", "love", "math", "NLP"]`，位置 0 预测"love"，位置 1 预测"math"，位置 2 预测"NLP"。损失为各位置交叉熵的平均。
 
@@ -347,6 +347,6 @@ print("\n========== GPT 全部验证通过 ==========")
 
 3. **贪心解码**：`np.argmax(probs)` 取概率最高的 token。实际 LLM 用更复杂的采样策略（top-k、top-p、temperature），但核心流程相同。
 
-4. **自回归损失**：对序列中每个位置 $ t $，用 $ Z_t $ 预测 $ x_{t+1} $。注意位置 $ T-1 $ （最后一个）不需要预测（没有 $ x_T $ 作为目标）。这与 BERT 的 MLM 不同——MLM 只在被遮挡的位置计算损失，而 GPT 在每个位置都计算。
+4. **自回归损失**：对序列中每个位置 $t$，用 $Z_t$ 预测 $x_{t+1}$。注意位置 $T-1$ （最后一个）不需要预测（没有 $x_T$ 作为目标）。这与 BERT 的 MLM 不同——MLM 只在被遮挡的位置计算损失，而 GPT 在每个位置都计算。
 
 5. **统一接口**：`generate` 函数对任何 prompt 都执行相同操作——翻译、问答、续写都是"给开头，续写"。这不需要为不同任务设计不同输出头，是 GPT 架构成为 LLM 标准的关键原因。

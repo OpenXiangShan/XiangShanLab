@@ -20,7 +20,7 @@ X -> FusedAffineReLU -> Y
 
 ### 1.2 核心思想
 
-若连续算子为 $ f_1,f_2,\ldots,f_k $，原计算为：
+若连续算子为 $f_1,f_2,\ldots,f_k$，原计算为：
 
 $$
 
@@ -28,7 +28,7 @@ Y=f_k\left(f_{k-1}\left(\cdots f_1(X)\right)\right).
 
 $$
 
-算子融合把这段组合计算替换为一个新算子 $ F_{\text{fused}} $：
+算子融合把这段组合计算替换为一个新算子 $F_{\text{fused}}$：
 
 $$
 
@@ -113,7 +113,7 @@ $$
 
 ### 2.1 MatMul、Bias 与 ReLU
 
-设输入矩阵 $ X\in\mathbb R^{N\times D} $，权重矩阵 $ W\in\mathbb R^{D\times M} $，偏置 $ b\in\mathbb R^M $。逐算子形式为：
+设输入矩阵 $X\in\mathbb R^{N\times D}$，权重矩阵 $W\in\mathbb R^{D\times M}$，偏置 $b\in\mathbb R^M$。逐算子形式为：
 
 $$
 
@@ -133,7 +133,7 @@ Y=\operatorname{ReLU}(T_2)=\max(0,T_2).
 
 $$
 
-偏置 $ b $ 会沿批次维广播。将中间变量代回后，可得到融合表达式：
+偏置 $b$ 会沿批次维广播。将中间变量代回后，可得到融合表达式：
 
 $$
 
@@ -153,7 +153,7 @@ Z=XW+b.
 
 $$
 
-在推理阶段，BatchNorm 对第 $ j $ 个输出特征执行：
+在推理阶段，BatchNorm 对第 $j$ 个输出特征执行：
 
 $$
 
@@ -172,7 +172,7 @@ a_j=\frac{\gamma_j}{\sqrt{\sigma_j^2+\epsilon}}.
 
 $$
 
-把 $ Z_j=XW_{:,j}+b_j $ 代入 BatchNorm 公式：
+把 $Z_j=XW_{:,j}+b_j$ 代入 BatchNorm 公式：
 
 $$
 
@@ -209,26 +209,26 @@ $$
 
 ### 2.3 变量含义
 
-- $ X $：输入矩阵；$ N $ 是样本数，$ D $ 是输入特征数。
-- $ W $：线性层权重；$ M $ 是输出特征数。
-- $ b $：线性层偏置，长度为 $ M $。
-- $ T_1 $、$ T_2 $：融合前需要在算子之间传递的中间结果。
-- $ Y $：最终输出矩阵，形状为 $ N\times M $。
-- $ \operatorname{ReLU} $：逐元素取 $ \max(0,x) $ 的激活函数。
-- $ Z $：BatchNorm 之前的线性层输出。
-- $ j $：输出特征索引，$ W_{:,j} $ 表示 $ W $ 的第 $ j $ 列。
-- $ \mu_j $、$ \sigma_j^2 $：推理时第 $ j $ 个特征固定的运行均值和运行方差。
-- $ \gamma_j $、$ \beta_j $：BatchNorm 的可学习缩放参数和偏移参数。
-- $ \epsilon $：加在方差上的正数，用于避免分母为零。
-- $ a_j $：由 BatchNorm 参数和运行方差计算出的固定缩放系数。
-- $ W' $、$ b' $：折叠 BatchNorm 后的新权重和新偏置。
-- $ \circ $：函数复合符号，$ g\circ f $ 表示先执行 $ f $，再执行 $ g $。
+- $X$：输入矩阵； $N$ 是样本数， $D$ 是输入特征数。
+- $W$：线性层权重； $M$ 是输出特征数。
+- $b$：线性层偏置，长度为 $M$。
+- $T_1$ 、 $T_2$：融合前需要在算子之间传递的中间结果。
+- $Y$：最终输出矩阵，形状为 $N\times M$。
+- $\operatorname{ReLU}$：逐元素取 $\max(0,x)$ 的激活函数。
+- $Z$：BatchNorm 之前的线性层输出。
+- $j$：输出特征索引， $W_{:,j}$ 表示 $W$ 的第 $j$ 列。
+- $\mu_j$ 、 $\sigma_j^2$：推理时第 $j$ 个特征固定的运行均值和运行方差。
+- $\gamma_j$ 、 $\beta_j$：BatchNorm 的可学习缩放参数和偏移参数。
+- $\epsilon$：加在方差上的正数，用于避免分母为零。
+- $a_j$：由 BatchNorm 参数和运行方差计算出的固定缩放系数。
+- $W'$ 、 $b'$：折叠 BatchNorm 后的新权重和新偏置。
+- $\circ$：函数复合符号， $g\circ f$ 表示先执行 $f$，再执行 $g$。
 
 ### 2.4 公式怎么理解
 
-`MatMul + Bias + ReLU` 融合没有改变参数，只是把函数复合关系交给一个融合实现。融合成立的直接依据，是把 $ T_1 $ 和 $ T_2 $ 逐层代回后恰好得到 $ \operatorname{ReLU}(XW+b) $。
+`MatMul + Bias + ReLU` 融合没有改变参数，只是把函数复合关系交给一个融合实现。融合成立的直接依据，是把 $T_1$ 和 $T_2$ 逐层代回后恰好得到 $\operatorname{ReLU}(XW+b)$。
 
-`Linear + BatchNorm` 折叠则把推理阶段的固定仿射变换吸收到 $ W $ 和 $ b $ 中。BatchNorm 的均值、方差必须固定，公式中的 $ a_j $ 才能预先计算。因此该折叠要求模型处于推理模式，并且已经获得可用的运行均值和运行方差。
+`Linear + BatchNorm` 折叠则把推理阶段的固定仿射变换吸收到 $W$ 和 $b$ 中。BatchNorm 的均值、方差必须固定，公式中的 $a_j$ 才能预先计算。因此该折叠要求模型处于推理模式，并且已经获得可用的运行均值和运行方差。
 
 数学等价不代表浮点结果逐位相同。不同实现可能使用不同的乘加顺序，验证时应根据数据类型选择合理的绝对误差和相对误差容限。
 
@@ -332,7 +332,7 @@ print("Operator fusion verification passed.")
 
 `separate_affine_relu` 显式保留矩阵乘法和偏置加法的中间变量，表示融合前的计算图。`fused_affine_relu` 直接写出组合表达式，用来验证数学结果一致。
 
-`fold_linear_batch_norm` 按输出特征计算 `scale`，然后分别缩放权重矩阵的列并修正偏置。NumPy 广播会将长度为 $ M $ 的 `scale` 作用到形状为 $ D\times M $ 的权重矩阵每一列。
+`fold_linear_batch_norm` 按输出特征计算 `scale`，然后分别缩放权重矩阵的列并修正偏置。NumPy 广播会将长度为 $M$ 的 `scale` 作用到形状为 $D\times M$ 的权重矩阵每一列。
 
 最后三个断言分别检查已知输出、激活融合等价性和 BatchNorm 参数折叠等价性。若任一公式或实现有误，程序会抛出 `AssertionError`。
 

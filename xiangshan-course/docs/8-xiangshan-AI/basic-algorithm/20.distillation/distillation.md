@@ -37,14 +37,14 @@ $$
 - **硬标签损失**：Student 学习数据集给出的真实类别。
 - **软标签损失**：Student 学习 Teacher 在相同输入上的概率分布。
 
-温度参数用于控制 Softmax 输出的平滑程度。温度大于 $ 1 $ 时，概率分布通常更平滑，原本很小的非目标类别概率会变得更明显。
+温度参数用于控制 Softmax 输出的平滑程度。温度大于 $1$ 时，概率分布通常更平滑，原本很小的非目标类别概率会变得更明显。
 
 ### 1.3 基本流程
 
 1. 先训练或准备一个 Teacher 模型。
 2. 固定 Teacher 参数，在蒸馏训练中不更新 Teacher。
 3. 将同一批输入分别送入 Teacher 和 Student，得到两组 logits。
-4. 使用温度 $ T $ 对两组 logits 计算 Softmax。
+4. 使用温度 $T$ 对两组 logits 计算 Softmax。
 5. 用 Teacher 的温度概率作为软标签，计算蒸馏损失。
 6. 使用 Student 在普通温度下的输出计算硬标签交叉熵。
 7. 对两项损失加权求和，只更新 Student 参数。
@@ -62,7 +62,7 @@ $$
 
 $$
 
-当温度为 $ 1 $ 时，Teacher 的概率约为：
+当温度为 $1$ 时，Teacher 的概率约为：
 
 $$
 
@@ -71,7 +71,7 @@ $$
 
 $$
 
-当温度提高到 $ 2 $ 时，概率约为：
+当温度提高到 $2$ 时，概率约为：
 
 $$
 
@@ -86,7 +86,7 @@ $$
 
 ### 2.1 核心公式
 
-Teacher 在温度 $ T $ 下对第 $ i $ 个类别的软标签为：
+Teacher 在温度 $T$ 下对第 $i$ 个类别的软标签为：
 
 $$
 
@@ -147,7 +147,7 @@ $$
 
 $$
 
-对于这一定义，蒸馏损失关于 Student 第 $ i $ 个 logit 的梯度为：
+对于这一定义，蒸馏损失关于 Student 第 $i$ 个 logit 的梯度为：
 
 $$
 
@@ -159,31 +159,31 @@ $$
 
 ### 2.2 变量含义
 
-- $ C $：分类任务的类别数量。
-- $ i $、$ j $：类别索引。
-- $ z_i^{(T)} $：Teacher 对第 $ i $ 类输出的 logit。
-- $ z_i^{(S)} $：Student 对第 $ i $ 类输出的 logit。
-- $ T $：大于零的温度参数。
-- $ p_i^{(T)} $：Teacher 在温度 $ T $ 下对第 $ i $ 类的软标签概率。
-- $ q_i^{(T)} $：Student 在温度 $ T $ 下对第 $ i $ 类的概率。
-- $ q_i^{(1)} $：Student 在普通温度 $ 1 $ 下的概率。
-- $ y_i $：真实硬标签的第 $ i $ 个分量，分类任务中通常使用 one-hot 表示。
-- $ \mathcal L_{\text{hard}} $：真实标签交叉熵损失。
-- $ D_{\mathrm{KL}} $：衡量两个概率分布差异的 KL 散度。
-- $ \mathcal L_{\text{soft}} $：乘有温度平方的软标签蒸馏损失。
-- $ \alpha $：硬标签损失权重，取值通常位于 $ [0,1] $。
-- $ \mathcal L $：用于训练 Student 的总损失。
-- $ \exp $、$ \log $：指数函数和自然对数。
+- $C$：分类任务的类别数量。
+- $i$ 、 $j$：类别索引。
+- $z_i^{(T)}$：Teacher 对第 $i$ 类输出的 logit。
+- $z_i^{(S)}$：Student 对第 $i$ 类输出的 logit。
+- $T$：大于零的温度参数。
+- $p_i^{(T)}$：Teacher 在温度 $T$ 下对第 $i$ 类的软标签概率。
+- $q_i^{(T)}$：Student 在温度 $T$ 下对第 $i$ 类的概率。
+- $q_i^{(1)}$：Student 在普通温度 $1$ 下的概率。
+- $y_i$：真实硬标签的第 $i$ 个分量，分类任务中通常使用 one-hot 表示。
+- $\mathcal L_{\text{hard}}$：真实标签交叉熵损失。
+- $D_{\mathrm{KL}}$：衡量两个概率分布差异的 KL 散度。
+- $\mathcal L_{\text{soft}}$：乘有温度平方的软标签蒸馏损失。
+- $\alpha$：硬标签损失权重，取值通常位于 $[0,1]$。
+- $\mathcal L$：用于训练 Student 的总损失。
+- $\exp$ 、 $\log$：指数函数和自然对数。
 
 ### 2.3 公式怎么理解
 
-Logits 除以温度后再进入 Softmax。当 $ T>1 $ 时，logits 之间的差距被缩小，输出分布变得更平滑；当 $ T $ 较小时，分布会更集中在最大 logit 对应的类别。
+Logits 除以温度后再进入 Softmax。当 $T>1$ 时，logits 之间的差距被缩小，输出分布变得更平滑；当 $T$ 较小时，分布会更集中在最大 logit 对应的类别。
 
 KL 散度要求 Student 的温度分布接近 Teacher 的温度分布。使用软标签交叉熵也能得到相同方向的 Student 梯度，因为两者只相差一个与 Student 参数无关的 Teacher 熵项。
 
-Softmax 对 logits 的梯度会随温度缩小，因此经典蒸馏通常将软标签损失乘以 $ T^2 $，使不同温度下的梯度尺度更容易保持在相近水平。
+Softmax 对 logits 的梯度会随温度缩小，因此经典蒸馏通常将软标签损失乘以 $T^2$，使不同温度下的梯度尺度更容易保持在相近水平。
 
-$\alpha $ 控制真实标签与 Teacher 知识之间的权衡。本章规定 $ \alpha $ 是硬标签权重；不同资料或代码可能采用相反命名，阅读实现时应以具体公式为准。
+$\alpha$ 控制真实标签与 Teacher 知识之间的权衡。本章规定 $\alpha$ 是硬标签权重；不同资料或代码可能采用相反命名，阅读实现时应以具体公式为准。
 
 训练时只对 Student 求梯度。Teacher 负责产生稳定的学习目标，其参数在当前蒸馏过程中保持不变。
 
@@ -311,7 +311,7 @@ assert np.argmax(trained_student_logits) == label
 - `label=0` 表示真实类别是第一类。
 - `temperature=2.0` 用于生成较平滑的 Teacher 和 Student 分布。
 - `hard_weight=0.5` 表示硬标签损失和软标签损失各占一半。
-- `trained_student_logits` 是执行 $ 200 $ 次梯度更新后的 Student logits。
+- `trained_student_logits` 是执行 $200$ 次梯度更新后的 Student logits。
 - `total_loss` 是硬标签损失与蒸馏损失的加权和。
 
 运行后，Student 的总损失和软标签损失都会下降，最高 logit 也会从错误的第二类转到真实的第一类。Student 的温度概率会同时受到硬标签和 Teacher 软标签的影响，因此不必与 Teacher 分布完全相同。
@@ -320,6 +320,6 @@ assert np.argmax(trained_student_logits) == label
 
 `softmax` 先减去最大值，再计算指数，避免直接计算较大指数时出现数值溢出。
 
-`distillation_losses` 使用温度为 $ 1 $ 的 Student 概率计算硬标签损失，使用温度为 $ 2 $ 的 Teacher 和 Student 概率计算 KL 蒸馏损失。
+`distillation_losses` 使用温度为 $1$ 的 Student 概率计算硬标签损失，使用温度为 $2$ 的 Teacher 和 Student 概率计算 KL 蒸馏损失。
 
 `hard_gradient` 让 Student 接近 one-hot 真实标签；`soft_gradient` 让 Student 接近 Teacher 的完整概率分布。训练循环只更新 `student_logits`，Teacher logits 始终不变。

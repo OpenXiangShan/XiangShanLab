@@ -57,18 +57,18 @@ v_1\\v_2\\v_3
 
 $$
 
-Decode 阶段收到第四个 token 后，只计算 $ q_4 $、$ k_4 $ 和 $ v_4 $，然后把 $ k_4 $、$ v_4 $ 追加到缓存。计算结果应与重新处理全部四个 token 完全一致。
+Decode 阶段收到第四个 token 后，只计算 $q_4$ 、 $k_4$ 和 $v_4$，然后把 $k_4$ 、 $v_4$ 追加到缓存。计算结果应与重新处理全部四个 token 完全一致。
 
 若只统计 Key 和 Value 投影所处理的 token 数量，这一步中：
 
-- 完整重算需要处理 $ 3+4=7 $ 个 token：Prefill 处理 3 个，Decode 时又处理 4 个。
-- KV Cache 需要处理 $ 3+1=4 $ 个 token：Prefill 处理 3 个，Decode 时只处理新增的 1 个。
+- 完整重算需要处理 $3+4=7$ 个 token：Prefill 处理 3 个，Decode 时又处理 4 个。
+- KV Cache 需要处理 $3+1=4$ 个 token：Prefill 处理 3 个，Decode 时只处理新增的 1 个。
 
 ## 2. 公式讲解
 
 ### 2.1 核心公式
 
-对第 $ t $ 个 token 的表示 $ x_t $，先计算：
+对第 $t$ 个 token 的表示 $x_t$，先计算：
 
 $$
 
@@ -105,21 +105,21 @@ $$
 
 ### 2.2 变量含义
 
-- $ x_t\in\mathbb{R}^{d_{\text{model}}} $：第 $ t $ 个 token 的输入表示。
-- $ W_Q $、$ W_K $、$ W_V $：生成 Query、Key、Value 的投影矩阵。
-- $ q_t $、$ k_t\in\mathbb{R}^{d_k} $：当前 token 的 Query 和 Key。
-- $ v_t\in\mathbb{R}^{d_v} $：当前 token 的 Value。
-- $ K_{\text{cache}}^{(t)}\in\mathbb{R}^{t\times d_k} $：包含位置 $ 1 $ 到 $ t $ 的 Key 缓存。
-- $ V_{\text{cache}}^{(t)}\in\mathbb{R}^{t\times d_v} $：包含位置 $ 1 $ 到 $ t $ 的 Value 缓存。
-- $ d_k $：Query 和 Key 的维度。
-- $ o_t\in\mathbb{R}^{d_v} $：第 $ t $ 个位置的注意力输出。
-- $ \operatorname{Concat} $：沿序列长度方向进行拼接。
+- $x_t\in\mathbb{R}^{d_{\text{model}}}$：第 $t$ 个 token 的输入表示。
+- $W_Q$ 、 $W_K$ 、 $W_V$：生成 Query、Key、Value 的投影矩阵。
+- $q_t$ 、 $k_t\in\mathbb{R}^{d_k}$：当前 token 的 Query 和 Key。
+- $v_t\in\mathbb{R}^{d_v}$：当前 token 的 Value。
+- $K_{\text{cache}}^{(t)}\in\mathbb{R}^{t\times d_k}$：包含位置 $1$ 到 $t$ 的 Key 缓存。
+- $V_{\text{cache}}^{(t)}\in\mathbb{R}^{t\times d_v}$：包含位置 $1$ 到 $t$ 的 Value 缓存。
+- $d_k$：Query 和 Key 的维度。
+- $o_t\in\mathbb{R}^{d_v}$：第 $t$ 个位置的注意力输出。
+- $\operatorname{Concat}$：沿序列长度方向进行拼接。
 
 实际模型具有多层和多头，因此每一层、每个注意力头都有各自的 Key 和 Value 缓存。
 
 ### 2.3 公式怎么理解
 
-没有缓存时，第 $ t $ 步需要再次为整个前缀计算 Key 和 Value：
+没有缓存时，第 $t$ 步需要再次为整个前缀计算 Key 和 Value：
 
 $$
 
@@ -127,7 +127,7 @@ K^{(t)}=X_{1:t}W_K,\qquad V^{(t)}=X_{1:t}W_V.
 
 $$
 
-使用缓存后，只计算新增 token 的 $ k_t $ 和 $ v_t $，历史部分直接复用。若 Prefill 长度为 $ p $，随后继续处理 $ m $ 个新 token，那么 Key/Value 投影处理的 token 数量可由重复累加变为：
+使用缓存后，只计算新增 token 的 $k_t$ 和 $v_t$，历史部分直接复用。若 Prefill 长度为 $p$，随后继续处理 $m$ 个新 token，那么 Key/Value 投影处理的 token 数量可由重复累加变为：
 
 $$
 
@@ -141,7 +141,7 @@ $$
 
 $$
 
-但计算 $ o_t $ 时，$ q_t $ 仍然要与缓存中的全部 Key 做点积。因此 KV Cache 消除的是历史 Key/Value 的重复计算，而不是消除对历史上下文的注意力计算。
+但计算 $o_t$ 时， $q_t$ 仍然要与缓存中的全部 Key 做点积。因此 KV Cache 消除的是历史 Key/Value 的重复计算，而不是消除对历史上下文的注意力计算。
 
 ## 3. 代码示例
 
