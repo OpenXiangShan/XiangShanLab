@@ -25,26 +25,36 @@
 **适合人群**：没有深度学习背景，想系统学习AI的同学
 
 #### 第一阶段：基础篇
-1. [1.FFT](1.FFT/) - 快速傅里叶变换（理解信号处理基础）
-2. [2.DNN](2.DNN/) - 深度神经网络（理解神经网络的基本原理）
-3. [3.cnn](3.cnn/) - 卷积神经网络（理解卷积操作）
+[1.FFT](1.FFT/) - 快速傅里叶变换（理解信号处理基础）
+
+[2.DNN](2.DNN/) - 深度神经网络（理解神经网络的基本原理）
+
+[3.cnn](3.cnn/) - 卷积神经网络（理解卷积操作）
 
 #### 第二阶段：经典网络篇
-4. [4.vgg](4.vgg/) - VGG网络（理解深度网络设计）
-5. [5.resnet](5.resnet/) - ResNet（理解残差连接）
-6. [6.rnn](6.rnn/) - 循环神经网络（理解序列建模）
-7. [7.lstm](7.lstm/) - LSTM（理解长序列处理）
+[4.vgg](4.vgg/) - VGG网络（理解深度网络设计）
+
+[5.resnet](5.resnet/) - ResNet（理解残差连接）
+
+[6.rnn](6.rnn/) - 循环神经网络（理解序列建模）
+
+[7.lstm](7.lstm/) - LSTM（理解长序列处理）
 
 #### 第三阶段：现代AI篇
-8. [8.transformer](8.transformer/) - Transformer架构（现代AI的基石）
-9. [11.attention](11.attention/) - 注意力机制（理解注意力原理）
-10. [9.bert](9.bert/) - BERT模型（理解预训练模型）
-11. [10.gpt](10.gpt/) - GPT模型（理解生成式模型）
-12. [12.kv-cache](12.kv-cache/) - KV缓存（理解推理优化）
+[8.transformer](8.transformer/) - Transformer架构（现代AI的基石）
+
+[11.attention](11.attention/) - 注意力机制（理解注意力原理）
+
+[9.bert](9.bert/) - BERT模型（理解预训练模型）
+
+[10.gpt](10.gpt/) - GPT模型（理解生成式模型）
+
+[12.kv-cache](12.kv-cache/) - KV缓存（理解推理优化）
 
 #### 第四阶段：进阶应用（选修）
-- [15.rlhf](15.rlhf/) - 人类反馈强化学习
-- [18.quantization](18.quantization/) - 模型量化（部署必备）
+[15.rlhf](15.rlhf/) - 人类反馈强化学习
+
+[18.quantization](18.quantization/) - 模型量化（部署必备）
 
 ---
 
@@ -53,33 +63,47 @@
 **适合人群**：有一定深度学习基础，想深入学习大模型技术与优化的同学
 
 #### 快速回顾（可选）
-- [2.DNN](2.DNN/) → [3.cnn](3.cnn/) → [5.resnet](5.resnet/) → [8.transformer](8.transformer/)
+[2.DNN](2.DNN/) → [3.cnn](3.cnn/) → [5.resnet](5.resnet/) → [8.transformer](8.transformer/)
 
 #### 核心：大语言模型架构
-1. [8.transformer](8.transformer/) - Transformer详解
-2. [11.attention](11.attention/) - 注意力机制深入
-3. [10.gpt](10.gpt/) - GPT架构与实现
-4. [12.kv-cache](12.kv-cache/) - KV缓存优化
-5. [13.moe](13.moe/) - 混合专家模型
-6. [14.deepseek](14.deepseek/) - DeepSeek架构解析
+[8.transformer](8.transformer/) - Transformer详解
+
+[11.attention](11.attention/) - 注意力机制深入
+
+[10.gpt](10.gpt/) - GPT架构与实现
+
+[12.kv-cache](12.kv-cache/) - KV缓存优化
+
+[13.moe](13.moe/) - 混合专家模型
+
+[14.deepseek](14.deepseek/) - DeepSeek架构解析
 
 #### 进阶：模型训练与对齐
-7. [15.rlhf](15.rlhf/) - 人类反馈强化学习
-8. [16.ppo](16.ppo/) - PPO算法
-9. [17.grpo](17.grpo/) - Group Relative Policy Optimization
+[15.rlhf](15.rlhf/) - 人类反馈强化学习
+
+[16.ppo](16.ppo/) - PPO算法
+
+[17.grpo](17.grpo/) - Group Relative Policy Optimization
 
 #### 高级：模型优化技术
-10. [18.quantization](18.quantization/) - 量化技术
-11. [19.pruning](19.pruning/) - 剪枝技术
-12. [20.distillation](20.distillation/) - 知识蒸馏
-13. [21.sparsity](21.sparsity/) - 稀疏化技术
-14. [22.operator-fusion](22.operator-fusion/) - 算子融合
+[18.quantization](18.quantization/) - 量化技术
+
+[19.pruning](19.pruning/) - 剪枝技术
+
+[20.distillation](20.distillation/) - 知识蒸馏
+
+[21.sparsity](21.sparsity/) - 稀疏化技术
+
+[22.operator-fusion](22.operator-fusion/) - 算子融合
 
 #### 系统：AI系统实现
-15. [23.compiler](23.compiler/) - AI编译器
-16. [24.parallel-strategies](24.parallel-strategies/) - 并行策略
-17. [25.lenet-riscv](25.lenet-riscv/) - LeNet RISC-V实现
-18. [26.riscv-npu](26.riscv-npu/) - RISC-V NPU设计
+[23.compiler](23.compiler/) - AI编译器
+
+[24.parallel-strategies](24.parallel-strategies/) - 并行策略
+
+[25.lenet-riscv](25.lenet-riscv/) - LeNet RISC-V实现
+
+[26.riscv-npu](26.riscv-npu/) - RISC-V NPU设计
 
 ---
 
@@ -115,6 +139,7 @@
 | 17 | [GRPO](17.grpo/) | 组相对策略优化 |
 
 ### 模型优化技术（18-22）
+
 | 编号 | 课程 | 内容 |
 |------|------|------|
 | 18 | [Quantization](18.quantization/) | 模型量化 |
