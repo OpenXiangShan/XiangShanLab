@@ -1,0 +1,77 @@
+name: ❓ Technical Q&A
+description: Ask a specific technical question regarding the XiangShan course materials, documentation, or codebase.
+title: "[Q&A] <Short description of your question>"
+labels: ["question", "technical-qa"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reaching out! Please provide as much detail as possible so the community can help you efficiently.
+
+  - type: dropdown
+    id: consultation_direction
+    attributes:
+      label: 1. Consultation Direction
+      description: Select the course module or technical area related to your question.
+      options:
+        - 1-xiangshan-development-environment
+        - 2-xiangshan-programming
+        - 3-riscv-specification
+        - 4-xiangshan-microarchitecture-analysis
+        - 5-xiangshan-scenarios-analysis
+        - 6-xiangshan-debug
+        - 7-xiangshan-NoC
+        - 8-xiangshan-AI
+        - 9-xiangshan-AIA
+        - 10-xiangshan-security
+        - 11-xiangshan-ddr
+        - 12-workload-analysis
+        - 13-xiangshan-verification
+        - 14-xiangshan-agile-tools
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: doc_link
+    attributes:
+      label: 2. Relevant Document / Code Link
+      description: Provide the full URL to the specific documentation, code file, or course slide you are referencing.
+      placeholder: e.g., https://github.com/OpenXiangShan/XiangShanLab/tree/master/xiangshan-course/...
+    validations:
+      required: true
+
+  - type: textarea
+    id: specific_question
+    attributes:
+      label: 3. Specific Question
+      description: Clearly describe your question. Include what you have already tried, error messages, or specific concepts you find confusing.
+      placeholder: |
+        - What I am trying to do: ...
+        - What I have tried: ...
+        - The exact confusion or error: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: 4. Additional Context (Optional)
+      description: Add any other context, screenshots, or logs that might help.
+      placeholder: |
+        - Screenshots
+        - Terminal logs
+        - Related issues
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues to ensure this question has not already been asked.
+          required: true
+        - label: I have provided the exact link to the document or code I am asking about.
+          required: true
