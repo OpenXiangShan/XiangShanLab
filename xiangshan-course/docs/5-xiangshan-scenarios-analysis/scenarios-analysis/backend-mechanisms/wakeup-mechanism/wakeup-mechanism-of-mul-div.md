@@ -4,7 +4,8 @@
 
 如果你还没有看过乘法和除法各自是怎么进入后端、怎么被发往对应 Issue Queue、怎么完成执行与提交的，建议先阅读：
 
-* `../../instructions-lifecycle/mul-div/mul-div-execution-process.md`
+* [乘法：固定延迟与提前唤醒](../../../instructions-lifecycle/mul-div/mul-execution-process.md)
+* [除法：不固定延迟与回写唤醒](../../../instructions-lifecycle/mul-div/div-execution-process.md)
 
 这样在看下面的唤醒时序时，你会更容易知道“这条被唤醒的加法”到底站在流水线的什么位置上。
 
