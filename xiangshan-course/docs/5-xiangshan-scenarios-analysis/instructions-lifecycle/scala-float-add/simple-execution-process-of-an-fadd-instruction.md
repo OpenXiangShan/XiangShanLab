@@ -24,11 +24,11 @@ int main() {
 
 打开反汇编文件（即压缩包中的 `float-riscv64-xs.txt`文件）：
 
-![image-20260910135053514](img/image-20260910135053514.png)
+![image-20260910135053514](img/fadd-open-disassembly1.png)
 
 此处选择位于程序计数器（pc）地址 `0x80000144`的指令，其内容为 `0x00d7f7d3`。单独分析这条指令，对照指令集手册：
 
-![image-20260909175949138](img/image-20260909175949138.png)
+![image-20260909175949138](img/fadd-open-explanation.png)
 
 **注意：** 结果在64位浮点寄存器中进行NaN-boxing
 
@@ -46,7 +46,7 @@ NaN-boxing 是 RISC-V 浮点寄存器采用的一种特殊表示规则：当较�
 
 核为kunminghu-v2
 
-![](https://docs.xiangshan.cc/projects/user-guide/zh-cn/kunminghu-v2/figs/kmh-multicore.svg)
+![](img/kmh-multicore.png)
 
 通过架构图我们也能梳理出一条指令执行的流程以及经过的模块，以下为整体分析结束之后的流程图，在后文中会详细阐述：
 
@@ -93,7 +93,7 @@ Commit：更新 architectural FP RAT，释放 old_pdest，更新 CSR fflags
 
 通过IBuffer传给backend：
 
-![image-20260910144600240](img/fadd-wave1.png)
+![image-20260910144600240](img/fadd-wave-frontend1.png)
 
 目标指令通过 `cfVec_1` 进入 Backend。
 
@@ -109,7 +109,7 @@ cfVec与DecodeWidth数量一致，每个 cfVec_i 对应一次并行发送的一�
 
 `DecodeStage` 在 `DecodeStage.scala`
 
-![image-20260911002706950](img/image-20260911002706950.png) 
+![image-20260911002706950](img/fadd-decode-code1.png) 
 
 实例化`DecodeWidth`（6）个解码器；输入接受和输出 `DecodedInst` 的流水控制在 `DecodeStage.scala:195-247`。
 
@@ -154,15 +154,15 @@ val opfff: Array[(BitPat, XSDecodeBase)] = Array(
 
 `yunsuan/src/main/scala/yunsuan/package.scala` 定义高位控制字段：
 
-![image-20260911005906496](img/image-20260911005906496.png)
+![image-20260911005906496](img/fadd-decode-code2.png)
 
 定义低五位 opcode：
 
-![image-20260911010005830](img/image-20260911010005830.png)
+![image-20260911010005830](img/fadd-decode-code3.png)
 
 在 `8331 ps`，Decode 输出：
 
-![image-20260910162119451](img/fadd-wave2.png)
+![image-20260910162119451](img/fadd-wave-decode1.png)
 
 | 字段               | 波形值       | 含义                   |
 | :----------------- | :----------- | :--------------------- |
@@ -304,7 +304,7 @@ f15 = f15 + f13
 
 逻辑寄存器到物理寄存器的查询由 Decode 阶段准备地址，RAT 返回物理寄存器号， CtrlBlock 再把返回值接到 Rename。Rename 根据 `srcType` 从整数、浮点或向量 读端口中选择对应结果：
 
-![image-20260911114409738](img/image-20260911114409738.png)
+![image-20260911114409738](img/fadd-fp-rat-code1.png)
 
 因为两个 `srcType` 都是 `SrcType.fp`，所以：
 
@@ -344,9 +344,9 @@ FreeList 是空闲物理寄存器列表。`Rename` 阶段为需要写目的寄�
 
 `fpWen=1` 使 `needFpDest` 成立：
 
-![image-20260911114006205](img/image-20260911114006205.png)
+![image-20260911114006205](img/fadd-fp-freelist-code1.png)
 
-![image-20260911114033571](img/image-20260911114033571.png)
+![image-20260911114033571](img/fadd-fp-freelist-code2.png)
 
 ```scala
 needFpDest(i) := io.in(i).valid && needDestReg(Reg_F, io.in(i).bits)
@@ -356,7 +356,7 @@ fpFreeList.io.allocateReq(i) := needFpDest(i)
 
 FreeList 给两条 flw 分配 p66、p67：backend/rename/Rename.scala
 
-![image-20260911113841717](img/image-20260911113841717.png)FreeList 的实际选择代码在：backend/rename/freelist/StdFreeList.scala
+![image-20260911113841717](img/fadd-fp-freelist-code3.png)FreeList 的实际选择代码在：backend/rename/freelist/StdFreeList.scala
 
 ```
 val phyRegCandidates = VecInit(headPtrOHVec.map(sel => Mux1H(sel, freeList)))
@@ -432,12 +432,11 @@ robIdx = 56
 
 在 `8332 ps`：
 
-![image-20260911120712702](img/image-20260911120712702.png)
+![image-20260911120712702](img/fadd-wave-rename1.png)
 
 （注：波形初始为16进制，例如psrc_0显示为:42，图片上已换为10进制）
 
-Rename 只有在 `FreeList` 可分配、下游可接收、且当前不处于 `RAB walk` 等条件满足时才会
-令输出有效。
+Rename 只有在 `FreeList` 可分配、下游可接收、且当前不处于 `RAB walk` 等条件满足时才会令输出有效。
 
 ## 6.Dispatch：同时送往 ROB 和浮点 Issue Queue
 
@@ -464,13 +463,13 @@ io.enqRob.req(i).bits  := updatedUop(i)
 
 在 `8333 ps` ：
 
-![image-20260911134310717](img/image-20260911134310717.png)
+![fadd-wave-rename1](img/fadd-wave-rob1.png)
 
 在我奇怪为什么没有ready信号的时候，发现 ROB 侧通过 `canAccept` 表示资源是否足够。
 
 在 `8335 ps`，ROB entry 56 的 debug 字段中已经可见：
 
-![image-20260910204316945](img/image-20260910204316945.png)
+![image-20260910204316945](img/fadd-wave-rob2.png)
 
 ```text
 robEntries_56_debug_pc    = 0x80000144
@@ -693,7 +692,7 @@ enq        : Dispatch    -> Issue Queue
 deqDelay   : Issue Queue -> DataPath/ExeUnit
 ```
 
-![image-20260910224414080](img/image-20260910224414080.png)
+![image-20260910224414080](img/fadd-wave-IQ1.png)
 
 该队列对应 FEX4，  FEX4 是一个浮点执行单元，也就是 ExeUnit：
 
@@ -774,7 +773,7 @@ writeback busy table 信号。
 
 目标项最终位于 IQ entry 4。在 `8403 ps`：
 
-![image-20260910225222444](img/image-20260910225222444.png)
+![image-20260910225222444](img/fadd-wave-IQ2.png)
 
 ```text
 io_deqDelay_0_valid                    = 1
@@ -849,7 +848,7 @@ p67 = 0xffffffff40200000
 
 在 `8405 ps`：
 
-![image-20260910230811456](img/image-20260910230811456.png)
+![image-20260910230811456](img/fadd-wave-falu1.png)
 
 ```text
 Falu.io_in_valid              = 1
@@ -953,7 +952,7 @@ Falu.falu.F32Adder.io_fire = 1
 
 在 `8406 ps`：
 
-![image-20260910231303083](img/image-20260910231303083.png)
+![image-20260910231303083](img/fadd-wave-falu2.png)
 
 ```text
 Falu.io_out_valid                 = 1
