@@ -4,7 +4,7 @@
 
 强烈建议先学习以下内容再学习本节
 
-* [一条乘法的执行过程](./mul-execution-process.md)
+* [一条乘法的执行过程](../scalar-mul/mul-execution-process.md)
 
 ## 阅读与复现说明
 
@@ -261,6 +261,6 @@ IQ 到执行单元之间还有后续流水级和资源检查。指令被选中�
 * `src/main/scala/xiangshan/backend/fu/SRT16Divider.scala`：预处理、迭代、后处理及结果等待状态。
 * `src/main/scala/xiangshan/backend/issue/EntryBundles.scala`：发射响应编码和表项状态条件。
 
-* [一条乘法指令的执行过程：固定延迟与提前唤醒](mul-execution-process.md)
+* [一条乘法指令的执行过程：固定延迟与提前唤醒](../scalar-mul/mul-execution-process.md)
 * [乘法与除法的唤醒机制](../../scenarios-analysis/backend-mechanisms/wakeup-mechanism/wakeup-mechanism-of-mul-div.md)
 * [Bypass 与 RegCache](../../scenarios-analysis/backend-mechanisms/bypass-and-regcache/bypass-and-regcache.md)

@@ -425,6 +425,6 @@ IQsel 信号为 2（偶数），因此需要查看此 IQ 的第 0 个请求接�
 * `src/main/scala/xiangshan/backend/issue/IssueQueue.scala`：唤醒请求、延迟选择和取消条件。
 * `src/main/scala/xiangshan/backend/issue/MultiWakeupQueue.scala`：按延迟配置组织的唤醒通路。
 
-* [一条除法指令的执行过程：不固定延迟与回写唤醒](div-execution-process.md)
+* [一条除法指令的执行过程：不固定延迟与回写唤醒](../scalar-div/div-execution-process.md)
 * [乘法与除法的唤醒机制](../../scenarios-analysis/backend-mechanisms/wakeup-mechanism/wakeup-mechanism-of-mul-div.md)
 * [Bypass 与 RegCache](../../scenarios-analysis/backend-mechanisms/bypass-and-regcache/bypass-and-regcache.md)
