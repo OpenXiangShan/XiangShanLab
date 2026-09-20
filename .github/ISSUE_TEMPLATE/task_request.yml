@@ -1,4 +1,4 @@
-name: 任务发布
+name: 📋 任务发布
 description: 发布一个需要认领、质押和按期交付的任务
 title: "[TASK] "
 body:
@@ -20,11 +20,12 @@ body:
         - scenarios-analysis
         - debug
         - NoC
-        - AI/basic-algorithm
+        - AI
         - AIA
+        - DDR
         - security
+        - verification
         - agile-tools
-        - verification/uvm
     validations:
       required: true
 
