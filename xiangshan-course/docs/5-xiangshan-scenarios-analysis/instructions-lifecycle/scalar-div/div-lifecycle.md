@@ -14,7 +14,7 @@
 | **目标 FU** | `DivUnit` → `SRT16DividerDataModule(64)` |
 | **分析日期** | 2026-09-06 |
 
-实现依据为本地 `/nfs/home/wanghao/emuByYuan/stable-kmh-v2`，源码标识 `abd0f867a86b66a92d4fc5d3c6d62944725c747f`。本文只描述实际由 DivUnit 实例化的 SRT16，不把同目录 SRT4/Radix2 当作当前数据通路。参数为默认声明，时序为源码推导，未执行本版本波形仿真。乘法另见 [整数乘法生命周期](mul-lifecycle.md)。
+实现依据为本地 `/nfs/home/wanghao/emuByYuan/stable-kmh-v2`，源码标识 `abd0f867a86b66a92d4fc5d3c6d62944725c747f`。本文只描述实际由 DivUnit 实例化的 SRT16，不把同目录 SRT4/Radix2 当作当前数据通路。参数为默认声明，时序为源码推导，未执行本版本波形仿真。乘法另见 [整数乘法生命周期](../scalar-mul/mul-lifecycle.md)。
 
 ## 1. 前端路径
 

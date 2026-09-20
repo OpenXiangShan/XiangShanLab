@@ -4,7 +4,8 @@
 
 如果你还没有先看过单条乘法 / 除法的基本执行过程，建议先阅读：
 
-* `../../instructions-lifecycle/mul-div/mul-div-execution-process.md`
+* [乘法：固定延迟与提前唤醒](../../../instructions-lifecycle/scalar-mul/mul-execution-process.md)
+* [除法：不固定延迟与回写唤醒](../../../instructions-lifecycle/scalar-div/div-execution-process.md)
 
 如果你已经看到了“乘法背靠背会被提前唤醒、除法背靠背要靠回写唤醒”的现象，但还想继续追问“值到底是怎么在最后一拍被送到执行单元里的”，那么当前这一篇就是顺着那个问题继续往下看的。
 
@@ -103,7 +104,8 @@
 
 如果读到这里，你想重新回到“整条乘法 / 除法执行链到底是怎么走的”这个总流程视角，再把 Bypass 放回完整生命周期中理解，可以回看：
 
-* `../../instructions-lifecycle/mul-div/mul-div-execution-process.md`
+* [乘法：固定延迟与提前唤醒](../../../instructions-lifecycle/scalar-mul/mul-execution-process.md)
+* [除法：不固定延迟与回写唤醒](../../../instructions-lifecycle/scalar-div/div-execution-process.md)
 
 
 > 更新: 2026-07-17 17:59:54  
