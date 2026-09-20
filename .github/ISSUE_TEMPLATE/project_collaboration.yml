@@ -7,7 +7,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for proposing a collaborative project! Please fill out the details below as thoroughly as possible to help others understand the scope and join the effort.
+        ## About this template
+
+        Use this template to propose a collaborative project related to XiangShan learning, development, verification, research, or documentation.
+
+        Explain the motivation and scope, define concrete deliverables and milestones, and provide a project link or onboarding guide when available. The more specific the proposal, the easier it is for contributors to evaluate and join.
         
   - type: textarea
     id: background

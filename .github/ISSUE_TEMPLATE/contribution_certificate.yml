@@ -1,0 +1,92 @@
+name: 🏅 XiangShan Contribution Certificate Application
+description: Apply for a contribution certificate by submitting your completed XiangShan project and contribution details.
+title: "[Certificate] <Project Name> - <Your Name>"
+labels: ["contribution", "certificate-application"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## About this template
+
+        Use this template to apply for a contribution certificate after completing a XiangShan-related project or contribution.
+
+        Describe the work clearly, provide a verifiable project or pull request link, and use the name and contact information that should be associated with the certificate. Maintainers may review the submitted information before processing the application.
+
+  - type: dropdown
+    id: contribution_direction
+    attributes:
+      label: 1. Contribution Direction
+      description: Select the technical area your contribution belongs to.
+      options:
+        - xiangshan-performance-optimize
+        - xiangshan-debug
+        - xiangshan-NoC
+        - xiangshan-AI
+        - xiangshan-AIA
+        - xiangshan-security
+        - xiangshan-ddr
+        - workload-analysis
+        - xiangshan-verification
+        - xiangshan-agile-tools
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: related_project
+    attributes:
+      label: 2. Related Project Link
+      description: Provide the full URL to the related project repository, pull request, or deliverable.
+      placeholder: e.g., https://github.com/OpenXiangShan/XiangShan/pull/1234
+    validations:
+      required: true
+
+  - type: input
+    id: related_organization
+    attributes:
+      label: 3. Related Organization
+      description: Provide the name of the organization, university, or community you are affiliated with for this contribution.
+      placeholder: e.g., University of Chinese Academy of Sciences / OpenXiangShan Community
+    validations:
+      required: true
+
+  - type: textarea
+    id: contribution_description
+    attributes:
+      label: 4. Contribution Description
+      description: Describe your contribution in detail. Explain what you did, the impact of your work, and any relevant results or metrics.
+      placeholder: |
+        - What was done: ...
+        - Key achievements: ...
+        - Impact / results: ...
+    validations:
+      required: true
+
+  - type: input
+    id: applicant_name
+    attributes:
+      label: 5. Applicant Name
+      description: Your full name as it should appear on the certificate.
+      placeholder: e.g., John Doe
+    validations:
+      required: true
+
+  - type: input
+    id: applicant_contact
+    attributes:
+      label: 6. Contact Information
+      description: Your email address or GitHub handle for follow-up communication.
+      placeholder: e.g., john.doe@example.com or @johndoe
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I confirm that the information provided is accurate and my contribution is original.
+          required: true
+        - label: I agree that my contribution details may be reviewed and verified by the maintainers.
+          required: true

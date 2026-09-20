@@ -33,19 +33,19 @@ git submodule update --init --recursive
 
 ## Course Structure
 
-The main course is located in [`xiangshan-course/`](./xiangshan-course/). Chinese materials are under `docs/`; English materials are under `docs-en/`.
+The main course is located in [`xiangshan-course/`](./xiangshan-course/). Chinese materials are under `docs/`; English materials are under `docs-en/`. The Chinese course currently has 14 chapter directories. The English course has 8 chapter directories plus a standalone microarchitecture collection.
 
 | Chapter | Topics | Entry |
 | --- | --- | --- |
 | 1 | Development environment, simulators, simulation flow, and Difftest | [Start](./xiangshan-course/docs-en/1-xiangshan-development-environment/) |
 | 2 | Scala, Chisel, Diplomacy, TileLink, and AXI | [Start](./xiangshan-course/docs-en/2-xiangshan-programming/) |
-| 3 | RISC-V instructions, exceptions, and related specifications | [Start](./xiangshan-course/docs-en/3-riscv-specification/) |
-| 4 | Superscalar execution, out-of-order execution, frontend, backend, and memory subsystems | [Start](./xiangshan-course/docs-en/4-xiangshan-microarchitecture-analysis/) |
-| 5 | Instruction lifecycles, prediction, prefetching, memory behavior, replay, and conflicts | [Start](./xiangshan-course/docs-en/5-xiangshan-scenarios-analysis/) |
-| 6 | Bug analysis, exceptions, CSRs, PMA/PMP, X-state, and debugging cases | [Start](./xiangshan-course/docs-en/6-xiangshan-debug/) |
+| 3 | RISC-V specification materials | [Start](./xiangshan-course/docs-en/3-riscv-specification/) |
+| 4 | Microarchitecture fundamentals, design documents, and source analysis | [Start](./xiangshan-course/docs-en/4-xiangshan-microarchitecture-analysis/) |
+| 5 | Pipeline and instruction execution scenarios | [Start](./xiangshan-course/docs-en/5-xiangshan-scenarios-analysis/) |
+| 6 | Debugging and bug-analysis materials | [Start](./xiangshan-course/docs-en/6-xiangshan-debug/) |
 | 7 | XiangShan development materials | [Directory](./xiangshan-course/docs-en/7-xiangshan-development/) |
 | 8 | XiangShan development tools | [Directory](./xiangshan-course/docs-en/8-xiangshan-development-tools/) |
-| Additional | Chinese materials for NoC, AI, AIA, security, verification, workload analysis, and agile tools | [Chinese course](./xiangshan-course/docs/) |
+| Additional | Chinese materials for NoC, AI, AIA, security, DDR, verification, workload analysis, and agile tools | [Chinese course](./xiangshan-course/docs/) |
 
 English coverage is currently smaller than the Chinese course. For the complete and newest chapter structure, see the [Chinese course README](./xiangshan-course/README.md) and the [English course README](./xiangshan-course/README_EN.md).
 
