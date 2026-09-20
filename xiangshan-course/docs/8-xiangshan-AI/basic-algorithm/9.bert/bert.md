@@ -14,9 +14,9 @@ Transformer 章节中我们实现了完整的 Encoder-Decoder 架构，但很多
 
 BERT（Bidirectional Encoder Representations from Transformers, Devlin et al., 2018）只用 Transformer 的 **Encoder** 部分，通过**双向自注意力**让每个 token 同时看到左右两侧的上下文，学习到真正"理解"语义的表示。
 
-**输入**：token 序列 $X \in \mathbb{R}^{T \times d}$（部分 token 被 [MASK] 替换）。
+**输入**：token 序列 $ X \in \mathbb{R}^{T \times d} $ （部分 token 被 [MASK] 替换）。
 
-**输出**：每个 token 的上下文感知表示 $Z \in \mathbb{R}^{T \times d}$，可用于分类、标注等下游任务。
+**输出**：每个 token 的上下文感知表示 $ Z \in \mathbb{R}^{T \times d} $，可用于分类、标注等下游任务。
 
 **适用边界**：文本理解类任务（分类、NER、问答）。不适合文本生成——BERT 的双向注意力无法用于自回归生成（生成时未来 token 不存在）。
 
@@ -56,7 +56,7 @@ BERT 的核心思想是**双向编码 + 掩码语言模型预训练**。
 
 贯穿全章使用一个 5 token 的小词汇表场景：
 
-- 词汇表：`["I", "love", "math", "NLP", "[MASK]"]`，嵌入维度 $d=4$
+- 词汇表：`["I", "love", "math", "NLP", "[MASK]"]`，嵌入维度 $ d=4$
 - 嵌入：`"I"=[1,0,0,0]`，`"love"=[0,1,0,0]`，`"math"=[0,0,1,0]`，`"NLP"=[0,0,1,1]`，`"[MASK]"=[0,0,0,1]`
 - 原始句子：`["I", "love", "math", "NLP"]`
 - 掩码后：`["I", "love", "[MASK]", "NLP"]`（第 3 个 token "math" 被遮挡）
@@ -69,56 +69,56 @@ BERT 的核心思想是**双向编码 + 掩码语言模型预训练**。
 
 **BERT Encoder（无掩码自注意力）**：
 
-$$Z = \text{Encoder}(X + PE)$$
+$$ Z = \text{Encoder}(X + PE)$$
 
-每个 token 的表示 $Z_t$ 可以关注所有位置（无因果约束）。
+每个 token 的表示 $ Z_t $ 可以关注所有位置（无因果约束）。
 
 **掩码语言模型（MLM）预测**：
 
-$$P(x_t \mid X_{\setminus t}) = \text{softmax}(Z_t \cdot W_{\text{vocab}} + b_{\text{vocab}})$$
+$$ P(x_t \mid X_{\setminus t}) = \text{softmax}(Z_t \cdot W_{\text{vocab}} + b_{\text{vocab}})$$
 
-其中 $Z_t$ 是被遮挡位置 $t$ 的 Encoder 输出，$W_{\text{vocab}} \in \mathbb{R}^{d \times |V|}$ 是词表投影矩阵。
+其中 $ Z_t $ 是被遮挡位置 $ t $ 的 Encoder 输出，$ W_{\text{vocab}} \in \mathbb{R}^{d \times |V|} $ 是词表投影矩阵。
 
 **MLM 损失**：
 
-$$L_{\text{MLM}} = -\sum_{t \in \text{masked}} \log P(x_t^* \mid X_{\setminus t})$$
+$$ L_{\text{MLM}} = -\sum_{t \in \text{masked}} \log P(x_t^* \mid X_{\setminus t})$$
 
-其中 $x_t^*$ 是被遮挡位置 $t$ 的真实 token。
+其中 $ x_t^* $ 是被遮挡位置 $ t $ 的真实 token。
 
 **下一句预测（NSP）损失**（BERT 原始预训练的辅助任务）：
 
-$$L_{\text{NSP}} = -\log P(\text{IsNext} \mid [\text{CLS}])$$
+$$ L_{\text{NSP}} = -\log P(\text{IsNext} \mid [\text{CLS}])$$
 
 判断两个句子是否是原文中相邻的句子。后来的研究（RoBERTa）发现 NSP 任务并非必要。
 
 **微调（分类任务）**：
 
-$$\hat{y} = \text{softmax}(Z_{[\text{CLS}]} \cdot W_{\text{cls}} + b_{\text{cls}})$$
+$$ \hat{y} = \text{softmax}(Z_{[\text{CLS}]} \cdot W_{\text{cls}} + b_{\text{cls}})$$
 
-$$L = -\log P(y \mid [\text{CLS}])$$
+$$ L = -\log P(y \mid [\text{CLS}])$$
 
 ### 2.2 变量含义
 
 | 符号 | 含义 |
 |------|------|
-| $X$ | 输入 token 嵌入序列（部分被 [MASK] 替换） |
-| $PE$ | 位置编码 |
-| $Z$ | Encoder 输出（上下文感知表示） |
-| $Z_t$ | 位置 $t$ 的表示（编码了全局上下文） |
-| $W_{\text{vocab}}$ | MLM 预测头，投影到词表维度 |
-| $\|V\|$ | 词汇表大小 |
-| $x_t^*$ | 被遮挡位置 $t$ 的真实 token |
-| $X_{\setminus t}$ | 除位置 $t$ 外的完整输入 |
-| $Z_{[\text{CLS}]}$ | [CLS] token 的输出表示，用于分类 |
-| $W_{\text{cls}}$ | 分类头权重 |
+| $ X $ | 输入 token 嵌入序列（部分被 [MASK] 替换） |
+| $ PE $ | 位置编码 |
+| $ Z $ | Encoder 输出（上下文感知表示） |
+| $ Z_t $ | 位置 $ t $ 的表示（编码了全局上下文） |
+| $ W_{\text{vocab}} $ | MLM 预测头，投影到词表维度 |
+| $ \|V\| $ | 词汇表大小 |
+| $ x_t^* $ | 被遮挡位置 $ t $ 的真实 token |
+| $ X_{\setminus t} $ | 除位置 $ t $ 外的完整输入 |
+| $ Z_{[\text{CLS}]} $ | [CLS] token 的输出表示，用于分类 |
+| $ W_{\text{cls}} $ | 分类头权重 |
 
 ### 2.3 公式怎么理解
 
-**双向注意力**：BERT 使用 Transformer Encoder（无因果掩码），因此 $Z_t = f(X_1, X_2, \dots, X_T)$——位置 $t$ 的表示融合了整个序列的信息。对比 GPT 的 Decoder：$\hat{Z}_t = f(X_1, \dots, X_t)$——只能看到左侧。对于理解任务（分类、问答），双向信息通常带来更好的性能；对于生成任务，双向注意力无法使用（因为生成时右侧 token 尚未产生）。
+**双向注意力**：BERT 使用 Transformer Encoder（无因果掩码），因此 $ Z_t = f(X_1, X_2, \dots, X_T) $ ——位置 $ t $ 的表示融合了整个序列的信息。对比 GPT 的 Decoder：$ \hat{Z}_t = f(X_1, \dots, X_t) $ ——只能看到左侧。对于理解任务（分类、问答），双向信息通常带来更好的性能；对于生成任务，双向注意力无法使用（因为生成时右侧 token 尚未产生）。
 
 **MLM 的遮挡策略**：不是简单的 100% 替换为 [MASK]。80% 替换 [MASK]、10% 随机替换、10% 保持不变，是为了让模型不只学会"看到 [MASK] 就预测"，而是对每个位置都学习有意义的表示。如果 100% 替换为 [MASK]，模型可能在非 [MASK] 位置"偷懒"。
 
-**[CLS] token**：BERT 在序列开头加一个特殊的 [CLS] token，其最终表示 $Z_{[\text{CLS}]}$ 用于分类。因为 [CLS] 通过自注意力可以汇聚整个序列的信息，相当于一个"全局摘要"。
+**[CLS] token**：BERT 在序列开头加一个特殊的 [CLS] token，其最终表示 $ Z_{[\text{CLS}]} $ 用于分类。因为 [CLS] 通过自注意力可以汇聚整个序列的信息，相当于一个"全局摘要"。
 
 **预训练 → 微调的参数效率**：BERT-Base 有约 1.1 亿参数，预训练一次后可以在各种下游任务上微调——只需少量标注数据和几个 epoch 就能达到很好的效果。这是因为预训练学到的语言表示是通用的，微调只是做任务适配。
 
@@ -331,6 +331,6 @@ print("\n========== BERT 全部验证通过 ==========")
 
 2. **MLM 预测**：`Z[mask_pos] @ W_mlm` 将被遮挡位置的 4 维表示投影到词表维度，再 softmax 得到每个词的概率。`W_mlm` 的每一列是一个词的嵌入——预测本质上是"被遮挡位置的表示与哪个词的嵌入最相似"。
 
-3. **双向 vs 单向对比**：同一个输入分别通过无掩码（BERT）和因果掩码（GPT）的注意力，对比 [MASK] 位置是否能看到右侧 token。BERT 的权重 $>0$，GPT 的权重 $\approx 0$——这就是两种架构在注意力模式上的本质区别。
+3. **双向 vs 单向对比**：同一个输入分别通过无掩码（BERT）和因果掩码（GPT）的注意力，对比 [MASK] 位置是否能看到右侧 token。BERT 的权重 $ >0 $，GPT 的权重 $ \approx 0 $ ——这就是两种架构在注意力模式上的本质区别。
 
-4. **微调分类**：`cls_repr @ W_cls` 将 [CLS] 位置的表示投影到类别数。微调时 BERT 的所有参数和 $W_{\text{cls}}$ 一起训练，使 [CLS] 表示逐步适应分类任务。
+4. **微调分类**：`cls_repr @ W_cls` 将 [CLS] 位置的表示投影到类别数。微调时 BERT 的所有参数和 $ W_{\text{cls}} $ 一起训练，使 [CLS] 表示逐步适应分类任务。

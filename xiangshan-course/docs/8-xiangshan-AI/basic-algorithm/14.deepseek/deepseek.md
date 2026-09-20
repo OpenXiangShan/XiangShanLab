@@ -51,13 +51,17 @@ GRPO 的具体目标函数将在后面的 GRPO 独立章节中讲解，本章只
 以 MLA 的 Key/Value 联合压缩为例。假设单个 token 的完整 Key 和 Value 都是 4 维：
 
 $$
+
 k_t\in\mathbb{R}^{4},\qquad v_t\in\mathbb{R}^{4}.
-$$
-
-标准缓存需要为每个 token 保存 $4+4=8$ 个数。若使用一个 2 维潜向量同时表示 Key 和 Value 的内容：
 
 $$
+
+标准缓存需要为每个 token 保存 $ 4+4=8 $ 个数。若使用一个 2 维潜向量同时表示 Key 和 Value 的内容：
+
+$$
+
 c_t^{KV}\in\mathbb{R}^{2},
+
 $$
 
 教学示例中，每个 token 的内容缓存就从 8 个数变为 2 个数。对于 3 个 token，完整 Key/Value 共 24 个数，而压缩潜向量共 6 个数。
@@ -71,73 +75,87 @@ $$
 MLA 首先对 Key 和 Value 进行低秩联合压缩：
 
 $$
+
 c_t^{KV}=h_tW^{DKV},
+
 $$
 
 $$
+
 k_t^{C}=c_t^{KV}W^{UK},\qquad
 v_t^{C}=c_t^{KV}W^{UV}.
-$$
-
-其中 $c_t^{KV}$ 是需要缓存的低维内容表示。完整 MLA 还将内容分支与携带 RoPE 的位置分支拼接：
 
 $$
+
+其中 $ c_t^{KV} $ 是需要缓存的低维内容表示。完整 MLA 还将内容分支与携带 RoPE 的位置分支拼接：
+
+$$
+
 q_{t,i}=\left[q_{t,i}^{C};q_{t,i}^{R}\right],\qquad
 k_{t,i}=\left[k_{t,i}^{C};k_t^{R}\right].
+
 $$
 
 标准多头注意力与 MLA 在每个 token、每层所需缓存的元素数量分别为：
 
 $$
+
 M_{\text{MHA}}=2n_hd_h,
+
 $$
 
 $$
+
 M_{\text{MLA}}=d_c+d_h^{R}.
+
 $$
 
 DeepSeekMoE 的输出可以写成：
 
 $$
+
 h_t'=u_t
 +\sum_{i=1}^{N_s}\operatorname{FFN}^{(s)}_i(u_t)
 +\sum_{i=1}^{N_r}g_{i,t}\operatorname{FFN}^{(r)}_i(u_t).
+
 $$
 
 只有分数位于 Top-K 的路由专家具有非零权重：
 
 $$
+
 g_{i,t}=
 \begin{cases}
 s_{i,t},&s_{i,t}\in\operatorname{TopK}(s_{1,t},\ldots,s_{N_r,t}),\\
 0,&\text{其他情况}.
 \end{cases}
+
 $$
 
 ### 2.2 变量含义
 
-- $h_t\in\mathbb{R}^{d}$：第 $t$ 个 token 在注意力层的输入。
-- $W^{DKV}\in\mathbb{R}^{d\times d_c}$：Key/Value 联合压缩的降维矩阵。
-- $c_t^{KV}\in\mathbb{R}^{d_c}$：压缩后的 Key/Value 内容潜向量。
-- $W^{UK}$、$W^{UV}$：从潜向量生成内容 Key 和 Value 的升维矩阵。
-- $k_t^{C}$、$v_t^{C}$：内容 Key 和内容 Value。
-- $q_{t,i}^{C}$、$k_{t,i}^{C}$：第 $i$ 个注意力头的内容 Query 和内容 Key。
-- $q_{t,i}^{R}$、$k_t^{R}$：应用 RoPE 的位置 Query 和共享位置 Key。
-- $n_h$：注意力头数量；$d_h$：每个标准注意力头的维度。
-- $d_c$：MLA 的 Key/Value 压缩维度。
-- $d_h^{R}$：解耦 RoPE 分支的维度。
-- $u_t$：DeepSeekMoE 的输入。
-- $N_s$、$N_r$：共享专家和路由专家的数量。
-- $\operatorname{FFN}^{(s)}_i$、$\operatorname{FFN}^{(r)}_i$：第 $i$ 个共享专家和路由专家。
-- $s_{i,t}$：token $t$ 对路由专家 $i$ 的匹配分数。
-- $g_{i,t}$：经过 Top-K 选择后的路由权重。
-- $h_t'$：DeepSeekMoE 层包含残差连接后的输出。
+- $ h_t\in\mathbb{R}^{d} $：第 $ t $ 个 token 在注意力层的输入。
+- $ W^{DKV}\in\mathbb{R}^{d\times d_c} $：Key/Value 联合压缩的降维矩阵。
+- $ c_t^{KV}\in\mathbb{R}^{d_c} $：压缩后的 Key/Value 内容潜向量。
+- $ W^{UK} $、$ W^{UV} $：从潜向量生成内容 Key 和 Value 的升维矩阵。
+- $ k_t^{C} $、$ v_t^{C} $：内容 Key 和内容 Value。
+- $ q_{t,i}^{C} $、$ k_{t,i}^{C} $：第 $ i $ 个注意力头的内容 Query 和内容 Key。
+- $ q_{t,i}^{R} $、$ k_t^{R} $：应用 RoPE 的位置 Query 和共享位置 Key。
+- $ n_h $：注意力头数量；$ d_h $：每个标准注意力头的维度。
+- $ d_c $：MLA 的 Key/Value 压缩维度。
+- $ d_h^{R} $：解耦 RoPE 分支的维度。
+- $ u_t $：DeepSeekMoE 的输入。
+- $ N_s $、$ N_r $：共享专家和路由专家的数量。
+- $ \operatorname{FFN}^{(s)}_i $、$ \operatorname{FFN}^{(r)}_i $：第 $ i $ 个共享专家和路由专家。
+- $ s_{i,t} $：token $ t $ 对路由专家 $ i $ 的匹配分数。
+- $ g_{i,t} $：经过 Top-K 选择后的路由权重。
+- $ h_t' $：DeepSeekMoE 层包含残差连接后的输出。
 
 ### 2.3 公式怎么理解
 
-MLA 的关键不是分别压缩 Key 和 Value，而是让二者共享同一个低维潜向量 $c_t^{KV}$。因此推理时不必保存每个头的完整内容 Key 和 Value。
+MLA 的关键不是分别压缩 Key 和 Value，而是让二者共享同一个低维潜向量 $ c_t^{KV} $。因此推理时不必保存每个头的完整内容 Key 和 Value。
 
-RoPE 与位置有关，不能简单地与低秩升维矩阵合并。MLA 将位置部分拆出，使内容部分仍能保持低秩压缩。完整缓存由 $c_t^{KV}$ 和位置 Key $k_t^R$ 组成。
+RoPE 与位置有关，不能简单地与低秩升维矩阵合并。MLA 将位置部分拆出，使内容部分仍能保持低秩压缩。完整缓存由 $ c_t^{KV} $ 和位置 Key $ k_t^R $ 组成。
 
 DeepSeekMoE 中，共享专家始终参与计算，路由专家则采用稀疏激活。这样既保留通用处理路径，又允许不同 token 调用不同的专门参数。
 
@@ -239,7 +257,7 @@ compressed latent elements: 6
 
 ### 3.3 关键代码解释
 
-`x @ w_down` 对应 $c_t^{KV}=h_tW^{DKV}$，把 Key 和 Value 的共同内容压缩到低维空间。
+`x @ w_down` 对应 $ c_t^{KV}=h_tW^{DKV} $，把 Key 和 Value 的共同内容压缩到低维空间。
 
 `latent_kv @ w_up_k` 和 `latent_kv @ w_up_v` 从同一潜向量生成内容 Key 和 Value。真实 MLA 在推理时可以进一步合并部分投影计算，但本例显式还原二者，便于观察数据形状。
 
