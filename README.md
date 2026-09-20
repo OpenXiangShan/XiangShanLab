@@ -2,7 +2,7 @@
 
 [English](./README_EN.md) | [香山官网](https://openxiangshan.cc/) | [GitHub Issues](https://github.com/OpenXiangShan/XiangShanLab/issues)
 
-XiangShanLab 是面向香山处理器学习、开发、验证和研究的开放仓库。仓库以课程文档为主，同时收录编程实践、问题题库、Bug 案例、分析工具、研究论文、周报、合作机构资料以及竞赛项目。
+XiangShanLab 是面向香山处理器学习、开发、验证和研究的开放仓库。仓库以课程文档为主，同时收录编程实践、问题题库、Bug 案例、分析工具、研究论文、周报、合作机构资料、外部贡献项目以及竞赛项目。
 
 ## 快速开始
 
@@ -29,6 +29,7 @@ git submodule update --init --recursive
 - **分析香山微架构**：从[超标量基础](./xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/)开始，再阅读设计文档和源码分析。
 - **研究运行场景和调试问题**：使用[场景分析](./xiangshan-course/docs/5-xiangshan-scenarios-analysis/)、[调试案例](./xiangshan-course/docs/6-xiangshan-debug/)和[问题题库](./xiangshan-question-bank/)。
 - **使用 AI 辅助工具分析源码、波形或 Bug**：查看[工具目录](./tools/README.md)及各工具的 `SKILL.md`。
+- **登记或了解社区外部贡献项目**：查看[外部贡献项目目录](./external-contribution-project/README.md)，了解项目与 RISC-V、香山及其支撑方向的关系。
 - **参加 2026 CIE RISC-V 大赛**：查看[应用方向赛题](./2026-CIE-RISC-V-Contest-Application-Track/README.md)和[提交指南](./2026-CIE-RISC-V-Contest-Application-Track/SUBMISSION_GUIDE.md)。
 
 ## 课程目录
@@ -67,6 +68,7 @@ git submodule update --init --recursive
 | [`xiangshan-research/`](./xiangshan-research/) | 香山相关论文、研究方向和文献索引 | [论文索引](./xiangshan-research/xiangshan-related-papers.md) |
 | [`xiangshan-collaborators/`](./xiangshan-collaborators/) | 香山合作高校和科研机构资料 | [合作机构](./xiangshan-collaborators/xiangshan-collaborators.md) |
 | [`weekly-status/`](./weekly-status/) | 周报、状态模板和周报生成脚本 | [周报目录](./weekly-status/) |
+| [`external-contribution-project/`](./external-contribution-project/) | 香山社区、合作机构和个人贡献的外部项目登记资料 | [项目说明](./external-contribution-project/README.md) |
 | [`2026-CIE-RISC-V-Contest-Application-Track/`](./2026-CIE-RISC-V-Contest-Application-Track/) | 2026 CIE RISC-V 大赛应用方向赛题与提交文件 | [赛题说明](./2026-CIE-RISC-V-Contest-Application-Track/README.md) |
 
 ## 编程实践
@@ -78,6 +80,12 @@ git submodule update --init --recursive
 - `TwoToOneXbarSystem/`：两个 AXI4 Master 共享一个 Memory Slave 的 2-to-1 XBar 实验；
 - `NonBlockingCache/`：非阻塞 Cache 设计与测试；
 - `mmu-smmpt/`：MMU / SMMPT 相关实现、模块和测试。
+
+## 外部贡献项目
+
+[`external-contribution-project/`](./external-contribution-project/)用于登记香山社区、合作实验室、高校、企业和个人贡献的外部项目，包括实验、工具、验证框架、扩展模块和研究成果。项目可以使用香山、扩展香山、验证香山，或为香山提供运行、集成和研究基础设施。
+
+新增项目时，请基于[贡献模板](./external-contribution-project/CONTRIBUTION_TEMPLATE.md)在对应项目目录中说明项目简介、公开仓库、依赖的 RISC-V 扩展和香山版本、构建或验证命令、维护组织及贡献者信息。详细登记规范、开发环境要求和当前项目列表见[外部贡献项目 README](./external-contribution-project/README.md)。
 
 ## 工具与数据
 
