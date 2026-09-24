@@ -72,8 +72,14 @@ class ReportTest(unittest.TestCase):
                                    directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
         self.assertIn("| Issue | 任务 | 目录 | 状态 | DDL |", text)
         self.assertIn("| [#26](https://example.test/26) | Test | AI |", text)
-        issue_row = next(line for line in text.splitlines() if "[#26]" in line)
-        self.assertEqual(len(issue_row.strip("|").split("|")), 5)
+        lines = text.splitlines()
+        header_index = lines.index("| Issue | 任务 | 目录 | 状态 | DDL |")
+        header = lines[header_index]
+        separator = lines[header_index + 1]
+        issue_row = next(line for line in lines[header_index + 2:] if "[#26]" in line)
+        column_count = len(header.strip("|").split("|"))
+        self.assertEqual(len(separator.strip("|").split("|")), column_count)
+        self.assertEqual(len(issue_row.strip("|").split("|")), column_count)
 
     def test_updated_or_commented_tasks_outside_the_three_conditions_are_excluded(self):
         old = "2026-08-01T00:00:00Z"

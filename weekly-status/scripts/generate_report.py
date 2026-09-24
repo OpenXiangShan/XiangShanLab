@@ -338,7 +338,7 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
                 markdown_cell(re.sub(r"^\[TASK\]\s*", "", issue.get("title", ""))),
                 markdown_cell(task["directory"]), markdown_cell(task["status"]),
                 markdown_cell(task["ddl"])))
-        person_sections.append("### %s\n\n| 本周交付 | 当前未关闭 | 本周到期未完成 | 历史逾期 | 未认领风险 |\n| --- | --- | --- | --- | --- |\n| %d | %d | %d | %d | %d |\n\n| Issue | 任务 | 目录 | 状态 | DDL |\n| --- | --- | --- | --- |\n%s" % (
+        person_sections.append("### %s\n\n| 本周交付 | 当前未关闭 | 本周到期未完成 | 历史逾期 | 未认领风险 |\n| --- | --- | --- | --- | --- |\n| %d | %d | %d | %d | %d |\n\n| Issue | 任务 | 目录 | 状态 | DDL |\n| --- | --- | --- | --- | --- |\n%s" % (
             label, counts["本周交付"], counts["当前未关闭"], counts["本周到期未完成"],
             counts["历史逾期"], counts["未认领风险"], "\n".join(rows)))
     total_row = "| 总计 | %d | %d | %d | %d | %d | %d |" % (total["任务数"], total["本周新增"], total["本周交付"], total["本周到期"], total["本周到期未完成"], total["历史逾期"])
