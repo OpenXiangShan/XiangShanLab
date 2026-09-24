@@ -715,9 +715,10 @@ Vim 是从 vi 发展出来的一个文本编辑器。代码补全、编译及错
 
 ### 2.6.1 Docker
 
-docker提供：Linux操作系统Ubuntu 20.04、香山开发环境(软件包和编译工具链)、香山和仿真相关工具的代码。
+docker提供：Linux操作系统Ubuntu 24.04、香山开发环境(软件包和编译工具链)、香山kuminghu-v2和仿真相关工具的代码。
 
-点击[香山kunminghu-v2](./docker/xiangshan-kunminghu-v2.tar)下载。
+下载docker网盘链接: https://pan.baidu.com/s/1hswNN-TwyqV5OW-V2HWhlg?pwd=y9pp 
+提取码: y9pp
 
 已自动设置：
 
