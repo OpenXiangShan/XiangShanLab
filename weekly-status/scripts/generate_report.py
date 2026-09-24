@@ -261,6 +261,8 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
     contributions = defaultdict(lambda: defaultdict(int))
     total = defaultdict(int)
     people = defaultdict(lambda: defaultdict(int))
+    directory_counts = defaultdict(lambda: defaultdict(int))
+    person_tasks = defaultdict(list)
     seen = set()
     for issue in issues:
         reasons = week_reasons(issue, start, end)
@@ -280,6 +282,22 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
                                   "本周到期" not in reasons)
         risk = "本周到期未完成" if due_open else "历史逾期" if historical_overdue else None
         status = current_status(issue, lgtm_count, risk)
+        directory, directory_path = resolve_directory(issue_section(issue.get("body") or "", "所属目录"), directories)
+        task = {
+            "issue": issue,
+            "directory": directory,
+            "directory_path": directory_path,
+            "status": status,
+            "ddl": ddl or "未填写",
+        }
+        directory_key = (directory, directory_path)
+        directory_counts[directory_key]["任务数"] += 1
+        for reason in reasons:
+            directory_counts[directory_key][reason] += 1
+        if due_open:
+            directory_counts[directory_key]["本周到期未完成"] += 1
+        if historical_overdue:
+            directory_counts[directory_key]["历史逾期"] += 1
         total["任务数"] += 1
         for reason in reasons:
             total[reason] += 1
@@ -291,6 +309,7 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
         assignees = {user["login"] for user in issue.get("assignees", []) if user.get("login")}
         target_people = assignees or {"未认领"}
         for login in target_people:
+            person_tasks[login].append(task)
             if weekly_delivery:
                 people[login]["本周交付"] += 1
             if issue.get("state") == "open":
@@ -300,15 +319,29 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
             if historical_overdue:
                 people[login]["历史逾期"] += 1
                 people[login]["未认领风险"] += int(login == "未认领")
+    directory_rows = []
+    for (directory, path), counts in sorted(directory_counts.items(), key=lambda item: item[0][0].lower()):
+        label = "[%s](%s)" % (directory, task_directory_url(path, repo)) if path else directory
+        directory_rows.append("| %s | %d | %d | %d | %d | %d | %d |" % (
+            label, counts["任务数"], counts["本周新增"], counts["本周交付"], counts["本周到期"],
+            counts["本周到期未完成"], counts["历史逾期"]))
     person_sections = []
     for login in sorted(people, key=str.lower):
         counts = people[login]
         label = "未认领" if login == "未认领" else "@" + login
-        person_sections.append("### %s\n\n| 本周交付 | 当前未关闭 | 本周到期未完成 | 历史逾期 | 未认领风险 |\n| --- | --- | --- | --- | --- |\n| %d | %d | %d | %d | %d |" % (
+        rows = []
+        for task in sorted(person_tasks[login], key=lambda item: item["issue"].get("number", 0)):
+            issue = task["issue"]
+            rows.append("| [#%s](%s) | %s | %s | %s | %s |" % (
+                issue.get("number"), issue.get("html_url", ""),
+                markdown_cell(re.sub(r"^\[TASK\]\s*", "", issue.get("title", ""))),
+                markdown_cell(task["directory"]), markdown_cell(task["status"]), markdown_cell(task["ddl"])))
+        person_sections.append("### %s\n\n| 本周交付 | 当前未关闭 | 本周到期未完成 | 历史逾期 | 未认领风险 |\n| --- | --- | --- | --- | --- |\n| %d | %d | %d | %d | %d |\n\n| Issue | 任务 | 目录 | 状态 | DDL |\n| --- | --- | --- | --- |\n%s" % (
             label, counts["本周交付"], counts["当前未关闭"], counts["本周到期未完成"],
-            counts["历史逾期"], counts["未认领风险"]))
+            counts["历史逾期"], counts["未认领风险"], "\n".join(rows)))
     total_row = "| 总计 | %d | %d | %d | %d | %d | %d |" % (total["任务数"], total["本周新增"], total["本周交付"], total["本周到期"], total["本周到期未完成"], total["历史逾期"])
-    return "| 总计 | 任务数 | 本周新增 | 本周交付 | 本周到期 | 本周到期未完成 | 历史逾期 |\n| --- | --- | --- | --- | --- | --- | --- |\n" + total_row + "\n\n" + "\n\n".join(person_sections)
+    directory_table = "| 目录 | 任务数 | 本周新增 | 本周交付 | 本周到期 | 本周到期未完成 | 历史逾期 |\n| --- | --- | --- | --- | --- | --- | --- |\n" + total_row.replace("| 总计 |", "| 总计 |", 1) + "\n" + "\n".join(directory_rows)
+    return directory_table + "\n\n" + "\n\n".join(person_sections)
 
 
 def default_week_start(now=None):

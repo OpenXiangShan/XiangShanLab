@@ -62,6 +62,8 @@ class ReportTest(unittest.TestCase):
         text = report.build_report([task, task], {}, START, END,
                                    directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
         self.assertIn("| 总计 | 1 | 1 | 1 | 1 | 0 | 0 |", text)
+        self.assertIn("| [AI](https://github.com/owner/repo/tree/HEAD/xiangshan-course/docs/8-xiangshan-AI) | 1 | 1 | 1 | 1 | 0 | 0 |", text)
+        self.assertIn("[#7](https://example.test/7)", text)
 
     def test_updated_or_commented_tasks_outside_the_three_conditions_are_excluded(self):
         old = "2026-08-01T00:00:00Z"
@@ -192,6 +194,8 @@ class ReportTest(unittest.TestCase):
         self.assertIn("| 总计 | 2 | 2 | 1 | 0 | 0 | 0 |", text)
         self.assertIn("### @alice", text)
         self.assertIn("### @bob", text)
+        self.assertIn("| [#1](https://example.test/1) | Test |", text)
+        self.assertIn("| [#2](https://example.test/2) | Test |", text)
         self.assertIn("### @carol", text)
 
     def test_delivery_week_uses_closed_at_boundaries(self):
@@ -219,7 +223,7 @@ class ReportTest(unittest.TestCase):
     def test_contributor_table_has_six_columns(self):
         text = report.build_report([], {}, START, END)
         lines = text.splitlines()
-        header = lines[lines.index("| 总计 | 任务数 | 本周新增 | 本周交付 | 本周到期 | 本周到期未完成 | 历史逾期 |")]
+        header = lines[0]
         self.assertEqual(len(header.strip("|").split("|")), 7)
 
     def test_pull_requests_and_non_tasks_do_not_count(self):
