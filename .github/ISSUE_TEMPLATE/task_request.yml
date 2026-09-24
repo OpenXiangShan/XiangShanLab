@@ -24,12 +24,12 @@ body:
         - scenarios-analysis
         - debug
         - NoC
-        - AI
+        - AI/basic-algorithm
         - AIA
-        - DDR
+        - ddr
         - security
-        - verification
-        - agile-tools
+        - verification/uvm
+        - aglie-tools
     validations:
       required: true
 

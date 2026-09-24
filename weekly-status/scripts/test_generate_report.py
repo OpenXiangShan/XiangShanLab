@@ -186,7 +186,7 @@ class ReportTest(unittest.TestCase):
         directories = report.docs_directories()
         for name, path in (
             ("AI/basic-algorithm", "xiangshan-course/docs/8-xiangshan-AI"),
-            ("verification/uvm", "xiangshan-course/docs/11-xiangshang-verification"),
+            ("verification/uvm", "xiangshan-course/docs/13-xiangshang-verification"),
         ):
             with self.subTest(name=name):
                 self.assertIn((name, path), directories)
@@ -200,7 +200,7 @@ class ReportTest(unittest.TestCase):
 
     def test_combined_label_takes_precedence_over_path_leaf(self):
         directories = [("uvm", "xiangshan-course/docs/uvm"),
-                       ("verification/uvm", "xiangshan-course/docs/11-xiangshang-verification")]
+                       ("verification/uvm", "xiangshan-course/docs/13-xiangshang-verification")]
         self.assertEqual(report.resolve_directory("verification/uvm", directories), directories[1])
 
     def test_all_directories_are_listed_without_tasks(self):
