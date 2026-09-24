@@ -332,10 +332,12 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
         rows = []
         for task in sorted(person_tasks[login], key=lambda item: item["issue"].get("number", 0)):
             issue = task["issue"]
-            rows.append("| [#%s](%s) | %s | %s | %s | %s |" % (
-                issue.get("number"), issue.get("html_url", ""),
+            issue_link = "[#%s](%s)" % (issue.get("number"), issue.get("html_url", ""))
+            rows.append("| %s | %s | %s | %s | %s |" % (
+                issue_link,
                 markdown_cell(re.sub(r"^\[TASK\]\s*", "", issue.get("title", ""))),
-                markdown_cell(task["directory"]), markdown_cell(task["status"]), markdown_cell(task["ddl"])))
+                markdown_cell(task["directory"]), markdown_cell(task["status"]),
+                markdown_cell(task["ddl"])))
         person_sections.append("### %s\n\n| 本周交付 | 当前未关闭 | 本周到期未完成 | 历史逾期 | 未认领风险 |\n| --- | --- | --- | --- | --- |\n| %d | %d | %d | %d | %d |\n\n| Issue | 任务 | 目录 | 状态 | DDL |\n| --- | --- | --- | --- |\n%s" % (
             label, counts["本周交付"], counts["当前未关闭"], counts["本周到期未完成"],
             counts["历史逾期"], counts["未认领风险"], "\n".join(rows)))
