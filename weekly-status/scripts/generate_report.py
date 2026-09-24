@@ -19,16 +19,14 @@ BEIJING = ZoneInfo("Asia/Shanghai")
 BOT_LOGIN = "github-actions[bot]"
 ASSIGNMENT_MARKER = re.compile(r"<!--\s*task-assignment:(pending|resolved|failed) claimant=([A-Za-z0-9-]+)\s*-->")
 REVIEW_MARKER = re.compile(r"<!--\s*task-review:(pending|resolved) executor=([A-Za-z0-9-]+)\s*-->")
-COMMIT_URL = re.compile(r"(?P<url>https?://github\.com/[^\s/]+/[^\s/]+/commit/(?P<sha>[0-9a-fA-F]{7,40}))(?=[/?#\s).,;:]|$)")
-LABELED_SHA = re.compile(r"(?:\bcommit\s*(?:sha|hash)?|\bsha|\b提交(?:的)?\s*(?:commit|SHA|哈希)?)\s*[:：#=]?\s*`?([0-9a-fA-F]{7,40})`?(?![0-9a-fA-F])", re.IGNORECASE)
 DDL = re.compile(r"^(\d{4})-(\d{2})-(\d{2}) ((?:[01]\d|2[0-3]):[0-5]\d|24:00)$")
-# These labels describe combined topics in one directory, not nested paths.
-# Match on the stable directory topic instead of its numeric prefix so that
-# reordering course directories does not require another code change.
-DIRECTORY_LABELS = {
-    "xiangshan-AI": "AI/basic-algorithm",
-    "xiangshang-verification": "verification/uvm",
+DIRECTORY_ALIASES = {
+    "xiangshan-AI": ("AI/basic-algorithm", "AI"),
+    "xiangshang-verification": ("verification/uvm", "verification", "11-xiangshang-verification", "13-xiangshang-verification"),
+    "xiangshan-aglie-tools": ("aglie-tools", "agile-tools"),
+    "xiangshan-ddr": ("ddr", "DDR"),
 }
+TEMPLATE_FIELDS = ("所属目录", "任务背景与目标", "交付清单", "任务难度", "预估工时", "质押积分", "截止时间（DDL）")
 
 
 class GitHubClient:
@@ -108,15 +106,20 @@ def docs_directories(repo_root=None):
         for child in docs_root.iterdir():
             if child.is_dir():
                 path = child.relative_to(root).as_posix()
-                directories.append((DIRECTORY_LABELS.get(re.sub(r"^\d+-", "", child.name),
-                                                            display_directory(child.name)), path))
+                topic = re.sub(r"^\d+-", "", child.name)
+                label = next((values[0] for key, values in DIRECTORY_ALIASES.items() if key == topic),
+                             display_directory(child.name))
+                directories.append((label, path))
     return directories
 
 
 def resolve_directory(value, directories):
     raw = value.strip().strip("/")
     for name, path in directories:
-        if raw == name:
+        topic = re.sub(r"^\d+-", "", Path(path).name)
+        aliases = {name, path, Path(path).name, topic}
+        aliases.update(DIRECTORY_ALIASES.get(topic, ()))
+        if raw in aliases:
             return name, path
     for name, path in directories:
         if raw == path or raw.endswith("/" + path):
@@ -149,37 +152,6 @@ def marker(comment, pattern):
 
 def sort_comments(comments):
     return sorted(comments, key=lambda item: (item.get("created_at", ""), item.get("id", 0)))
-
-
-def extract_commit_refs(texts, default_repo=None):
-    """Extract explicit commit references without guessing arbitrary short hex text."""
-    commits = []
-    seen = set()
-    for text in texts:
-        for match in COMMIT_URL.finditer(text or ""):
-            sha = match.group("sha").lower()
-            url = match.group("url")
-            if url not in seen:
-                seen.add(url)
-                commits.append((sha, url))
-        for match in LABELED_SHA.finditer(text or ""):
-            sha = match.group(1).lower()
-            url = "https://github.com/%s/commit/%s" % (default_repo, sha) if default_repo else None
-            key = url or sha
-            if key not in seen:
-                seen.add(key)
-                commits.append((sha, url))
-    return commits
-
-
-def extract_commits(texts):
-    commits = []
-    seen = set()
-    for sha, _ in extract_commit_refs(texts):
-        if sha not in seen:
-            seen.add(sha)
-            commits.append(sha)
-    return commits
 
 
 def analyze_comments(comments, start, end):
@@ -221,10 +193,16 @@ def is_task(issue):
     return not issue.get("pull_request") and bool(re.match(r"^\[TASK\]\s+\S", issue.get("title") or ""))
 
 
-def current_status(issue, lgtm_count, overdue=False):
+def template_quality(issue):
+    """Return missing task template fields without excluding legacy tasks."""
+    body = issue.get("body") or ""
+    return [field for field in TEMPLATE_FIELDS if not issue_section(body, field)]
+
+
+def current_status(issue, lgtm_count, risk=None):
     status = "已交付（已关闭）" if issue.get("state") == "closed" else "未交付（未关闭）"
     status += "；LGTM %d/3" % lgtm_count
-    return status + "；逾期" if overdue else status
+    return status + ("；" + risk if risk else "")
 
 
 def markdown_cell(value):
@@ -234,16 +212,14 @@ def markdown_cell(value):
 def task_row(task):
     issue = task["issue"]
     assignees = ", ".join("@" + user.get("login", "") for user in issue.get("assignees", []) if user.get("login")) or "未认领"
-    commits = task["commits"]
-    commit_text = "、".join("[%s](%s)" % (sha, url) if url else sha for sha, url in commits) if commits else "未记录"
-    return "| %s | @%s | %s | [#%s](%s) | %s | %s | %s |" % (
+    return "| %s | @%s | %s | [#%s](%s) | %s | %s |" % (
         markdown_cell(re.sub(r"^\[TASK\]\s*", "", issue.get("title", ""))),
         markdown_cell((issue.get("user") or {}).get("login", "未知")),
         markdown_cell(assignees), issue.get("number"), issue.get("html_url", ""),
-        markdown_cell(commit_text), markdown_cell(task["status"]), markdown_cell(task["ddl"] or "未填写"))
+        markdown_cell(task["status"]), markdown_cell(task["ddl"] or "未填写"))
 
 
-TABLE_HEADER = "| Task Description | Creator | Assignee | Issue Number | Commit Number | Weekly Status | DDL |\n| --- | --- | --- | --- | --- | --- | --- |"
+TABLE_HEADER = "| 任务 | 创建者 | 执行人 | Issue | 状态 | DDL |\n| --- | --- | --- | --- | --- | --- |"
 
 
 def render_task_groups(tasks):
@@ -283,10 +259,8 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
     now = now or datetime.now(BEIJING)
     directories = docs_directories() if directories is None else directories
     contributions = defaultdict(lambda: defaultdict(int))
-    directory_counts = {entry: defaultdict(int) for entry in directories}
-    directory_contributors = defaultdict(set)
-    delivered = []
-    details = []
+    total = defaultdict(int)
+    people = defaultdict(lambda: defaultdict(int))
     seen = set()
     for issue in issues:
         reasons = week_reasons(issue, start, end)
@@ -299,109 +273,42 @@ def build_report(issues, comments_by_issue, start, end, repo="owner/repo", direc
             creator = (issue.get("user") or {}).get("login")
             if creator:
                 events.append(("创建", creator))
-        for event, login in events:
-            contributions[login][event] += 1
         ddl = issue_section(issue.get("body") or "", "截止时间（DDL）")
         deadline = parse_ddl(ddl)
-        overdue = bool(issue.get("state") == "open" and deadline and deadline < now)
-        status = current_status(issue, lgtm_count, overdue)
-        directory, directory_path = resolve_directory(issue_section(issue.get("body") or "", "所属目录"), directories)
-        key = (directory, directory_path)
-        counts = directory_counts.setdefault(key, defaultdict(int))
-        counts["本周任务数"] += 1
+        due_open = "本周到期" in reasons and issue.get("state") == "open"
+        historical_overdue = bool(issue.get("state") == "open" and deadline and deadline < now and
+                                  "本周到期" not in reasons)
+        risk = "本周到期未完成" if due_open else "历史逾期" if historical_overdue else None
+        status = current_status(issue, lgtm_count, risk)
+        total["任务数"] += 1
         for reason in reasons:
-            counts[reason] += 1
-        if "本周到期" in reasons and issue.get("state") == "open":
-            counts["到期未关闭"] += 1
+            total[reason] += 1
+        if due_open:
+            total["本周到期未完成"] += 1
+        if historical_overdue:
+            total["历史逾期"] += 1
         weekly_delivery = "本周交付" in reasons
-        if weekly_delivery:
-            # Attribute delivery to assignees, never to the creator or closing bot.
-            for login in {user["login"] for user in issue.get("assignees", []) if user.get("login")}:
-                contributions[login]["本周交付"] += 1
-                directory_contributors[key].add(login)
-            if not issue.get("assignees"):
-                counts["执行人未记录"] += 1
-        task = {
-            "issue": issue,
-            "directory": directory,
-            "directory_path": directory_path,
-            "ddl": ddl,
-            "status": status + "；" + "、".join(reasons),
-            "commits": extract_commit_refs([issue.get("body") or ""] + [comment.get("body") or "" for comment in comments], repo),
-            "repo": repo,
-        }
-        if weekly_delivery:
-            delivered.append(task)
-        else:
-            details.append(task)
-        if issue.get("state") == "open" and issue.get("assignees"):
-            for assignee in issue["assignees"]:
-                login = assignee.get("login")
-                if not login:
-                    continue
-                contributions[login]["当前未关闭"] += 1
-                if overdue:
-                    contributions[login]["当前逾期"] += 1
-
-    directory_rows = []
-    for key in sorted(directory_counts, key=lambda item: item[0].lower()):
-        name, path = key
-        counts = directory_counts[key]
-        heading = "[%s](%s)" % (name, task_directory_url(path, repo)) if path else name
-        people = ", ".join("@" + login for login in sorted(directory_contributors[key], key=str.lower))
-        if counts["执行人未记录"]:
-            people = (people + "; " if people else "") + "执行人未记录：%d 项" % counts["执行人未记录"]
-        directory_rows.append("| %s | %d | %d | %d | %d | %d | %s |" % (
-            heading, counts["本周任务数"], counts["本周新增"], counts["本周交付"],
-            counts["本周到期"], counts["到期未关闭"], people or "无"))
-
-    contribution_rows = []
-    for login in sorted(contributions, key=str.lower):
-        counts = contributions[login]
-        contribution_rows.append("| @%s | %d | %d | %d | %d | %d | %d | %d |" % (
-            login, counts["创建"], counts["认领确认"], counts["提交验收"], counts["本周交付"], counts["有效LGTM"],
-            counts["当前未关闭"], counts["当前逾期"]))
-    contribution_table = "\n".join(contribution_rows) or "| - | 0 | 0 | 0 | 0 | 0 | 0 | 0 |"
-    template = """# Weekly Status: {date}
-
-统计区间：北京时间 {start}（含）至 {end}（不含）。
-
-## 目录贡献汇总
-
-仅纳入本周发布、本周关闭、DDL 在本周的任务 Issue，三类取并集并按 Issue 编号去重。各分类可重叠，不能直接相加。仅有本周评论或更新不作为入选条件，不统计历史累计和范围外存量。
-
-交付只看任务 Issue 是否关闭；本周交付按 `closed_at` 落在统计区间内计算，不再额外检查 LGTM 或验收评论。每个任务只归属一个目录，目录交付数按 Issue 计数。到期未关闭是本周到期任务中当前仍开放的数量，不等于已经逾期。
-
-| 所属目录 | 本周任务数（去重） | 本周新增 | 本周交付 | 本周到期 | 到期未关闭（当前） | 本周交付贡献者 |
-| --- | --- | --- | --- | --- | --- | --- |
-{directory_summary}
-
-## 本周交付明细
-
-按目录列出谁交付了哪些任务；贡献归属 Assignee，不归属发布者或执行关闭操作的机器人。未记录执行人的交付仍计入目录，但不猜测个人贡献。
-
-{delivered}
-
-## 用户交付与参与
-
-| Contributor | 创建 | 认领确认 | 提交验收 | 本周交付 | 有效 LGTM | 当前未关闭 | 当前逾期 |
-{contribution_separator}\n{contributions}
-
-所有用户指标仅针对上述本周入选任务，当前未关闭和逾期也不含范围外存量。创建、认领、提交验收、LGTM 仅表示参与活动，不算已交付贡献。多人共同负责时每人计一次，目录内该 Issue 仍只计一次。
-
-Issue 进度只显示有效 LGTM 数量（n/3），不由认领或提交验收推断。有效票按现有审查流程计算：审查开始后、非机器人、非执行人、正文为 LGTM 的评论，每个用户只计一次；已关闭任务保留有效票数。若缺少审查记录则显示 0/3，不反推票数。交付只看关闭状态，DDL 仅用于范围筛选与逾期提示。
-
-## 其他任务明细
-
-列出本周新增或本周到期的其余任务，本周交付已单独列出；Weekly Status 标注入选原因。状态、DDL 和执行人为生成时的当前快照，补跑历史周报不会还原当时状态。已重新打开的 Issue 不计交付，但仍可因本周新增或本周到期入选。
-
-{details}
-"""
-    return template.format(date=start.date().isoformat(), start=start.strftime("%Y-%m-%d %H:%M"),
-            end=end.strftime("%Y-%m-%d %H:%M"), contributions=contribution_table,
-            directory_summary="\n".join(directory_rows), delivered=render_task_groups(delivered),
-            details=render_task_groups(details),
-            contribution_separator="| --- | --- | --- | --- | --- | --- | --- | --- |")
+        assignees = {user["login"] for user in issue.get("assignees", []) if user.get("login")}
+        target_people = assignees or {"未认领"}
+        for login in target_people:
+            if weekly_delivery:
+                people[login]["本周交付"] += 1
+            if issue.get("state") == "open":
+                people[login]["当前未关闭"] += 1
+            if due_open:
+                people[login]["本周到期未完成"] += 1
+            if historical_overdue:
+                people[login]["历史逾期"] += 1
+                people[login]["未认领风险"] += int(login == "未认领")
+    person_sections = []
+    for login in sorted(people, key=str.lower):
+        counts = people[login]
+        label = "未认领" if login == "未认领" else "@" + login
+        person_sections.append("### %s\n\n| 本周交付 | 当前未关闭 | 本周到期未完成 | 历史逾期 | 未认领风险 |\n| --- | --- | --- | --- | --- |\n| %d | %d | %d | %d | %d |" % (
+            label, counts["本周交付"], counts["当前未关闭"], counts["本周到期未完成"],
+            counts["历史逾期"], counts["未认领风险"]))
+    total_row = "| 总计 | %d | %d | %d | %d | %d | %d |" % (total["任务数"], total["本周新增"], total["本周交付"], total["本周到期"], total["本周到期未完成"], total["历史逾期"])
+    return "| 总计 | 任务数 | 本周新增 | 本周交付 | 本周到期 | 本周到期未完成 | 历史逾期 |\n| --- | --- | --- | --- | --- | --- | --- |\n" + total_row + "\n\n" + "\n\n".join(person_sections)
 
 
 def default_week_start(now=None):
