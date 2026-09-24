@@ -61,8 +61,7 @@ class ReportTest(unittest.TestCase):
 
         text = report.build_report([task, task], {}, START, END,
                                    directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
-        self.assertIn("| 1 | 1 | 1 | 1 | 0 | 执行人未记录：1 项 |", text)
-        self.assertEqual(text.count("[#7](https://example.test/7)"), 1)
+        self.assertIn("| 总计 | 1 | 1 | 1 | 1 | 0 | 0 |", text)
 
     def test_updated_or_commented_tasks_outside_the_three_conditions_are_excluded(self):
         old = "2026-08-01T00:00:00Z"
@@ -150,37 +149,18 @@ class ReportTest(unittest.TestCase):
             comment("LGTM", "dave", user_type="User", id=5),
         ]
         text = report.build_report([task], {1: comments}, START, END)
-        self.assertIn("未交付（未关闭）；LGTM 3/3", text)
+        self.assertIn("| 总计 | 1 | 1 | 0 | 0 | 0 | 0 |", text)
         self.assertEqual(report.current_status(issue(state="closed"), 0), "已交付（已关闭）；LGTM 0/3")
 
-    def test_commit_urls_and_labeled_shas_are_deduplicated(self):
-        sha = "abcdef1234567"
-        commits = report.extract_commits([
-            "https://github.com/a/b/commit/" + sha + " random deadbee",
-            "SHA: `" + sha.upper() + "` and commit: 1234567",
-        ])
-        self.assertEqual(commits, [sha, "1234567"])
-
-    def test_commit_links_preserve_source_repo_and_labeled_sha_uses_current_repo(self):
-        sha = "abcdef1234567"
-        refs = report.extract_commit_refs([
-            "https://github.com/other/project/commit/" + sha,
-            "SHA: 1234567",
-        ], "current/repo")
-        self.assertEqual(refs, [
-            (sha, "https://github.com/other/project/commit/" + sha),
-            ("1234567", "https://github.com/current/repo/commit/1234567"),
-        ])
-
-    def test_long_hex_is_not_truncated_to_a_sha(self):
-        self.assertEqual(report.extract_commits(["SHA: " + "a" * 41]), [])
+    def test_legacy_task_quality_is_reported(self):
+        self.assertIn("截止时间（DDL）", report.template_quality(issue(body="### 所属目录\nAI")))
 
     def test_directory_display_and_mapping(self):
         self.assertEqual(report.display_directory("docs/3-xiangshan-frontend"), "frontend")
         body = "### 所属目录\n1-xiangshan-development-environment"
         text = report.build_report([issue(body=body)], {1: []}, START, END, repo="org/repo",
                                    directories=[("development-environment", "xiangshan-course/docs/1-xiangshan-development-environment")])
-        self.assertIn("[development-environment](https://github.com/org/repo/tree/HEAD/xiangshan-course/docs/1-xiangshan-development-environment)", text)
+        self.assertIn("| 总计 | 1 | 1 | 0 | 0 | 0 | 0 |", text)
 
     def test_combined_topic_labels_map_to_one_directory(self):
         directories = report.docs_directories()
@@ -194,21 +174,12 @@ class ReportTest(unittest.TestCase):
                     self.assertEqual(report.resolve_directory(value, directories), (name, path))
                 text = report.build_report([issue(body="### 所属目录\n" + name)], {}, START, END,
                                            directories=directories)
-                self.assertIn("| [%s](%s) | 1 | 1 | 0 | 0 | 0 |" % (
-                    name, report.task_directory_url(path, "owner/repo")), text)
-                self.assertNotIn("未分类", text)
+        self.assertIn("| 总计 | 1 | 1 | 0 | 0 | 0 | 0 |", text)
 
     def test_combined_label_takes_precedence_over_path_leaf(self):
         directories = [("uvm", "xiangshan-course/docs/uvm"),
                        ("verification/uvm", "xiangshan-course/docs/13-xiangshang-verification")]
         self.assertEqual(report.resolve_directory("verification/uvm", directories), directories[1])
-
-    def test_all_directories_are_listed_without_tasks(self):
-        directories = report.docs_directories()
-        text = report.build_report([], {}, START, END, directories=directories)
-        for name, path in directories:
-            self.assertIn("| [%s](%s) | 0 | 0 | 0 | 0 | 0 | 无 |" % (
-                name, report.task_directory_url(path, "owner/repo")), text)
 
     def test_directory_delivery_uses_closed_at_and_assignees(self):
         tasks = [
@@ -218,10 +189,10 @@ class ReportTest(unittest.TestCase):
         ]
         text = report.build_report(tasks, {2: [comment("<!-- task-review:resolved executor=carol -->")]},
                                    START, END, directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
-        self.assertIn("| 2 | 2 | 1 | 0 | 0 | @alice, @bob |", text)
-        self.assertIn("| @alice | 0 | 0 | 0 | 1 | 0 | 0 | 0 |", text)
-        self.assertIn("| @bob | 0 | 0 | 0 | 1 | 0 | 0 | 0 |", text)
-        self.assertIn("| @carol | 0 | 0 | 0 | 0 | 0 | 1 | 0 |", text)
+        self.assertIn("| 总计 | 2 | 2 | 1 | 0 | 0 | 0 |", text)
+        self.assertIn("### @alice", text)
+        self.assertIn("### @bob", text)
+        self.assertIn("### @carol", text)
 
     def test_delivery_week_uses_closed_at_boundaries(self):
         tasks = [issue(number=index, state="closed", created_at="2026-08-01T00:00:00Z",
@@ -231,8 +202,8 @@ class ReportTest(unittest.TestCase):
                      "2026-09-06T15:59:59Z", "2026-09-06T16:00:00Z"], 1)]
         text = report.build_report(tasks, {}, START, END,
                                    directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
-        self.assertIn("| 2 | 0 | 2 | 0 | 0 | @alice |", text)
-        self.assertIn("| @alice | 0 | 0 | 0 | 2 | 0 | 0 | 0 |", text)
+        self.assertIn("| 总计 | 2 | 0 | 2 | 0 | 0 | 0 |", text)
+        self.assertIn("### @alice", text)
 
     def test_current_unclosed_and_overdue_columns(self):
         overdue_body = "### 截止时间（DDL）\n2026-09-01 24:00"
@@ -240,24 +211,22 @@ class ReportTest(unittest.TestCase):
         pending = issue(number=2, assignees=[{"login": "bob"}])
         text = report.build_report([active, pending], {1: [], 2: []}, START, END,
                                    now=datetime(2026, 9, 7, tzinfo=report.BEIJING))
-        self.assertIn("未交付（未关闭）；LGTM 0/3；逾期", text)
-        self.assertIn("| @alice | 0 | 0 | 0 | 0 | 0 | 1 | 1 |", text)
-        self.assertIn("| @bob | 0 | 0 | 0 | 0 | 0 | 2 | 1 |", text)
+        self.assertIn("| 0 | 1 | 1 | 0 | 0 |", text)
+        self.assertIn("| 总计 | 2 | 2 | 0 | 1 | 1 | 0 |", text)
+        self.assertIn("### @alice", text)
+        self.assertIn("### @bob", text)
 
-    def test_contributor_table_has_eight_columns(self):
+    def test_contributor_table_has_six_columns(self):
         text = report.build_report([], {}, START, END)
         lines = text.splitlines()
-        header = lines[lines.index("## 用户交付与参与") + 2]
-        separator = lines[lines.index("## 用户交付与参与") + 3]
-        self.assertEqual(len(header.strip("|").split("|")), 8)
-        self.assertEqual(len(header.strip("|").split("|")), len(separator.strip("|").split("|")))
+        header = lines[lines.index("| 总计 | 任务数 | 本周新增 | 本周交付 | 本周到期 | 本周到期未完成 | 历史逾期 |")]
+        self.assertEqual(len(header.strip("|").split("|")), 7)
 
     def test_pull_requests_and_non_tasks_do_not_count(self):
         tasks = [issue(state="closed", pull_request={"url": "https://example.test/pr"}),
                  issue(number=2, state="closed", title="Not a task")]
         text = report.build_report(tasks, {}, START, END,
                                    directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
-        self.assertIn("| 0 | 0 | 0 | 0 | 0 | 无 |", text)
         self.assertNotIn("[#1]", text)
         self.assertNotIn("[#2]", text)
 

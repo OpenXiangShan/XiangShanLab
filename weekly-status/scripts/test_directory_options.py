@@ -19,7 +19,7 @@ class DirectoryOptionsTest(unittest.TestCase):
                         for path in (root / 'xiangshan-course/docs').iterdir() if path.is_dir()]
         self.assertCountEqual(paths, actual_paths)
         directory_topics = [Path(path).name.split('-', 1)[-1] for path in paths]
-        self.assertTrue(set(report.DIRECTORY_LABELS).issubset(directory_topics), 'Stale directory label mapping')
+        self.assertTrue(set(report.DIRECTORY_ALIASES).issubset(directory_topics), 'Stale directory alias mapping')
         self.assertEqual(len(options), len(set(options)), 'Ambiguous directory options')
         for option in options:
             self.assertNotEqual(report.resolve_directory(option, directories), ("未分类", None))
