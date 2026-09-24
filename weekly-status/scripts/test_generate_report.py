@@ -65,6 +65,16 @@ class ReportTest(unittest.TestCase):
         self.assertIn("| [AI](https://github.com/owner/repo/tree/HEAD/xiangshan-course/docs/8-xiangshan-AI) | 1 | 1 | 1 | 1 | 0 | 0 |", text)
         self.assertIn("[#7](https://example.test/7)", text)
 
+    def test_person_issue_rows_match_their_five_column_header(self):
+        body = "### 所属目录\nAI\n### 截止时间（DDL）\n2026-09-03 18:00"
+        task = issue(26, body=body, assignees=[{"login": "alice"}])
+        text = report.build_report([task], {}, START, END,
+                                   directories=[("AI", "xiangshan-course/docs/8-xiangshan-AI")])
+        self.assertIn("| Issue | 任务 | 目录 | 状态 | DDL |", text)
+        self.assertIn("| [#26](https://example.test/26) | Test | AI |", text)
+        issue_row = next(line for line in text.splitlines() if "[#26]" in line)
+        self.assertEqual(len(issue_row.strip("|").split("|")), 5)
+
     def test_updated_or_commented_tasks_outside_the_three_conditions_are_excluded(self):
         old = "2026-08-01T00:00:00Z"
         updated = issue(created_at=old, updated_at="2026-09-02T00:00:00Z")
