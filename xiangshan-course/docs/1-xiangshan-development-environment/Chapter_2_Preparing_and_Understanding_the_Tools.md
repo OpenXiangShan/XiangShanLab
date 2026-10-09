@@ -813,7 +813,7 @@ make verilog
 
 注意：这里的 `JVM_XMX` 为8GB， `JVM_XMX` 是 Java/Mill 构建进程允许使用的最大堆内存，对于寻常笔记本只有16GB的同学更友好。
 
-标准XiangShan编译使用的40GB，若想要更改可在输入时使用例如 `JVM_XMX=12G`的参数
+标准XiangShan编译使用的40GB，若想要更改可在输入时使用例如 `JVM_XMX=40G`的参数
 
 生成的主要 Verilog 文件为：
 
@@ -830,6 +830,8 @@ make emu CONFIG=MinimalConfig EMU_TRACE=1 -j32
 - `CONFIG=MinimalConfig`：使用最小配置，编译更快 (该配置移除了L2缓存, 有效降低了设计的复杂度, 但该配置下的香山核仍是乱序超标量处理器核)
 - `EMU_TRACE=1`：启用调试跟踪功能
 - `-j32`：并行编译，数字根据你的 CPU 核心数调整 (可以通过 `nproc`指令查询 CPU 核心数量, 建议保留 1-2 个 CPU 核心用于后台其他进程)
+
+编译时间较长，CPU、内存和磁盘不足时可能失败。可降低 `-j10` 的并行数，或在 Docker Desktop/WSL 配置中提高资源上限。
 
 **6.编译 Hello XiangShan 程序：**
 
@@ -856,7 +858,6 @@ cd $NOOP_HOME
 ./build/emu -i $AM_HOME/apps/hello/build/hello-riscv64-xs.bin --no-diff
 ```
 
-编译时间较长，CPU、内存和磁盘不足时可能失败。可降低 `-j10` 的并行数，或在 Docker Desktop/WSL 配置中提高资源上限。
 
 如果一切正常，你应该看到输出：
 
