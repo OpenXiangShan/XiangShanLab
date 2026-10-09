@@ -846,11 +846,13 @@ make ARCH=riscv64-xs
 /work/nexus-am/apps/hello/build/hello-riscv64-xs.bin
 ```
 
-NEMU 源码已完整放入 `/work/NEMU`，但它的 SoftFloat、nanopb、LibCheckpoint 和 LibCheckpointAlpha 是单独的上游依赖，不属于本次指定的两个源码仓库。首次构建某些 NEMU 配置时会尝试联网下载这些依赖；离线交付时需另外准备与该 NEMU 提交兼容的版本。
-
 运行：
 
 ```bash
+# 返回香山项目目录
+cd $NOOP_HOME
+
+# 运行 Hello XiangShan（不使用 DiffTest，速度更快）
 ./build/emu -i $AM_HOME/apps/hello/build/hello-riscv64-xs.bin --no-diff
 ```
 
