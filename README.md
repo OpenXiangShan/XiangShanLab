@@ -103,7 +103,7 @@ git submodule update --init --recursive
 
 ## 参与贡献
 
-欢迎补充课程、修正文档、回答题目、添加实践工程、整理 Bug 案例和完善工具。
+欢迎补充课程、修正文档、回答题目、添加实践工程、整理 Bug 案例、完善工具，以及登记和维护外部贡献项目。
 
 建议：
 
@@ -111,6 +111,12 @@ git submodule update --init --recursive
 2. 修改后检查 Markdown 相对链接、命令和目录名称；
 3. 在 Pull Request 中说明修改内容、影响范围和验证方式；
 4. 如果暂时无法修复问题，可通过 [GitHub Issues](https://github.com/OpenXiangShan/XiangShanLab/issues) 报告。
+
+### 外部贡献项目
+
+外部贡献项目请登记在 [`external-contribution-project/`](./external-contribution-project/) 中。当前目录包含 HACO、内存安全和香山外部验证项目等资料；项目可使用、扩展或验证香山，也可提供 DDR、验证、AI、NoC 或安全等支撑能力。
+
+新增项目时，请复制[贡献模板](./external-contribution-project/CONTRIBUTION_TEMPLATE.md)到对应项目目录，并填写项目简介、公开仓库、与 RISC-V 和香山的关系、依赖的 RISC-V 扩展和香山版本或 commit、构建或验证命令、维护组织及贡献者信息。具体项目清单和登记要求见[外部贡献项目 README](./external-contribution-project/README.md)。
 
 任务认领、同步和交付规则见[社区去中心化治理策略](./XiangShanLab-user-guide/XiangShan-Community-Decentralized-Governance-Strategy.md)，Hello XiangShan 的提交流程见[提交指南](./XiangShanLab-user-guide/how-to-commit-hello-xiangshan.md)。
 
