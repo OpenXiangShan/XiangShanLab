@@ -8,9 +8,9 @@ Attention 解决的问题是：**面对多条输入信息，怎样根据当前�
 
 它接收三类输入：
 
-- Query（查询，记为 $Q$）：当前想寻找什么。
-- Key（键，记为 $K$）：每条候选信息用于匹配的特征。
-- Value（值，记为 $V$）：每条候选信息真正携带的内容。
+- Query（查询，记为 $Q$ ）：当前想寻找什么。
+- Key（键，记为 $K$ ）：每条候选信息用于匹配的特征。
+- Value（值，记为 $V$ ）：每条候选信息真正携带的内容。
 
 输出是 Value 的加权和。同一组 Key 和 Value 面对不同 Query 时，会产生不同的权重和输出。
 
@@ -29,9 +29,9 @@ Key 只负责“匹配”，Value 才是最后被汇总的“内容”。匹配�
 
 缩放点积注意力的计算顺序如下：
 
-1. 准备 Query 矩阵 $Q$、Key 矩阵 $K$ 和 Value 矩阵 $V$。
-2. 计算 $QK^\top$，得到所有 Query 与 Key 的点积匹配分数。
-3. 将分数除以 $\sqrt{d_k}$，其中 $d_k$ 是 Query 和 Key 的维度。
+1. 准备 Query 矩阵 $Q$ 、Key 矩阵 $K$ 和 Value 矩阵 $V$。
+2. 计算 $QK^\top$ ，得到所有 Query 与 Key 的点积匹配分数。
+3. 将分数除以 $\sqrt{d_k}$ ，其中 $d_k$ 是 Query 和 Key 的维度。
 4. 对每一行执行 Softmax，得到注意力权重。
 5. 将权重矩阵与 $V$ 相乘，得到输出。
 
@@ -40,6 +40,7 @@ Key 只负责“匹配”，Value 才是最后被汇总的“内容”。匹配�
 设一个 Query 要从三条信息中提取内容：
 
 $$
+
 q=\begin{bmatrix}1 & 0\end{bmatrix},\qquad
 K=\begin{bmatrix}
 1 & 0\\
@@ -51,9 +52,10 @@ V=\begin{bmatrix}
 0 & 2\\
 3 & 1
 \end{bmatrix}.
+
 $$
 
-Query 与第一、第三个 Key 的点积都是 $1$，与第二个 Key 的点积是 $0$。因此第一、第三个 Value 获得较高且相同的权重。最终输出不是直接选择某个 Value，而是将三个 Value 按权重混合。
+Query 与第一、第三个 Key 的点积都是 $1$ ，与第二个 Key 的点积是 $0$。因此第一、第三个 Value 获得较高且相同的权重。最终输出不是直接选择某个 Value，而是将三个 Value 按权重混合。
 
 ## 2. 公式讲解
 
@@ -62,28 +64,38 @@ Query 与第一、第三个 Key 的点积都是 $1$，与第二个 Key 的点积
 缩放点积注意力的完整公式是：
 
 $$
+
 \operatorname{Attention}(Q,K,V)
 =\operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
+
 $$
 
 可以拆成三步：
 
 $$
+
 S=\frac{QK^\top}{\sqrt{d_k}},
+
 $$
 
 $$
+
 A_{ij}=\frac{\exp(S_{ij})}{\sum_{r=1}^{n_k}\exp(S_{ir})},
+
 $$
 
 $$
+
 O=AV.
+
 $$
 
 对于单个 Query，其输出为：
 
 $$
+
 o_i=\sum_{j=1}^{n_k}A_{ij}v_j.
+
 $$
 
 ### 2.2 变量含义
@@ -97,8 +109,8 @@ $$
 - $A_{ij}$：第 $i$ 个 Query 分配给第 $j$ 个 Value 的权重。
 - $r$：Softmax 分母中的求和下标。
 - $v_j$：第 $j$ 个 Value 向量。
-- $O\in\mathbb{R}^{n_q\times d_v}$：最终输出矩阵，$o_i$ 是其第 $i$ 行。
-- $\exp(\cdot)$：指数函数；$K^\top$ 表示 $K$ 的转置。
+- $O\in\mathbb{R}^{n_q\times d_v}$：最终输出矩阵， $o_i$ 是其第 $i$ 行。
+- $\exp(\cdot)$：指数函数； $K^\top$ 表示 $K$ 的转置。
 
 ### 2.3 公式怎么理解
 
@@ -109,24 +121,32 @@ $$
 第三步对每一行执行 Softmax，使固定 Query 对应的所有权重满足：
 
 $$
+
 A_{ij}\geq 0,\qquad \sum_{j=1}^{n_k}A_{ij}=1.
-$$
-
-最后计算 $AV$，也就是按这些权重混合所有 Value。
-
-将前面的例子代入，$d_k=2$，得到：
 
 $$
+
+最后计算 $AV$ ，也就是按这些权重混合所有 Value。
+
+将前面的例子代入， $d_k=2$ ，得到：
+
+$$
+
 S=\frac{qK^\top}{\sqrt{2}}
 =\begin{bmatrix}0.7071 & 0 & 0.7071\end{bmatrix},
+
 $$
 
 $$
+
 A\approx\begin{bmatrix}0.4011 & 0.1978 & 0.4011\end{bmatrix},
+
 $$
 
 $$
+
 O=AV\approx\begin{bmatrix}1.6044 & 0.7967\end{bmatrix}.
+
 $$
 
 ## 3. 代码示例
@@ -192,8 +212,8 @@ output: [[1.6044 0.7967]]
 
 ### 3.3 关键代码解释
 
-`query @ key.T` 对应 $QK^\top$，计算 Query 与所有 Key 的点积。
+`query @ key.T` 对应 $QK^\top$ ，计算 Query 与所有 Key 的点积。
 
 `/ np.sqrt(d_k)` 对分数进行缩放。`softmax(scores)` 将每行分数转换为总和为 $1$ 的权重。
 
-`weights @ value` 对应 $AV$，使用注意力权重对所有 Value 做加权求和。Softmax 实现先减去每行最大值，是为了降低指数计算溢出的风险，不会改变 Softmax 结果。
+`weights @ value` 对应 $AV$ ，使用注意力权重对所有 Value 做加权求和。Softmax 实现先减去每行最大值，是为了降低指数计算溢出的风险，不会改变 Softmax 结果。

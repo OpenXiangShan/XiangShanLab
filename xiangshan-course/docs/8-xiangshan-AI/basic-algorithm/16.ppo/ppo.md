@@ -39,13 +39,15 @@ PPO 的基本训练流程如下：
 
 ### 1.4 直观例子
 
-假设旧策略选择某动作的概率为 $0.4$，新策略将其提高到 $0.6$，则概率比率为：
+假设旧策略选择某动作的概率为 $0.4$ ，新策略将其提高到 $0.6$ ，则概率比率为：
 
 $$
+
 \rho=\frac{0.6}{0.4}=1.5.
+
 $$
 
-若该动作的优势为 $1$，普通策略梯度会把这次变化记为 $1.5$。当裁剪范围为 $[0.8,1.2]$ 时，PPO 只把这次有利变化按 $1.2$ 计算，避免继续鼓励策略一步走得过远。
+若该动作的优势为 $1$ ，普通策略梯度会把这次变化记为 $1.5$。当裁剪范围为 $[0.8,1.2]$ 时，PPO 只把这次有利变化按 $1.2$ 计算，避免继续鼓励策略一步走得过远。
 
 裁剪并不是把实际概率强制改回区间，而是改变优化目标中的激励。
 
@@ -56,33 +58,42 @@ $$
 策略梯度的基本形式为：
 
 $$
+
 \nabla_\theta J(\theta)
 =\mathbb{E}_t\left[
 \nabla_\theta\log\pi_\theta(a_t\mid s_t)\hat A_t
 \right].
+
 $$
 
 Actor-Critic 使用价值函数 $V_\phi(s_t)$ 作为基线。一种常用的优势估计从 TD 残差开始：
 
 $$
+
 \delta_t=R_t+\gamma V_\phi(s_{t+1})-V_\phi(s_t),
+
 $$
 
 $$
+
 \hat A_t=\sum_{l=0}^{T-t-1}(\gamma\lambda)^l\delta_{t+l}.
+
 $$
 
 PPO 定义新旧策略的概率比率：
 
 $$
+
 \rho_t(\theta)=
 \frac{\pi_\theta(a_t\mid s_t)}
 {\pi_{\theta_{\text{old}}}(a_t\mid s_t)}.
+
 $$
 
 PPO-Clip 的核心目标为：
 
 $$
+
 L^{\text{CLIP}}(\theta)=
 \mathbb{E}_t\left[
 \min\left(
@@ -90,15 +101,18 @@ L^{\text{CLIP}}(\theta)=
 \operatorname{clip}\left(\rho_t(\theta),1-\epsilon,1+\epsilon\right)\hat A_t
 \right)
 \right].
+
 $$
 
 Critic 可以使用均方误差训练：
 
 $$
+
 L_V(\phi)=
 \mathbb{E}_t\left[
 \left(V_\phi(s_t)-\hat V_t\right)^2
 \right].
+
 $$
 
 ### 2.2 变量含义
@@ -205,4 +219,4 @@ value loss: 1.0
 
 `np.clip` 将用于代理目标的比率限制在 $[1-\epsilon,1+\epsilon]$。`np.minimum` 再选择未裁剪项和裁剪项中较保守的一项。
 
-第一个样本优势为正且比率达到 $1.5$，因此收益从 $1.5$ 截到 $1.2$。第三个样本优势为负且比率降到 $0.5$，PPO 选择 $-0.8$，不再奖励继续大幅降低该动作概率。
+第一个样本优势为正且比率达到 $1.5$ ，因此收益从 $1.5$ 截到 $1.2$。第三个样本优势为负且比率降到 $0.5$ ，PPO 选择 $-0.8$ ，不再奖励继续大幅降低该动作概率。
