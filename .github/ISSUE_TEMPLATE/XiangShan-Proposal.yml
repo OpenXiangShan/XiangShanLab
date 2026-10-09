@@ -1,0 +1,191 @@
+---
+name: RISC-V International Proposal (XiangShan)
+about: Submit a proposal to RISC-V International related to the XiangShan open-source high-performance RISC-V processor, covering AI, SoC, Server Platform, Security, and other domains
+title: "[PROPOSAL][XiangShan] <short proposal title>"
+labels: ["proposal", "xiangshan", "risc-v-international"]
+assignees: ""
+---
+
+## 1. Proposal Summary
+
+**Proposal Title:**
+
+**Target Domain:**
+<!-- Select all that apply: -->
+- [ ] AI 
+- [ ] SoC 
+- [ ] Server Platform
+- [ ] Security
+- [ ] ISA Extension (general)
+- [ ] Non-ISA Specification / ABI
+- [ ] Test / Compliance / Certification
+- [ ] Tooling / Ecosystem
+- [ ] Other (please specify)
+
+**Target RISC-V International Group (SIG/TG/HC):**
+<!-- e.g., Security HC, Trusted Computing SIG, SmMTT TG, Runtime Integrity SIG, Crypto SIG, CHERI SIG, AI/ML SIG, SoC Infrastructure HC, Server Platform SIG, Applications & Tools HC, Privileged Spec IC, Unprivileged Spec IC, etc. -->
+
+**Proposal Type:**
+- [ ] ISA Extension
+- [ ] Non-ISA Specification / ABI
+- [ ] Platform Specification
+- [ ] Security Model / Threat Model
+- [ ] Performance / Profiling / Benchmark
+- [ ] Compliance / Certification
+- [ ] Tooling / Ecosystem
+- [ ] Other (please specify)
+
+**XiangShan Component(s) Affected:**
+<!-- e.g., frontend, backend, cache, MMU, PMP, SmMTT, CHERI, vector, matrix, crypto, debug, NoC, chiplet, IOMMU, PCIe, CXL, memory subsystem, etc. -->
+
+---
+
+## 2. Motivation and Problem Statement
+
+**Current Limitation / Gap:**
+
+**Impact on XiangShan:**
+
+**Impact on RISC-V Ecosystem:**
+
+**Relevant Industry Trends / Requirements:**
+<!-- e.g., AI inference/training, chiplet-based SoC, CXL memory expansion, confidential computing, RISC-V server platform, etc. -->
+
+---
+
+## 3. Proposed Solution
+
+**Technical Description:**
+
+**Relevant RISC-V Specifications / Drafts:**
+
+**Relationship to Existing RISC-V International Work:**
+<!-- e.g., overlaps with AI/ML SIG, SoC Infrastructure HC, Server Platform SIG, Security HC, etc. -->
+
+**XiangShan Implementation Plan:**
+<!-- Which modules, repositories, branches, or FPGA/silicon targets? -->
+
+---
+
+## 4. Use Cases and Requirements
+
+**Primary Use Case(s):**
+<!-- e.g., LLM inference, training acceleration, chiplet integration, CXL memory pooling, confidential VM, RISC-V server, edge AI, etc. -->
+
+**Functional Requirements:**
+
+**Non-Functional Requirements:**
+<!-- Performance, area, power, security, verifiability, scalability, etc. -->
+
+**Target RISC-V Profiles / Platforms:**
+<!-- e.g., RVA23, RVB23, RVA23 Server, AI/ML profile, confidential computing profile, etc. -->
+
+**Performance Targets:**
+<!-- If applicable, e.g., TOPS, memory bandwidth, latency, IPC, SPECint, MLPerf. -->
+
+---
+
+## 5. Domain-Specific Considerations
+
+### 5.1 AI / Machine Learning
+- Data types (FP8, FP16, BF16, INT8, INT4, etc.):
+- Matrix / vector extensions:
+- Memory hierarchy and bandwidth:
+- Software stack (compiler, runtime, libraries):
+- Interoperability with existing AI frameworks:
+
+### 5.2 SoC / Chiplet / Interconnect
+- On-chip interconnect (NoC, mesh, ring):
+- Chiplet / die-to-die interfaces (UCIe, BoW, AIB, etc.):
+- Cache coherence / memory consistency:
+- IOMMU / IOPMP / device assignment:
+- Power / clock / reset domains:
+
+### 5.3 Server Platform / Datacenter
+- RAS (Reliability, Availability, Serviceability):
+- Virtualization / hypervisor support:
+- Confidential computing:
+- CXL / PCIe / memory expansion:
+- BMC / manageability / firmware:
+- Boot / secure boot / attestation:
+
+### 5.4 Security
+- Threat model:
+- Attack surface:
+- Mitigations:
+- Relevant Security HC / SIG / TG:
+
+---
+
+## 6. Implementation and Validation
+
+**Prototype / PoC Status:**
+
+**XiangShan Repositories / Branches:**
+
+**Verification Plan:**
+<!-- Simulation, FPGA, silicon, formal verification, emulation, etc. -->
+
+**Compliance / Certification Plan:**
+<!-- RISC-V Architectural Tests, certification steering committee, etc. -->
+
+---
+
+## 7. Timeline and Milestones
+
+| Milestone | Description | Target Date |
+|-----------|-------------|-------------|
+| M1 | Proposal submitted to RISC-V International | |
+| M2 | Discussion in target SIG/TG | |
+| M3 | Draft specification available | |
+| M4 | PoC in XiangShan | |
+| M5 | Ratification / Freeze | |
+| M6 | Production / upstream | |
+
+---
+
+## 8. Voting and Membership
+
+**Proposer Membership Status:**
+<!-- Organization Member / Individual Member / Not yet a member -->
+
+**Target Committee Chair Contacted:**
+<!-- Name and email of the chair of the target SIG/TG/HC. -->
+
+**Voting Rights Plan:**
+<!-- Will you attend three consecutive meetings to obtain voting rights? -->
+
+---
+
+## 9. References
+
+- RISC-V International Membership: https://riscv.org/members/join/
+- RISC-V Technical Calendar: https://tech.riscv.org/calendar
+- XiangShan Repository: https://github.com/OpenXiangShan/XiangShan
+- Related RISC-V International Groups:
+  - Security HC: https://lists.riscv.org/g/security
+  - Trusted Computing SIG: https://lists.riscv.org/g/sig-trusted-computing
+  - Runtime Integrity SIG: https://lists.riscv.org/g/sig-runtime-integrity
+  - Crypto SIG: https://lists.riscv.org/g/tech-crypto-ext
+  - CHERI SIG: https://lists.riscv.org/g/sig-cheri
+  - SoC Infrastructure HC: https://lists.riscv.org/g/soc-infra
+  - Applications & Tools HC: https://lists.riscv.org/g/apps-tools
+  - Privileged Spec IC: https://lists.riscv.org/g/priv-ic
+  - Unprivileged Spec IC: https://lists.riscv.org/g/unpriv-ic
+- Other references:
+
+---
+
+## 10. Checklist
+
+- [ ] I have read the RISC-V International participation guide.
+- [ ] I have confirmed the target SIG/TG/HC and contacted the chair if needed.
+- [ ] I have described the motivation, proposed solution, and use cases.
+- [ ] I have considered domain-specific requirements (AI / SoC / Server / Security).
+- [ ] I have provided a timeline and milestones.
+- [ ] I have listed relevant references.
+- [ ] I understand that voting rights require attending three consecutive meetings.
+
+---
+
+**Additional Comments:**
