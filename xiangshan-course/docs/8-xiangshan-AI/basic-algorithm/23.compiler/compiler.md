@@ -148,7 +148,7 @@ $$
 设模型输出节点集合为 $O$。所有必须保留的节点构成集合：
 
 $$
-V_{\text{live}}
+V_{live}
 =
 \{u\in V\mid
 \exists o\in O,\ u\leadsto o\}
