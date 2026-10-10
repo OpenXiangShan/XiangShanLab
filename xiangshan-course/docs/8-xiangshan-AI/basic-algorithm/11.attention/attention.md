@@ -40,7 +40,6 @@ Key 只负责“匹配”，Value 才是最后被汇总的“内容”。匹配�
 设一个 Query 要从三条信息中提取内容：
 
 $$
-
 q=\begin{bmatrix}1 & 0\end{bmatrix},\qquad
 K=\begin{bmatrix}
 1 & 0\\
@@ -52,7 +51,6 @@ V=\begin{bmatrix}
 0 & 2\\
 3 & 1
 \end{bmatrix}.
-
 $$
 
 Query 与第一、第三个 Key 的点积都是 $1$ ，与第二个 Key 的点积是 $0$。因此第一、第三个 Value 获得较高且相同的权重。最终输出不是直接选择某个 Value，而是将三个 Value 按权重混合。
@@ -64,38 +62,28 @@ Query 与第一、第三个 Key 的点积都是 $1$ ，与第二个 Key 的点�
 缩放点积注意力的完整公式是：
 
 $$
-
-\operatorname{Attention}(Q,K,V)
-=\operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
-
+Attention(Q,K,V)
+=softmax\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
 $$
 
 可以拆成三步：
 
 $$
-
 S=\frac{QK^\top}{\sqrt{d_k}},
-
 $$
 
 $$
-
 A_{ij}=\frac{\exp(S_{ij})}{\sum_{r=1}^{n_k}\exp(S_{ir})},
-
 $$
 
 $$
-
 O=AV.
-
 $$
 
 对于单个 Query，其输出为：
 
 $$
-
 o_i=\sum_{j=1}^{n_k}A_{ij}v_j.
-
 $$
 
 ### 2.2 变量含义
@@ -121,9 +109,7 @@ $$
 第三步对每一行执行 Softmax，使固定 Query 对应的所有权重满足：
 
 $$
-
 A_{ij}\geq 0,\qquad \sum_{j=1}^{n_k}A_{ij}=1.
-
 $$
 
 最后计算 $AV$ ，也就是按这些权重混合所有 Value。
@@ -131,22 +117,16 @@ $$
 将前面的例子代入， $d_k=2$ ，得到：
 
 $$
-
 S=\frac{qK^\top}{\sqrt{2}}
 =\begin{bmatrix}0.7071 & 0 & 0.7071\end{bmatrix},
-
 $$
 
 $$
-
 A\approx\begin{bmatrix}0.4011 & 0.1978 & 0.4011\end{bmatrix},
-
 $$
 
 $$
-
 O=AV\approx\begin{bmatrix}1.6044 & 0.7967\end{bmatrix}.
-
 $$
 
 ## 3. 代码示例

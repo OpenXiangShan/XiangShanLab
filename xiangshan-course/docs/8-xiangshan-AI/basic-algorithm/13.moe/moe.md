@@ -38,35 +38,27 @@ MoE（Mixture of Experts，混合专家模型）把一层拆成多个“专家�
 设有三个专家，Router 为某个 token 输出的概率为：
 
 $$
-
 p(x)=\begin{bmatrix}0.6652 & 0.0900 & 0.2447\end{bmatrix}.
-
 $$
 
 当 Top-K 取 2 时，选择专家 1 和专家 3。示例将两项概率重新归一化，得到：
 
 $$
-
 g(x)=\begin{bmatrix}0.7311 & 0 & 0.2689\end{bmatrix}.
-
 $$
 
 如果两个专家的输出分别为：
 
 $$
-
 E_1(x)=\begin{bmatrix}1 & 0\end{bmatrix},\qquad
 E_3(x)=\begin{bmatrix}0.5 & 1\end{bmatrix},
-
 $$
 
 那么 MoE 输出为：
 
 $$
-
 y=0.7311E_1(x)+0.2689E_3(x)
 \approx\begin{bmatrix}0.8655 & 0.2689\end{bmatrix}.
-
 $$
 
 专家 2 没有被选中，因此不参与这个 token 的专家计算。
@@ -78,39 +70,31 @@ $$
 Router 首先计算专家分数和概率：
 
 $$
-
 z=xW_r,\qquad p_i(x)=\frac{\exp(z_i)}{\sum_{j=1}^{N}\exp(z_j)}.
-
 $$
 
 设 $\mathcal{T}_K(x)$ 是概率最高的 $K$ 个专家下标。本章示例使用以下稀疏门控权重：
 
 $$
-
 g_i(x)=
 \begin{cases}
 \displaystyle\frac{p_i(x)}{\sum_{j\in\mathcal{T}_K(x)}p_j(x)},
 & i\in\mathcal{T}_K(x),\\
 0,&i\notin\mathcal{T}_K(x).
 \end{cases}
-
 $$
 
 MoE 层的输出为：
 
 $$
-
 y=\sum_{i=1}^{N}g_i(x)E_i(x)
 =\sum_{i\in\mathcal{T}_K(x)}g_i(x)E_i(x).
-
 $$
 
 一种常见的 Top-1 负载均衡辅助损失是：
 
 $$
-
 L_{\text{balance}}=\alpha N\sum_{i=1}^{N}f_iP_i.
-
 $$
 
 ### 2.2 变量含义

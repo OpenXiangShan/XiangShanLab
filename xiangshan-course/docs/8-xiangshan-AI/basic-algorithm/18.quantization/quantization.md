@@ -45,33 +45,25 @@
 假设要量化下面五个浮点数：
 
 $$
-
 \mathbf x=[-1.0,\ -0.3,\ 0,\ 0.8,\ 1.2].
-
 $$
 
 使用对称 INT4 量化时，常取对称整数范围 $[-7,7]$ ，并令绝对值最大的 $1.2$ 映射到 $7$。缩放因子为：
 
 $$
-
 s=\frac{1.2}{7}\approx 0.1714.
-
 $$
 
 原数组量化后约为：
 
 $$
-
 \mathbf q=[-6,\ -2,\ 0,\ 5,\ 7].
-
 $$
 
 反量化结果约为：
 
 $$
-
 \hat{\mathbf x}=[-1.0286,\ -0.3429,\ 0,\ 0.8571,\ 1.2].
-
 $$
 
 这些结果与原值接近，但并不完全相同，差值就是量化误差。
@@ -83,90 +75,70 @@ $$
 对于规格化浮点数，可用下面的形式理解其数值：
 
 $$
-
 x=(-1)^a\times 2^{e-b}\times (1+f).
-
 $$
 
 在线性整数量化中，设浮点数允许范围为 $[x_{\min},x_{\max}]$ ，整数编码范围为 $[q_{\min},q_{\max}]$。非对称量化的缩放因子为：
 
 $$
-
 s=\frac{x_{\max}-x_{\min}}
 {q_{\max}-q_{\min}}.
-
 $$
 
 零点为：
 
 $$
-
-z=\operatorname{clip}\left(
-\operatorname{round}\left(q_{\min}-\frac{x_{\min}}{s}\right),
+z=clip\left(
+round\left(q_{\min}-\frac{x_{\min}}{s}\right),
 q_{\min},q_{\max}
 \right).
-
 $$
 
 浮点数 $x$ 的量化公式为：
 
 $$
-
-q=\operatorname{clip}\left(
-\operatorname{round}\left(\frac{x}{s}\right)+z,
+q=clip\left(
+round\left(\frac{x}{s}\right)+z,
 q_{\min},q_{\max}
 \right).
-
 $$
 
 反量化公式为：
 
 $$
-
 \hat x=s(q-z).
-
 $$
 
 对称量化令浮点范围关于零对称。对于 $B$ 位有符号整数，常使用：
 
 $$
-
 q_{\max}^{\text{sym}}=2^{B-1}-1,
 \qquad
 q_{\min}^{\text{sym}}=-q_{\max}^{\text{sym}},
-
 $$
 
 $$
-
 \alpha=\max(|x_{\min}|,|x_{\max}|),
 \qquad
 s=\frac{\alpha}{q_{\max}^{\text{sym}}},
 \qquad
 z=0.
-
 $$
 
 单个元素的量化误差可以写为：
 
 $$
-
 e_i=\hat x_i-x_i.
-
 $$
 
 常用的平均绝对误差和均方误差分别为：
 
 $$
-
-\operatorname{MAE}=\frac{1}{N}\sum_{i=1}^{N}|e_i|,
-
+MAE=\frac{1}{N}\sum_{i=1}^{N}|e_i|,
 $$
 
 $$
-
-\operatorname{MSE}=\frac{1}{N}\sum_{i=1}^{N}e_i^2.
-
+MSE=\frac{1}{N}\sum_{i=1}^{N}e_i^2.
 $$
 
 ### 2.2 变量含义
@@ -182,8 +154,8 @@ $$
 - $s$：正的缩放因子，也就是相邻量化级别之间的间距。
 - $z$：整数零点，使实数零能够映射到某个整数编码。
 - $q$：量化后的整数编码。
-- $\operatorname{round}$：将数值舍入到相邻整数。
-- $\operatorname{clip}$：将数值限制在给定上下界内。
+- $round$：将数值舍入到相邻整数。
+- $clip$：将数值限制在给定上下界内。
 - $B$：整数格式的位数。
 - $\alpha$：对称量化使用的最大绝对值。
 - $i$：数组中元素的索引。

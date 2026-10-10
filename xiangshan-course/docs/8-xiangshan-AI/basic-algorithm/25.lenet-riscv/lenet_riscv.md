@@ -200,7 +200,6 @@ NPU_WAIT  last_command
 输入为：
 
 $$
-
 X=
 \begin{bmatrix}
 1&2&3&4\\
@@ -208,40 +207,33 @@ X=
 9&10&11&12\\
 13&14&15&16
 \end{bmatrix}.
-
 $$
 
 卷积后重新量化的结果为：
 
 $$
-
 Q=
 \begin{bmatrix}
 4&5&6\\
 8&9&10\\
 12&13&14
 \end{bmatrix}.
-
 $$
 
 最大池化得到：
 
 $$
-
 P=
 \begin{bmatrix}
 9&10\\
 13&14
 \end{bmatrix}.
-
 $$
 
 最后全连接层选择第一个和第四个输入，并分别加上 $1$ 和 $-1$ 的偏置，因此输出为：
 
 $$
-
 Y=[10,13]^{\mathsf T}.
-
 $$
 
 ## 2. 公式讲解
@@ -250,62 +242,26 @@ $$
 
 二维卷积的输出高度和宽度为：
 
-$$
+$$H_{\text{out}}=\left\lfloor\frac{H_{\text{in}}+2P_h-K_h}{S_h}\right\rfloor+1,$$
 
-H_{\text{out}}
-=
-\left\lfloor
-\frac{H_{\text{in}}+2P_h-K_h}{S_h}
-\right\rfloor+1,
-
-$$
-
-$$
-
-W_{\text{out}}
-=
-\left\lfloor
-\frac{W_{\text{in}}+2P_w-K_w}{S_w}
-\right\rfloor+1.
-
-$$
+$$W_{\text{out}}=\left\lfloor\frac{W_{\text{in}}+2P_w-K_w}{S_w}\right\rfloor+1.$$
 
 Conv1 使用 $H_{\text{in}}=W_{\text{in}}=32$ 、 $K_h=K_w=5$ 、 $S_h=S_w=1$ 和零填充，因此：
 
-$$
-
-H_{\text{out}}=W_{\text{out}}
-=
-\frac{32-5}{1}+1
-=28.
-
-$$
+$$H_{\text{out}}=W_{\text{out}}=\frac{32-5}{1}+1
+=28.$$
 
 $2\times2$ 最大池化使用步长 $2$ ，因此把 $28\times28$ 变成 $14\times14$。Conv2 再把 $14\times14$ 变成 $10\times10$ ，第二次池化得到 $5\times5$。最终展平长度为：
 
 $$
-
 16\times5\times5=400.
-
 $$
 
 ### 2.2 INT8 卷积与 INT32 累加
 
 设输入激活为 $X$ ，卷积权重为 $W$ ，INT32 偏置为 $b$。批次大小为 $1$ 时，卷积累加结果为：
 
-$$
-
-A_{c_o,h_o,w_o}
-=
-b_{c_o}
-+
-\sum_{c_i=0}^{C_{\text{in}}-1}
-\sum_{k_h=0}^{K_h-1}
-\sum_{k_w=0}^{K_w-1}
-X_{c_i,h_oS_h+k_h-P_h,w_oS_w+k_w-P_w}
-W_{c_o,c_i,k_h,k_w}.
-
-$$
+$$A_{c_o,h_o,w_o}=b_{c_o}+\sum_{c_i=0}^{C_{\text{in}}-1}\sum_{k_h=0}^{K_h-1}\sum_{k_w=0}^{K_w-1}X_{c_i,h_oS_h+k_h-P_h,w_oS_w+k_w-P_w}W_{c_o,c_i,k_h,k_w}.$$
 
 $X$ 和 $W$ 的元素是有符号 INT8，乘积进入 INT32 累加器。若索引落在填充区域，本章约定对应输入值为零。
 
@@ -314,53 +270,28 @@ $X$ 和 $W$ 的元素是有符号 INT8，乘积进入 INT32 累加器。若索�
 本章描述符使用整数乘子 $m$ 和非负右移量 $n$。先计算：
 
 $$
-
 z=mA.
-
 $$
 
 当 $n\ge1$ 时，采用“绝对值四舍五入，恰好一半时远离零”的规则：
 
-$$
-
-\operatorname{RoundShift}(z,n)
-=
-\operatorname{sgn}(z)
-\left\lfloor
-\frac{|z|+2^{n-1}}{2^n}
-\right\rfloor.
-
+$$RoundShift(z,n)=sgn(z)\left\lfloor\frac{|z|+2^{n-1}}{2^n}\right\rfloor.
 $$
 
 当 $n=0$ 时：
 
 $$
-
-\operatorname{RoundShift}(z,0)=z.
-
+RoundShift(z,0)=z.
 $$
 
 最终 INT8 输出为：
 
-$$
-
-q
-=
-\operatorname{clip}
-\left(
-\operatorname{RoundShift}(mA,n),
--128,
-127
-\right).
-
-$$
+$$q=clip\left(RoundShift(mA,n),-128,127\right).$$
 
 若随后执行 ReLU，则：
 
 $$
-
 q_{\text{relu}}=\max(0,q).
-
 $$
 
 真实量化模型中的 $m$ 和 $n$ 应由输入、权重与输出量化尺度推导或校准。本章只规定执行语义，不重复推导量化参数。
@@ -370,12 +301,7 @@ $$
 对于窗口大小 $K_p\times K_p$ 、步长 $S_p$ 的最大池化：
 
 $$
-
-Y_{c,h_o,w_o}
-=
-\max_{\substack{0\le i<K_p\\0\le j<K_p}}
-X_{c,h_oS_p+i,w_oS_p+j}.
-
+Y_{c,h_o,w_o}=\max_{0\le i,j\lt K_p}X_{c,h_oS_p+i,w_oS_p+j}.
 $$
 
 最大池化只比较 INT8 激活，不需要 INT32 乘加。
@@ -385,9 +311,7 @@ $$
 设输入向量 $x\in\mathbb Z^{D_{\text{in}}}$ ，权重矩阵 $W\in\mathbb Z^{D_{\text{out}}\times D_{\text{in}}}$ ，偏置 $b\in\mathbb Z^{D_{\text{out}}}$。INT32 累加结果为：
 
 $$
-
 A_j=b_j+\sum_{i=0}^{D_{\text{in}}-1}W_{j,i}x_i.
-
 $$
 
 全连接输出同样通过 `RoundShift` 和 `clip` 转回 INT8。卷积与全连接因此可以共享 INT8 乘法器、INT32 累加器和重新量化单元。
@@ -397,7 +321,6 @@ $$
 设 32 位指令字为 $I$ ，本章采用以下编码：
 
 $$
-
 \begin{aligned}
 I={}&
 (\text{funct7}\ll25)
@@ -412,45 +335,32 @@ I={}&
 \mathbin{|}
 \text{0x0B}.
 \end{aligned}
-
 $$
 
-字段可以从指令字中恢复：
+下面用 $\text{AND}$ 表示按位与，$\gg$ 表示逻辑右移。字段可以从指令字中恢复：
 
 $$
-
-\text{opcode}=I\mathbin{\&}\text{0x7F},
-
+\text{opcode}=I\text{ AND }\text{0x7F},
 $$
 
 $$
-
-\text{rd}=(I\gg7)\mathbin{\&}\text{0x1F},
-
+\text{rd}=(I\gg7)\text{ AND }\text{0x1F},
 $$
 
 $$
-
-\text{funct3}=(I\gg12)\mathbin{\&}\text{0x7},
-
+\text{funct3}=(I\gg12)\text{ AND }\text{0x7},
 $$
 
 $$
-
-\text{rs1}=(I\gg15)\mathbin{\&}\text{0x1F},
-
+\text{rs1}=(I\gg15)\text{ AND }\text{0x1F},
 $$
 
 $$
-
-\text{rs2}=(I\gg20)\mathbin{\&}\text{0x1F},
-
+\text{rs2}=(I\gg20)\text{ AND }\text{0x1F},
 $$
 
 $$
-
-\text{funct7}=(I\gg25)\mathbin{\&}\text{0x7F}.
-
+\text{funct7}=(I\gg25)\text{ AND }\text{0x7F}.
 $$
 
 ### 2.7 变量含义
@@ -473,9 +383,9 @@ $$
 - $m$：重新量化使用的整数乘子。
 - $n$：重新量化使用的非负右移位数。
 - $z$：右移前的整数中间值 $mA$。
-- $\operatorname{sgn}(z)$：符号函数，正数为 $1$ 、负数为 $-1$ 、零为 $0$。
-- $\operatorname{RoundShift}$：本章定义的带舍入算术右移。
-- $\operatorname{clip}(x,a,b)$：把 $x$ 限制到闭区间 $[a,b]$。
+- $sgn(z)$：符号函数，正数为 $1$ 、负数为 $-1$ 、零为 $0$。
+- $RoundShift$：本章定义的带舍入算术右移。
+- $clip(x,a,b)$：把 $x$ 限制到闭区间 $[a,b]$。
 - $q$ 、 $q_{\text{relu}}$：重新量化结果和 ReLU 结果。
 - $K_p$ 、 $S_p$：池化窗口大小和池化步长。
 - $D_{\text{in}}$ 、 $D_{\text{out}}$：全连接层输入和输出维度。
@@ -484,7 +394,7 @@ $$
 - `rs1`、`rs2`、`rd`：RISC-V 源寄存器和目标寄存器编号字段。
 - $\ll$ 、 $\gg$：逻辑左移和逻辑右移。
 - $\mathbin{|}$：按位或。
-- $\mathbin{\&}$：按位与。
+- \&：按位与。
 - `0x0B`：`custom-0` 的 7 位主操作码。
 
 ### 2.8 公式怎么理解

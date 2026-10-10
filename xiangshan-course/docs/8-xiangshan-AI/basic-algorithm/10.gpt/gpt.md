@@ -93,7 +93,7 @@ $$L = -\sum_{t=1}^{T-1} \log P(x_{t+1} \mid x_1, \dots, x_t)$$
 
 **生成概率（链式法则）**：
 
-$$P(x_1, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_{<t})$$
+$$ P(x_1, \dots, x_T) = \prod_{t=1}^{T} P(x_t \mid x_{\lt t}) $$
 
 ### 2.2 变量含义
 

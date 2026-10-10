@@ -129,47 +129,29 @@ token 1、3 -> 专家 1 -> 输出回到位置 1、3
 设全局批次 $B$ 被平均切成 $P$ 个大小相同的局部批次 $B_1,\ldots,B_P$ ，模型参数为 $\theta$。第 $r$ 个工作进程的平均损失和局部梯度为：
 
 $$
-
-\mathcal L_r(\theta)
-=
-\frac{1}{|B_r|}
+\mathcal L_r(\theta)=\frac{1}{|B_r|}
 \sum_{(x,y)\in B_r}
 \ell\left(f_\theta(x),y\right),
-
 $$
 
 $$
-
 g_r=\nabla_\theta\mathcal L_r(\theta).
-
 $$
 
 全局平均损失和梯度为：
 
 $$
-
-\mathcal L(\theta)
-=
-\frac{1}{P}\sum_{r=1}^{P}\mathcal L_r(\theta),
-
+\mathcal L(\theta)=\frac{1}{P}\sum_{r=1}^{P}\mathcal L_r(\theta),
 $$
 
 $$
-
-g
-=
-\nabla_\theta\mathcal L(\theta)
-=
-\frac{1}{P}\sum_{r=1}^{P}g_r.
-
+g=\nabla_\theta\mathcal L(\theta)=\frac{1}{P}\sum_{r=1}^{P}g_r.
 $$
 
 使用学习率 $\eta$ 更新参数：
 
 $$
-
 \theta'=\theta-\eta g.
-
 $$
 
 上述简单平均要求每个局部批次大小相同，并且局部损失都采用样本平均。若各分片样本数不同，应按样本数加权，而不能直接平均局部梯度。
@@ -179,69 +161,54 @@ $$
 设：
 
 $$
-
 X\in\mathbb R^{N\times D},
 \qquad
 W\in\mathbb R^{D\times M},
 \qquad
 Y=XW.
-
 $$
 
 沿 $W$ 的输出维做列切分：
 
 $$
-
-W=
-\begin{bmatrix}
+W=\begin{bmatrix}
 W_1 & W_2 & \cdots & W_P
 \end{bmatrix}.
-
 $$
 
 每个分片独立计算：
 
 $$
-
 Y_r=XW_r.
-
 $$
 
 完整输出由各分片沿最后一维拼接：
 
 $$
-
 Y=
-\operatorname{Concat}
+Concat
 \left(Y_1,Y_2,\ldots,Y_P\right).
-
 $$
 
 沿输入维做行切分时：
 
 $$
-
-X=
-\begin{bmatrix}
+X=\begin{bmatrix}
 X_1 & X_2 & \cdots & X_P
 \end{bmatrix},
 \qquad
-W=
-\begin{bmatrix}
+W=\begin{bmatrix}
 W_1\\
 W_2\\
 \vdots\\
 W_P
 \end{bmatrix}.
-
 $$
 
 根据分块矩阵乘法：
 
 $$
-
 Y=XW=\sum_{r=1}^{P}X_rW_r.
-
 $$
 
 因此列切分需要拼接输出特征，行切分需要对部分乘积求和。
@@ -251,43 +218,31 @@ $$
 将模型划分为 $S$ 个连续阶段：
 
 $$
-
 F=F_S\circ F_{S-1}\circ\cdots\circ F_1.
-
 $$
 
 对于第 $m$ 个微批次 $x^{(m)}$ ，定义：
 
 $$
-
 h_0^{(m)}=x^{(m)},
-
 $$
 
 $$
-
-h_s^{(m)}
-=
-F_s\left(h_{s-1}^{(m)}\right),
+h_s^{(m)}=F_s\left(h_{s-1}^{(m)}\right),
 \qquad
 s=1,2,\ldots,S.
-
 $$
 
 最终输出为：
 
 $$
-
 y^{(m)}=h_S^{(m)}.
-
 $$
 
 在只考虑前向传播、每个阶段耗时相同的简化模型中， $M$ 个微批次通过 $S$ 个阶段至少需要：
 
 $$
-
 T_{\text{slot}}=M+S-1
-
 $$
 
 个阶段时间槽。多出的 $S-1$ 个时间槽来自流水线的填充与排空。该公式是理想化调度模型，不包含阶段耗时不均、通信、反向传播和调度策略差异。
@@ -297,36 +252,24 @@ $$
 设 MoE 层包含 $E$ 个专家函数 $E_i$ ，路由器为输入 token $x$ 计算分数 $s_i(x)$：
 
 $$
-
-p_i(x)
-=
-\frac{\exp(s_i(x))}
+p_i(x)=\frac{\exp(s_i(x))}
 {\sum_{j=1}^{E}\exp(s_j(x))}.
-
 $$
 
 令 $\mathcal T_K(x)$ 表示概率最高的 $K$ 个专家索引。对选中概率重新归一化：
 
 $$
-
-\alpha_i(x)
-=
-\frac{p_i(x)}
+\alpha_i(x)=\frac{p_i(x)}
 {\sum_{j\in\mathcal T_K(x)}p_j(x)},
 \qquad
 i\in\mathcal T_K(x).
-
 $$
 
 MoE 输出为：
 
 $$
-
-y(x)
-=
-\sum_{i\in\mathcal T_K(x)}
+y(x)=\sum_{i\in\mathcal T_K(x)}
 \alpha_i(x)E_i(x).
-
 $$
 
 专家并行不会改变这个函数定义，它改变的是专家参数放置位置，以及 token 根据 $\mathcal T_K(x)$ 被分发和收集的过程。
@@ -349,7 +292,7 @@ $$
 - $W$：线性层权重矩阵； $M$ 是输出特征数。
 - $W_r$ 、 $X_r$：第 $r$ 个权重或输入分片。
 - $Y_r$ 、 $Y$：局部输出分片和完整输出。
-- $\operatorname{Concat}$：按照指定维度拼接张量。
+- $Concat$：按照指定维度拼接张量。
 - $F$：完整模型函数。
 - $F_s$：流水线中的第 $s$ 个阶段。
 - $S$：流水线阶段数量。

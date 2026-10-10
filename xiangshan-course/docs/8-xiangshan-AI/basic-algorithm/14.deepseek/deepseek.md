@@ -51,17 +51,13 @@ GRPO 的具体目标函数将在后面的 GRPO 独立章节中讲解，本章只
 以 MLA 的 Key/Value 联合压缩为例。假设单个 token 的完整 Key 和 Value 都是 4 维：
 
 $$
-
 k_t\in\mathbb{R}^{4},\qquad v_t\in\mathbb{R}^{4}.
-
 $$
 
 标准缓存需要为每个 token 保存 $4+4=8$ 个数。若使用一个 2 维潜向量同时表示 Key 和 Value 的内容：
 
 $$
-
 c_t^{KV}\in\mathbb{R}^{2},
-
 $$
 
 教学示例中，每个 token 的内容缓存就从 8 个数变为 2 个数。对于 3 个 token，完整 Key/Value 共 24 个数，而压缩潜向量共 6 个数。
@@ -75,61 +71,47 @@ $$
 MLA 首先对 Key 和 Value 进行低秩联合压缩：
 
 $$
-
 c_t^{KV}=h_tW^{DKV},
-
 $$
 
 $$
-
 k_t^{C}=c_t^{KV}W^{UK},\qquad
 v_t^{C}=c_t^{KV}W^{UV}.
-
 $$
 
 其中 $c_t^{KV}$ 是需要缓存的低维内容表示。完整 MLA 还将内容分支与携带 RoPE 的位置分支拼接：
 
 $$
-
 q_{t,i}=\left[q_{t,i}^{C};q_{t,i}^{R}\right],\qquad
 k_{t,i}=\left[k_{t,i}^{C};k_t^{R}\right].
-
 $$
 
 标准多头注意力与 MLA 在每个 token、每层所需缓存的元素数量分别为：
 
 $$
-
 M_{\text{MHA}}=2n_hd_h,
-
 $$
 
 $$
-
 M_{\text{MLA}}=d_c+d_h^{R}.
-
 $$
 
 DeepSeekMoE 的输出可以写成：
 
 $$
-
 h_t'=u_t
-+\sum_{i=1}^{N_s}\operatorname{FFN}^{(s)}_i(u_t)
-+\sum_{i=1}^{N_r}g_{i,t}\operatorname{FFN}^{(r)}_i(u_t).
-
++\sum_{i=1}^{N_s}FFN^{(s)}_i(u_t)
++\sum_{i=1}^{N_r}g_{i,t}FFN^{(r)}_i(u_t).
 $$
 
 只有分数位于 Top-K 的路由专家具有非零权重：
 
 $$
-
 g_{i,t}=
 \begin{cases}
-s_{i,t},&s_{i,t}\in\operatorname{TopK}(s_{1,t},\ldots,s_{N_r,t}),\\
+s_{i,t},&s_{i,t}\in TopK(s_{1,t},\ldots,s_{N_r,t}),\\
 0,&\text{其他情况}.
 \end{cases}
-
 $$
 
 ### 2.2 变量含义
@@ -146,7 +128,7 @@ $$
 - $d_h^{R}$：解耦 RoPE 分支的维度。
 - $u_t$：DeepSeekMoE 的输入。
 - $N_s$ 、 $N_r$：共享专家和路由专家的数量。
-- $\operatorname{FFN}^{(s)}_i$ 、 $\operatorname{FFN}^{(r)}_i$：第 $i$ 个共享专家和路由专家。
+- $FFN^{(s)}_i$ 、 $FFN^{(r)}_i$：第 $i$ 个共享专家和路由专家。
 - $s_{i,t}$：token $t$ 对路由专家 $i$ 的匹配分数。
 - $g_{i,t}$：经过 Top-K 选择后的路由权重。
 - $h_t'$：DeepSeekMoE 层包含残差连接后的输出。
