@@ -31,6 +31,7 @@ git submodule update --init --recursive
 - **使用 AI 辅助工具分析源码、波形或 Bug**：查看[工具目录](./tools/README.md)及各工具的 `SKILL.md`。
 - **登记或了解社区外部贡献项目**：查看[外部贡献项目目录](./external-contribution-project/README.md)，了解项目与 RISC-V、香山及其支撑方向的关系。
 - **参加 2026 CIE RISC-V 大赛**：查看[应用方向赛题](./2026-CIE-RISC-V-Contest-Application-Track/README.md)和[提交指南](./2026-CIE-RISC-V-Contest-Application-Track/SUBMISSION_GUIDE.md)。
+- **参与 RISC-V 国际社区**：阅读[RISC-V International 参与指南](./RISC-V-International-Participation-Guide/)，了解如何注册会员、加入群组、订阅邮件列表和加入委员会。
 
 ## 课程目录
 
@@ -70,6 +71,7 @@ git submodule update --init --recursive
 | [`weekly-status/`](./weekly-status/) | 周报、状态模板和周报生成脚本 | [周报目录](./weekly-status/) |
 | [`external-contribution-project/`](./external-contribution-project/) | 香山社区、合作机构和个人贡献的外部项目登记资料 | [项目说明](./external-contribution-project/README.md) |
 | [`2026-CIE-RISC-V-Contest-Application-Track/`](./2026-CIE-RISC-V-Contest-Application-Track/) | 2026 CIE RISC-V 大赛应用方向赛题与提交文件 | [赛题说明](./2026-CIE-RISC-V-Contest-Application-Track/README.md) |
+| [`RISC-V-International-Participation-Guide/`](./RISC-V-International-Participation-Guide/) | RISC-V International 参与指南：会员注册、群组/邮件列表与委员会加入 | [参与指南](./RISC-V-International-Participation-Guide/README.md) |
 
 ## 编程实践
 
@@ -79,7 +81,8 @@ git submodule update --init --recursive
 - `IopmpSystem/`：DCache、IOPMP 和 Memory 组成的系统级实验；
 - `TwoToOneXbarSystem/`：两个 AXI4 Master 共享一个 Memory Slave 的 2-to-1 XBar 实验；
 - `NonBlockingCache/`：非阻塞 Cache 设计与测试；
-- `mmu-smmpt/`：MMU / SMMPT 相关实现、模块和测试。
+- `mmu-smmpt/`：MMU / SMMPT 相关实现、模块和测试；
+- `miniXiangShan/`：以香山微架构为原型的教学级乱序处理器 Chisel 工程（RV32IM + Sv32 分页），详见[项目 README](./xiangshan-programming-practice/miniXiangShan/README.md)。
 
 ## 外部贡献项目
 
@@ -132,6 +135,7 @@ git submodule update --init --recursive
 | [Technical Q&A](./.github/ISSUE_TEMPLATE/technical_qa.yml) | 咨询课程材料、文档、源码或调试相关的具体技术问题；请提供准确链接、命令和错误信息。 |
 | [Project Collaboration Proposal](./.github/ISSUE_TEMPLATE/project_collaboration.yml) | 提议新的协作项目；请说明背景、范围、里程碑、交付物和参与方式。 |
 | [Contribution Certificate Application](./.github/ISSUE_TEMPLATE/contribution_certificate.yml) | 为已完成的香山项目或贡献申请贡献证明；请提供可核验的项目链接和证书信息。 |
+| [RISC-V International Proposal (XiangShan)](./.github/ISSUE_TEMPLATE/riscv-internation-proposal.yml) | 向 RISC-V International 提交与 XiangShan 开源高性能 RISC-V 处理器相关的提案；请说明目标领域（AI、SoC、Server Platform、Security 等）、目标 SIG/TG/HC、动机与解决方案、使用场景、实现与验证、时间线里程碑及成员资格状态。 |
 
 任务发布、认领、同步和交付规则见[社区去中心化治理策略](./XiangShanLab-user-guide/XiangShan-Community-Decentralized-Governance-Strategy.md)。如果模板无法覆盖你的问题，请先在对应模板中补充说明；`config.yml` 已禁用空白 Issue。
 

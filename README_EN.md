@@ -31,6 +31,7 @@ git submodule update --init --recursive
 - **Using AI-assisted source, waveform, or bug analysis**: see the [tool directory](./tools/README.md) and the `SKILL.md` file in each tool.
 - **Registering or exploring an external community project**: see the [external-contribution-project directory](./external-contribution-project/README.md) for a project's relationship to RISC-V, XiangShan, and its supporting areas.
 - **Preparing a 2026 CIE RISC-V Contest project**: read the [application-track description](./2026-CIE-RISC-V-Contest-Application-Track/README.md) and [submission guide](./2026-CIE-RISC-V-Contest-Application-Track/SUBMISSION_GUIDE.md).
+- **Participating in the RISC-V International community**: read the [RISC-V International participation guide](./RISC-V-International-Participation-Guide/), which covers membership registration, joining groups/mailing lists, and joining committees.
 
 ## Course Structure
 
@@ -65,6 +66,7 @@ English coverage is currently smaller than the Chinese course. For the complete 
 | [`weekly-status/`](./weekly-status/) | Weekly reports, status template, and report-generation scripts | [Weekly reports](./weekly-status/) |
 | [`external-contribution-project/`](./external-contribution-project/) | Registration materials for external projects contributed by the XiangShan community, collaborating organizations, and individuals | [Project guide](./external-contribution-project/README.md) |
 | [`2026-CIE-RISC-V-Contest-Application-Track/`](./2026-CIE-RISC-V-Contest-Application-Track/) | 2026 CIE RISC-V Contest application-track materials and submission files | [Contest description](./2026-CIE-RISC-V-Contest-Application-Track/README.md) |
+| [`RISC-V-International-Participation-Guide/`](./RISC-V-International-Participation-Guide/) | RISC-V International participation guide: membership registration, groups/mailing lists, and committee joining | [Participation guide](./RISC-V-International-Participation-Guide/README.md) |
 
 ## Programming Exercises
 
@@ -74,7 +76,8 @@ Projects under [`xiangshan-programming-practice/`](./xiangshan-programming-pract
 - `IopmpSystem/`: a system-level DCache–IOPMP–Memory experiment;
 - `TwoToOneXbarSystem/`: a 2-to-1 XBar experiment with two AXI4 masters sharing a memory slave;
 - `NonBlockingCache/`: non-blocking cache design and tests;
-- `mmu-smmpt/`: MMU / SMMPT implementations, modules, and tests.
+- `mmu-smmpt/`: MMU / SMMPT implementations, modules, and tests;
+- `miniXiangShan/`: a teaching-oriented out-of-order processor Chisel project (RV32IM + Sv32 paging) modeled after the XiangShan microarchitecture; see the [project README](./xiangshan-programming-practice/miniXiangShan/README.md).
 
 ## External Contribution Projects
 
@@ -108,6 +111,28 @@ Please:
 4. Report issues through [GitHub Issues](https://github.com/OpenXiangShan/XiangShanLab/issues) when a fix is not yet available.
 
 The [community governance strategy](./XiangShanLab-user-guide/XiangShan-Community-Decentralized-Governance-Strategy.md) documents task claiming, synchronization, and delivery. The [Hello XiangShan submission guide](./XiangShanLab-user-guide/how-to-commit-hello-xiangshan.md) documents that specific workflow.
+
+### External Contribution Projects
+
+Register external contribution projects in [`external-contribution-project/`](./external-contribution-project/). The directory currently contains HACO, memory-safety, and XiangShan-external-verification materials; a project may use, extend, or verify XiangShan, or provide DDR, verification, AI, NoC, or security capabilities.
+
+For a new project, copy the [contribution template](./external-contribution-project/CONTRIBUTION_TEMPLATE.md) into its project directory and fill in the project summary, relationship to RISC-V and XiangShan, required RISC-V extensions and XiangShan version or commit, build or verification commands, maintaining organization, and contributors. See the [external-contribution-project README](./external-contribution-project/README.md) for the full project list and registration requirements.
+
+## Issue Templates
+
+Blank issues are disabled in this repository. Choose the template that fits your issue type, and search for existing issues before submitting; provide reproducible context, relevant links, and verification results.
+
+| Template | Use case |
+| --- | --- |
+| [Task Request](./.github/ISSUE_TEMPLATE/task_request.yml) | Publish a course or engineering task that can be claimed, requires collateral, and must be delivered by a DDL; write the deliverables as an verifiable checklist. |
+| [Hello XiangShan Submission](./.github/ISSUE_TEMPLATE/hello-xiangshan-submission.yml) | Submit a completed `hello xiangshan` starter task; upload full run screenshots and read the [submission guide](./XiangShanLab-user-guide/how-to-commit-hello-xiangshan.md). |
+| [Report Documentation Issue](./.github/ISSUE_TEMPLATE/documentation-issue.yml) | Report errors, outdated content, dead links, or unclear wording in the course documentation. |
+| [Technical Q&A](./.github/ISSUE_TEMPLATE/technical_qa.yml) | Ask about a specific technical issue related to course materials, documentation, source code, or debugging; provide accurate links, commands, and error messages. |
+| [Project Collaboration Proposal](./.github/ISSUE_TEMPLATE/project_collaboration.yml) | Propose a new collaboration project; describe background, scope, milestones, deliverables, and how to participate. |
+| [Contribution Certificate Application](./.github/ISSUE_TEMPLATE/contribution_certificate.yml) | Apply for a contribution certificate for a completed XiangShan project or contribution; provide verifiable project links and certificate information. |
+| [RISC-V International Proposal (XiangShan)](./.github/ISSUE_TEMPLATE/riscv-internation-proposal.yml) | Submit a proposal to RISC-V International related to the XiangShan open-source high-performance RISC-V processor; specify the target domain (AI, SoC, Server Platform, Security, etc.), target SIG/TG/HC, motivation and proposed solution, use cases, implementation and validation, timeline and milestones, and membership status. |
+
+Task publication, claiming, synchronization, and delivery rules are in the [community governance strategy](./XiangShanLab-user-guide/XiangShan-Community-Decentralized-Governance-Strategy.md). If no template fits your issue, add details to the closest template; the `config.yml` disables blank issues.
 
 ## License and Related Projects
 

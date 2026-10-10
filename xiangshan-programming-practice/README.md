@@ -44,3 +44,17 @@
 **对应目录**: `TwoToOneXbarSystem/`
 - 核心模块: `mytop.scala`, `AXI4DCache.scala`, `AXI4DMAC.scala`, `AXI4Memory.scala`
 - 特点: 顶层核心是 `TwoToOneXbarSystem`，实现两个 AXI4 Master 共享一个 Memory Slave 的 2-to-1 XBar 系统
+
+## 学习乱序处理器微架构的项目
+
+### miniXiangShan
+**描述**:
+- 以香山（XiangShan）微架构为原型的教学级乱序处理器
+- 指令集为 RISC-V RV32IM（Zicsr + M/S/U 特权模式 + Sv32 分页）
+- 覆盖译码、重命名、发射、访存队列、提交与重定向等乱序后端各级
+- 支持分支预测（BTB/PHT/RAS）、L1 分离 I/D Cache、统一 L2 Cache 与 AXI3 对外接口
+- 支持与参考模型对拍（`difftest/`，需配套 RISC-V NEMU）
+
+**对应目录**: `miniXiangShan/`
+- 构建: `sbt "runMain minixiangshan.CoreGen simu"`（仿真）/ `fpga`（上板）
+- 详细说明见 [`miniXiangShan/README.md`](./miniXiangShan/README.md)
