@@ -148,11 +148,8 @@ $$
 设模型输出节点集合为 $O$。所有必须保留的节点构成集合：
 
 $$
-V_{live}
-=
-\{u\in V\mid
-\exists o\in O,\ u\leadsto o\}
-\cup O.
+V_{live}=\{u\in V\mid
+\exists o\in O,\ u\leadsto o\}\cup O.
 $$
 
 $u\leadsto o$ 表示从节点 $u$ 到输出节点 $o$ 存在一条有向路径。不属于 $V_{\text{live}}$ 的节点不会影响模型输出，可以由死代码消除删除。
