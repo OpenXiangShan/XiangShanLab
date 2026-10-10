@@ -45,50 +45,40 @@ CSR 使用三个数组表示二维矩阵：
 设稀疏权重矩阵为：
 
 $$
-
 W=
 \begin{bmatrix}
 0 & 2 & 0 & 0\\
 -1 & 0 & 0 & 3\\
 0 & 0 & 4 & 0
 \end{bmatrix}.
-
 $$
 
 该矩阵共有 $12$ 个元素，其中 $4$ 个非零，因此稀疏率为：
 
 $$
-
 S=1-\frac{4}{12}=\frac{2}{3}.
-
 $$
 
 它的 CSR 表示为：
 
 $$
-
 \begin{aligned}
 \text{values}&=[2,-1,3,4],\\
 \text{column\_indices}&=[1,0,3,2],\\
 \text{row\_pointer}&=[0,1,3,4].
 \end{aligned}
-
 $$
 
 若输入向量为：
 
 $$
-
 \mathbf x=[1,2,-1,0.5]^{\mathsf T},
-
 $$
 
 则矩阵向量乘法结果为：
 
 $$
-
 W\mathbf x=[4,0.5,-4]^{\mathsf T}.
-
 $$
 
 CSR 计算只需要处理矩阵中的四个非零权重，零位置不会进入求和。
@@ -100,38 +90,30 @@ CSR 计算只需要处理矩阵中的四个非零权重，零位置不会进入�
 对于矩阵 $A\in\mathbb R^{m\times n}$ ，非零元素数量定义为：
 
 $$
-
 nnz(A)
 =\sum_{i=1}^{m}\sum_{j=1}^{n}
 \mathbb I(A_{ij}\ne 0).
-
 $$
 
 矩阵的稀疏率为：
 
 $$
-
 S(A)
 =1-\frac{nnz(A)}{mn}.
-
 $$
 
 稀疏权重可以使用二值掩码表示：
 
 $$
-
 W_{\text{sparse}}=M\odot W,
 \qquad M_{ij}\in\{0,1\}.
-
 $$
 
 ReLU 激活函数为：
 
 $$
-
 a_i=ReLU(h_i)
 =\max(0,h_i).
-
 $$
 
 当 $h_i\le 0$ 时，ReLU 输出 $a_i=0$ ，因此一次前向传播可能产生稀疏激活。
@@ -139,19 +121,15 @@ $$
 稠密矩阵向量乘法为：
 
 $$
-
 y_i=\sum_{j=0}^{n-1}A_{ij}x_j,
 \qquad i=0,1,\ldots,m-1.
-
 $$
 
 在 CSR 表示中，设非零值数组为 $v$ ，列索引数组为 $c$ ，行指针数组为 $p$ ，则同一个结果可以写为：
 
 $$
-
 y_i=\sum_{k=p_i}^{p_{i+1}-1}v_kx_{c_k},
 \qquad i=0,1,\ldots,m-1.
-
 $$
 
 ### 2.2 变量含义
