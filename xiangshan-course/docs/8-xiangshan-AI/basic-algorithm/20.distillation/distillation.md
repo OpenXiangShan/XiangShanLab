@@ -17,17 +17,13 @@
 假设一张图片的真实类别是“猫”，硬标签只表示：
 
 $$
-
 \mathbf y=[1,0,0].
-
 $$
 
 如果三个类别依次为“猫、狗、汽车”，Teacher 可能输出：
 
 $$
-
 \mathbf p^{(T)}=[0.67,0.24,0.09].
-
 $$
 
 这个软标签除了指出“猫”的概率最高，还说明 Teacher 认为“狗”比“汽车”更接近当前样本。Student 模仿完整分布时，就能学习这种类别之间的相对关系。
@@ -57,27 +53,21 @@ $$
 设 Teacher 对三个类别输出 logits：
 
 $$
-
 \mathbf z^{(T)}=[4,2,0].
-
 $$
 
 当温度为 $1$ 时，Teacher 的概率约为：
 
 $$
-
 softmax(\mathbf z^{(T)})
 \approx[0.8668,0.1173,0.0159].
-
 $$
 
 当温度提高到 $2$ 时，概率约为：
 
 $$
-
 softmax\left(\frac{\mathbf z^{(T)}}{2}\right)
 \approx[0.6652,0.2447,0.0900].
-
 $$
 
 最高概率类别没有改变，但另外两个类别的概率信息变得更明显。Student 会在真实类别监督之外，学习 Teacher 对第二类和第三类的不同判断。
@@ -89,72 +79,58 @@ $$
 Teacher 在温度 $T$ 下对第 $i$ 个类别的软标签为：
 
 $$
-
 p_i^{(T)}=
 \frac{\exp\left(z_i^{(T)}/T\right)}
 {\sum_{j=1}^{C}\exp\left(z_j^{(T)}/T\right)}.
-
 $$
 
 Student 在相同温度下的概率为：
 
 $$
-
 q_i^{(T)}=
 \frac{\exp\left(z_i^{(S)}/T\right)}
 {\sum_{j=1}^{C}\exp\left(z_j^{(S)}/T\right)}.
-
 $$
 
 Student 的硬标签交叉熵损失为：
 
 $$
-
 \mathcal L_{\text{hard}}
 =-\sum_{i=1}^{C}y_i\log q_i^{(1)}.
-
 $$
 
 软标签蒸馏损失可以使用 Teacher 分布到 Student 分布的 KL 散度：
 
 $$
-
 \mathcal L_{\text{soft}}
 =T^2D_{\mathrm{KL}}\left(
 \mathbf p^{(T)}\middle\|\mathbf q^{(T)}
 \right),
-
 $$
 
 $$
-
 D_{\mathrm{KL}}\left(
 \mathbf p^{(T)}\middle\|\mathbf q^{(T)}
 \right)
 =\sum_{i=1}^{C}
 p_i^{(T)}
 \log\frac{p_i^{(T)}}{q_i^{(T)}}.
-
 $$
 
 将硬标签和软标签组合后，本章采用的总损失为：
 
 $$
-
 \mathcal L
 =\alpha\mathcal L_{\text{hard}}
 +(1-\alpha)\mathcal L_{\text{soft}}.
-
 $$
 
 对于这一定义，蒸馏损失关于 Student 第 $i$ 个 logit 的梯度为：
 
 $$
-
 \frac{\partial\mathcal L_{\text{soft}}}
 {\partial z_i^{(S)}}
 =T\left(q_i^{(T)}-p_i^{(T)}\right).
-
 $$
 
 ### 2.2 变量含义
