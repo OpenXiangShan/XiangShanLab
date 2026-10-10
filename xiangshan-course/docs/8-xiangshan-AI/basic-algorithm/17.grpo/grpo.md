@@ -42,17 +42,13 @@ GRPO 仍保留 PPO 的概率比率和裁剪机制，并可通过 KL 正则限制
 假设模型对同一道题生成四个回答，奖励分别为：
 
 $$
-
 \mathbf r=[1.0,\ 0.6,\ 0.2,\ -0.2].
-
 $$
 
 组内平均奖励为 $0.4$ ，总体标准差约为 $0.4472$。标准化后的组相对优势约为：
 
 $$
-
 \hat{\mathbf A}=[1.3416,\ 0.4472,\ -0.4472,\ -1.3416].
-
 $$
 
 第一个回答明显好于组内平均水平，因此优势最大；第四个回答明显较差，因此优势最小。训练时，模型会倾向于提高前两个回答中已采样 token 的概率，降低后两个回答中已采样 token 的概率。
@@ -64,56 +60,43 @@ $$
 对于同一个问题 $q$ ，旧策略生成一组回答：
 
 $$
-
 \{o_1,o_2,\ldots,o_G\}\sim
 \pi_{\theta_{\text{old}}}(\cdot\mid q).
-
 $$
 
 设这些回答的奖励为 $\mathbf r=\{r_1,r_2,\ldots,r_G\}$。组内奖励均值与总体标准差为：
 
 $$
-
 \mu_r=\frac{1}{G}\sum_{i=1}^{G}r_i,
-
 $$
 
 $$
-
 \sigma_r=\sqrt{\frac{1}{G}\sum_{i=1}^{G}(r_i-\mu_r)^2}.
-
 $$
 
 在结果监督的基本形式中，第 $i$ 个回答的组相对优势为：
 
 $$
-
 \hat A_i=\frac{r_i-\mu_r}{\sigma_r}.
-
 $$
 
 同一回答中的各个 token 可以共享该回答的优势：
 
 $$
-
 \hat A_{i,t}=\hat A_i.
-
 $$
 
 当前策略与旧策略对已采样 token 的概率比率为：
 
 $$
-
 \rho_{i,t}(\theta)=
 \frac{\pi_\theta(o_{i,t}\mid q,o_{i,<t})}
 {\pi_{\theta_{\text{old}}}(o_{i,t}\mid q,o_{i,<t})}.
-
 $$
 
 忽略批次期望后，GRPO 的核心裁剪目标可以写为：
 
 $$
-
 \begin{aligned}
 J_{\text{GRPO}}(\theta)
 =\frac{1}{G}\sum_{i=1}^{G}\frac{1}{|o_i|}
@@ -125,19 +108,16 @@ J_{\text{GRPO}}(\theta)
 \big)
 -\beta D_{\mathrm{KL},i,t}\Big].
 \end{aligned}
-
 $$
 
 原始 GRPO 论文使用下面的逐 token KL 估计量：
 
 $$
-
 D_{\mathrm{KL},i,t}=
 \frac{\pi_{\text{ref}}(o_{i,t}\mid q,o_{i,<t})}
 {\pi_\theta(o_{i,t}\mid q,o_{i,<t})}
 -\log\frac{\pi_{\text{ref}}(o_{i,t}\mid q,o_{i,<t})}
 {\pi_\theta(o_{i,t}\mid q,o_{i,<t})}-1.
-
 $$
 
 ### 2.2 变量含义
