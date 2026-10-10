@@ -44,9 +44,7 @@ RLHF 的目标不是给模型增加全新知识，而是让模型已有能力的
 标注者选择 A，形成一条偏好数据 $A\succ B$。奖励模型学习使：
 
 $$
-
 r_\phi(x,A)>r_\phi(x,B).
-
 $$
 
 策略优化会提高生成 A 类回答的概率。但如果只追求奖励模型分数，策略可能利用奖励模型的缺陷，因此还要使用 KL 惩罚，使策略不要突然远离原来的 SFT 模型。
@@ -58,28 +56,23 @@ $$
 设对同一个提示词 $x$ ，人类更喜欢回答 $y_w$ ，不喜欢回答 $y_l$。奖励模型使用 Bradley-Terry 形式表示偏好概率：
 
 $$
-
 P(y_w\succ y_l\mid x)
 =\sigma\left(r_\phi(x,y_w)-r_\phi(x,y_l)\right).
-
 $$
 
 对应的成对偏好损失为：
 
 $$
-
 L_{\text{RM}}
 =-\mathbb{E}_{(x,y_w,y_l)}
 \left[
 \log\sigma\left(r_\phi(x,y_w)-r_\phi(x,y_l)\right)
 \right].
-
 $$
 
 策略优化的简化目标可以写成：
 
 $$
-
 J(\theta)=
 \mathbb{E}_{x\sim D,\,y\sim\pi_\theta(\cdot\mid x)}
 \left[r_\phi(x,y)\right]
@@ -87,17 +80,14 @@ J(\theta)=
 D_{\mathrm{KL}}\left(
 \pi_\theta(\cdot\mid x)\,\|\,\pi_{\mathrm{ref}}(\cdot\mid x)
 \right).
-
 $$
 
 离散回答集合上的 KL 散度为：
 
 $$
-
 D_{\mathrm{KL}}(\pi_\theta\|\pi_{\mathrm{ref}})
 =\sum_y\pi_\theta(y\mid x)
 \log\frac{\pi_\theta(y\mid x)}{\pi_{\mathrm{ref}}(y\mid x)}.
-
 $$
 
 ### 2.2 变量含义
