@@ -78,30 +78,18 @@ $$
 
 将新的 Key 和 Value追加到已有缓存：
 
-$$
+$$ K_{\text{cache}}^{(t)}=
+\operatorname{Concat}\left(K_{\text{cache}}^{(t-1)},k_t\right), $$
 
-K_{\text{cache}}^{(t)}=
-\operatorname{Concat}\left(K_{\text{cache}}^{(t-1)},k_t\right),
-
-$$
-
-$$
-
-V_{\text{cache}}^{(t)}=
-\operatorname{Concat}\left(V_{\text{cache}}^{(t-1)},v_t\right).
-
-$$
+$$ V_{\text{cache}}^{(t)}=
+\operatorname{Concat}\left(V_{\text{cache}}^{(t-1)},v_t\right). $$
 
 当前 token 的注意力输出为：
 
-$$
-
-o_t=
+$$ o_t=
 \operatorname{softmax}\left(
 \frac{q_t\left(K_{\text{cache}}^{(t)}\right)^\top}{\sqrt{d_k}}
-\right)V_{\text{cache}}^{(t)}.
-
-$$
+\right)V_{\text{cache}}^{(t)}. $$
 
 ### 2.2 变量含义
 
@@ -113,7 +101,7 @@ $$
 - $V_{\text{cache}}^{(t)}\in\mathbb{R}^{t\times d_v}$：包含位置 $1$ 到 $t$ 的 Value 缓存。
 - $d_k$：Query 和 Key 的维度。
 - $o_t\in\mathbb{R}^{d_v}$：第 $t$ 个位置的注意力输出。
-- $\operatorname{Concat}$：沿序列长度方向进行拼接。
+- Concat：沿序列长度方向进行拼接。
 
 实际模型具有多层和多头，因此每一层、每个注意力头都有各自的 Key 和 Value 缓存。
 
