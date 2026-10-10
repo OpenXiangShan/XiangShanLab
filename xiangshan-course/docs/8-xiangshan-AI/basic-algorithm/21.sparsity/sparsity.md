@@ -64,8 +64,8 @@ $$
 $$
 \begin{aligned}
 \text{values}&=[2,-1,3,4],\\
-\text{column\_indices}&=[1,0,3,2],\\
-\text{row\_pointer}&=[0,1,3,4].
+\text{column_indices}&=[1,0,3,2],\\
+\text{row_pointer}&=[0,1,3,4].
 \end{aligned}
 $$
 
