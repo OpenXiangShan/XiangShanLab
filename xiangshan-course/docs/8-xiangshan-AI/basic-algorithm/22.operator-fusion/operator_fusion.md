@@ -23,19 +23,15 @@ X -> FusedAffineReLU -> Y
 若连续算子为 $f_1,f_2,\ldots,f_k$ ，原计算为：
 
 $$
-
 Y=f_k\left(f_{k-1}\left(\cdots f_1(X)\right)\right).
-
 $$
 
 算子融合把这段组合计算替换为一个新算子 $F_{\text{fused}}$：
 
 $$
-
 Y=F_{\text{fused}}(X),
 \qquad
 F_{\text{fused}}=f_k\circ f_{k-1}\circ\cdots\circ f_1.
-
 $$
 
 关键要求是融合前后的计算语义一致。常见融合模式包括：
@@ -60,9 +56,7 @@ $$
 **运行时算子融合**保留原数学表达式，但把多个计算步骤放进同一个融合实现中。`MatMul + Bias + ReLU` 是典型例子：
 
 $$
-
 Y=ReLU(XW+b).
-
 $$
 
 **参数折叠**在执行前直接改写参数。推理阶段的 BatchNorm 使用固定均值和方差，因此可以把 `Linear + BatchNorm` 改写为一个新的 Linear。此时 BatchNorm 节点可从推理图中删除。
@@ -74,7 +68,6 @@ $$
 设：
 
 $$
-
 X=
 \begin{bmatrix}
 1 & 2 & -1\\
@@ -92,19 +85,16 @@ b=
 \begin{bmatrix}
 0.1 & -0.2
 \end{bmatrix}.
-
 $$
 
 依次执行矩阵乘法、偏置加法和 ReLU，或者直接按照融合表达式计算，结果均为：
 
 $$
-
 Y=
 \begin{bmatrix}
 3.1 & 0\\
 0 & 2.3
 \end{bmatrix}.
-
 $$
 
 这里验证的是融合前后的数学等价性。NumPy 表达式 `np.maximum(X @ W + b, 0.0)` 是否被底层生成为单个融合实现，不由这一行 Python 代码本身保证。
@@ -116,29 +106,21 @@ $$
 设输入矩阵 $X\in\mathbb R^{N\times D}$ ，权重矩阵 $W\in\mathbb R^{D\times M}$ ，偏置 $b\in\mathbb R^M$。逐算子形式为：
 
 $$
-
 T_1=XW,
-
 $$
 
 $$
-
 T_2=T_1+b,
-
 $$
 
 $$
-
 Y=ReLU(T_2)=\max(0,T_2).
-
 $$
 
 偏置 $b$ 会沿批次维广播。将中间变量代回后，可得到融合表达式：
 
 $$
-
 Y=ReLU(XW+b).
-
 $$
 
 两种写法定义同一个函数，差别在于执行系统是否将它们作为多个独立步骤，还是一个融合单元来实现。
@@ -148,63 +130,49 @@ $$
 线性层输出为：
 
 $$
-
 Z=XW+b.
-
 $$
 
 在推理阶段，BatchNorm 对第 $j$ 个输出特征执行：
 
 $$
-
 Y_j=
 \gamma_j
 \frac{Z_j-\mu_j}{\sqrt{\sigma_j^2+\epsilon}}
 +\beta_j.
-
 $$
 
 先定义每个输出特征的缩放系数：
 
 $$
-
 a_j=\frac{\gamma_j}{\sqrt{\sigma_j^2+\epsilon}}.
-
 $$
 
 把 $Z_j=XW_{:,j}+b_j$ 代入 BatchNorm 公式：
 
 $$
-
 \begin{aligned}
 Y_j
 &=a_j\left(XW_{:,j}+b_j-\mu_j\right)+\beta_j\\
 &=X\left(a_jW_{:,j}\right)
 +a_j(b_j-\mu_j)+\beta_j.
 \end{aligned}
-
 $$
 
 因此可以构造新的权重和偏置：
 
 $$
-
 W'_{:,j}=a_jW_{:,j},
-
 $$
 
 $$
-
 b'_j=a_j(b_j-\mu_j)+\beta_j.
-
 $$
 
 融合后的单个线性层为：
 
 $$
-
 Y=XW'+b'.
-
 $$
 
 ### 2.3 变量含义
