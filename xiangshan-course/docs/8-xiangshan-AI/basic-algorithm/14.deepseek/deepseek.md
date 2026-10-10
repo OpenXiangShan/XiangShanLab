@@ -115,8 +115,8 @@ DeepSeekMoE 的输出可以写成：
 $$
 
 h_t'=u_t
-+\sum_{i=1}^{N_s}\operatorname{FFN}^{(s)}_i(u_t)
-+\sum_{i=1}^{N_r}g_{i,t}\operatorname{FFN}^{(r)}_i(u_t).
++\sum_{i=1}^{N_s}FFN^{(s)}_i(u_t)
++\sum_{i=1}^{N_r}g_{i,t}FFN^{(r)}_i(u_t).
 
 $$
 
@@ -126,7 +126,7 @@ $$
 
 g_{i,t}=
 \begin{cases}
-s_{i,t},&s_{i,t}\in\operatorname{TopK}(s_{1,t},\ldots,s_{N_r,t}),\\
+s_{i,t},&s_{i,t}\inTopK(s_{1,t},\ldots,s_{N_r,t}),\\
 0,&\text{其他情况}.
 \end{cases}
 
@@ -146,7 +146,7 @@ $$
 - $d_h^{R}$：解耦 RoPE 分支的维度。
 - $u_t$：DeepSeekMoE 的输入。
 - $N_s$ 、 $N_r$：共享专家和路由专家的数量。
-- $\operatorname{FFN}^{(s)}_i$ 、 $\operatorname{FFN}^{(r)}_i$：第 $i$ 个共享专家和路由专家。
+- $FFN^{(s)}_i$ 、 $FFN^{(r)}_i$：第 $i$ 个共享专家和路由专家。
 - $s_{i,t}$：token $t$ 对路由专家 $i$ 的匹配分数。
 - $g_{i,t}$：经过 Top-K 选择后的路由权重。
 - $h_t'$：DeepSeekMoE 层包含残差连接后的输出。

@@ -101,8 +101,8 @@ $$
 
 $$
 
-z=\operatorname{clip}\left(
-\operatorname{round}\left(q_{\min}-\frac{x_{\min}}{s}\right),
+z=clip\left(
+round\left(q_{\min}-\frac{x_{\min}}{s}\right),
 q_{\min},q_{\max}
 \right).
 
@@ -112,8 +112,8 @@ $$
 
 $$
 
-q=\operatorname{clip}\left(
-\operatorname{round}\left(\frac{x}{s}\right)+z,
+q=clip\left(
+round\left(\frac{x}{s}\right)+z,
 q_{\min},q_{\max}
 \right).
 
@@ -159,13 +159,13 @@ $$
 
 $$
 
-\operatorname{MAE}=\frac{1}{N}\sum_{i=1}^{N}|e_i|,
+MAE=\frac{1}{N}\sum_{i=1}^{N}|e_i|,
 
 $$
 
 $$
 
-\operatorname{MSE}=\frac{1}{N}\sum_{i=1}^{N}e_i^2.
+MSE=\frac{1}{N}\sum_{i=1}^{N}e_i^2.
 
 $$
 
@@ -182,8 +182,8 @@ $$
 - $s$：正的缩放因子，也就是相邻量化级别之间的间距。
 - $z$：整数零点，使实数零能够映射到某个整数编码。
 - $q$：量化后的整数编码。
-- $\operatorname{round}$：将数值舍入到相邻整数。
-- $\operatorname{clip}$：将数值限制在给定上下界内。
+- $round$：将数值舍入到相邻整数。
+- $clip$：将数值限制在给定上下界内。
 - $B$：整数格式的位数。
 - $\alpha$：对称量化使用的最大绝对值。
 - $i$：数组中元素的索引。

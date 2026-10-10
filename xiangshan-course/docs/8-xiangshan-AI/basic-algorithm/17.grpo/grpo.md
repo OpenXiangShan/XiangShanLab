@@ -120,7 +120,7 @@ J_{\text{GRPO}}(\theta)
 \sum_{t=1}^{|o_i|}
 \Big[&\min\big(
 \rho_{i,t}(\theta)\hat A_{i,t},\\
-&\operatorname{clip}(\rho_{i,t}(\theta),1-\epsilon,1+\epsilon)
+&clip(\rho_{i,t}(\theta),1-\epsilon,1+\epsilon)
 \hat A_{i,t}
 \big)
 -\beta D_{\mathrm{KL},i,t}\Big].

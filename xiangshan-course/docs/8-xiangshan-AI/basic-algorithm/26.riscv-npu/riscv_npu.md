@@ -488,7 +488,7 @@ $$
 
 r
 =
-\operatorname{sgn}(z)
+sgn(z)
 \left\lfloor
 \frac{|z|+2^{q_s-1}}{2^{q_s}}
 \right\rfloor,
@@ -505,7 +505,7 @@ y
 \max
 \left(
 0,
-\operatorname{clip}(r,-128,127)
+clip(r,-128,127)
 \right).
 
 $$
@@ -538,8 +538,8 @@ $$
 - $a$：PE 阵列产生的 INT32 累加值。
 - $q_m$ 、 $q_s$：重新量化的整数乘子和非负右移量。
 - $z$ 、 $r$ 、 $y$：缩放结果、舍入结果和最终输出。
-- $\operatorname{sgn}$：符号函数。
-- $\operatorname{clip}$：区间饱和裁剪。
+- $sgn$：符号函数。
+- $clip$：区间饱和裁剪。
 
 ### 2.7 公式怎么理解
 

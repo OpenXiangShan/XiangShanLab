@@ -65,8 +65,8 @@ Query 与第一、第三个 Key 的点积都是 $1$ ，与第二个 Key 的点�
 
 $$
 
-\operatorname{Attention}(Q,K,V)
-=\operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
+Attention(Q,K,V)
+=softmax\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
 
 $$
 

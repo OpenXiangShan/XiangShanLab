@@ -98,7 +98,7 @@ L^{\text{CLIP}}(\theta)=
 \mathbb{E}_t\left[
 \min\left(
 \rho_t(\theta)\hat A_t,
-\operatorname{clip}\left(\rho_t(\theta),1-\epsilon,1+\epsilon\right)\hat A_t
+clip\left(\rho_t(\theta),1-\epsilon,1+\epsilon\right)\hat A_t
 \right)
 \right].
 

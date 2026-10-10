@@ -323,9 +323,9 @@ $$
 
 $$
 
-\operatorname{RoundShift}(z,n)
+RoundShift(z,n)
 =
-\operatorname{sgn}(z)
+sgn(z)
 \left\lfloor
 \frac{|z|+2^{n-1}}{2^n}
 \right\rfloor.
@@ -336,7 +336,7 @@ $$
 
 $$
 
-\operatorname{RoundShift}(z,0)=z.
+RoundShift(z,0)=z.
 
 $$
 
@@ -346,9 +346,9 @@ $$
 
 q
 =
-\operatorname{clip}
+clip
 \left(
-\operatorname{RoundShift}(mA,n),
+RoundShift(mA,n),
 -128,
 127
 \right).
@@ -473,9 +473,9 @@ $$
 - $m$：重新量化使用的整数乘子。
 - $n$：重新量化使用的非负右移位数。
 - $z$：右移前的整数中间值 $mA$。
-- $\operatorname{sgn}(z)$：符号函数，正数为 $1$ 、负数为 $-1$ 、零为 $0$。
-- $\operatorname{RoundShift}$：本章定义的带舍入算术右移。
-- $\operatorname{clip}(x,a,b)$：把 $x$ 限制到闭区间 $[a,b]$。
+- $sgn(z)$：符号函数，正数为 $1$ 、负数为 $-1$ 、零为 $0$。
+- $RoundShift$：本章定义的带舍入算术右移。
+- $clip(x,a,b)$：把 $x$ 限制到闭区间 $[a,b]$。
 - $q$ 、 $q_{\text{relu}}$：重新量化结果和 ReLU 结果。
 - $K_p$ 、 $S_p$：池化窗口大小和池化步长。
 - $D_{\text{in}}$ 、 $D_{\text{out}}$：全连接层输入和输出维度。

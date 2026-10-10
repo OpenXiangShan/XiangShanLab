@@ -79,15 +79,15 @@ $$
 将新的 Key 和 Value追加到已有缓存：
 
 $$ K_{\text{cache}}^{(t)}=
-\operatorname{Concat}\left(K_{\text{cache}}^{(t-1)},k_t\right), $$
+Concat\left(K_{\text{cache}}^{(t-1)},k_t\right), $$
 
 $$ V_{\text{cache}}^{(t)}=
-\operatorname{Concat}\left(V_{\text{cache}}^{(t-1)},v_t\right). $$
+Concat\left(V_{\text{cache}}^{(t-1)},v_t\right). $$
 
 当前 token 的注意力输出为：
 
 $$ o_t=
-\operatorname{softmax}\left(
+softmax\left(
 \frac{q_t\left(K_{\text{cache}}^{(t)}\right)^\top}{\sqrt{d_k}}
 \right)V_{\text{cache}}^{(t)}. $$
 

@@ -66,7 +66,7 @@ $$
 
 $$
 
-\operatorname{softmax}(\mathbf z^{(T)})
+softmax(\mathbf z^{(T)})
 \approx[0.8668,0.1173,0.0159].
 
 $$
@@ -75,7 +75,7 @@ $$
 
 $$
 
-\operatorname{softmax}\left(\frac{\mathbf z^{(T)}}{2}\right)
+softmax\left(\frac{\mathbf z^{(T)}}{2}\right)
 \approx[0.6652,0.2447,0.0900].
 
 $$
