@@ -90,8 +90,8 @@ $$
 
 $$
 \rho_{i,t}(\theta)=
-\frac{\pi_\theta(o_{i,t}\mid q,o_{i,<t})}
-{\pi_{\theta_{\text{old}}}(o_{i,t}\mid q,o_{i,<t})}.
+\frac{\pi_\theta(o_{i,t}\mid q,o_{i,\lt t})}
+{\pi_{\theta_{\text{old}}}(o_{i,t}\mid q,o_{i,\lt t})}.
 $$
 
 忽略批次期望后，GRPO 的核心裁剪目标可以写为：
@@ -114,10 +114,10 @@ $$
 
 $$
 D_{\mathrm{KL},i,t}=
-\frac{\pi_{\text{ref}}(o_{i,t}\mid q,o_{i,<t})}
-{\pi_\theta(o_{i,t}\mid q,o_{i,<t})}
--\log\frac{\pi_{\text{ref}}(o_{i,t}\mid q,o_{i,<t})}
-{\pi_\theta(o_{i,t}\mid q,o_{i,<t})}-1.
+\frac{\pi_{\text{ref}}(o_{i,t}\mid q,o_{i,\lt t})}
+{\pi_\theta(o_{i,t}\mid q,o_{i,\lt t})}
+-\log\frac{\pi_{\text{ref}}(o_{i,t}\mid q,o_{i,\lt t})}
+{\pi_\theta(o_{i,t}\mid q,o_{i,\lt t})}-1.
 $$
 
 ### 2.2 变量含义
@@ -126,7 +126,7 @@ $$
 - $G$：针对同一问题采样的回答数量。
 - $o_i$：第 $i$ 个完整回答， $|o_i|$ 是其 token 数量。
 - $o_{i,t}$：第 $i$ 个回答中的第 $t$ 个 token。
-- $o_{i,<t}$：该回答在第 $t$ 个 token 之前的前缀。
+- $o_{i,\lt t}$：该回答在第 $t$ 个 token 之前的前缀。
 - $r_i$：第 $i$ 个回答获得的奖励。
 - $\mu_r$ 、 $\sigma_r$：组内奖励的均值和总体标准差。
 - $\hat A_i$ 、 $\hat A_{i,t}$：回答级和 token 级的组相对优势。
