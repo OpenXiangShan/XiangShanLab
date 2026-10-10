@@ -130,7 +130,7 @@ $$
 对于节点 $v\in V$ ，设其直接前驱节点集合为 $pred(v)$ ，则节点输出为：
 
 $$
-z_v=f_v\left(\{z_u\mid u\inpred(v)\};\theta_v\right).
+z_v=f_v(\left\{z_u\mid u\in pred(v)\right\};\theta_v).
 $$
 
 这里的边 $(u,v)\in E$ 表示节点 $v$ 需要使用节点 $u$ 的输出，因此 $u$ 是 $v$ 的前驱。
@@ -148,8 +148,8 @@ $$
 设模型输出节点集合为 $O$。所有必须保留的节点构成集合：
 
 $$
-V_{live}=\{u\in V\mid
-\exists o\in O,\ u\leadsto o\}\cup O.
+V_{live}= \left\{u\in V\mid
+\exists o\in O,\ u\leadsto o \right\}\cup O.
 $$
 
 $u\leadsto o$ 表示从节点 $u$ 到输出节点 $o$ 存在一条有向路径。不属于 $V_{\text{live}}$ 的节点不会影响模型输出，可以由死代码消除删除。
