@@ -109,7 +109,7 @@ $$
 $$
 g_{i,t}=
 \begin{cases}
-s_{i,t},&s_{i,t}\inTopK(s_{1,t},\ldots,s_{N_r,t}),\\
+s_{i,t},&s_{i,t}\in TopK(s_{1,t},\ldots,s_{N_r,t}),\\
 0,&\text{其他情况}.
 \end{cases}
 $$
