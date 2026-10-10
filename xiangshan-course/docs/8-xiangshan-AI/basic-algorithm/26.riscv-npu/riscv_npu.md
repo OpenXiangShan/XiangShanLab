@@ -114,9 +114,7 @@ PE（Processing Element）是阵列中的基本计算单元。最小 PE 可以�
 单个输出元素通常需要多次乘加。例如矩阵乘法 $C=AB$ 中：
 
 $$
-
 C_{i,j}=\sum_{k=0}^{K-1}A_{i,k}B_{k,j}.
-
 $$
 
 二维阵列可以让不同 PE 同时计算不同的 $(i,j)$ 输出。矩阵尺寸大于阵列尺寸时，控制器把矩阵切成多个 tile，阵列分批完成。
@@ -248,50 +246,27 @@ NPU 命令队列与执行单元
 
 代码使用一个 $2\times2$ PE 阵列执行缩小卷积。输入形状为 $(1,1,4,4)$ ，两个卷积核形状均为 $(1,2,2)$：
 
-$$
-
-W_0=
-\begin{bmatrix}
-1&1\\
-1&1
-\end{bmatrix},
-\qquad
-W_1=
-\begin{bmatrix}
-1&0\\
-0&-1
-\end{bmatrix}.
-
+$$W_0=\begin{bmatrix}1&1\\1&1\end{bmatrix},\qquad W_1=\begin{bmatrix}1&0\\0&-1\end{bmatrix}.
 $$
 
 偏置为：
 
 $$
-
 b=[1,-1].
-
 $$
 
 卷积先通过 im2col 转换为：
 
 $$
-
 A\in\mathbb Z^{9\times4},
 \qquad
 B\in\mathbb Z^{4\times2}.
-
 $$
 
 $2\times2$ 阵列每次最多保存一个 $2\times2$ 输出 tile 的部分和。输出经过偏置和 ReLU 后，第一个通道为：
 
 $$
-
-\begin{bmatrix}
-15&19&23\\
-31&35&39\\
-47&51&55
-\end{bmatrix},
-
+\begin{bmatrix}15&19&23\\31&35&39\\47&51&55\end{bmatrix},
 $$
 
 第二个通道的卷积结果为负数，经过 ReLU 后全部为零。
@@ -303,48 +278,33 @@ $$
 对于矩阵乘法：
 
 $$
-
 C=AB,
 \qquad
 A\in\mathbb Z^{M\times K},
 \qquad
 B\in\mathbb Z^{K\times N},
-
 $$
 
 第 $(i,j)$ 个输出为：
 
 $$
-
-C_{i,j}
-=
-\sum_{k=0}^{K-1}A_{i,k}B_{k,j}.
-
+C_{i,j}=\sum_{k=0}^{K-1}A_{i,k}B_{k,j}.
 $$
 
 Output Stationary PE 使用递推形式：
 
 $$
-
 p_{i,j}^{(0)}=0,
-
 $$
 
 $$
-
-p_{i,j}^{(k+1)}
-=
-p_{i,j}^{(k)}
-+A_{i,k}B_{k,j}.
-
+p_{i,j}^{(k+1)}=p_{i,j}^{(k)}+A_{i,k}B_{k,j}.
 $$
 
 遍历完整归约维后：
 
 $$
-
 C_{i,j}=p_{i,j}^{(K)}.
-
 $$
 
 $A_{i,k}$ 和 $B_{k,j}$ 为 INT8， $p_{i,j}$ 使用 INT32 语义保存部分和。
@@ -354,32 +314,21 @@ $A_{i,k}$ 和 $B_{k,j}$ 为 INT8， $p_{i,j}$ 使用 INT32 语义保存部分和
 将矩阵沿三个维度分块。对于输出 tile $(I,J)$：
 
 $$
-
-C_{I,J}
-=
-\sum_{R}
-A_{I,R}B_{R,J}.
-
+C_{I,J}=\sum_{R}A_{I,R}B_{R,J}.
 $$
 
 其中：
 
 $$
-
 A_{I,R}\in\mathbb Z^{T_M\times T_K},
-
 $$
 
 $$
-
 B_{R,J}\in\mathbb Z^{T_K\times T_N},
-
 $$
 
 $$
-
 C_{I,J}\in\mathbb Z^{T_M\times T_N}.
-
 $$
 
 Output Stationary 要求 $C_{I,J}$ 在遍历所有 $R$ 时留在累加器中。
@@ -389,13 +338,7 @@ Output Stationary 要求 $C_{I,J}$ 在遍历所有 $R$ 时留在累加器中。
 若输入 tile 和权重 tile 使用 INT8，部分和 tile 使用 INT32，不考虑对齐、描述符、队列和双缓冲时，三个 tile 至少需要：
 
 $$
-
-B_{\text{tile}}
-=
-T_MT_K
-+T_KT_N
-+4T_MT_N
-
+B_{\text{tile}}=T_MT_K+T_KT_N+4T_MT_N
 $$
 
 字节。
@@ -407,67 +350,41 @@ $$
 卷积输出为：
 
 $$
-
-Y_{n,c_o,h_o,w_o}
-=
-b_{c_o}
-+
-\sum_{c_i=0}^{C_{\text{in}}-1}
-\sum_{k_h=0}^{K_h-1}
-\sum_{k_w=0}^{K_w-1}
-X_{n,c_i,h_oS_h+k_h-P_h,w_oS_w+k_w-P_w}
-W_{c_o,c_i,k_h,k_w}.
-
+Y_{n,c_o,h_o,w_o}=b_{c_o}+\sum_{c_i=0}^{C_{\text{in}}-1}\sum_{k_h=0}^{K_h-1}\sum_{k_w=0}^{K_w-1} X_{n,c_i,h_oS_h+k_h-P_h,w_oS_w+k_w-P_w}W_{c_o,c_i,k_h,k_w}.
 $$
 
 定义 im2col 行索引：
 
 $$
-
 m=(nH_{\text{out}}+h_o)W_{\text{out}}+w_o,
-
 $$
 
 归约维索引：
 
 $$
-
 k=(c_iK_h+k_h)K_w+k_w,
-
 $$
 
 输出列索引：
 
 $$
-
 o=c_o.
-
 $$
 
 构造矩阵：
 
 $$
-
-A_{m,k}
-=
-X_{n,c_i,h_oS_h+k_h-P_h,w_oS_w+k_w-P_w},
-
+A_{m,k}=X_{n,c_i,h_oS_h+k_h-P_h,w_oS_w+k_w-P_w},
 $$
 
 $$
-
 B_{k,o}=W_{c_o,c_i,k_h,k_w}.
-
 $$
 
 则卷积可以写为：
 
 $$
-
-C_{m,o}
-=
-b_o+\sum_{k=0}^{K-1}A_{m,k}B_{k,o}.
-
+C_{m,o}=b_o+\sum_{k=0}^{K-1}A_{m,k}B_{k,o}.
 $$
 
 最后把 $C$ 从 $(M,O)$ 重新解释为 $(N_b,C_{\text{out}},H_{\text{out}},W_{\text{out}})$。
@@ -477,37 +394,19 @@ $$
 设 PE 阵列输出的 INT32 累加值为 $a$ ，偏置为 $b$ ，整数乘子为 $q_m$ ，右移量为 $q_s$：
 
 $$
-
 z=q_m(a+b).
-
 $$
 
 沿用第 25 章的带舍入右移：
 
 $$
-
-r
-=
-sgn(z)
-\left\lfloor
-\frac{|z|+2^{q_s-1}}{2^{q_s}}
-\right\rfloor,
-\qquad q_s\ge1.
-
+r=sgn(z)\left\lfloor\frac{|z|+2^{q_s-1}}{2^{q_s}}\right\rfloor,\qquad q_s\ge1.
 $$
 
 当 $q_s=0$ 时， $r=z$。重新量化和 ReLU 输出为：
 
 $$
-
-y
-=
-\max
-\left(
-0,
-clip(r,-128,127)
-\right).
-
+y=\max\left(0,clip(r,-128,127)\right).
 $$
 
 若当前层不启用 ReLU，则省略最外层的 $\max(0,\cdot)$。
