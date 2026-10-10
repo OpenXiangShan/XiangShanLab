@@ -1,0 +1,11 @@
+{
+  "reader": "wavekit.VcdReader",
+  "clock": "TOP.clock",
+  "sample_on_posedge": true,
+  "begin_time": 0,
+  "end_time": 8913,
+  "sample_count": 4457,
+  "selected_signals": 3952,
+  "wave": "/nfs/home/wanghao/doCIE/xs-env/nexus-am/apps/learnTrap/runs/run-20260922-150415-Hlo0qH/learnTrap.vcd",
+  "wave_sha256": "848cc4a791fe00746a8393963efa234da4843c06d8d98350305d7d713278fcbf"
+}

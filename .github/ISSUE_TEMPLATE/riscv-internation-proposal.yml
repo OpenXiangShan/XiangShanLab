@@ -1,0 +1,299 @@
+name: 📜 RISC-V International Proposal (XiangShan)
+description: Submit a proposal to RISC-V International related to the XiangShan open-source high-performance RISC-V processor, covering AI, SoC, Server Platform, Security, and other domains.
+title: "[PROPOSAL][XiangShan] <Short Proposal Title>"
+labels: ["proposal", "xiangshan", "risc-v-international"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        <p align="center">
+          <img src="https://raw.githubusercontent.com/OpenXiangShan/XiangShan/master/misc/logo.png" alt="XiangShan Logo" width="120"/>
+          &nbsp;&nbsp;&nbsp;&nbsp;
+          <img src="https://riscv.org/wp-content/uploads/2024/01/RISC-V-Logo.svg" alt="RISC-V International Logo" width="160"/>
+        </p>
+
+        <h3 align="center">XiangShan × RISC-V International Proposal</h3>
+
+        <p align="center">
+          <em>Open-source high-performance RISC-V processor proposal to RISC-V International</em>
+        </p>
+
+        ---
+
+        Thank you for submitting a proposal to RISC-V International. Please fill out the sections below as completely as possible. For more information, see the [RISC-V International Participation Guide](https://riscv.org/members/join/).
+
+  - type: input
+    id: proposal-title
+    attributes:
+      label: Proposal Title
+      description: A concise title for your proposal.
+      placeholder: "e.g., XiangShan SmMTT-based Supervisor Domain Isolation Extension"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: target-domain
+    attributes:
+      label: Target Domain
+      description: Select the primary domain(s) this proposal addresses.
+      multiple: true
+      options:
+        - AI
+        - SoC
+        - Server Platform
+        - Security
+        - ISA Extension (general)
+        - Non-ISA Specification / ABI
+        - Test / Compliance / Certification
+        - Tooling / Ecosystem
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: target-group
+    attributes:
+      label: Target RISC-V International Group (SIG/TG/HC)
+      description: Select the most relevant RISC-V International group.
+      multiple: true
+      options:
+        - Security HC
+        - Trusted Computing SIG
+        - Runtime Integrity SIG
+        - Crypto SIG
+        - CHERI SIG
+        - SoC Infrastructure HC
+        - Applications & Tools HC
+        - Privileged Spec IC
+        - Unprivileged Spec IC
+        - AI/ML SIG
+        - Server Platform SIG
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: proposal-type
+    attributes:
+      label: Proposal Type
+      description: Select the type of proposal.
+      multiple: true
+      options:
+        - ISA Extension
+        - Non-ISA Specification / ABI
+        - Platform Specification
+        - Security Model / Threat Model
+        - Performance / Profiling / Benchmark
+        - Compliance / Certification
+        - Tooling / Ecosystem
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: xiangshan-component
+    attributes:
+      label: XiangShan Component(s) Affected
+      description: Which XiangShan modules or subsystems are affected?
+      placeholder: "e.g., frontend, backend, cache, MMU, PMP, SmMTT, CHERI, vector, matrix, crypto, debug, NoC, chiplet, IOMMU, PCIe, CXL"
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation and Problem Statement
+      description: Why is this proposal needed? What problem does it solve for XiangShan and/or the broader RISC-V ecosystem?
+      placeholder: |
+        - Current Limitation / Gap:
+        - Impact on XiangShan:
+        - Impact on RISC-V Ecosystem:
+        - Relevant Industry Trends / Requirements:
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the technical solution in detail. Include diagrams, tables, or pseudo-code if applicable.
+      placeholder: |
+        - Technical Description:
+        - Relevant RISC-V Specifications / Drafts:
+        - Relationship to Existing RISC-V International Work:
+        - XiangShan Implementation Plan:
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Use Cases and Requirements
+      description: Describe concrete use cases and requirements.
+      placeholder: |
+        - Primary Use Case(s):
+        - Functional Requirements:
+        - Non-Functional Requirements:
+        - Target RISC-V Profiles / Platforms:
+        - Performance Targets:
+    validations:
+      required: true
+
+  - type: textarea
+    id: domain-considerations
+    attributes:
+      label: Domain-Specific Considerations
+      description: Fill in the sections relevant to your proposal.
+      placeholder: |
+        ### AI
+        - Data types (FP8, FP16, BF16, INT8, INT4, etc.):
+        - Matrix / vector extensions:
+        - Memory hierarchy and bandwidth:
+        - Software stack (compiler, runtime, libraries):
+        - Interoperability with existing AI frameworks:
+
+        ### SoC
+        - On-chip interconnect (NoC, mesh, ring):
+        - Chiplet / die-to-die interfaces (UCIe, BoW, AIB, etc.):
+        - Cache coherence / memory consistency:
+        - IOMMU / IOPMP / device assignment:
+        - Power / clock / reset domains:
+
+        ### Server Platform
+        - RAS (Reliability, Availability, Serviceability):
+        - Virtualization / hypervisor support:
+        - Confidential computing:
+        - CXL / PCIe / memory expansion:
+        - BMC / manageability / firmware:
+        - Boot / secure boot / attestation:
+
+        ### Security
+        - Threat model:
+        - Attack surface:
+        - Mitigations:
+        - Relevant Security HC / SIG / TG:
+    validations:
+      required: false
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation and Validation
+      description: Describe the prototype status, repositories, verification, and compliance plans.
+      placeholder: |
+        - Prototype / PoC Status:
+        - XiangShan Repositories / Branches:
+        - Verification Plan:
+        - Compliance / Certification Plan:
+    validations:
+      required: true
+
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Timeline and Milestones
+      description: Provide a timeline with milestones.
+      placeholder: |
+        | Milestone | Description | Target Date |
+        |-----------|-------------|-------------|
+        | M1 | Proposal submitted to RISC-V International | |
+        | M2 | Discussion in target SIG/TG | |
+        | M3 | Draft specification available | |
+        | M4 | PoC in XiangShan | |
+        | M5 | Ratification / Freeze | |
+        | M6 | Production / upstream | |
+    validations:
+      required: true
+
+  - type: input
+    id: membership-status
+    attributes:
+      label: Proposer Membership Status
+      description: Organization Member / Individual Member / Not yet a member.
+      placeholder: "e.g., Organization Member"
+    validations:
+      required: true
+
+  - type: input
+    id: chair-contact
+    attributes:
+      label: Target Committee Chair Contacted
+      description: Name and email of the chair of the target SIG/TG/HC.
+      placeholder: "e.g., Andrew Dellow (adellow@qti.qualcomm.com)"
+    validations:
+      required: false
+
+  - type: textarea
+    id: voting-rights-plan
+    attributes:
+      label: Voting Rights Plan
+      description: Will you attend three consecutive meetings to obtain voting rights?
+      placeholder: "e.g., Yes, I plan to attend the next three consecutive Security HC meetings."
+    validations:
+      required: false
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Attachments and Images
+      description: Upload diagrams, block diagrams, performance charts, or other supporting materials here. GitHub will automatically generate accessible image links when you drag and drop files into this section.
+      placeholder: |
+        - Architecture / Block Diagram:
+        - Performance / Benchmark Charts:
+        - Threat Model / Security Diagram:
+        - Other Supporting Materials:
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: List relevant documents, links, papers, specifications, and GitHub issues.
+      placeholder: |
+        - RISC-V International Membership: https://riscv.org/members/join/
+        - RISC-V Technical Calendar: https://tech.riscv.org/calendar
+        - XiangShan Repository: https://github.com/OpenXiangShan/XiangShan
+        - Related RISC-V International Groups:
+          - Security HC: https://lists.riscv.org/g/security
+          - Trusted Computing SIG: https://lists.riscv.org/g/sig-trusted-computing
+          - Runtime Integrity SIG: https://lists.riscv.org/g/sig-runtime-integrity
+          - Crypto SIG: https://lists.riscv.org/g/tech-crypto-ext
+          - CHERI SIG: https://lists.riscv.org/g/sig-cheri
+          - SoC Infrastructure HC: https://lists.riscv.org/g/soc-infra
+          - Applications & Tools HC: https://lists.riscv.org/g/apps-tools
+          - Privileged Spec IC: https://lists.riscv.org/g/priv-ic
+          - Unprivileged Spec IC: https://lists.riscv.org/g/unpriv-ic
+        - Other references:
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following before submitting.
+      options:
+        - label: I have read the RISC-V International participation guide.
+          required: true
+        - label: I have confirmed the target SIG/TG/HC and contacted the chair if needed.
+          required: true
+        - label: I have described the motivation, proposed solution, and use cases.
+          required: true
+        - label: I have considered domain-specific requirements (AI / SoC / Server / Security).
+          required: true
+        - label: I have provided a timeline and milestones.
+          required: true
+        - label: I have listed relevant references.
+          required: true
+        - label: I understand that voting rights require attending three consecutive meetings.
+          required: true
+
+  - type: textarea
+    id: additional-comments
+    attributes:
+      label: Additional Comments
+      description: Any other information you want to provide.
+    validations:
+      required: false

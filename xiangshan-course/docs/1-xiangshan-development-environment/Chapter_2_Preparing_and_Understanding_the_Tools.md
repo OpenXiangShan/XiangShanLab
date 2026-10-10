@@ -715,9 +715,10 @@ Vim 是从 vi 发展出来的一个文本编辑器。代码补全、编译及错
 
 ### 2.6.1 Docker
 
-docker提供：Linux操作系统Ubuntu 20.04、香山开发环境(软件包和编译工具链)、香山和仿真相关工具的代码。
+docker提供：Linux操作系统Ubuntu 24.04、香山开发环境(软件包和编译工具链)、香山kuminghu-v2和仿真相关工具的代码。
 
-点击[香山kunminghu-v2](./docker/xiangshan-kunminghu-v2.tar)下载。
+下载docker网盘链接: https://pan.baidu.com/s/1hswNN-TwyqV5OW-V2HWhlg?pwd=y9pp 
+提取码: y9pp
 
 已自动设置：
 
@@ -812,7 +813,7 @@ make verilog
 
 注意：这里的 `JVM_XMX` 为8GB， `JVM_XMX` 是 Java/Mill 构建进程允许使用的最大堆内存，对于寻常笔记本只有16GB的同学更友好。
 
-标准XiangShan编译使用的40GB，若想要更改可在输入时使用例如 `JVM_XMX=12G`的参数
+标准XiangShan编译使用的40GB，若想要更改可在输入时使用例如 `JVM_XMX=40G`的参数
 
 生成的主要 Verilog 文件为：
 
@@ -830,6 +831,8 @@ make emu CONFIG=MinimalConfig EMU_TRACE=1 -j32
 - `EMU_TRACE=1`：启用调试跟踪功能
 - `-j32`：并行编译，数字根据你的 CPU 核心数调整 (可以通过 `nproc`指令查询 CPU 核心数量, 建议保留 1-2 个 CPU 核心用于后台其他进程)
 
+编译时间较长，CPU、内存和磁盘不足时可能失败。可降低 `-j10` 的并行数，或在 Docker Desktop/WSL 配置中提高资源上限。
+
 **6.编译 Hello XiangShan 程序：**
 
 ```bash
@@ -845,15 +848,16 @@ make ARCH=riscv64-xs
 /work/nexus-am/apps/hello/build/hello-riscv64-xs.bin
 ```
 
-NEMU 源码已完整放入 `/work/NEMU`，但它的 SoftFloat、nanopb、LibCheckpoint 和 LibCheckpointAlpha 是单独的上游依赖，不属于本次指定的两个源码仓库。首次构建某些 NEMU 配置时会尝试联网下载这些依赖；离线交付时需另外准备与该 NEMU 提交兼容的版本。
-
 运行：
 
 ```bash
+# 返回香山项目目录
+cd $NOOP_HOME
+
+# 运行 Hello XiangShan（不使用 DiffTest，速度更快）
 ./build/emu -i $AM_HOME/apps/hello/build/hello-riscv64-xs.bin --no-diff
 ```
 
-编译时间较长，CPU、内存和磁盘不足时可能失败。可降低 `-j10` 的并行数，或在 Docker Desktop/WSL 配置中提高资源上限。
 
 如果一切正常，你应该看到输出：
 
