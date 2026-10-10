@@ -300,8 +300,7 @@ $$
 
 对于窗口大小 $K_p\times K_p$ 、步长 $S_p$ 的最大池化：
 
-$$Y_{c,h_o,w_o}=\max_{\substack{0\le i<K_p\\0\le j<K_p}}X_{c,h_oS_p+i,w_oS_p+j}.
-$$
+$$Y_{c,h_o,w_o}=\max_{\substack{0\le i<K_p\\0\le j<K_p}}X_{c,h_oS_p+i,w_oS_p+j}.$$
 
 最大池化只比较 INT8 激活，不需要 INT32 乘加。
 
