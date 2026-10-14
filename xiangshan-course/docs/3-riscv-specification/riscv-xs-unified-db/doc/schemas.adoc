@@ -1,0 +1,13 @@
+= UnifiedDB Data Schemas
+
+Data in UnifiedDB is written in https://en.wikipedia.org/wiki/YAML[YAML] files,
+and the structure of those files is checked using https://json-schema.org/[JSON Schema].
+
+Many UDB data objects share common field types, including:
+
+* xref:schema/conditions.adoc[Expressing Conditions in UDB Data]
+* xref:schema/yaml-style-constraints.adoc[YAML Style Constraints for IDL Values]
+
+== Conditions
+
+All conditions are represented using the same schema.

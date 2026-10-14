@@ -1,0 +1,42 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+# yaml-language-server: $schema=../../../schemas/param_schema.json
+
+$schema: param_schema.json#
+kind: parameter
+name: ELEN
+description: |
+  The maximum size in bits of a vector element that any operation can produce or consume.
+long_name: maximum vector element bit width
+schema:
+  description: |
+    An unsigned power of 2 that is at least 8. The ISA states no maximum; the
+    absolute upper bound is (max VLEN) * (#VRs) = 64Ki * 32 = 2Mi, since an
+    element cannot exceed the total vector register state.
+  type: integer
+  enum:
+    [
+      0x8,
+      0x10,
+      0x20,
+      0x40,
+      0x80,
+      0x100,
+      0x200,
+      0x400,
+      0x800,
+      0x1000,
+      0x2000,
+      0x4000,
+      0x8000,
+      0x10000,
+      0x20000,
+      0x40000,
+      0x80000,
+      0x100000,
+      0x200000,
+    ]
+definedBy:
+  extension:
+    name: Zvl32b

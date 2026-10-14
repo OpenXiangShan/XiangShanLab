@@ -1,0 +1,51 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+# yaml-language-server: $schema=../../../schemas/csr_schema.json
+
+$schema: "csr_schema.json#"
+kind: csr
+name: mseccfg
+long_name: Machine Security Configuration
+address: 0x747
+writable: true
+priv_mode: M
+length: 64
+description: Machine Security Configuration
+definedBy:
+  extension:
+    allOf:
+      - name: Sm
+        version: ">= 1.12"
+      - anyOf:
+          - name: Zkr
+          - name: Smmpm
+          - name: Zicfilp
+          - name: Smepmp
+fields:
+  USEED:
+    location: 8
+    description: |
+      Controls access to the `seed` CSR from U-mode.
+    definedBy:
+      extension:
+        allOf:
+          - name: Zkr
+          - name: U
+    type(): |
+      return USEED_READ_ONLY_ZERO ? CsrFieldType::RO : CsrFieldType::RW;
+    reset_value(): |
+      return USEED_READ_ONLY_ZERO ? 0 : UNDEFINED_LEGAL;
+  SSEED:
+    location: 9
+    description: |
+      Controls access to the `seed` CSR from S-mode and VS-mode.
+    definedBy:
+      extension:
+        allOf:
+          - name: Zkr
+          - name: S
+    type(): |
+      return SSEED_READ_ONLY_ZERO ? CsrFieldType::RO : CsrFieldType::RW;
+    reset_value(): |
+      return SSEED_READ_ONLY_ZERO ? 0 : UNDEFINED_LEGAL;

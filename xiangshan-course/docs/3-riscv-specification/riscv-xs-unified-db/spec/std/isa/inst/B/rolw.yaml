@@ -1,0 +1,42 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+# yaml-language-server: $schema=../../../../schemas/inst_schema.json
+
+$schema: "inst_schema.json#"
+kind: instruction
+name: rolw
+long_name: Rotate left word (Register)
+description: |
+  Performs a rotate left of the least-significant word of xs1 by the amount in least-significant 5 bits of xs2.
+  The resulting word value is sign-extended by copying bit 31 to all of the more-significant bits.
+definedBy:
+  allOf:
+    - xlen: 64
+    - extension:
+        anyOf:
+          - name: Zbb
+          - name: Zbkb
+assembly: xd, xs1, xs2
+encoding:
+  match: 0110000----------001-----0111011
+  variables:
+    - name: xs2
+      location: 24-20
+    - name: xs1
+      location: 19-15
+    - name: xd
+      location: 11-7
+access:
+  s: always
+  u: always
+  vs: always
+  vu: always
+data_independent_timing: true
+operation(): |
+  XReg xs1_word = X[xs1][31:0];
+  XReg shamt = X[xs2][4:0];
+
+  XReg unextended_result = (xs1_word << shamt) | (xs1_word >> (32 - shamt));
+
+  X[xd] = {{32{unextended_result[31]}}, unextended_result};

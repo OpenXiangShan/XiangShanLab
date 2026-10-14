@@ -1,0 +1,218 @@
+---
+# Priority groups (lower runs earlier; equal priority runs in parallel):
+minimum_prek_version: "0.3.4"
+exclude: ^docs/ruby/ # All generated code
+default_language_version:
+  python: python3.12
+default_stages: [pre-commit]
+
+repos:
+  # Rust-native builtin hooks (no clone, no Python venv).
+  - repo: builtin
+    hooks:
+      # Whitespace/EOL fixers (sequential to avoid races on the same files).
+      - id: end-of-file-fixer
+        priority: 10
+        # Exclude reference and generated files
+        exclude: (cfgs/profile.*|.*\.golden\.adoc$|.*\.svg|amo.*\.yaml|hpmcounter.*\.yaml|mhpmevent.*\.yaml|pmp.*\.yaml|mop.*\.yaml|mcountinhibit\.yaml|[smh]counteren\.yaml|scountovf\.yaml|spec/std/isa/inst/Zalrsc/.*\.yaml|spec/std/isa/inst/Zalasr/.*\.yaml|\.github/workflows/regress\.yml|tests/data/golden/.*)
+      - id: trailing-whitespace
+        priority: 11
+        args: [--markdown-linebreak-ext=md]
+        exclude: \.svg$|cfgs/profile/.*\.yaml$|tests/data/golden/.*
+      - id: mixed-line-ending
+        priority: 12
+        args: ["--fix=lf"]
+        exclude: ^.*\.bat$
+      # Validators (parallel).
+      - id: check-case-conflict
+        priority: 30
+      - id: check-symlinks
+        priority: 30
+      - id: check-merge-conflict
+        priority: 30
+        args: ["--assume-in-merge"]
+        exclude: \.adoc$ # sections titles Level 6 "=======" get flagged otherwise
+      - id: check-json
+        priority: 30
+        exclude: tools/vscode/\.vscode/launch\.json|doc/tsconfig\.json # Uses JSONC (comments)
+      - id: check-yaml
+        priority: 30
+
+  # Formatters touching distinct file extensions (parallel).
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.9.6
+    hooks:
+      - id: prettier
+        priority: 20
+        files: \.(json|toml|yml|yaml)$
+        exclude: schemas/json-schema-draft-07.json|cfgs/profile/.*
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: "v22.1.8"
+    hooks:
+      - id: clang-format
+        priority: 20
+        types_or: [c++, c]
+        files: \.(hpp|cpp)$
+        # TEMPORARILY DISABLE CLANG-FORMAT IN LIBHART
+        # WIll RE-ENABLE WHEN NEXT PATCH COMES THROUGH
+        exclude: backends/cpp_hart_gen
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.9
+    hooks:
+      - id: ruff-format
+        priority: 20
+      - id: ruff-check
+        priority: 30
+        args: ["--fix"]
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.11.0-1
+    hooks:
+      - id: shfmt
+        priority: 20
+        args:
+          - --indent
+          - "2"
+          - --case-indent
+
+  # JSON-schema validation: each variant filters a different subtree, so they
+  # are independent and benefit greatly from running in parallel.
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.38.0
+    hooks:
+      - id: check-metaschema
+        priority: 30
+        files: ^spec/schemas/.*\.json$
+      - id: check-jsonschema
+        name: Validate instruction files with jsonschema
+        priority: 30
+        alias: check-jsonschema-inst
+        files: ^spec/std/isa/inst/.*\.(yaml|yml)$
+        args:
+          [
+            "--schemafile",
+            "spec/schemas/inst_schema.json",
+            "--base-uri",
+            "file://spec/schemas/",
+          ]
+      - id: check-jsonschema
+        name: Validate CSR files with jsonschema
+        priority: 30
+        alias: check-jsonschema-csr
+        files: ^spec/std/isa/csr/.*\.(yaml|yml)$
+        args:
+          [
+            "--schemafile",
+            "spec/schemas/csr_schema.json",
+            "--base-uri",
+            "file://spec/schemas/",
+          ]
+      - id: check-jsonschema
+        name: Validate MMR files with jsonschema
+        priority: 30
+        alias: check-jsonschema-mmr
+        files: ^spec/.*/isa/.*/mmr/.*\.(yaml|yml)$
+        args: ["--schemafile", "spec/schemas/mmr_schema.json"]
+      - id: check-jsonschema
+        name: Validate extension files with jsonschema
+        priority: 30
+        alias: check-jsonschema-ext
+        files: ^spec/std/isa/ext/.*\.(yaml|yml)$
+        args:
+          [
+            "--schemafile",
+            "spec/schemas/ext_schema.json",
+            "--base-uri",
+            "file://spec/schemas/",
+          ]
+      - id: check-jsonschema
+        name: Validate profile family files with jsonschema
+        priority: 30
+        alias: check-jsonschema-profile-family
+        files: ^spec/std/isa/profile_family/.*\.(yaml|yml)$
+        args:
+          [
+            "--schemafile",
+            "spec/schemas/profile_family_schema.json",
+            "--base-uri",
+            "file://spec/schemas/",
+          ]
+      - id: check-jsonschema
+        name: Validate profile release files with jsonschema
+        priority: 30
+        alias: check-jsonschema-profile-release
+        files: ^spec/std/isa/profile_release/.*\.(yaml|yml)$
+        args:
+          [
+            "--schemafile",
+            "spec/schemas/profile_release_schema.json",
+            "--base-uri",
+            "file://spec/schemas/",
+          ]
+      # Commenting because throwing errors and not sure this is complete yet
+      # - id: check-jsonschema
+      #   name: Validate manual version files with jsonschema
+      #   alias: check-jsonschema-manual-version
+      #   files: ^spec/std/isa/manual/.*\.(yaml|yml)$
+      #   args:
+      #     [
+      #       "--schemafile",
+      #       "spec/schemas/manual_version_schema.json",
+      #       "--base-uri",
+      #       "file://spec/schemas/",
+      #     ]
+
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        priority: 30
+        types: [shell]
+        language: system
+        entry: shellcheck
+        args: ["--severity=error"]
+
+  - repo: https://github.com/fsfe/reuse-tool
+    rev: v6.2.0
+    hooks:
+      - id: reuse-lint-file
+        priority: 30
+        exclude: COMMIT_EDITMSG|MERGE_MSG
+
+  - repo: https://github.com/renovatebot/pre-commit-hooks
+    rev: 44.40.0
+    hooks:
+      - id: renovate-config-validator
+        priority: 30
+
+  - repo: local
+    hooks:
+      - id: check-csr-conflicts
+        name: Check CSR address conflicts
+        priority: 40
+        files: ^(Rakefile|\.pre-commit-config\.yaml|spec/std/isa/csr/.*\.ya?ml)$
+        pass_filenames: false
+        language: system
+        entry: ./do test:csrs
+      - id: regress
+        name: generate regress.yml
+        priority: 90
+        files: (tools/test/gen_regress\.py|tools/test/regress-tests.yaml|tools/test/regress-gh-template.yaml)
+        pass_filenames: false
+        language: system
+        entry: >-
+          /usr/bin/env bash -c '
+          ./bin/chore gen -f regress
+          ||
+          (
+          echo "Generated file .github/workflows/regress.yml changed." 1>&2;
+          echo "Run" 1>&2;
+          echo "" 1>&2;
+          echo "  git add .github/workflows/regress.yml" 1>&2;
+          echo "" 1>&2;
+          echo "and commit again." 1>&2;
+          false
+          )
+          '

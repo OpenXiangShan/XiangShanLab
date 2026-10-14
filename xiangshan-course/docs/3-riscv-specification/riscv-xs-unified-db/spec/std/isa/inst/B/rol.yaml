@@ -1,0 +1,36 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+# yaml-language-server: $schema=../../../../schemas/inst_schema.json
+
+$schema: "inst_schema.json#"
+kind: instruction
+name: rol
+long_name: Rotate left (Register)
+description: |
+  Performs a rotate left of xs1 by the amount in least-significant `log2(XLEN)` bits of xs2.
+definedBy:
+  extension:
+    anyOf:
+      - name: Zbb
+      - name: Zbkb
+assembly: xd, xs1, xs2
+encoding:
+  match: 0110000----------001-----0110011
+  variables:
+    - name: xs2
+      location: 24-20
+    - name: xs1
+      location: 19-15
+    - name: xd
+      location: 11-7
+access:
+  s: always
+  u: always
+  vs: always
+  vu: always
+data_independent_timing: true
+operation(): |
+  XReg shamt = (xlen() == 32) ? X[xs2][4:0] : X[xs2][5:0];
+
+  X[xd] = (X[xs1] << shamt) | (X[xs1] >> (xlen() - shamt));

@@ -1,0 +1,37 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+# yaml-language-server: $schema=../../../../schemas/inst_schema.json
+
+$schema: "inst_schema.json#"
+kind: instruction
+name: c.mv
+long_name: Move Register
+description: |
+  C.MV (move register) performs copy of the data in register xs2 to register xd
+  C.MV expands to add xd, x0, xs2.
+definedBy:
+  extension:
+    name: Zca
+assembly: xd, xs2
+encoding:
+  match: 1000----------10
+  variables:
+    - name: xd
+      location: 11-7
+      not: 0
+    - name: xs2
+      location: 6-2
+      not: 0
+access:
+  s: always
+  u: always
+  vs: always
+  vu: always
+data_independent_timing: true
+operation(): |
+  if (implemented?(ExtensionName::C) && MISA_CSR_IMPLEMENTED && (CSR[misa].C == 1'b0)) {
+    reserved_instruction($encoding);
+  }
+
+  X[xd] = X[xs2];

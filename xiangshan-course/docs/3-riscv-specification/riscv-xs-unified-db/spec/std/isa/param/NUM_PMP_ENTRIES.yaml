@@ -1,0 +1,31 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+# yaml-language-server: $schema=../../../schemas/param_schema.json
+
+$schema: param_schema.json#
+kind: parameter
+name: NUM_PMP_ENTRIES
+description: |
+  Number of implemented PMP entries.
+
+  The architecture mandates that the number of implemented PMP registers
+  must appear to be 0, 16, or 64, so NUM_PMP_ENTRIES must be one of those values.
+  It directly determines which PMP registers exist: `pmpaddr0`-`pmpaddr<N-1>`
+  and their corresponding `pmpNcfg` fields are implemented, and the rest are
+  not. Accessing an unimplemented PMP register causes an `IllegalInstruction`
+  when TRAP_ON_UNIMPLEMENTED_CSR is true.
+
+  [NOTE]
+  `pmpcfgN` for an odd N never exists when XLEN == 64.
+
+  An implemented entry may still be read-only zero (but will never cause an exception).
+  The number of entries that are actually usable is given by
+  NUM_USABLE_PMP_ENTRIES.
+long_name: number of implemented PMP entries
+schema:
+  type: integer
+  enum: [0, 16, 64]
+definedBy:
+  extension:
+    name: Sm

@@ -1,0 +1,145 @@
+= UnifiedDB Contribution Guide
+
+Thank you for your interest in contributing to UnifiedDB!
+We welcome all contributions that meet our xref:CODE_OF_CONDUCT.adoc[code of conduct].
+
+== Ways to contribute
+
+=== Bug Reports
+
+Bug reports should be filed as a https://github.com/riscv/riscv-unified-db/issues[GitHub Issue] using the `Bug report` template.
+
+=== Feature Requests
+
+Feature requests should be filed as a https://github.com/riscv/riscv-unified-db/issues[GitHub Issue] using the `Feature request` template.
+
+=== Bug Fixes
+
+Bug fixes should be submitted as a Pull Request.
+
+There should be a corresponding https://github.com/riscv/riscv-unified-db/issues[GitHub Issue] for the PR. Ensure the two are linked by adding "closes #<issue number>" in the PR description.
+
+=== New data, tools, and features
+
+New data (for example, adding an extension), tools, or features should be submitted as a Pull Request.
+
+There should be a corresponding https://github.com/riscv/riscv-unified-db/issues[GitHub Issue] for the PR. Ensure the two are linked by adding "closes #<issue number>" in the PR description.
+
+== Submitting a Pull Request
+
+All patches must meet the UnifiedDB code standards. This includes:
+
+* Pass regression tests
+** run locally as `./bin/regress --all`...though this will take a while to run sequentially. These will also run in GitHub automatically.
+* Use appropriate commit messages
+* Sign off every commit (see <<Developer Certificate of Origin (DCO)>>)
+* Cryptographically sign every commit (see <<Commit signing>>)
+* Go through code review as a Pull Request
+
+=== Regression tests
+
+All contributions must pass the full suite of regression tests.
+Tests are documented more in xref:doc/ci.adoc[Continuous Integration].
+
+=== Commit messages
+
+We use a squash merge policy for PRs. The commit message that appears in main is the PR title and description, and reviewers will ask that those are brief but descriptive. We also strive to follow https://www.conventionalcommits.org/en/v1.0.0[Conventional Commits v1.0.0], though that is not enforced.
+
+==== Linked Issues and PRs
+
+When a commit will close a GitHub Issue, it should be noted in the PR description.
+
+```
+Fixes #<issue number>
+Closes #<issue number>
+```
+
+=== Developer Certificate of Origin (DCO)
+
+UnifiedDB uses the https://developercertificate.org/[Developer Certificate of Origin] (DCO)
+to confirm that contributors have the right to submit their work under the project's
+xref:LICENSE-BSD-3-Clause-Clear.txt[license]. The DCO is a short statement, not a separate
+agreement to sign. By adding a `Signed-off-by` line to a commit, you certify that you wrote
+the contribution or otherwise have the right to submit it under the project's license.
+
+Every commit in a Pull Request must carry a `Signed-off-by` line, in this form:
+
+----
+Signed-off-by: Jane Developer <jane@example.com>
+----
+
+The name and email must be your real name and the email address configured in git.
+
+==== Adding the sign-off
+
+Git adds the line for you when you pass `-s` (`--signoff`):
+
+[source,bash]
+----
+git config --global user.name "Jane Developer"
+git config --global user.email "jane@example.com"
+
+git commit -s -m "fix: correct fcvt metadata"
+----
+
+==== Fixing commits that are missing the sign-off
+
+For the most recent commit:
+
+[source,bash]
+----
+git commit --amend --no-edit -s
+git push --force-with-lease
+----
+
+For several commits on your branch:
+
+[source,bash]
+----
+git rebase --exec 'git commit --amend --no-edit -s' upstream/main
+git push --force-with-lease
+----
+
+NOTE: The DCO sign-off (`Signed-off-by`) is a line of text in the commit message. It is
+different from a cryptographic signature (see <<Commit signing>>). Both are required.
+
+=== Commit signing
+
+All commits must be cryptographically signed so that GitHub shows them as *Verified*.
+You can sign with an SSH key or a GPG key; see GitHub's documentation on
+https://docs.github.com/en/authentication/managing-commit-signature-verification[managing commit signature verification]
+for how to set one up. The email address on your commits (`git config user.email`) must match
+a verified email address on your GitHub account. To sign a commit, pass `-S` to `git commit`
+(or set `commit.gpgsign` to `true`), and check the result with `git log --show-signature -1`.
+
+=== Code review
+
+All Pull Requests must go through the code review process.
+
+All Pull Requests require approval by at least one maintainer.
+
+== Finding tasks
+
+If you are looking to contribute but are unsure what to do, browse through the https://github.com/riscv/riscv-unified-db/issues[issues]. We try to keep them tagged by area and mark easier tasks with "good first issue".
+
+== Legal
+
+All contributions to UnifiedDB are by default made under the xref:LICENSE-BSD-3-Clause-Clear.txt[BSD-3-Clause-Clear license].
+Copyrights are held by the specific contributors, and are not tracked by the UnifiedDB project other
+than what can be gleaned through git history.
+
+Under special circumstances code may be added under a different license.
+For example, code from an existing project may be integrated after careful deliberation.
+Any contributions under a different license will receive extra review.
+When any contribution is made under a different license, it must be tracked using
+https://reuse.software/tutorial/#step-2[a Reuse-compatible identifier].
+
+To keep UnifiedDB open to both private and commercial interests, contributions under a
+https://en.wikipedia.org/wiki/copyleft[copyleft license] will never be accepted.
+
+== Maintainers
+
+The current maintainers for UnifiedDB are:
+
+* Derek Hower (@dhower-qc)
+* Paul Clarke (@ThinkOpenly)

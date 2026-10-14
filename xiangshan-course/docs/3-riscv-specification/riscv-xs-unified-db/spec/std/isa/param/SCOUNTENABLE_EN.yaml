@@ -1,0 +1,38 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+# yaml-language-server: $schema=../../../schemas/param_schema.json
+
+$schema: param_schema.json#
+kind: parameter
+name: SCOUNTENABLE_EN
+description: |
+  Indicates which counters can delegated via `scounteren`
+
+  `SCOUNTENABLE_EN[n]` controls whether `scounteren.HPM<n>` is writable. It does not
+  depend on whether `hpmcounter<n>`/`mhpmcounter<n>` is read-only zero.
+
+  SCOUNTENABLE_EN[0:2] must all be false if `Zicntr` is not implemented.
+  SCOUNTENABLE_EN[3:31] must all be false if `Zihpm` is not implemented.
+long_name: TODO
+schema:
+  type: array
+  items:
+    type: boolean
+  maxItems: 32
+  minItems: 32
+requirements:
+  idl(): |
+    for (U32 i = 0; i < 3; i++) {
+      !implemented?(ExtensionName::Zicntr) -> !SCOUNTENABLE_EN[i];
+    }
+    for (U32 i = 3; i < 32; i++) {
+      !implemented?(ExtensionName::Zihpm) -> !SCOUNTENABLE_EN[i];
+    }
+  reason: |
+    Counters 0-2 are defined by Zicntr
+
+    Counters 3..31 are defined by Zihpm
+definedBy:
+  extension:
+    name: S
