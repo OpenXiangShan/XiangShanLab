@@ -33,6 +33,7 @@ description: |
   <%- end -%>
 
   CBO operations never raise a misaligned address fault.
+FuType: stu
 definedBy:
   extension:
     name: Zicboz

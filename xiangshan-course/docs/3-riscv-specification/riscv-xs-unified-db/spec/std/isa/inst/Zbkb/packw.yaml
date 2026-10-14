@@ -9,6 +9,7 @@ name: packw
 long_name: No synopsis available
 description: |
   No description available.
+FuType: alu
 definedBy:
   allOf:
     - xlen: 64

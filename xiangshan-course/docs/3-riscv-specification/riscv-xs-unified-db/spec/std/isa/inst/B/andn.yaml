@@ -10,6 +10,7 @@ long_name: AND with inverted operand
 description: |
   Performs the bitwise logical AND operation between `xs1` and the
   bitwise inversion of `xs2`.
+FuType: alu
 definedBy:
   extension:
     anyOf:

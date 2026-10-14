@@ -9,6 +9,7 @@ name: fcvt.s.lu
 long_name: Floating-Point Convert Unsigned Long to Single-Precision
 description: |
   The `fcvt.s.lu` instruction converts a 64-bit unsigned integer into a single-precision floating-point number.
+FuType: i2f
 definedBy:
   allOf:
     - xlen: 64

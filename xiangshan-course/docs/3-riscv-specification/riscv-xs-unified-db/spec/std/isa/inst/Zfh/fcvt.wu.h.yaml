@@ -14,6 +14,7 @@ definedBy:
       - name: Zhinx
 description: |
   `fcvt.wu.h` converts a half-precision floating-point number to a signed 32-bit unsigned integer.
+FuType: fcvt
 assembly: xd, fs1, rm
 encoding:
   match: 110001000001-------------1010011

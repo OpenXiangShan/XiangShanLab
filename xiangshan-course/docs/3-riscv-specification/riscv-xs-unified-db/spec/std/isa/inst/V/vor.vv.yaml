@@ -9,6 +9,7 @@ name: vor.vv
 long_name: Vector-vector bitwise OR
 description: |
   Performs bitwise OR on corresponding elements from vs1 and vs2 according to mask vm and stores results in vd. Element width is determined by SEW setting.
+FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

@@ -9,6 +9,7 @@ name: vfwnmsac.vf
 long_name: No synopsis available
 description: |
   No description available.
+FuType: vfma
 definedBy:
   extension:
     anyOf:

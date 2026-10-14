@@ -10,6 +10,7 @@ long_name: Floating-Point Divide Single-Precision
 description: |
   The `fdiv.s` instruction performs the single-precision floating-point division of `fs1` by `fs2`, and
   writes the final result to `fd`.
+FuType: fDivSqrt
 definedBy:
   extension:
     name: F

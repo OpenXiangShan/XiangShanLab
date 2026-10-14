@@ -35,6 +35,7 @@ description: |
   provide mechanisms for efficient multiprocessor instruction-stream
   synchronization.
   ====
+FuType: fence
 definedBy:
   extension:
     name: Zifencei

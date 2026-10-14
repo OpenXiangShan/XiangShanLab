@@ -8,6 +8,7 @@ kind: instruction
 name: lui
 long_name: Load upper immediate
 description: Load the zero-extended imm into xd.
+FuType: alu
 definedBy:
   extension:
     name: I

@@ -10,6 +10,7 @@ long_name: Hypervisor store word
 description: |
   Store 32 bits of data from register `xs2` to guest physical memory at the
   address in `xs1`, as though V=1.
+FuType: stu
 definedBy:
   extension:
     name: H

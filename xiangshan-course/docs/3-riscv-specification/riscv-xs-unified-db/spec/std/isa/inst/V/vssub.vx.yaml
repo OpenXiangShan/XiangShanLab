@@ -9,6 +9,7 @@ name: vssub.vx
 long_name: "Vector subtraction with scalar"
 description: |
   Performs subtraction on elements from vector register vs2 and scalar register xs1 and stores results in vector register vd, using vector mask vm.
+FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

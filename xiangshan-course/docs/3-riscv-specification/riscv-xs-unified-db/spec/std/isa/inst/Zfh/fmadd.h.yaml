@@ -9,6 +9,7 @@ name: fmadd.h
 long_name: No synopsis available
 description: |
   No description available.
+FuType: fmac
 definedBy:
   extension:
     oneOf:

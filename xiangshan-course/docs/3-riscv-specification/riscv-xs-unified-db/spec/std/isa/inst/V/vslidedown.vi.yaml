@@ -9,6 +9,7 @@ name: vslidedown.vi
 long_name: "Vector slide down with immediate"
 description: |
   Slides elements in vector register vs2 down by 1 position, inserting immediate value at the top, and stores results in vector register vd, using vector mask vm.
+FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

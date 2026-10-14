@@ -9,6 +9,7 @@ name: xnor
 long_name: Exclusive NOR
 description: |
   Performs the bit-wise exclusive-NOR operation on xs1 and xs2.
+FuType: alu
 definedBy:
   extension:
     anyOf:

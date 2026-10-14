@@ -9,6 +9,7 @@ name: orn
 long_name: OR with inverted operand
 description: |
   Performs the bitwise logical OR operation between xs1 and the bitwise inversion of xs2.
+FuType: alu
 definedBy:
   extension:
     anyOf:

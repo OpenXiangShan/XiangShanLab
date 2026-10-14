@@ -11,6 +11,7 @@ description: |
   Performs a rotate right on the least-significant word of xs1 by the amount in
   the least-significant log2(XLEN) bits of shamt. The resulting word value is sign-extended by
   copying bit 31 to all of the more-significant bits.
+FuType: alu
 definedBy:
   allOf:
     - xlen: 64

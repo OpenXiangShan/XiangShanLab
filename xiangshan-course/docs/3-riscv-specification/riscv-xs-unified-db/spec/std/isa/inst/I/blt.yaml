@@ -12,6 +12,7 @@ description: |
   the signed value in register xs1 is less than the signed value in register xs2.
 
   Raise a `MisalignedAddress` exception if PC + imm is misaligned.
+FuType: brh
 definedBy:
   extension:
     name: I

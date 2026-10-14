@@ -9,6 +9,7 @@ name: fmadd.s
 long_name: Floating-Point Multiply-Add Single-Precision
 description: |
   The `fmadd.s` multiplies the values in `fs1` and `fs2`, adds the value in `fs3`, and writes the final result to `fd`.
+FuType: fmac
 definedBy:
   extension:
     name: F

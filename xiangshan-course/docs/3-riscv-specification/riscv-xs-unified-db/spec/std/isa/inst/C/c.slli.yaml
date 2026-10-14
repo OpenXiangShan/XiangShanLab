@@ -10,6 +10,7 @@ long_name: Shift left logical immediate
 description: |
   Shift the value in xd left by shamt, and store the result back in xd.
   C.SLLI expands into `slli xd, xd, shamt`.
+FuType: alu
 definedBy:
   extension:
     name: Zca

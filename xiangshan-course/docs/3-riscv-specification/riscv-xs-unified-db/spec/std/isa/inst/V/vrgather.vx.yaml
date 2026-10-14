@@ -9,6 +9,7 @@ name: vrgather.vx
 long_name: "Vector register gather with scalar index"
 description: |
   Gathers elements from vector register vs2 using scalar index from register xs1 and stores results in vector register vd, using vector mask vm. This operation performs indexed element selection.
+FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

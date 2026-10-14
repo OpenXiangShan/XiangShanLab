@@ -11,6 +11,7 @@ description: |
   The NTL.ALL instruction indicates that the immediately subsequent instruction
   does not exhibit temporal locality within the capacity of any level of cache
   in the memory hierarchy. NTL.ALL is encoded as ADD x0, x0, x5.
+FuType: alu
 definedBy:
   extension:
     name: Zihintntl

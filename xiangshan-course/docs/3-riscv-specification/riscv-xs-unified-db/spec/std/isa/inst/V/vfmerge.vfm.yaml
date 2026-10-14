@@ -9,6 +9,7 @@ name: vfmerge.vfm
 long_name: No synopsis available
 description: |
   No description available.
+FuType: vfalu
 definedBy:
   extension:
     anyOf:

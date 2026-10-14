@@ -9,6 +9,7 @@ name: minu
 long_name: Unsigned minimum
 description: |
   Returns the smaller of two unsigned integers.
+FuType: alu
 definedBy:
   extension:
     name: Zbb

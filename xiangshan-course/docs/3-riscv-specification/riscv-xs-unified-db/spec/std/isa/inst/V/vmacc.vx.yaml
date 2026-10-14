@@ -9,6 +9,7 @@ name: vmacc.vx
 long_name: No synopsis available
 description: |
   No description available.
+FuType: vimac
 definedBy:
   extension:
     name: Zvl32b

@@ -15,6 +15,7 @@ definedBy:
 description: |
   The `fdiv.d` instruction performs the double-precision floating-point division of `fs1` by `fs2`. It is defined analogously
   to its single-precision counterpart, but operates on double-precision operands and produces double-precision results.
+FuType: fDivSqrt
 assembly: fd, fs1, fs2, rm
 encoding:
   match: 0001101------------------1010011

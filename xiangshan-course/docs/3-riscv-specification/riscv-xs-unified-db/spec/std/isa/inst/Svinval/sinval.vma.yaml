@@ -22,6 +22,7 @@ description:
   `sfence.vma` instruction with the same values of xs1 and xs2 would invalidate.
   However, unlike `sfence.vma`, `sinval.vma` instructions are only ordered with respect to
   `sfence.vma`, `sfence.w.inval`, and `sfence.inval.ir` instructions as defined below.
+FuType: fence
 access:
   s: sometimes
   u: never

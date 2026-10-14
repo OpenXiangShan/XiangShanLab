@@ -17,6 +17,7 @@ description: |
   The byte-reverse operation is only available for the full register width. To emulate word-sized
   and halfword-sized byte-reversal, perform a `rev8 xd,xs1` followed by a `srai xd,xd,K`, where K
   is XLEN-32 and XLEN-16, respectively.
+FuType: alu
 definedBy:
   extension:
     anyOf:

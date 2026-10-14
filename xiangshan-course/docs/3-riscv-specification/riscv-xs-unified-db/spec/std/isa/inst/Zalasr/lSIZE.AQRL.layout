@@ -55,6 +55,8 @@ description: |
   The address must be naturally aligned (<%= alignment_bytes %>-byte aligned); if not, an
   address-misaligned or access-fault exception will be raised.
 <% end -%>
+FuType: ldu
+
 definedBy:
   extension:
     name: Zalasr

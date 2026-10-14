@@ -17,6 +17,7 @@ definedBy:
 description: |
   The `fcvt.lu.d` instruction converts a double-precision floating-point number in floating-point register `fs1`
   to an unsigned 64-bit integer, in integer register `xd`.
+FuType: fcvt
 assembly: xd, fs1, rm
 encoding:
   match: 110000100011-------------1010011

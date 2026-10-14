@@ -9,6 +9,7 @@ name: vmv.v.v
 long_name: "Vector register move"
 description: |
   Copies elements from vector register vs2 to vector register vd, using vector mask vm. This operation performs a simple register-to-register copy.
+FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

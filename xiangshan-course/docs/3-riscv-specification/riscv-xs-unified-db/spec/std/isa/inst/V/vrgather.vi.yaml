@@ -9,6 +9,7 @@ name: vrgather.vi
 long_name: "Vector register gather with immediate index"
 description: |
   Gathers elements from vector register vs2 using immediate index value and stores results in vector register vd, using vector mask vm. This operation performs indexed element selection.
+FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

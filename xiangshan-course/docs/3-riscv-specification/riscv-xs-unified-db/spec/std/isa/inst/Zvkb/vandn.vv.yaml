@@ -9,6 +9,7 @@ name: vandn.vv
 long_name: Vector AND-NOT
 description: |
   Performs a bitwise AND operation between vector register vs2 and the bitwise NOT of vector register vs1, storing results in vector register vd according to mask vm.
+FuType: vialuF
 definedBy:
   extension:
     name: Zvkb

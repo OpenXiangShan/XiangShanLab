@@ -11,6 +11,7 @@ description: |
   Load 16 bits of data into register `xd` from an
   address formed by adding `xs1` to a signed offset.
   Sign extend the result.
+FuType: ldu
 definedBy:
   extension:
     name: I

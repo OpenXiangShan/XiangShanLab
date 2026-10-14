@@ -8,6 +8,7 @@ kind: instruction
 name: auipc
 long_name: Add upper immediate to pc
 description: Add an immediate to the current PC.
+FuType: jmp
 definedBy:
   extension:
     name: I

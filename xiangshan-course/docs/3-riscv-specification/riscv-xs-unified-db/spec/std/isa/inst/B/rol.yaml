@@ -9,6 +9,7 @@ name: rol
 long_name: Rotate left (Register)
 description: |
   Performs a rotate left of xs1 by the amount in least-significant `log2(XLEN)` bits of xs2.
+FuType: alu
 definedBy:
   extension:
     anyOf:

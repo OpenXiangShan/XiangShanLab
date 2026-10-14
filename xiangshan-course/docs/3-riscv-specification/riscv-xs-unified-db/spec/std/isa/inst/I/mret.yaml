@@ -7,6 +7,7 @@ name: mret
 long_name: Machine-mode Return from Trap
 description: |
   Return from machine mode after handling a trap.
+FuType: csr
 assembly: ""
 definedBy:
   extension:

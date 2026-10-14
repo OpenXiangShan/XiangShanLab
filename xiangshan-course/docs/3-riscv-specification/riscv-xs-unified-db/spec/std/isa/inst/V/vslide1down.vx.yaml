@@ -9,6 +9,7 @@ name: vslide1down.vx
 long_name: "Vector slide down by 1 element with scalar"
 description: |
   Slides elements in vector register vs2 down by 1 position, inserting scalar register xs1 at the top, and stores results in vector register vd, using vector mask vm.
+FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

@@ -9,6 +9,7 @@ name: vslideup.vx
 long_name: "Vector slide up with scalar"
 description: |
   Slides elements in vector register vs2 up by 1 position, inserting scalar register xs1 at the bottom, and stores results in vector register vd, using vector mask vm.
+FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

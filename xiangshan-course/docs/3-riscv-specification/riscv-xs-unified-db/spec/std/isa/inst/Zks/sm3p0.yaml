@@ -9,6 +9,7 @@ name: sm3p0
 long_name: No synopsis available
 description: |
   No description available.
+FuType: bku
 definedBy:
   extension:
     name: Zksh

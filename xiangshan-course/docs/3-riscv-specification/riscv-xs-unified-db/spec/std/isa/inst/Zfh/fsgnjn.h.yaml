@@ -9,6 +9,7 @@ name: fsgnjn.h
 long_name: No synopsis available
 description: |
   No description available.
+FuType: falu
 definedBy:
   extension:
     oneOf:

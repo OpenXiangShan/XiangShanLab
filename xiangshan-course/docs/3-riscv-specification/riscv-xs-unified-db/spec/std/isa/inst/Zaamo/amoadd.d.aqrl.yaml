@@ -18,6 +18,7 @@ description: |
     * Write the loaded value into _xd_
     * Add the value of register _xs2_ to the loaded value
     * Write the result to the address in _xs1_
+FuType: mou
 definedBy:
   allOf:
     - extension:

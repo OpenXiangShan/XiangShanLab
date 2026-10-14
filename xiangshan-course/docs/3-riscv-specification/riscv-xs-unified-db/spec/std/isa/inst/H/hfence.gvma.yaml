@@ -13,6 +13,7 @@ description: |
   applies to any guest physical addresses within the range specified by
   `xs1` and `xs2`, for all address spaces if `xs2`=0, or for the address
   space identified by the VMID in `xs2` otherwise.
+FuType: fence
 definedBy:
   extension:
     name: H

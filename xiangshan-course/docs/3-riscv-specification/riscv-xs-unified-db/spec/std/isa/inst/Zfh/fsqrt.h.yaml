@@ -9,6 +9,7 @@ name: fsqrt.h
 long_name: No synopsis available
 description: |
   No description available.
+FuType: fDivSqrt
 definedBy:
   extension:
     oneOf:

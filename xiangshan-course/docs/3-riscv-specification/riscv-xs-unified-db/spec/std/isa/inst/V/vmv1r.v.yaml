@@ -9,6 +9,7 @@ name: vmv1r.v
 long_name: No synopsis available
 description: |
   No description available.
+FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

@@ -9,6 +9,7 @@ name: fcvt.d.h
 long_name: No synopsis available
 description: |
   No description available.
+FuType: fcvt
 definedBy:
   extension:
     oneOf:

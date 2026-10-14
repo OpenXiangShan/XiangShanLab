@@ -9,6 +9,7 @@ name: maxu
 long_name: Unsigned maximum
 description: |
   Returns the larger of two unsigned integers.
+FuType: alu
 definedBy:
   extension:
     name: Zbb

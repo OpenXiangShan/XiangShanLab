@@ -9,6 +9,7 @@ name: sha512sig1
 long_name: No synopsis available
 description: |
   No description available.
+FuType: bku
 definedBy:
   allOf:
     - xlen: 64

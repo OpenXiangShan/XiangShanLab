@@ -10,6 +10,7 @@ long_name: Zero-extend word, 16-bit encoding
 description: |
   Takes a single source/destination operand.
   It zero-extends the least-significant word of the operand to XLEN bits by inserting zeros into all of the bits more significant than 31.
+FuType: alu
 
 definedBy:
   allOf:

@@ -31,6 +31,8 @@ description: |
   The encoding allows future extensions to define it to read X[xs1], as well as write X[xd].
 
   This is mop.r.<%= n %> from the MOP.R instruction family (n=<%= n %>).
+FuType: alu
+
 definedBy:
   extension:
     name: Zimop

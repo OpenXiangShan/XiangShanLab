@@ -9,6 +9,7 @@ name: vfdiv.vv
 long_name: Vector floating-point divide
 description: |
   Performs floating-point division on elements from vs2 and vs1, according to mask vm, and stores results in vd. Element width is determined by SEW setting. Follows IEEE-754 floating-point standards. Supports vector masking and follows vector tail policy.
+FuType: vfdiv
 definedBy:
   extension:
     name: Zvl32b

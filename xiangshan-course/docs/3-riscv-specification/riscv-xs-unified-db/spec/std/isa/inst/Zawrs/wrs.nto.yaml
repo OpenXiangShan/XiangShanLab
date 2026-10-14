@@ -39,6 +39,7 @@ description: |
   may promptly cause an illegal instruction exception if used at U-mode.
   Unlike WFI, `wrs.nto` is expected to be used by software in U-mode when waiting on memory but without
   a deadline for that wait.
+FuType: csr
 definedBy:
   extension:
     name: Zawrs

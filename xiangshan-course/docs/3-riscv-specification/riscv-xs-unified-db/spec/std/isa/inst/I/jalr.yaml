@@ -12,6 +12,7 @@ description: |
   to a signed offset then clearing the least
   significant bit, and store the return address
   in xd.
+FuType: jmp
 definedBy:
   extension:
     name: I

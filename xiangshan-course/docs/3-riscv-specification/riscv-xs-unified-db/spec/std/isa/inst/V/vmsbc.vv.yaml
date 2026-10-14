@@ -9,6 +9,7 @@ name: vmsbc.vv
 long_name: "Vector multiply-subtract with carry"
 description: |
   Performs multiply-subtract operation on elements from vector registers vs2 and vs1, subtracts the carry-in from vector register vs3, and stores results in vector register vd, using vector mask vm.
+FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

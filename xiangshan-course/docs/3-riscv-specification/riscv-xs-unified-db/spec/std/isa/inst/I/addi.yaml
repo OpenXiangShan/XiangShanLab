@@ -10,6 +10,7 @@ long_name: Add immediate
 description:
   Adds an immediate value to the value in xs1, and store the result in
   xd
+FuType: alu
 definedBy:
   extension:
     name: I

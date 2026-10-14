@@ -16,6 +16,7 @@ description: |
   write any register. Their encoding allows future extensions to define them to read register x[7].
 
   This is c.mop.7 from the compressed MOP instruction family.
+FuType: alu
 definedBy:
   extension:
     name: Zcmop

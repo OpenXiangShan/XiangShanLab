@@ -9,6 +9,7 @@ name: vmsbf.m
 long_name: No synopsis available
 description: |
   No description available.
+FuType: vipu
 definedBy:
   extension:
     name: Zvl32b

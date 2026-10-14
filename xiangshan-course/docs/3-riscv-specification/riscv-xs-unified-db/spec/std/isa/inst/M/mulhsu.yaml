@@ -19,6 +19,7 @@ description: |
   ---
 
   Microarchitectures may look for that sequence and fuse the operations.
+FuType: mul
 definedBy:
   extension:
     name: Zmmul

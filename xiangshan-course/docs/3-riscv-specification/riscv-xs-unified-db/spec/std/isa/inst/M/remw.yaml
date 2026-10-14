@@ -14,6 +14,7 @@ description: |
   If the value in register xs2 is zero, write the sign-extended 32-bit value in xs1 into xd;
 
   If the result of the division overflows, write zero into xd;
+FuType: div
 definedBy:
   allOf:
     - xlen: 64

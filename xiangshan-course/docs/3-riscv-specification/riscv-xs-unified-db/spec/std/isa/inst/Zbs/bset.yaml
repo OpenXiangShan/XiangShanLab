@@ -10,6 +10,7 @@ long_name: Single-Bit set (Register)
 description: |
   Returns xs1 with a single bit set at the index specified in xs2.
   The index is read from the lower log2(XLEN) bits of xs2.
+FuType: alu
 definedBy:
   extension:
     name: Zbs

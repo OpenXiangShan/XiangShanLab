@@ -16,6 +16,7 @@ description: |
   `fsh` ignores all but the lower 16 bits in _fs2_.
 
   `fsh` is only guaranteed to execute atomically if the effective address is naturally aligned.
+FuType: stu
 
 definedBy:
   extension:

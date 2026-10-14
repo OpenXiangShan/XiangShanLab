@@ -15,6 +15,7 @@ definedBy:
 description: |
   The `fnmadd.d` instruction multiplies the values in `fs1` and `fs2`, negates the product, subtracts the value in `fs3`, and
   writes the final result to `fd`.
+FuType: fmac
 assembly: fd, fs1, fs2, fs3, rm
 encoding:
   match: "-----01------------------1001111"

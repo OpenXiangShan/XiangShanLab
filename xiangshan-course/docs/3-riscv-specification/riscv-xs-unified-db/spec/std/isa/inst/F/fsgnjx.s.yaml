@@ -12,6 +12,7 @@ description: |
   The result's sign bit is the XOR of sign bits of `fs1` and `fs2`, and the result is written to
   the destination register `fd`. Sign-injection instructions do not set floating-point exception
   flags, nor do they canonicalize NaNs.
+FuType: falu
 definedBy:
   extension:
     name: F

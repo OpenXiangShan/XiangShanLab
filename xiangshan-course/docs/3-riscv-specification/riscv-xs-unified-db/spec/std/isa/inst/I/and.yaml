@@ -8,6 +8,7 @@ kind: instruction
 name: and
 long_name: And
 description: And xs1 with xs2, and store the result in xd
+FuType: alu
 definedBy:
   extension:
     name: I

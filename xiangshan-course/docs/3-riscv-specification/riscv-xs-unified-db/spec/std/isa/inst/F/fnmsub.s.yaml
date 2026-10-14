@@ -10,6 +10,7 @@ long_name: Floating-Point Negate-Multiply-Subtract Single-Precision
 description: |
   The `fnmsub.s` instruction multiplies the values in `fs1` and `fs2`, negates the product, adds the value in `fs3`, and
   writes the final result to `fd`.
+FuType: fmac
 definedBy:
   extension:
     name: F

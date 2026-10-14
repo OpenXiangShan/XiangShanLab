@@ -9,6 +9,7 @@ name: fsub.s
 long_name: Floating-Point Subtract Single-Precision
 description: |
   The `fsub.s` instruction performs the single-precision floating-point subtraction of `fs2` from `fs1` and writes the result in `fd`.
+FuType: falu
 definedBy:
   extension:
     name: F

@@ -16,6 +16,7 @@ description: |
   Its encoding allows future extensions to define it to read X[xs1] and X[xs2], as well as write X[xd].
 
   This is mop.rr.4 from the MOP.RR instruction family (n=4).
+FuType: alu
 definedBy:
   extension:
     name: Zimop

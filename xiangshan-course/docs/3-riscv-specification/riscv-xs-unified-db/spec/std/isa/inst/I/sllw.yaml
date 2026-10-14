@@ -9,6 +9,7 @@ name: sllw
 long_name: Shift left logical word
 description: |
   Shift the 32-bit value in `xs1` left by the value in the lower 5 bits of `xs2`, and store the sign-extended result in `xd`.
+FuType: alu
 definedBy:
   allOf:
     - xlen: 64

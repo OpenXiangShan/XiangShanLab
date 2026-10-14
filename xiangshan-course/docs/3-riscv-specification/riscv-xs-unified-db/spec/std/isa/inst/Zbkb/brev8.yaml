@@ -9,6 +9,7 @@ name: brev8
 long_name: Reverse bits in bytes
 description: |
   Reverses the order of the bits in every byte of a register.
+FuType: alu
 definedBy:
   extension:
     name: Zbkb

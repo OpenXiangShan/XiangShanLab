@@ -13,6 +13,7 @@ description: |
   The remainder is discarded.
 
   If the value in xs2 is zero, xd gets the largest unsigned value.
+FuType: div
 definedBy:
   extension:
     name: M

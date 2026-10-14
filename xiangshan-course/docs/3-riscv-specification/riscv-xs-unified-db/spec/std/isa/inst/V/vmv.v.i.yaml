@@ -15,6 +15,7 @@ description: |
   body element of the destination vector register group (elements from vstart to vl-1).
   Prestart elements (indices less than vstart) are unchanged.
   Tail elements (indices >= vl) are handled according to the tail agnostic/undisturbed policy.
+FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

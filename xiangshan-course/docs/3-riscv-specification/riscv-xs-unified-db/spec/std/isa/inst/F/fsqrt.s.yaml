@@ -9,6 +9,7 @@ name: fsqrt.s
 long_name: Floating-Point Square Root Single-Precision
 description: |
   The `fsqrt.s` instruction computes the square root of `fs1` and writes the result is written to `fd`.
+FuType: fDivSqrt
 definedBy:
   extension:
     name: F

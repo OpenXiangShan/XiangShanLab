@@ -10,6 +10,7 @@ long_name: Shift left logical immediate word
 description:
   Shift the 32-bit value in xs1 left by shamt, and store the sign-extended
   result in xd
+FuType: alu
 definedBy:
   allOf:
     - xlen: 64

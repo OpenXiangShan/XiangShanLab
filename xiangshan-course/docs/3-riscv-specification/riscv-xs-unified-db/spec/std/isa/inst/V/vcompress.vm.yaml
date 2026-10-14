@@ -9,6 +9,7 @@ name: vcompress.vm
 long_name: No synopsis available
 description: |
   No description available.
+FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

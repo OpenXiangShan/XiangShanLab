@@ -9,6 +9,7 @@ name: vdivu.vx
 long_name: No synopsis available
 description: |
   No description available.
+FuType: vidiv
 definedBy:
   extension:
     name: Zvl32b

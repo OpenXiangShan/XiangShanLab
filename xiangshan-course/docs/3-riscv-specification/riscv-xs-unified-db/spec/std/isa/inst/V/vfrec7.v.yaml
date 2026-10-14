@@ -9,6 +9,7 @@ name: vfrec7.v
 long_name: No synopsis available
 description: |
   No description available.
+FuType: vfcvt
 definedBy:
   extension:
     anyOf:

@@ -9,6 +9,7 @@ name: fmsub.s
 long_name: Floating-Point Multiply-Subtract Single-Precision
 description: |
   The `fmsub.s` multiplies the values in `fs1` and `fs2`, subtracts the value in `fs3`, and writes the final result to `fd`.
+FuType: fmac
 definedBy:
   extension:
     name: F

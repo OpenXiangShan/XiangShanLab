@@ -9,6 +9,7 @@ name: vfcvt.f.x.v
 long_name: "Vector integer to floating-point conversion"
 description: |
   Converts signed integer elements from vector register vs2 to floating-point format and stores results in vector register vd, using vector mask vm. The conversion follows IEEE 754 standards.
+FuType: vfcvt
 definedBy:
   extension:
     name: Zvl32b
