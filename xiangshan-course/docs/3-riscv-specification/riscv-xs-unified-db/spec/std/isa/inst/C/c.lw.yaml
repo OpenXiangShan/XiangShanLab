@@ -12,7 +12,8 @@ description: |
   It computes an effective address by adding the zero-extended offset, scaled by 4,
   to the base address in register xs1.
   It expands to `lw` `xd, offset(xs1)`.
-FuType: ldu
+microarchitectural_attributes:
+    - FuType: ldu
 definedBy:
   extension:
     name: Zca

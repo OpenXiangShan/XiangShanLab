@@ -13,7 +13,8 @@ description: |
   The remainder is discarded.
 
   If the value in xs2 is zero, xd is written with all 1s.
-FuType: div
+microarchitectural_attributes:
+    - FuType: div
 definedBy:
   allOf:
     - xlen: 64

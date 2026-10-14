@@ -9,7 +9,8 @@ name: vrsub.vx
 long_name: "Vector reverse subtract with scalar"
 description: |
   Performs reverse subtraction on elements from scalar register xs1 and vector register vs2 and stores results in vector register vd, using vector mask vm.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

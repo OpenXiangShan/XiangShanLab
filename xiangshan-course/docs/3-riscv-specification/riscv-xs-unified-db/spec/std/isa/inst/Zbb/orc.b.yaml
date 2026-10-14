@@ -11,7 +11,8 @@ description: |
   Combines the bits within each byte using bitwise logical OR. This sets the bits
   of each byte in the result xd to all zeros if no bit within the respective byte
   of xs1 is set, or to all ones if any bit within the respective byte of xs1 is set.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: Zbb

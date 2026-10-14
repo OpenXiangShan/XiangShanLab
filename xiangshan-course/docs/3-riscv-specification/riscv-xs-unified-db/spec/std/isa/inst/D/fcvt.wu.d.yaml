@@ -15,7 +15,8 @@ definedBy:
 description: |
   The `fcvt.wu.d` instruction converts a double-precision floating-point number in floating-point register `fs1` to an
   unsigned 32-bit integer, in integer register `xd`.
-FuType: fcvt
+microarchitectural_attributes:
+    - FuType: fcvt
 assembly: xd, fs1, rm
 encoding:
   match: 110000100001-------------1010011

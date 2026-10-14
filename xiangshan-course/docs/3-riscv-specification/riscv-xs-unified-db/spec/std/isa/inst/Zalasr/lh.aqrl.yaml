@@ -21,7 +21,8 @@ description: |
 
   The address must be naturally aligned (2-byte aligned); if not, an
   address-misaligned or access-fault exception will be raised.
-FuType: ldu
+microarchitectural_attributes:
+    - FuType: ldu
 definedBy:
   extension:
     name: Zalasr

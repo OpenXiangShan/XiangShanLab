@@ -9,7 +9,8 @@ name: fnmsub.h
 long_name: No synopsis available
 description: |
   No description available.
-FuType: fmac
+microarchitectural_attributes:
+    - FuType: fmac
 definedBy:
   extension:
     oneOf:

@@ -37,7 +37,8 @@ description: |
   <%- end -%>
 
   CBO operations never raise a misaligned address fault.
-FuType: stu
+microarchitectural_attributes:
+    - FuType: stu
 
 definedBy:
   extension:

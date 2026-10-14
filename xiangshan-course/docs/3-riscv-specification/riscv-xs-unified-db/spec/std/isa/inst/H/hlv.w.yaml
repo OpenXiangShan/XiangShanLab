@@ -10,7 +10,8 @@ long_name: Hypervisor load word
 description: |
   Load 32 bits of data into register `xd` from guest physical memory at the
   address in `xs1`, as though V=1. Sign-extend the result to XLEN bits.
-FuType: ldu
+microarchitectural_attributes:
+    - FuType: ldu
 definedBy:
   extension:
     name: H

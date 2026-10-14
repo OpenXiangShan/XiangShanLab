@@ -19,7 +19,8 @@ description: |
   the proposed _IEEE 754-201x_ `minimumNumber` and `maximumNumber` operations, rather than the _IEEE 754-2008_
   _minNum_ and _maxNum_ operations. These operations differ in their handling of signaling NaNs.
   ====
-FuType: falu
+microarchitectural_attributes:
+    - FuType: falu
 definedBy:
   extension:
     name: F

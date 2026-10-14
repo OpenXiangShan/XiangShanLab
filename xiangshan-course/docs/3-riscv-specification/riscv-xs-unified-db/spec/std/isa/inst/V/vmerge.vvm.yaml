@@ -9,7 +9,8 @@ name: vmerge.vvm
 long_name: Vector merge with mask
 description: |
   Merges elements from vs1 and vs2 using mask register v0 and stores results in vd. Where mask bits are set, elements from vs1 are selected; otherwise elements from vs2 are selected.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

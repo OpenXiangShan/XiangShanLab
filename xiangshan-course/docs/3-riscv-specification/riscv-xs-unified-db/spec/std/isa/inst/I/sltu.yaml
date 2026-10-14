@@ -10,7 +10,8 @@ long_name: Set on less than unsigned
 description: |
   Places the value 1 in register `xd` if register `xs1` is less than the value in register `xs2`, where
   both sources are treated as unsigned numbers, else 0 is written to `xd`.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: I

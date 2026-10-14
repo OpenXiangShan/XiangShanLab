@@ -9,7 +9,8 @@ name: vfnmsub.vv
 long_name: No synopsis available
 description: |
   No description available.
-FuType: vfma
+microarchitectural_attributes:
+    - FuType: vfma
 definedBy:
   extension:
     anyOf:

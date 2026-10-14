@@ -59,7 +59,8 @@ description: |
   set is null. Other HINTs similar to PAUSE might be encoded with other
   predecessor sets.
   ====
-FuType: fence
+microarchitectural_attributes:
+    - FuType: fence
 
 definedBy:
   extension:

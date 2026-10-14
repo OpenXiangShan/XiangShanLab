@@ -9,7 +9,8 @@ name: vnclip.wv
 long_name: "Vector narrowing signed clip"
 description: |
   Performs narrowing signed clip operation on double-width elements from vector register vs2 using clip values from vector register vs1 and stores results in vector register vd, using vector mask vm. The operation clips values to a specified range and packs the result into a narrower destination.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

@@ -17,7 +17,8 @@ description: |
     * Load the word at address _xs1_
     * Write the sign-extended value into _xd_
     * Store the least-significant word of register _xs2_ to the address in _xs1_
-FuType: mou
+microarchitectural_attributes:
+    - FuType: mou
 definedBy:
   extension:
     name: Zaamo

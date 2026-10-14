@@ -20,7 +20,8 @@ description: |
 
   The address must be naturally aligned (4-byte aligned); if not, an
   address-misaligned or access-fault exception will be raised.
-FuType: stu
+microarchitectural_attributes:
+    - FuType: stu
 definedBy:
   extension:
     name: Zalasr

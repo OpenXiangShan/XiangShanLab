@@ -9,7 +9,8 @@ name: vwredsumu.vs
 long_name: No synopsis available
 description: |
   No description available.
-FuType: vipu
+microarchitectural_attributes:
+    - FuType: vipu
 definedBy:
   extension:
     name: Zvl32b

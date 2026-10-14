@@ -9,7 +9,8 @@ name: vsext.vf8
 long_name: "Vector sign-extend by factor of 8"
 description: |
   Sign-extends elements from vector register vs2 by a factor of 8 and stores results in vector register vd, using vector mask vm. The operation extends SEW to 8×SEW.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

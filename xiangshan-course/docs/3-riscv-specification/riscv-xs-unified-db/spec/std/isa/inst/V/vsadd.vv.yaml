@@ -9,7 +9,8 @@ name: vsadd.vv
 long_name: "Vector unsigned addition"
 description: |
   Performs unsigned addition on elements from vector registers vs2 and vs1 and stores results in vector register vd, using vector mask vm. The operation follows standard unsigned arithmetic rules.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

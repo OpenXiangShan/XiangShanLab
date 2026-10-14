@@ -9,7 +9,8 @@ name: sll
 long_name: Shift left logical
 description: |
   Shift the value in `xs1` left by the value in the lower 6 bits of `xs2`, and store the result in `xd`.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: I

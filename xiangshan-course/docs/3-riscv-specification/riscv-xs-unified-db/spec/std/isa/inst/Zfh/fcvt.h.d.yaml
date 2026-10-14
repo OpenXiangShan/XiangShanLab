@@ -9,7 +9,8 @@ name: fcvt.h.d
 long_name: Floating-point Convert Double-precision to Half-precision
 description: |
   `fcvt.h.d` converts a Double-precision Floating-point number to a Half-precision floating-point number.
-FuType: fcvt
+microarchitectural_attributes:
+    - FuType: fcvt
 definedBy:
   extension:
     oneOf:

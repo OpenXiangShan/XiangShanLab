@@ -21,7 +21,8 @@ description: |
   function `__builtin_popcountl (unsigned long x)` for LP64 is
   implemented by cpop on RV64.
   ----
-FuType: bku
+microarchitectural_attributes:
+    - FuType: bku
 definedBy:
   extension:
     name: Zbb

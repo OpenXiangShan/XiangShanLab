@@ -9,7 +9,8 @@ name: vfsub.vv
 long_name: Vector floating-point subtract
 description: |
   Performs floating-point subtraction on elements from vs2 and vs1, according to mask vm, and stores results in vd. Element width is determined by SEW setting. Follows IEEE-754 floating-point standards. Supports vector masking and follows vector tail policy.
-FuType: vfalu
+microarchitectural_attributes:
+    - FuType: vfalu
 definedBy:
   extension:
     anyOf:

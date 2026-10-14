@@ -9,7 +9,8 @@ name: vsra.vi
 long_name: Vector shift right arithmetic immediate
 description: |
   Performs arithmetic right shift on elements from vs2 using immediate shift amount, according to mask vm, and stores results in vd. Only the low lg2(SEW) bits of the shift amount are used. Supports vector masking and follows vector tail policy.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

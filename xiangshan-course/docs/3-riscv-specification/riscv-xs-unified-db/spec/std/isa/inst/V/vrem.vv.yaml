@@ -9,7 +9,8 @@ name: vrem.vv
 long_name: "Vector remainder"
 description: |
   Performs remainder operation on elements from vector registers vs2 and vs1 and stores results in vector register vd, using vector mask vm.
-FuType: vidiv
+microarchitectural_attributes:
+    - FuType: vidiv
 definedBy:
   extension:
     name: Zvl32b

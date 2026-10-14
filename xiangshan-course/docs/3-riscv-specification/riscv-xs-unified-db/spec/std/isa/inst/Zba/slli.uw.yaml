@@ -13,7 +13,8 @@ description: |
 
   [NOTE]
   This instruction is the same as `slli` with `zext.w` performed on xs1 before shifting.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   allOf:
     - xlen: 64

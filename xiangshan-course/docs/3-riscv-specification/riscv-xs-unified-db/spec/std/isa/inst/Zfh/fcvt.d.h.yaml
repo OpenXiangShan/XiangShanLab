@@ -9,7 +9,8 @@ name: fcvt.d.h
 long_name: No synopsis available
 description: |
   No description available.
-FuType: fcvt
+microarchitectural_attributes:
+    - FuType: fcvt
 definedBy:
   extension:
     oneOf:

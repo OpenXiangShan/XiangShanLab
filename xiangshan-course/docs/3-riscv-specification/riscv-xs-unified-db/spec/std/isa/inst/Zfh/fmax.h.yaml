@@ -9,7 +9,8 @@ name: fmax.h
 long_name: No synopsis available
 description: |
   No description available.
-FuType: falu
+microarchitectural_attributes:
+    - FuType: falu
 definedBy:
   extension:
     oneOf:

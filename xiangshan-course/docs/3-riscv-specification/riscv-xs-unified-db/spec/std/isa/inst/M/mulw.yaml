@@ -18,7 +18,8 @@ description: |
   but signed arguments must be proper 32-bit signed values, whereas unsigned arguments
   must have their upper 32 bits clear. If the arguments are not known to be sign- or zero-extended,
   an alternative is to shift both arguments left by 32 bits, then use MULH[[S]U].
-FuType: mul
+microarchitectural_attributes:
+    - FuType: mul
 definedBy:
   allOf:
     - xlen: 64

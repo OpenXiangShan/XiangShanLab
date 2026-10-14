@@ -10,7 +10,9 @@ long_name: Floating-Point Load Single-Precision
 description: |
   The `flw` instruction loads a single-precision floating-point value from memory at address `xs1` + `imm` into floating-point register `fd`.
   It does not modify the bits being transferred; in particular, the payloads of non-canonical NaNs are preserved.
-FuType: ldu
+
+microarchitectural_attributes:
+    - FuType: ldu
 
 definedBy:
   extension:

@@ -10,7 +10,8 @@ long_name: Sign-extend byte
 description: |
   Sign-extends the least-significant byte in the source to XLEN by copying the
   most-significant bit in the byte (i.e., bit 7) to all of the more-significant bits.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: Zbb

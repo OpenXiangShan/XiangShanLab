@@ -9,7 +9,8 @@ name: min
 long_name: Minimum
 description: |
   Returns the smaller of two signed integers.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: Zbb

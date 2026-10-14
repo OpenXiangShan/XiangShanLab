@@ -10,7 +10,8 @@ long_name: Sign-extend halfword
 description: |
   Sign-extends the least-significant halfword in the source to XLEN by copying the
   most-significant bit in the halfword (i.e., bit 15) to all of the more-significant bits.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: Zbb

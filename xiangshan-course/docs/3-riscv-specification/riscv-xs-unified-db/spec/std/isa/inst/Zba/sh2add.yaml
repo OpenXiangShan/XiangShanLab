@@ -9,7 +9,8 @@ name: sh2add
 long_name: Shift left by 2 and add
 description: |
   Shifts `xs1` to the left by 2 places and adds it to `xs2`.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: Zba

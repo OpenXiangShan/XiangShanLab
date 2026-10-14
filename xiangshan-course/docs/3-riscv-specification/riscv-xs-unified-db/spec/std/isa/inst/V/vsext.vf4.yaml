@@ -9,7 +9,8 @@ name: vsext.vf4
 long_name: "Vector sign-extend by factor of 4"
 description: |
   Sign-extends elements from vector register vs2 by a factor of 4 and stores results in vector register vd, using vector mask vm. The operation extends SEW to 4×SEW.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

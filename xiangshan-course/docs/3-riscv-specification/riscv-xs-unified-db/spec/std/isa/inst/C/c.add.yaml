@@ -10,7 +10,8 @@ long_name: Add
 description: |
   Add the value in xs2 to xd, and store the result in xd.
   C.ADD expands into `add xd, xd, xs2`.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: Zca

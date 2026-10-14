@@ -11,7 +11,8 @@ description: |
   Loads a 16-bit value from memory into register xd.
   It computes an effective address by adding the zero-extended offset, to the base address in register xs1.
   It expands to `lhu` `xd, offset(xs1)`.
-FuType: ldu
+microarchitectural_attributes:
+    - FuType: ldu
 definedBy:
   extension:
     name: Zcb

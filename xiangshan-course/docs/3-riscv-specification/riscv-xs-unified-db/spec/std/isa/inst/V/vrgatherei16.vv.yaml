@@ -9,7 +9,8 @@ name: vrgatherei16.vv
 long_name: No synopsis available
 description: |
   No description available.
-FuType: vppu
+microarchitectural_attributes:
+    - FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

@@ -13,7 +13,8 @@ description: |
 
   This is a scalar read instruction that always reads element 0 of vs2,
   regardless of vstart. The vstart CSR is reset to 0 after execution.
-FuType: vipu
+microarchitectural_attributes:
+    - FuType: vipu
 definedBy:
   extension:
     name: Zvl32b

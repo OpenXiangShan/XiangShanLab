@@ -12,7 +12,8 @@ description: |
   from the lower 16 bits of integer register `xs1` to the floating-point
   register `fd`. The bits are not modified in the transfer, and in particular,
   the payloads of non-canonical NaNs are preserved.
-FuType: i2v
+microarchitectural_attributes:
+    - FuType: i2v
 definedBy:
   extension:
     anyOf:

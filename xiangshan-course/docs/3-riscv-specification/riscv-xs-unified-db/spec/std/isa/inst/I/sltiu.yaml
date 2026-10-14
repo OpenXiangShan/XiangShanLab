@@ -14,7 +14,8 @@ description: |
 
   NOTE: `sltiu xd, xs1, 1` sets `xd` to 1 if `xs1` equals zero, otherwise sets `xd` to 0
   (assembler pseudoinstruction `SEQZ xd, rs`).
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: I

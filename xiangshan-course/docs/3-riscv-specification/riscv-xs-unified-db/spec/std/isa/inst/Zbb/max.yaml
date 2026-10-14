@@ -17,7 +17,8 @@ description: |
   common sequence, it is suggested that they are scheduled with no intervening
   instructions so that implementations that are so optimized can fuse them
   together.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: Zbb

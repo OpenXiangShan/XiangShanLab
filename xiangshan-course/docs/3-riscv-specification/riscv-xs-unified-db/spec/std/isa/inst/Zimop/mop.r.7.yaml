@@ -15,7 +15,8 @@ description: |
   The encoding allows future extensions to define it to read X[xs1], as well as write X[xd].
 
   This is mop.r.7 from the MOP.R instruction family (n=7).
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: Zimop

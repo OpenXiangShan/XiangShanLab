@@ -11,7 +11,8 @@ description: |
   Takes a single source/destination operand.
   This instruction zero-extends the least-significant halfword of the source to XLEN by inserting
   0's into all of the bits more significant than 15.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 
 definedBy:
   extension:

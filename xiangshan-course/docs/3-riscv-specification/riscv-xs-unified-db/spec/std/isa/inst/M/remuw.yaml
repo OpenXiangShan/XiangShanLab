@@ -12,7 +12,8 @@ description: |
   and store the sign-extended result in xd.
 
   If the value in xs2 is zero, xd gets the sign-extended value in xs1.
-FuType: div
+microarchitectural_attributes:
+    - FuType: div
 definedBy:
   allOf:
     - xlen: 64

@@ -9,7 +9,8 @@ name: vfncvt.f.x.w
 long_name: "Vector integer to floating-point narrowing conversion"
 description: |
   Converts double-width signed integer elements from vector register vs2 to a single-width floating-point format and stores results in vector register vd, using vector mask vm. The conversion follows IEEE 754 standards.
-FuType: vfcvt
+microarchitectural_attributes:
+    - FuType: vfcvt
 definedBy:
   extension:
     name: Zvl32b

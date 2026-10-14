@@ -19,7 +19,8 @@ description: |
   (source register specifiers must be in same order and xdh cannot be the same as xs1 or xs2).
   Microarchitectures can then fuse these into a single multiply operation instead of
   performing two separate multiplies.
-FuType: mul
+microarchitectural_attributes:
+    - FuType: mul
 
 definedBy:
   extension:

@@ -9,7 +9,8 @@ name: clmulh
 long_name: Carry-less multiply (high-part)
 description: |
   `clmulh` produces the upper half of the 2*XLEN carry-less product
-FuType: bku
+microarchitectural_attributes:
+    - FuType: bku
 definedBy:
   extension:
     name: Zbkc

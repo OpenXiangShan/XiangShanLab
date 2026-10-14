@@ -9,7 +9,8 @@ name: vwsubu.wv
 long_name: No synopsis available
 description: |
   No description available.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

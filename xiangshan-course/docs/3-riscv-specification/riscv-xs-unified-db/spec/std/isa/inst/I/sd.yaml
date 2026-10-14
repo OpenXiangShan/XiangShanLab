@@ -13,7 +13,8 @@ description: |
   <% if ext?(:Zilsd) %>
   For RV32, store doubleword from even/odd register pair.
   <% end %>
-FuType: stu
+microarchitectural_attributes:
+    - FuType: stu
 definedBy:
   anyOf:
     - allOf:

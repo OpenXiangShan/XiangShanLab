@@ -9,7 +9,8 @@ name: sha256sum0
 long_name: No synopsis available
 description: |
   No description available.
-FuType: bku
+microarchitectural_attributes:
+    - FuType: bku
 definedBy:
   extension:
     name: Zknh

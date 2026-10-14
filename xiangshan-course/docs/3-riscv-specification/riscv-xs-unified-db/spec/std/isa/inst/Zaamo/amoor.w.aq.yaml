@@ -18,7 +18,8 @@ description: |
     * Write the sign-extended value into _xd_
     * OR the least-significant word of register _xs2_ to the loaded value
     * Write the result to the address in _xs1_
-FuType: mou
+microarchitectural_attributes:
+    - FuType: mou
 definedBy:
   extension:
     name: Zaamo

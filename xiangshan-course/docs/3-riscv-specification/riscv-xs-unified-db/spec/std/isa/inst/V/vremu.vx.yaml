@@ -9,7 +9,8 @@ name: vremu.vx
 long_name: "Vector unsigned remainder with scalar"
 description: |
   Performs unsigned remainder operation on elements from vector register vs2 and scalar register xs1 and stores results in vector register vd, using vector mask vm.
-FuType: vidiv
+microarchitectural_attributes:
+    - FuType: vidiv
 definedBy:
   extension:
     name: Zvl32b

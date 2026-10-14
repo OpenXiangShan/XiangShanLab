@@ -9,7 +9,8 @@ name: vwsll.vi
 long_name: Vector widening shift left logical by immediate
 description: |
   Performs a widening shift left logical operation on each element in vector register vs2 by the immediate shift amount, storing double-width results in vector register vd according to mask vm.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvbb

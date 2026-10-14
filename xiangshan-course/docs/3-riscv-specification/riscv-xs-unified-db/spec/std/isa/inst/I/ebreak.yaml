@@ -20,7 +20,8 @@ description: |
   the EBREAK instruction itself, not the address of the following instruction.
   As EBREAK causes a synchronous exception, it is not considered to retire,
   and should not increment the `minstret` CSR.
-FuType: csr
+microarchitectural_attributes:
+    - FuType: csr
 definedBy:
   extension:
     name: I

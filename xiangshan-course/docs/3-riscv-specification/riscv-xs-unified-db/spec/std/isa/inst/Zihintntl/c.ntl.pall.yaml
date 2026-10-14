@@ -11,7 +11,8 @@ description: |
   The C.NTL.PALL instruction indicates that the immediately subsequent instruction
   does not exhibit temporal locality within the capacity of any level of private
   cache in the memory hierarchy. C.NTL.PALL is encoded as C.ADD x0, x3.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     allOf:

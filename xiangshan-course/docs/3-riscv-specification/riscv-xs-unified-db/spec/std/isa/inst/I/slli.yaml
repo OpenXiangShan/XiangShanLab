@@ -8,7 +8,8 @@ kind: instruction
 name: slli
 long_name: Shift left logical immediate
 description: Shift the value in xs1 left by shamt, and store the result in xd
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: I

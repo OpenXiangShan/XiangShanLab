@@ -9,7 +9,8 @@ name: vfwcvt.f.xu.v
 long_name: "Vector unsigned integer to floating-point widening conversion"
 description: |
   Converts unsigned integer elements from vector register vs2 to a wider floating-point format and stores results in vector register vd, using vector mask vm. The conversion follows IEEE 754 standards.
-FuType: vfcvt
+microarchitectural_attributes:
+    - FuType: vfcvt
 definedBy:
   extension:
     anyOf:

@@ -9,7 +9,8 @@ name: vfmv.s.f
 long_name: "Vector scalar to floating-point move"
 description: |
   Moves scalar floating-point value from register fs1 to all elements of vector register vd, using vector mask vm. This operation broadcasts a scalar to a vector.
-FuType: vfalu
+microarchitectural_attributes:
+    - FuType: vfalu
 definedBy:
   extension:
     anyOf:

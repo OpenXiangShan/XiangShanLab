@@ -9,7 +9,8 @@ name: srl
 long_name: Shift right logical
 description: |
   Logical shift the value in `xs1` right by the value in the lower bits of `xs2`, and store the result in `xd`.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: I

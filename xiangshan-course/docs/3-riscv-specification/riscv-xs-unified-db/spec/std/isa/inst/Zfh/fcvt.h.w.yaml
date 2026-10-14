@@ -14,7 +14,8 @@ definedBy:
       - name: Zhinx
 description: |
   `fcvt.h.w` converts a 32-bit signed integer to a half-precision floating-point number.
-FuType: i2f
+microarchitectural_attributes:
+    - FuType: i2f
 assembly: fd, xs1, rm
 encoding:
   match: 110101000000-------------1010011

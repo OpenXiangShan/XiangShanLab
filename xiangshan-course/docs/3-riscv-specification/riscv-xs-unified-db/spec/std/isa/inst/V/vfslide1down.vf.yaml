@@ -9,7 +9,8 @@ name: vfslide1down.vf
 long_name: No synopsis available
 description: |
   No description available.
-FuType: vppu
+microarchitectural_attributes:
+    - FuType: vppu
 definedBy:
   extension:
     anyOf:

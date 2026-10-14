@@ -20,7 +20,8 @@ description: |
   Note that if `xs1` specifies a register other than `x0`, and that register holds a zero value,
   the instruction will not action any attendant per-field side effects, but will action any
   side effects caused by writing to the entire CSR.
-FuType: csr
+microarchitectural_attributes:
+    - FuType: csr
 definedBy:
   extension:
     name: Zicsr

@@ -15,7 +15,8 @@ long_name: Floating-Point Move Double-Precision to Integer Register
 description: |
   The `fmv.x.d` instruction moves the double-precision value in floating-point register `fs1` to a representation in
   `IEEE 754-2008` standard encoding in integer register `xd`.
-FuType: fcvt
+microarchitectural_attributes:
+    - FuType: fcvt
 assembly: xd, fs1
 encoding:
   match: 111000100000-----000-----1010011

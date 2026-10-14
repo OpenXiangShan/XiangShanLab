@@ -9,7 +9,8 @@ name: fsqrt.h
 long_name: No synopsis available
 description: |
   No description available.
-FuType: fDivSqrt
+microarchitectural_attributes:
+    - FuType: fDivSqrt
 definedBy:
   extension:
     oneOf:

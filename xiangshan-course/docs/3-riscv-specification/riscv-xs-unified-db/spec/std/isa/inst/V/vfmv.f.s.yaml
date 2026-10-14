@@ -9,7 +9,8 @@ name: vfmv.f.s
 long_name: "Vector floating-point to scalar move"
 description: |
   Moves floating-point element from vector register vs2 to scalar floating-point register fd, using vector mask vm. This operation extracts a single element from the vector.
-FuType: vfalu
+microarchitectural_attributes:
+    - FuType: vfalu
 definedBy:
   extension:
     anyOf:

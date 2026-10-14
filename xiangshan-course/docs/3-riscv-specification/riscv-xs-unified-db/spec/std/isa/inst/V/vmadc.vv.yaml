@@ -9,7 +9,8 @@ name: vmadc.vv
 long_name: "Vector multiply-add with carry"
 description: |
   Performs multiply-add operation on elements from vector registers vs2 and vs1, adds the carry-in from vector register vs3, and stores results in vector register vd, using vector mask vm.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

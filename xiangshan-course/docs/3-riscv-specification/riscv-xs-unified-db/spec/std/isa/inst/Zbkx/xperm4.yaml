@@ -11,7 +11,8 @@ description: |
   The xperm4 instruction operates on nibbles. The xs1 register contains a vector of XLEN/4 4-bit
   elements. The xs2 register contains a vector of XLEN/4 4-bit indexes. The result is each element in
   xs2 replaced by the indexed element in xs1, or zero if the index into xs2 is out of bounds.
-FuType: bku
+microarchitectural_attributes:
+    - FuType: bku
 definedBy:
   extension:
     name: Zbkx

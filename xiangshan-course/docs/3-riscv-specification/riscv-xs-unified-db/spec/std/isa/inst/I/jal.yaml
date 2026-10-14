@@ -10,7 +10,8 @@ long_name: Jump and link
 description: |
   Jump to a PC-relative offset and store the return
   address in xd.
-FuType: jmp
+microarchitectural_attributes:
+    - FuType: jmp
 definedBy:
   extension:
     name: I

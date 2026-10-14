@@ -9,7 +9,8 @@ name: vdiv.vv
 long_name: No synopsis available
 description: |
   No description available.
-FuType: vidiv
+microarchitectural_attributes:
+    - FuType: vidiv
 definedBy:
   extension:
     name: Zvl32b

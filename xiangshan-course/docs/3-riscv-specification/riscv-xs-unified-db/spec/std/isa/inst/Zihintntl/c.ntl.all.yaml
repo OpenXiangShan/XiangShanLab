@@ -11,7 +11,8 @@ description: |
   The C.NTL.ALL instruction indicates that the immediately subsequent instruction
   does not exhibit temporal locality within the capacity of any level of cache in
   the memory hierarchy. C.NTL.ALL is encoded as C.ADD x0, x5.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     allOf:

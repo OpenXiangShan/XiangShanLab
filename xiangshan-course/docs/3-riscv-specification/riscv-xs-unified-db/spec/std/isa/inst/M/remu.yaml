@@ -9,7 +9,8 @@ name: remu
 long_name: Unsigned remainder
 description: |
   Calculate the remainder of unsigned division of xs1 by xs2, and store the result in xd.
-FuType: div
+microarchitectural_attributes:
+    - FuType: div
 definedBy:
   extension:
     name: M

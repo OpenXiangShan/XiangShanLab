@@ -22,7 +22,8 @@ description: |
 
   The highest XLEN-16 bits of the destination register are filled with copies of the
   floating-point number's sign bit.
-FuType: fcvt
+microarchitectural_attributes:
+    - FuType: fcvt
 encoding:
   match: 111001000000-----000-----1010011
   variables:

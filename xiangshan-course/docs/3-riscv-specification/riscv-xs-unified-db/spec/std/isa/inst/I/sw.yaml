@@ -10,7 +10,8 @@ long_name: Store word
 description: |
   Store 32 bits of data from register `xs2` to an
   address formed by adding `xs1` to a signed offset.
-FuType: stu
+microarchitectural_attributes:
+    - FuType: stu
 definedBy:
   extension:
     name: I

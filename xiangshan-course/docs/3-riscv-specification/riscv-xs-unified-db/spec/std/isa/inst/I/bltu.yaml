@@ -12,7 +12,8 @@ description: |
   the unsigned value in register xs1 is less than the unsigned value in register xs2.
 
   Raise a `MisalignedAddress` exception if PC + imm is misaligned.
-FuType: brh
+microarchitectural_attributes:
+    - FuType: brh
 definedBy:
   extension:
     name: I

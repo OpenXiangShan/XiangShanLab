@@ -122,7 +122,8 @@ description: |
   ! 1 ! - ! 1 ! ! 1
   !===
   <%- end -%>
-FuType: fence
+microarchitectural_attributes:
+    - FuType: fence
 
 definedBy:
   extension:

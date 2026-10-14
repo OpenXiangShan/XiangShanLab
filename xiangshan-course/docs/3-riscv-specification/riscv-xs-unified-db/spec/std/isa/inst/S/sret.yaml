@@ -46,7 +46,8 @@ description: |
   | 0 | VU-mode
   | 1 | VS-mode
   |===
-FuType: csr
+microarchitectural_attributes:
+    - FuType: csr
 
 definedBy:
   extension:

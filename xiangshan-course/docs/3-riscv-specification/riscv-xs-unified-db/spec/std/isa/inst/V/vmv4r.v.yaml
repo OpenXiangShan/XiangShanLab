@@ -9,7 +9,8 @@ name: vmv4r.v
 long_name: No synopsis available
 description: |
   No description available.
-FuType: vppu
+microarchitectural_attributes:
+    - FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

@@ -9,7 +9,8 @@ name: vfrdiv.vf
 long_name: No synopsis available
 description: |
   No description available.
-FuType: vfdiv
+microarchitectural_attributes:
+    - FuType: vfdiv
 definedBy:
   extension:
     name: Zvl32b

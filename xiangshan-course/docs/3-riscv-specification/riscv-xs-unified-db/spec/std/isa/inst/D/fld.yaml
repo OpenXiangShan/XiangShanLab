@@ -15,7 +15,8 @@ description: |
   register `fd`. It is guaranteed to execute atomically if the effective address is naturally aligned
   and XLEN≥64. It doesn't modify the bits being transferred; in particular, the payloads of non-canonical
   NaNs are preserved.
-FuType: ldu
+microarchitectural_attributes:
+    - FuType: ldu
 assembly: fd, imm(xs1)
 encoding:
   match: "-----------------011-----0000111"

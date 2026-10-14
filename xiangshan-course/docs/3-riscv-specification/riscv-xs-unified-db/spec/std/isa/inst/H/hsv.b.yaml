@@ -10,7 +10,8 @@ long_name: Hypervisor store byte
 description: |
   Store 8 bits of data from register `xs2` to guest physical memory at the
   address in `xs1`, as though V=1.
-FuType: stu
+microarchitectural_attributes:
+    - FuType: stu
 definedBy:
   extension:
     name: H

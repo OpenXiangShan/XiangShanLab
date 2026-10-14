@@ -9,7 +9,8 @@ name: vnsrl.wi
 long_name: "Vector narrowing logical shift right with immediate"
 description: |
   Performs narrowing logical right shift on double-width elements from vector register vs2 by immediate shift amount and stores results in vector register vd, using vector mask vm. The operation fills with zeros and writes a single-width destination.
-FuType: vialuF
+microarchitectural_attributes:
+    - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

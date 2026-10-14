@@ -13,7 +13,8 @@ description: |
   If the value in register xs2 is zero, write the value in xs1 into xd;
 
   If the result of the division overflows, write zero into xd;
-FuType: div
+microarchitectural_attributes:
+    - FuType: div
 definedBy:
   extension:
     name: M

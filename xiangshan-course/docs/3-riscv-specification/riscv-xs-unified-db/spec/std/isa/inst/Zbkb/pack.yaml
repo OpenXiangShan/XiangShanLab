@@ -9,7 +9,8 @@ name: pack
 long_name: No synopsis available
 description: |
   No description available.
-FuType: alu
+microarchitectural_attributes:
+    - FuType: alu
 definedBy:
   extension:
     name: Zbkb

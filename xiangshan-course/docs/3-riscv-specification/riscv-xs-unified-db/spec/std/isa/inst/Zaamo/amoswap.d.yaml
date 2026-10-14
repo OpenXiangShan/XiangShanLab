@@ -17,7 +17,8 @@ description: |
     * Load the doubleword at address _xs1_
     * Write the loaded value into _xd_
     * Store the value of register _xs2_ to the address in _xs1_
-FuType: mou
+microarchitectural_attributes:
+    - FuType: mou
 definedBy:
   allOf:
     - extension:

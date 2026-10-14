@@ -16,7 +16,8 @@ description: |
   The effective address is obtained by adding
   register xs1 to the sign-extended 12-bit offset.
   <% end %>
-FuType: ldu
+microarchitectural_attributes:
+    - FuType: ldu
 
 definedBy:
   anyOf:

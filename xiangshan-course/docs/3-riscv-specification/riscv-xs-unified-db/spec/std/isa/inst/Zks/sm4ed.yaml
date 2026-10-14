@@ -9,7 +9,8 @@ name: sm4ed
 long_name: No synopsis available
 description: |
   No description available.
-FuType: bku
+microarchitectural_attributes:
+    - FuType: bku
 definedBy:
   extension:
     name: Zksed

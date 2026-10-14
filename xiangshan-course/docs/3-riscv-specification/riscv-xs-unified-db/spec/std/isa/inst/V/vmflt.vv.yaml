@@ -9,7 +9,8 @@ name: vmflt.vv
 long_name: No synopsis available
 description: |
   No description available.
-FuType: vfalu
+microarchitectural_attributes:
+    - FuType: vfalu
 definedBy:
   extension:
     anyOf:
