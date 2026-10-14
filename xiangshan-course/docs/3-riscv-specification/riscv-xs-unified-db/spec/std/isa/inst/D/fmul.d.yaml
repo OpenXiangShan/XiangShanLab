@@ -7,16 +7,6 @@ $schema: inst_schema.json#
 kind: instruction
 name: fmul.d
 long_name: Floating-Point Multiply Double-Precision
-architectural_attributes:
-    - exceptions:
-        - NX
-        - UF
-        - OF
-        - NV
-        - PageFault_inst
-        - IllegalInst
-        - AddrMisalign_inst
-
 definedBy:
   extension:
     oneOf:
@@ -28,6 +18,17 @@ description: |
   produces double-precision results.
 microarchitectural_attributes:
     - FuType: fmac
+
+architectural_attributes:
+    - exceptions:
+        - NX
+        - UF
+        - OF
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 assembly: fd, fs1, fs2, rm
 encoding:
   match: 0001001------------------1010011

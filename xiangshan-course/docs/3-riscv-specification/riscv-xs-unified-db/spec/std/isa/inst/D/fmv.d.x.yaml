@@ -6,12 +6,6 @@
 $schema: inst_schema.json#
 kind: instruction
 name: fmv.d.x
-architectural_attributes:
-    - exceptions:
-        - IllegalInst
-        - AddrMisalign_inst
-        - PageFault_inst
-
 definedBy:
   allOf:
     - xlen: 64
@@ -23,6 +17,13 @@ description: |
   register `xs1` to the floating-point register `fd`.
 microarchitectural_attributes:
     - FuType: i2v
+
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 assembly: fd, xs1
 encoding:
   match: 111100100000-----000-----1010011

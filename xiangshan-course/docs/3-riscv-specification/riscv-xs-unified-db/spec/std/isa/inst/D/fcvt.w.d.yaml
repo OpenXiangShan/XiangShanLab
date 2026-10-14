@@ -7,14 +7,6 @@ $schema: inst_schema.json#
 kind: instruction
 name: fcvt.w.d
 long_name: Floating-Point Convert Double-Precision to Word
-architectural_attributes:
-    - exceptions:
-        - NX
-        - NV
-        - PageFault_inst
-        - IllegalInst
-        - AddrMisalign_inst
-
 definedBy:
   extension:
     oneOf:
@@ -25,6 +17,15 @@ description: |
   signed 32-bit integer, in integer register `xd`.
 microarchitectural_attributes:
     - FuType: fcvt
+
+architectural_attributes:
+    - exceptions:
+        - NX
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 assembly: xd, fs1, rm
 encoding:
   match: 110000100000-------------1010011

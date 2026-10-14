@@ -7,15 +7,6 @@ $schema: inst_schema.json#
 kind: instruction
 name: fsd
 long_name: Floating-Point Store Double-Precision
-architectural_attributes:
-    - exceptions:
-        - AccessFault_store
-        - AddrMisalign_store
-        - PageFault_inst
-        - IllegalInst
-        - PageFault_store
-        - AddrMisalign_inst
-
 definedBy:
   extension:
     name: D
@@ -25,6 +16,16 @@ description: |
   the payloads of non-canonical NaNs are preserved.
 microarchitectural_attributes:
     - FuType: stu
+
+architectural_attributes:
+    - exceptions:
+        - AccessFault_store
+        - AddrMisalign_store
+        - PageFault_inst
+        - IllegalInst
+        - PageFault_store
+        - AddrMisalign_inst
+
 assembly: fs2, imm(xs1)
 encoding:
   match: "-----------------011-----0100111"

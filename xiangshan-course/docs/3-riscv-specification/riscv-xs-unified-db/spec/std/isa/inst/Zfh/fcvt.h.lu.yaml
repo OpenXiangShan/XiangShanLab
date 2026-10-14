@@ -7,12 +7,6 @@ $schema: inst_schema.json#
 kind: instruction
 name: fcvt.h.lu
 long_name: Floating-point Convert Unsigned Long to Half-precision
-architectural_attributes:
-    - exceptions:
-        - IllegalInst
-        - AddrMisalign_inst
-        - PageFault_inst
-
 definedBy:
   allOf:
     - xlen: 64
@@ -24,6 +18,13 @@ description: |
   `fcvt.h.lu` converts a 64-bit unsigned integer to a half-precision floating-point number.
 microarchitectural_attributes:
     - FuType: i2f
+
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 assembly: fd, xs1, rm
 encoding:
   match: 110101000011-------------1010011

@@ -7,6 +7,17 @@ $schema: inst_schema.json#
 kind: instruction
 name: fdiv.d
 long_name: Floating-Point Divide Double-Precision
+definedBy:
+  extension:
+    oneOf:
+      - name: D
+      - name: Zdinx
+description: |
+  The `fdiv.d` instruction performs the double-precision floating-point division of `fs1` by `fs2`. It is defined analogously
+  to its single-precision counterpart, but operates on double-precision operands and produces double-precision results.
+microarchitectural_attributes:
+    - FuType: fDivSqrt
+
 architectural_attributes:
     - exceptions:
         - DZ
@@ -18,16 +29,6 @@ architectural_attributes:
         - IllegalInst
         - AddrMisalign_inst
 
-definedBy:
-  extension:
-    oneOf:
-      - name: D
-      - name: Zdinx
-description: |
-  The `fdiv.d` instruction performs the double-precision floating-point division of `fs1` by `fs2`. It is defined analogously
-  to its single-precision counterpart, but operates on double-precision operands and produces double-precision results.
-microarchitectural_attributes:
-    - FuType: fDivSqrt
 assembly: fd, fs1, fs2, rm
 encoding:
   match: 0001101------------------1010011

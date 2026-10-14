@@ -7,16 +7,6 @@ $schema: inst_schema.json#
 kind: instruction
 name: fadd.d
 long_name: Floating-Point Add Double-Precision
-architectural_attributes:
-    - exceptions:
-        - NX
-        - UF
-        - OF
-        - NV
-        - PageFault_inst
-        - IllegalInst
-        - AddrMisalign_inst
-
 definedBy:
   extension:
     oneOf:
@@ -27,6 +17,17 @@ description: |
   `fs1` and `fs2` and writes the final result to `fd`.
 microarchitectural_attributes:
     - FuType: falu
+
+architectural_attributes:
+    - exceptions:
+        - NX
+        - UF
+        - OF
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 assembly: fd, fs1, fs2, rm
 encoding:
   match: 0000001------------------1010011

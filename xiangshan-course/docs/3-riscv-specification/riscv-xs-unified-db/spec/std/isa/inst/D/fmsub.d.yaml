@@ -7,6 +7,16 @@ $schema: inst_schema.json#
 kind: instruction
 name: fmsub.d
 long_name: Floating-Point Multiply-Subtract Double-Precision
+definedBy:
+  extension:
+    oneOf:
+      - name: D
+      - name: Zdinx
+description: |
+  The `fmsub.d` instruction multiplies the values in `fs1` and `fs2`, subtracts the value in `fs3`, and writes the final result to `fd`.
+microarchitectural_attributes:
+    - FuType: fmac
+
 architectural_attributes:
     - exceptions:
         - NX
@@ -17,15 +27,6 @@ architectural_attributes:
         - IllegalInst
         - AddrMisalign_inst
 
-definedBy:
-  extension:
-    oneOf:
-      - name: D
-      - name: Zdinx
-description: |
-  The `fmsub.d` instruction multiplies the values in `fs1` and `fs2`, subtracts the value in `fs3`, and writes the final result to `fd`.
-microarchitectural_attributes:
-    - FuType: fmac
 assembly: fd, fs1, fs2, fs3, rm
 encoding:
   match: "-----01------------------1000111"

@@ -7,16 +7,6 @@ $schema: inst_schema.json#
 kind: instruction
 name: fnmsub.d
 long_name: Floating-Point Negate-Multiply-Subtract Double-Precision
-architectural_attributes:
-    - exceptions:
-        - NX
-        - UF
-        - OF
-        - NV
-        - PageFault_inst
-        - IllegalInst
-        - AddrMisalign_inst
-
 definedBy:
   extension:
     oneOf:
@@ -27,6 +17,17 @@ description: |
   writes the final result to `fd`.
 microarchitectural_attributes:
     - FuType: fmac
+
+architectural_attributes:
+    - exceptions:
+        - NX
+        - UF
+        - OF
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 assembly: fd, fs1, fs2, fs3, rm
 encoding:
   match: "-----01------------------1001011"

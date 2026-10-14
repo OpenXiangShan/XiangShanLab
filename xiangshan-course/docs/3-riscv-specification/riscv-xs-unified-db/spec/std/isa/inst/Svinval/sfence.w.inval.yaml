@@ -7,12 +7,6 @@ $schema: "inst_schema.json#"
 kind: instruction
 name: sfence.w.inval
 long_name: Order writes before sfence
-architectural_attributes:
-    - exceptions:
-        - IllegalInst
-        - AddrMisalign_inst
-        - PageFault_inst
-
 definedBy:
   extension:
     name: Svinval
@@ -24,6 +18,13 @@ description: |
   same hart.
 microarchitectural_attributes:
     - FuType: fence
+
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 access:
   s: sometimes
   u: never

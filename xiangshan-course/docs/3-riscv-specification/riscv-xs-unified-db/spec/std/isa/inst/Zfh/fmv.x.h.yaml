@@ -7,12 +7,6 @@ $schema: "inst_schema.json#"
 kind: instruction
 name: fmv.x.h
 long_name: Move half-precision value from floating-point to integer register
-architectural_attributes:
-    - exceptions:
-        - IllegalInst
-        - AddrMisalign_inst
-        - PageFault_inst
-
 definedBy:
   extension:
     anyOf:
@@ -30,6 +24,13 @@ description: |
   floating-point number's sign bit.
 microarchitectural_attributes:
     - FuType: fcvt
+
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 encoding:
   match: 111001000000-----000-----1010011
   variables:
