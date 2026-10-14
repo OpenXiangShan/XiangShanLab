@@ -41,10 +41,7 @@ microarchitectural_attributes:
     - FuType: stu
 
 architectural_attributes:
-    - exceptions:
-        - IllegalInst
-        - AddrMisalign_inst
-        - PageFault_inst
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

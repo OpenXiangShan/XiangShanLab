@@ -11,10 +11,7 @@ description: And xs1 with xs2, and store the result in xd
 microarchitectural_attributes:
     - FuType: alu
 architectural_attributes:
-    - exceptions:
-        - IllegalInst
-        - AddrMisalign_inst
-        - PageFault_inst
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

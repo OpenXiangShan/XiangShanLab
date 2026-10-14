@@ -19,13 +19,7 @@ microarchitectural_attributes:
     - FuType: ldu
 
 architectural_attributes:
-    - exceptions:
-        - PageFault_load
-        - AccessFault_load
-        - PageFault_inst
-        - IllegalInst
-        - AddrMisalign_load
-        - AddrMisalign_inst
+    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
 assembly: fd, imm(xs1)
 encoding:

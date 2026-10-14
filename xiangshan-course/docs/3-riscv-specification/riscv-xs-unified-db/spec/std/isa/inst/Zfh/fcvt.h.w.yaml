@@ -18,10 +18,7 @@ microarchitectural_attributes:
     - FuType: i2f
 
 architectural_attributes:
-    - exceptions:
-        - IllegalInst
-        - AddrMisalign_inst
-        - PageFault_inst
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 assembly: fd, xs1, rm
 encoding:

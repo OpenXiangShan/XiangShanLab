@@ -20,13 +20,7 @@ description: |
 microarchitectural_attributes:
     - FuType: mou
 architectural_attributes:
-    - exceptions:
-        - PageFault_amo
-        - AddrMisalign_amo
-        - PageFault_inst
-        - AccessFault_amo
-        - IllegalInst
-        - AddrMisalign_inst
+    - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
 
 definedBy:
   allOf:

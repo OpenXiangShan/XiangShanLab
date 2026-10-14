@@ -18,13 +18,7 @@ microarchitectural_attributes:
     - FuType: stu
 
 architectural_attributes:
-    - exceptions:
-        - AccessFault_store
-        - AddrMisalign_store
-        - PageFault_inst
-        - IllegalInst
-        - PageFault_store
-        - AddrMisalign_inst
+    - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
 assembly: fs2, imm(xs1)
 encoding:

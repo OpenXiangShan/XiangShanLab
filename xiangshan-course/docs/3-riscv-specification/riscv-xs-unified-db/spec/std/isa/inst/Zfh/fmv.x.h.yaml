@@ -26,10 +26,7 @@ microarchitectural_attributes:
     - FuType: fcvt
 
 architectural_attributes:
-    - exceptions:
-        - IllegalInst
-        - AddrMisalign_inst
-        - PageFault_inst
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 encoding:
   match: 111001000000-----000-----1010011

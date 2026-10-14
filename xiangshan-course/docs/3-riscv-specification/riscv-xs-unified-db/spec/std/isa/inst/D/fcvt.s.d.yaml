@@ -21,13 +21,7 @@ microarchitectural_attributes:
     - FuType: fcvt
 
 architectural_attributes:
-    - exceptions:
-        - NX
-        - UF
-        - OF
-        - PageFault_inst
-        - IllegalInst
-        - AddrMisalign_inst
+    - exceptions: [NX, UF, OF, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
 assembly: fd, fs1, rm
 encoding:

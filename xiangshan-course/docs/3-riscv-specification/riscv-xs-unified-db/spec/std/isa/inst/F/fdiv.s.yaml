@@ -13,15 +13,7 @@ description: |
 microarchitectural_attributes:
     - FuType: fDivSqrt
 architectural_attributes:
-    - exceptions:
-        - DZ
-        - NX
-        - UF
-        - OF
-        - NV
-        - PageFault_inst
-        - IllegalInst
-        - AddrMisalign_inst
+    - exceptions: [DZ, NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
 definedBy:
   extension:

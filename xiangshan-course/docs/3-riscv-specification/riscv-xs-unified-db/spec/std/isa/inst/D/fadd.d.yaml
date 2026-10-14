@@ -19,14 +19,7 @@ microarchitectural_attributes:
     - FuType: falu
 
 architectural_attributes:
-    - exceptions:
-        - NX
-        - UF
-        - OF
-        - NV
-        - PageFault_inst
-        - IllegalInst
-        - AddrMisalign_inst
+    - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
 assembly: fd, fs1, fs2, rm
 encoding:

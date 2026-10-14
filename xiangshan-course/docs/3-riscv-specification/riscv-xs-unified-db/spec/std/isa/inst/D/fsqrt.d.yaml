@@ -20,12 +20,7 @@ microarchitectural_attributes:
     - FuType: fDivSqrt
 
 architectural_attributes:
-    - exceptions:
-        - NX
-        - NV
-        - PageFault_inst
-        - IllegalInst
-        - AddrMisalign_inst
+    - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
 assembly: fd, fs1, rm
 encoding:
