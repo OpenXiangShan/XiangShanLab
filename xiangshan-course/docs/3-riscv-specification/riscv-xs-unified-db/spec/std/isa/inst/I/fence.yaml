@@ -125,6 +125,12 @@ description: |
 microarchitectural_attributes:
     - FuType: fence
 
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: I

@@ -14,6 +14,14 @@ description: |
   It expands to `sw` `rs2, offset(xs1)`.
 microarchitectural_attributes:
     - FuType: stu
+architectural_attributes:
+    - exceptions:
+        - AddrMisalign_store
+        - PageFault_inst
+        - IllegalInst
+        - PageFault_store
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     name: Zca

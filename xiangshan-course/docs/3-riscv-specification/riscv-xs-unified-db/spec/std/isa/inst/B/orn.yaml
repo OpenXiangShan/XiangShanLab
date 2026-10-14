@@ -11,6 +11,12 @@ description: |
   Performs the bitwise logical OR operation between xs1 and the bitwise inversion of xs2.
 microarchitectural_attributes:
     - FuType: alu
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     anyOf:

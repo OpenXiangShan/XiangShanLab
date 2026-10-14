@@ -7,6 +7,14 @@ $schema: inst_schema.json#
 kind: instruction
 name: fsqrt.d
 long_name: Floating-Point Square Root Double-Precision
+architectural_attributes:
+    - exceptions:
+        - NX
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     oneOf:

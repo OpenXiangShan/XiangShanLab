@@ -7,6 +7,15 @@ $schema: inst_schema.json#
 kind: instruction
 name: fld
 long_name: Floating-Point Load Double-Precision
+architectural_attributes:
+    - exceptions:
+        - PageFault_load
+        - AccessFault_load
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_load
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     name: D

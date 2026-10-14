@@ -13,6 +13,12 @@ description: |
   xs2 replaced by the indexed element in xs1, or zero if the index into xs2 is out of bounds.
 microarchitectural_attributes:
     - FuType: bku
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Zbkx

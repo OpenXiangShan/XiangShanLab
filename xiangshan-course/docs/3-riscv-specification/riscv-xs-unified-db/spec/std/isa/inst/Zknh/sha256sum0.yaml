@@ -11,6 +11,12 @@ description: |
   No description available.
 microarchitectural_attributes:
     - FuType: bku
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Zknh

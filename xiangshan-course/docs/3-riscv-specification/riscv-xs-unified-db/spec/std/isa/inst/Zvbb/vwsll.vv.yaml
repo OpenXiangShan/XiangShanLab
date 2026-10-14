@@ -11,6 +11,12 @@ description: |
   Performs a widening shift left logical operation on each element in vector register vs2 by the shift amount in vector register vs1, storing double-width results in vector register vd according to mask vm.
 microarchitectural_attributes:
     - FuType: vialuF
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Zvbb

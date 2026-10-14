@@ -40,6 +40,14 @@ description: |
 microarchitectural_attributes:
     - FuType: fcvt
 
+architectural_attributes:
+    - exceptions:
+        - NX
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     name: F

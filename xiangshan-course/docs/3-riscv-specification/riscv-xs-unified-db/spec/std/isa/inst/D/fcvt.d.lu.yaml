@@ -7,6 +7,13 @@ $schema: inst_schema.json#
 kind: instruction
 name: fcvt.d.lu
 long_name: Floating-Point Convert Unsigned Long to Double-Precision
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - NX
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   allOf:
     - xlen: 64

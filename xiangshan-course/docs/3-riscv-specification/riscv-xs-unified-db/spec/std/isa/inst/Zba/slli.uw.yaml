@@ -15,6 +15,12 @@ description: |
   This instruction is the same as `slli` with `zext.w` performed on xs1 before shifting.
 microarchitectural_attributes:
     - FuType: alu
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   allOf:
     - xlen: 64

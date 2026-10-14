@@ -41,6 +41,12 @@ description: |
   a deadline for that wait.
 microarchitectural_attributes:
     - FuType: csr
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Zawrs

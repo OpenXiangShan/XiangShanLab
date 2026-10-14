@@ -7,6 +7,14 @@ $schema: inst_schema.json#
 kind: instruction
 name: fcvt.wu.d
 long_name: Floating-Point Convert Double-Precision to Unsigned Word
+architectural_attributes:
+    - exceptions:
+        - NX
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     oneOf:

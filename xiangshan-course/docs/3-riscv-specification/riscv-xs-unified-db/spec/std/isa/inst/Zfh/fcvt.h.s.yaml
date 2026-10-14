@@ -7,6 +7,12 @@ $schema: "inst_schema.json#"
 kind: instruction
 name: fcvt.h.s
 long_name: Convert single-precision float to a half-precision float
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     oneOf:

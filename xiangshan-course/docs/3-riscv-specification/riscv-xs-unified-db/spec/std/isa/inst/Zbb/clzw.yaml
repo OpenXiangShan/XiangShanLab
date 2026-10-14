@@ -13,6 +13,12 @@ description: |
   bit of the word (_i.e._, bit 31) is a 1, the output is 0.
 microarchitectural_attributes:
     - FuType: bku
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   allOf:
     - xlen: 64

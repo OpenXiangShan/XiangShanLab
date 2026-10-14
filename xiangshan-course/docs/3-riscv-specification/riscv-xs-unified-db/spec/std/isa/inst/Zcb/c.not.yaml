@@ -11,6 +11,12 @@ description: |
   Takes a single source/destination operand.
   This instruction takes the one's complement of xd'/xs1' and writes the result to the same register.
 
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Zcb

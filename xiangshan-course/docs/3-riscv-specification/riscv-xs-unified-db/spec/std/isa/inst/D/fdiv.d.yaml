@@ -7,6 +7,17 @@ $schema: inst_schema.json#
 kind: instruction
 name: fdiv.d
 long_name: Floating-Point Divide Double-Precision
+architectural_attributes:
+    - exceptions:
+        - DZ
+        - NX
+        - UF
+        - OF
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     oneOf:

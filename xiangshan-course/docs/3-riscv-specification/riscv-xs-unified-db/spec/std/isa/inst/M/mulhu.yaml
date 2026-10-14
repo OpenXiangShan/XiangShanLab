@@ -21,6 +21,12 @@ description: |
   Microarchitectures may look for that sequence and fuse the operations.
 microarchitectural_attributes:
     - FuType: mul
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Zmmul

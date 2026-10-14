@@ -7,6 +7,12 @@ $schema: inst_schema.json#
 kind: instruction
 name: fcvt.w.h
 long_name: Floating-point Convert Half-precision to Word
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     oneOf:

@@ -7,6 +7,13 @@ $schema: inst_schema.json#
 kind: instruction
 name: fcvt.d.s
 long_name: Floating-Point Convert Single-Precision to Double-Precision
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - NX
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     oneOf:

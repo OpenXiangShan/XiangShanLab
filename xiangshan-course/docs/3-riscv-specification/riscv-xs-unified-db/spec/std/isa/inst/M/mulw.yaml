@@ -20,6 +20,12 @@ description: |
   an alternative is to shift both arguments left by 32 bits, then use MULH[[S]U].
 microarchitectural_attributes:
     - FuType: mul
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   allOf:
     - xlen: 64

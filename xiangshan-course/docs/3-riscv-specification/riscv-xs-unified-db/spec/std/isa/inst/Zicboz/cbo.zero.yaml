@@ -35,6 +35,12 @@ description: |
   CBO operations never raise a misaligned address fault.
 microarchitectural_attributes:
     - FuType: stu
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Zicboz

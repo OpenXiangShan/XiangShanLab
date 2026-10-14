@@ -18,6 +18,12 @@ description: |
   The *zext.h* instruction is a pseudo-op for `packw` when `Zbkb` is implemented and XLEN == 64.
 microarchitectural_attributes:
     - FuType: alu
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   # When The Bit-manipulation for Cryptography extension (Zbkb) is implemented, then zext.h is an alias of pack.
   extension:

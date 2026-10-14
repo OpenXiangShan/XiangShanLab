@@ -23,6 +23,14 @@ description: |
   access-fault exception will be raised.
 microarchitectural_attributes:
     - FuType: ldu
+architectural_attributes:
+    - exceptions:
+        - PageFault_load
+        - AccessFault_load
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     name: Zalasr

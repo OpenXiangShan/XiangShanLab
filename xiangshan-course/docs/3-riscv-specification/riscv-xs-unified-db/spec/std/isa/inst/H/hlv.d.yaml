@@ -12,6 +12,15 @@ description: |
   address in `xs1`, as though V=1.
 microarchitectural_attributes:
     - FuType: ldu
+architectural_attributes:
+    - exceptions:
+        - PageFault_load
+        - AccessFault_load
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_load
+        - AddrMisalign_inst
+
 definedBy:
   allOf:
     - xlen: 64

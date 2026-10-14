@@ -14,6 +14,14 @@ description: |
   It expands to `lw` `xd, offset(xs1)`.
 microarchitectural_attributes:
     - FuType: ldu
+architectural_attributes:
+    - exceptions:
+        - PageFault_load
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_load
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     name: Zca

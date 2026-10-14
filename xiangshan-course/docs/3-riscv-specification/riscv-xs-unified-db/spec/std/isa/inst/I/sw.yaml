@@ -12,6 +12,15 @@ description: |
   address formed by adding `xs1` to a signed offset.
 microarchitectural_attributes:
     - FuType: stu
+architectural_attributes:
+    - exceptions:
+        - AccessFault_store
+        - AddrMisalign_store
+        - PageFault_inst
+        - IllegalInst
+        - PageFault_store
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     name: I

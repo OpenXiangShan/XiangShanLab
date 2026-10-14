@@ -7,6 +7,14 @@ $schema: inst_schema.json#
 kind: instruction
 name: fcvt.l.d
 long_name: Floating-Point Convert Double-Precision to Long
+architectural_attributes:
+    - exceptions:
+        - NX
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 definedBy:
   allOf:
     - xlen: 64

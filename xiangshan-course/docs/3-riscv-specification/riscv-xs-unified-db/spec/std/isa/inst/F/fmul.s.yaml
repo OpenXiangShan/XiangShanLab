@@ -12,6 +12,16 @@ description: |
   writes the result in `fd`.
 microarchitectural_attributes:
     - FuType: fmac
+architectural_attributes:
+    - exceptions:
+        - NX
+        - UF
+        - OF
+        - NV
+        - PageFault_inst
+        - IllegalInst
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     name: F

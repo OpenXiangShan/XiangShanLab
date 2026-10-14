@@ -11,6 +11,12 @@ description: |
   Performs the bit-wise exclusive-NOR operation on xs1 and xs2.
 microarchitectural_attributes:
     - FuType: alu
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     anyOf:

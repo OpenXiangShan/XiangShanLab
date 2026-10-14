@@ -13,6 +13,12 @@ description: |
   in the memory hierarchy. NTL.ALL is encoded as ADD x0, x0, x5.
 microarchitectural_attributes:
     - FuType: alu
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Zihintntl

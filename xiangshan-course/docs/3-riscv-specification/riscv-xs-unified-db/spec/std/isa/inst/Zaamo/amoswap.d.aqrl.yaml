@@ -19,6 +19,15 @@ description: |
     * Store the value of register _xs2_ to the address in _xs1_
 microarchitectural_attributes:
     - FuType: mou
+architectural_attributes:
+    - exceptions:
+        - PageFault_amo
+        - AddrMisalign_amo
+        - PageFault_inst
+        - AccessFault_amo
+        - IllegalInst
+        - AddrMisalign_inst
+
 definedBy:
   allOf:
     - extension:

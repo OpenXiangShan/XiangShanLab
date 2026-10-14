@@ -20,6 +20,15 @@ description: |
     * Write the result to the address in _xs1_
 microarchitectural_attributes:
     - FuType: mou
+architectural_attributes:
+    - exceptions:
+        - PageFault_amo
+        - AddrMisalign_amo
+        - PageFault_inst
+        - AccessFault_amo
+        - IllegalInst
+        - AddrMisalign_inst
+
 definedBy:
   extension:
     name: Zaamo

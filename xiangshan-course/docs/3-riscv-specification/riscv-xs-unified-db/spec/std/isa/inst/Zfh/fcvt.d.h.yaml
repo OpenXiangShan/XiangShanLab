@@ -11,6 +11,13 @@ description: |
   No description available.
 microarchitectural_attributes:
     - FuType: fcvt
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - NX
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     oneOf:

@@ -13,6 +13,12 @@ description: |
   cache in the memory hierarchy. NTL.PALL is encoded as ADD x0, x0, x3.
 microarchitectural_attributes:
     - FuType: alu
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Zihintntl

@@ -7,6 +7,12 @@ $schema: "inst_schema.json#"
 kind: instruction
 name: sfence.inval.ir
 long_name: Order implicit page table reads after invalidation
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: Svinval

@@ -25,6 +25,13 @@ description: |
   and should not increment the `minstret` CSR.
 microarchitectural_attributes:
     - FuType: csr
+architectural_attributes:
+    - exceptions:
+        - CALL
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     name: I

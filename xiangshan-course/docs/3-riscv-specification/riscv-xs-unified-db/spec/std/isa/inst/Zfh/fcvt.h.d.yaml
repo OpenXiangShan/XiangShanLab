@@ -11,6 +11,12 @@ description: |
   `fcvt.h.d` converts a Double-precision Floating-point number to a Half-precision floating-point number.
 microarchitectural_attributes:
     - FuType: fcvt
+architectural_attributes:
+    - exceptions:
+        - IllegalInst
+        - AddrMisalign_inst
+        - PageFault_inst
+
 definedBy:
   extension:
     oneOf:
