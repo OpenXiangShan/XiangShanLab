@@ -9,7 +9,9 @@ CHI（Coherent Hub Interface）使用不同类型的 Node 描述互连中的协�
 
 本文先建立 `RN -> HN -> SN` 的整体关系，再区分 Node、Channel 与 Router，之后分别介绍 RN、HN、SN 和 MN，最后用两个典型流程把这些角色串起来。
 
-> CHI 不同 Issue 会扩展消息类型、字段和可选能力。本文重点解释各类 Node 最稳定的协议职责，不作为某一 CHI Issue 的完整合法消息表。
+本文以 [CHI Issue E.b](https://documentation-service.arm.com/static/6295e03db334256d9ea8ae86) 为基线，解释协议角色；具体 opcode 的合法性仍需查对应节点的规范表。E.b 使用 `Subordinate Node`，旧版称 `Slave Node`，缩写都为 SN。
+
+先修读 [NoC 基础](NoC-Basics.md) 和 [缓存一致性](Cache-Conherence.md)。缓存层级和协议节点不是一一对应关系：CPU cluster 的缓存出口可能是 RN-F，一致性管理单元可能是 HN-F，内存控制器前的协议端口可能是 SN。
 
 ## 1. 先看四类 Node 的关系
 
@@ -17,7 +19,7 @@ CHI 中最主要的访问路径由 RN、HN 和 SN 组成：
 
 ```text
 发起请求                    协调请求                    执行后端访问
-Request Node  ---------->  Home Node  ------------->  Slave Node
+Request Node  ---------->  Home Node  ------------->  Subordinate Node
     RN                         HN                         SN
                                |
                                +---- Snoop 其他 RN-F
@@ -25,7 +27,7 @@ Request Node  ---------->  Home Node  ------------->  Slave Node
 
 - **RN（Request Node）**发起读、写、权限或维护请求。
 - **HN（Home Node）**负责目标地址，协调一致性、顺序、数据来源和后端访问。
-- **SN（Slave Node）**执行最终的内存或设备访问。
+- **SN（Subordinate Node）**执行后端的内存或设备访问。
 - **MN（Miscellaneous Node）**不位于普通数据访问的主路径上，主要参与 DVM 等系统级管理操作。
 
 一次访问不一定经过图中的全部步骤。例如，HN 的本地缓存能够提供数据时可以不访问 SN；目标地址不需要完整一致性管理时，也不需要 Snoop 其他 RN。上图表达的是各类 Node 的职责关系，不是一条固定消息序列。
@@ -51,7 +53,7 @@ CHI 使用多个逻辑 Channel 传输不同类型的消息：
 
 | Channel | 主要用途 | 常见方向 |
 |---|---|---|
-| `REQ` | 读、写、权限和维护请求 | Requester 向 Home 或 Slave |
+| `REQ` | 读、写、权限和维护请求 | Requester 向 Home，Home 向 Subordinate |
 | `RSP` | Completion、确认、重试和无数据 Snoop 响应 | Node 之间双向使用 |
 | `DAT` | 读数据、写数据和带数据 Snoop 响应 | Node 之间双向使用 |
 | `SNP` | 一致性查询、降级、失效或转发请求 | Home 向可被 Snoop 的 Requester |
@@ -66,7 +68,7 @@ CHI 使用多个逻辑 Channel 传输不同类型的消息：
 
 ### 2.3 Router 负责网络传输
 
-Router 根据目标 Node ID、网络拓扑和流控状态转发 flit。它主要解决“消息怎样到达目标”，而 Node 解决“收到消息后协议上应该做什么”。
+Router 根据目标选择、网络拓扑和流控状态转发 flit。它主要解决“消息怎样到达目标”，而 Node 解决“收到消息后协议上应该做什么”。REQ/RSP/DAT 有 TgtID；SNP payload 没有同样的 TgtID 字段，目标由互连投递机制确定，不能把两者混用。
 
 可以把三者关系概括为：
 
@@ -94,7 +96,7 @@ RN-F
 |---|---|---|
 | `RN` | Request Node | 发起读、写、权限或维护事务 |
 | `HN` | Home Node | 负责地址范围的一致性、顺序和事务协调 |
-| `SN` | Slave Node | 执行后端内存或设备访问 |
+| `SN` | Subordinate Node | 执行后端内存或设备访问 |
 | `MN` | Miscellaneous Node | 参与 DVM 等系统级管理操作 |
 
 常见完整类型包括：
@@ -103,10 +105,10 @@ RN-F
 |---|---|
 | Request Node | `RN-F`、`RN-D`、`RN-I` |
 | Home Node | `HN-F`、`HN-I` |
-| Slave Node | `SN-F`、`SN-I` |
+| Subordinate Node | `SN-F`、`SN-I` |
 | Miscellaneous Node | `MN` |
 
-后缀不能脱离基本角色机械解释。例如，`D` 只出现在 `RN-D` 中；`HN-F` 和 `SN-F` 中的 `F` 也分别描述它们在 Home 和 Slave 位置上支持的协议能力，而不是说三者具有完全相同的接口和行为。
+后缀不能脱离基本角色机械解释。例如，`D` 表示 RN-D 的 DVM 接收能力；SN-F 则是服务 Normal memory 的后端节点类型，并不作为 RN-F 那样的可被 Snoop 的缓存。三者不能因为都带 F 就认为具有相同接口和职责。
 
 本节只给出分类。每种 Node 的能力和相互区别在后续所属章节中解释，避免把后缀脱离角色单独记忆。
 
@@ -124,6 +126,7 @@ RN-F 既可以是请求发起者，也可能是其他事务所需数据的当前
 - 请求共享或唯一访问权限；
 - 在本地 Cache 中保存 coherent cache line；
 - 接收 HN-F 发出的 Snoop；
+- 支持包括 DVM 在内的各类 Snoop 事务；
 - 根据本地 Cache 状态返回无数据或带数据的 Snoop Response；
 - 根据 Snoop 要求保持、降级或失效本地副本；
 - 必要时把最新数据返回给 Home 或直接转发给另一个 Requester。
@@ -177,7 +180,7 @@ RN-I 的核心特征是：
 | 保存需要一致性管理的 Cache 副本 | 是 | 否 | 否 |
 | 接收普通 cache-line Snoop | 是 | 否 | 否 |
 | 返回 Snoop Response/Data | 是 | 否 | 否 |
-| 参与 DVM | 可按系统配置支持 | 是 | 否 |
+| 接收和处理 DVM | 是 | 是 | 否 |
 
 判断一个设备应该使用哪种 RN，可以先问两个问题：
 
@@ -188,7 +191,7 @@ RN-I 的核心特征是：
 
 Home Node 负责一个地址范围。Requester 根据地址把请求发送到相应 Home，Home 再决定如何满足请求。
 
-Home 的关键意义不只是地址路由。对于 coherent 地址，Home 还需要协调目录、其他 Requester 和后端 Slave，保证数据来源、访问权限和事务顺序符合协议要求。
+Home 的关键意义不只是地址路由。对于 coherent 地址，Home 还需要协调一致性状态、其他 Requester 和后端 Subordinate，保证数据来源、访问权限和事务顺序符合协议要求。Directory/Snoop Filter 可用于减少冗余 Snoop，但 CHI 不强制每个 HN-F 必须具有它们。
 
 ### 5.1 HN-F
 
@@ -197,14 +200,14 @@ Home 的关键意义不只是地址路由。对于 coherent 地址，Home 还需
 HN-F 通常负责：
 
 - 管理一个或多个地址范围；
-- 查询和更新目录或 Snoop Filter；
+- 若实现了目录或 Snoop Filter，查询和更新相应元数据；
 - 判断哪些 RN-F 可能持有目标 cache line；
 - 判断最新数据位于内存、Home Cache 还是某个 RN-F；
 - 向相关 RN-F 发送 Snoop；
 - 收集必要的 Snoop Response；
 - 协调共享、唯一、脏数据等权限变化；
 - 向 SN-F 发起后端内存访问；
-- 向原 Requester 返回 Completion 和数据；
+- 协调向原 Requester 返回 Completion 和数据，直接传输时数据可不经过 Home；
 - 维护同一地址或存在顺序要求的事务关系。
 
 HN-F 可以与 LLC、Directory 或 Snoop Filter 集成，但这些概念不能直接画等号：
@@ -214,36 +217,38 @@ HN-F 可以与 LLC、Directory 或 Snoop Filter 集成，但这些概念不能�
 - Directory 是记录持有者和权限信息的数据结构；
 - 一个实现可以把 HN-F、LLC 和 Directory 集成，也可以采用其他组织方式。
 
+E.b 把 HN-F 定义为包含 PoC（Point of Coherence），并预期作为请求的 PoS（Point of Serialization）。DVMOp 由相应管理路径处理，不作为 HN-F 的普通一致性请求。
+
 可以把 HN-F 概括为：
 
 > RN 表示“谁要访问”，HN-F 表示“谁负责决定这次 coherent 访问如何完成”。
 
 ### 5.2 HN-I
 
-`HN-I` 是 I/O Home Node。它用于不需要完整 cache coherence 管理的 Home 路径，负责接收请求、进行目标选择和协调后端访问，但不承担 HN-F 的完整目录与 Snoop 管理职责。
+`HN-I` 在 E.b 中称为 Non-coherent Home Node，通常用于 I/O 等非一致性路径。它不包含 PoC，也不能处理 Snoopable 请求；收到这类请求时须按规范响应，不能冒充 HN-F。它可以承担相应 I/O 路径的 PoS，接收合法请求、进行目标选择并协调后端访问。
 
 HN-I 的典型职责包括：
 
 - 管理相应的地址范围；
 - 接收允许发送到该 Home 的请求；
-- 根据地址和系统映射选择目标 Slave；
+- 根据地址和系统映射选择目标 Subordinate；
 - 协调请求、响应和数据传输；
 - 维护该路径要求的事务顺序。
 
 因此，HN-I 不能简单理解为“较小的 HN-F”。二者面向的协议路径不同：HN-F 的重点是 coherent cache-line 管理，HN-I 的重点是不需要完整 Snoop 流程的访问。
 
-## 6. Slave Node
+## 6. Subordinate Node
 
-Slave Node 位于请求处理的后端，负责执行实际的内存或设备访问。Home 决定一致性和路由后，可以把访问发送给相应的 Slave。
+Subordinate Node 位于请求处理的后端，负责执行相应的内存或设备访问。Home 决定一致性和路由后，可以把访问发送给相应的 SN。
 
-Slave 和 Home 的职责应分开理解：
+Subordinate 和 Home 的职责应分开理解：
 
 - Home 决定请求在协议上应该怎样完成；
-- Slave 提供后端存储或设备服务。
+- Subordinate 提供后端存储或设备服务。
 
 ### 6.1 SN-F
 
-`SN-F` 是服务于 Fully Coherent 路径的 Slave Node。它通常位于 HN-F 后端，对接内存控制器或下一级存储系统。
+`SN-F` 是用于 Normal memory 的 Subordinate Node，通常位于 HN-F 后端，对接内存控制器或下一级存储系统。它处理 Non-snoopable Read、Write、Atomic（包括相应 Exclusive 形式）与 CMO。SN-F 本身不承担 Home 的 RN 副本管理，也不是一个会接收普通 cache-line Snoop 的 RN-F。
 
 SN-F 主要负责：
 
@@ -256,7 +261,7 @@ SN-F 通常不负责追踪所有 RN-F 的 sharer/owner。哪些 Requester 持有
 
 ### 6.2 SN-I
 
-`SN-I` 是服务于 I/O 或非完整一致性路径的 Slave Node，常见目标包括外设、寄存器空间或相应的内存访问端口。
+`SN-I` 是用于外设或 Normal memory 的 Subordinate Node，常见目标包括外设、寄存器空间或相应的内存访问端口。它也可以处理规范允许的 Non-snoopable Read、Write、Atomic（包括相应 Exclusive 形式）与 CMO；不能仅凭名字把它理解为只支持寄存器读写。
 
 SN-I 主要负责：
 
@@ -275,7 +280,7 @@ SN-I 不参与 HN-F 面向 coherent cache line 的完整 sharer/owner 管理。
 
 MN 的典型职责包括：
 
-- 发起或协调 DVM 操作；
+- 接收 RN 发起的 DVMOp 并协调所需动作；
 - 把 DVM 操作发送给需要参与的 RN；
 - 收集各参与者的完成响应；
 - 协助完成系统范围的地址翻译维护与同步。
@@ -355,7 +360,7 @@ CHI Node 可以先按四类理解：
 |---|---|---|
 | Request Node | 谁发起访问，是否缓存 coherent data，是否支持 DVM | RN-F、RN-D、RN-I |
 | Home Node | 谁负责该地址的一致性、顺序和事务协调 | HN-F、HN-I |
-| Slave Node | 谁执行最终的内存或设备访问 | SN-F、SN-I |
+| Subordinate Node | 谁执行后端的内存或设备访问 | SN-F、SN-I |
 | Miscellaneous Node | 谁协调 DVM 等系统级管理操作 | MN |
 
 最重要的区别是：
@@ -367,4 +372,9 @@ CHI Node 可以先按四类理解：
 5. MN 主要参与 DVM 等系统控制流程。
 6. Node 是协议角色，REQ/RSP/DAT/SNP 是消息通道，Router 是 NoC 中的传输组件，三者不能混为一谈。
 
-理解 Node 解决的是“谁负责什么”。下一步分析 CHI Transaction 时，再沿着这些 Node 追踪一次 Read、Write、Snoop、Dataless 或 Retry 流程中实际出现的多条消息及其完成条件。
+接下来阅读 [CHI Read / Write / Snoop / Dataless / Retry](CHI-Read-Write-Snoop-Dataless-Retry.md)，建立操作含义；然后通过 [CHI Link](CHI-Link.md) 理解传输，再沿 [CHI Transaction](CHI-Transaction.md) 追踪 ID 和完成条件。上面的角色示意图省略了具体 opcode、CompAck 以及 DMT/DCT 等优化，不用它们判断严格消息合法性。
+
+## 10. 参考
+
+- [CHI E.b 规范](https://documentation-service.arm.com/static/6295e03db334256d9ea8ae86)：§1.6 Component naming；§13.6 Node interface definitions；Appendix B Message Interface Support。
+- 返回：[学习入口](README.md)。
