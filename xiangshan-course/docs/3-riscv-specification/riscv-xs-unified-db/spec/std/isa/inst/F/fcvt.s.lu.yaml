@@ -15,6 +15,15 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [IllegalInst, NX, AddrMisalign_inst, PageFault_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: freg
+                reg_type: FLOAT
+            -   type: reg
+                reg_type: INTEGER
+
 definedBy:
   allOf:
     - xlen: 64

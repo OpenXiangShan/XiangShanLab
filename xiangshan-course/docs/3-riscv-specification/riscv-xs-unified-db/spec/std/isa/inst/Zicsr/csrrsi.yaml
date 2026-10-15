@@ -20,6 +20,19 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+            -   type: csr
+                width: 12
+            -   type: imm
+                width: 5
+                signed: false
+
 definedBy:
   extension:
     name: Zicsr

@@ -24,6 +24,15 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [IllegalInst, NX, AddrMisalign_inst, PageFault_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: freg
+                reg_type: FLOAT
+            -   type: reg
+                reg_type: INTEGER
+
 assembly: fd, xs1, rm
 encoding:
   match: 110100100011-------------1010011

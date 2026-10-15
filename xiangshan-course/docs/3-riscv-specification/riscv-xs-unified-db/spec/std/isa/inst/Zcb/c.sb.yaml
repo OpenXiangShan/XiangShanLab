@@ -17,6 +17,20 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [AccessFault_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: creg
+                width: 5
+            -   type: creg
+                width: 5
+            -   type: imm
+                width: 5
+                signed: false
+                range: (0, 0)
+                alignment: 4
+
 definedBy:
   extension:
     name: Zcb

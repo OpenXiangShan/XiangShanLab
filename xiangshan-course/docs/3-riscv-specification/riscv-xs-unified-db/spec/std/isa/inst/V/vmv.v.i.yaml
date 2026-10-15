@@ -18,6 +18,20 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vialuF
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vd
+            -   type: imm
+                width: 5
+                signed: true
+                field: imm
+
 definedBy:
   extension:
     name: Zvl32b

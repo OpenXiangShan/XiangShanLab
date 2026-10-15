@@ -18,6 +18,16 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [IllegalInst, AccessException, AddrMisalign_inst, PageFault_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: reg
+                width: 5
+            -   type: imm
+                width: 12
+                signed: true
+
 definedBy:
   extension:
     name: Zicbop

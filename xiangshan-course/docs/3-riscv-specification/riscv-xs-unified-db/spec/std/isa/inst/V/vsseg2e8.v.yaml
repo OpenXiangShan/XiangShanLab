@@ -9,6 +9,24 @@ name: vsseg2e8.v
 long_name: "Vector segmented store 2 elements of 8 bits"
 description: |
   Stores 2 segments of 8-bit elements from vector register vs2 to memory starting at address in xs1 register, using vector mask vm. The effective element width is 8 bits regardless of SEW setting.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vs3
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+            -   type: vm
+                literal: v0.t
+                option: true
+
 definedBy:
   extension:
     name: Zvl32b

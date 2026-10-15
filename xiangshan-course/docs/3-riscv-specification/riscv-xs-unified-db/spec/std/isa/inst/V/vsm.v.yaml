@@ -9,6 +9,21 @@ name: vsm.v
 long_name: Vector store mask
 description: |
   Stores a vector mask from vector register vs2 to memory starting at address in xs1 register. This operation is used to save vector masks for later restoration.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vs3
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+
 definedBy:
   extension:
     name: Zvl32b

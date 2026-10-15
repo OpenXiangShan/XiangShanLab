@@ -9,6 +9,21 @@ name: vlm.v
 long_name: Vector load mask
 description: |
   Loads a vector mask from memory starting at address in xs1 register and stores it in vector register vd. This operation is used to load previously saved vector masks.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vd
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+
 definedBy:
   extension:
     name: Zvl32b

@@ -12,6 +12,28 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vfma
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                required: '!=v0'
+                field: vd
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vs1
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vs2
+            -   type: vm
+                literal: v0.t
+                option: true
+
 definedBy:
   extension:
     anyOf:

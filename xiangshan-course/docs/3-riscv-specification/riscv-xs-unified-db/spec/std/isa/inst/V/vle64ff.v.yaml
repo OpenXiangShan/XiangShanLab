@@ -9,6 +9,24 @@ name: vle64ff.v
 long_name: "Vector load 64-bit elements, fault-first"
 description: |
   Loads 64-bit elements from memory starting at address in xs1 register, using vector mask vm, and stores results in vector register vd. This is a fault-first operation that stops on the first fault. The effective element width is 64 bits.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vd
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+            -   type: vm
+                literal: v0.t
+                option: true
+
 definedBy:
   extension:
     name: Zvl32b

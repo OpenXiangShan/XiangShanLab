@@ -9,6 +9,24 @@ name: vle32.v
 long_name: Vector load 32-bit elements
 description: |
   Loads 32-bit elements from memory starting at address in xs1 register, using vector mask vm, and stores results in vector register vd. The effective element width is 32 bits regardless of SEW setting.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vd
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+            -   type: vm
+                literal: v0.t
+                option: true
+
 definedBy:
   extension:
     name: Zvl32b

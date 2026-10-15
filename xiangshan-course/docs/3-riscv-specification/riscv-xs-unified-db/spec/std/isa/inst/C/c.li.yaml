@@ -15,6 +15,18 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: creg
+                width: 5
+                range: (0, 31)
+            -   type: imm
+                width: 6
+                signed: true
+                range: (-32, 31)
+
 definedBy:
   extension:
     name: Zca

@@ -15,6 +15,13 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+            -   type: vreg
+
 definedBy:
   extension:
     name: Zvkb

@@ -9,6 +9,21 @@ name: vs8r.v
 long_name: Vector store 8 elements with register stride
 description: |
   Stores 8 segments of elements from vector register vs2 to memory starting at address in xs1 register with stride in xs2, using vector mask vm. The effective element width is determined by SEW setting.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vs3
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+
 definedBy:
   extension:
     name: Zvl32b

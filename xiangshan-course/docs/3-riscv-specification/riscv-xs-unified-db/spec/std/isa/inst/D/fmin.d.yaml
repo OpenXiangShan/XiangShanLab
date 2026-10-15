@@ -27,6 +27,17 @@ xs-attributes:
             - AddrMisalign_inst
             - PageFault_inst
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: freg
+                reg_type: FLOAT
+            -   type: freg
+                reg_type: FLOAT
+            -   type: freg
+                reg_type: FLOAT
+
 assembly: fd, fs1, fs2
 encoding:
   match: 0010101----------000-----1010011

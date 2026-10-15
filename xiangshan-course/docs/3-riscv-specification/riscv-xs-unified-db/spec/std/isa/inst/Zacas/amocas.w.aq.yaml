@@ -24,6 +24,19 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: reg
+                reg_type: INTEGER
+                alignment: 2
+            -   type: reg
+                reg_type: INTEGER
+                alignment: 2
+            -   type: reg
+                reg_type: INTEGER
+
 definedBy:
   extension:
     name: Zacas

@@ -16,6 +16,20 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs2
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+
 definedBy:
   allOf:
     - xlen: 64

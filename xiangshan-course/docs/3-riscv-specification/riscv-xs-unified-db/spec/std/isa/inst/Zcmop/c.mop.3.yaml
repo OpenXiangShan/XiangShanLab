@@ -19,6 +19,12 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: alu
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands: []
+
 definedBy:
   extension:
     name: Zcmop

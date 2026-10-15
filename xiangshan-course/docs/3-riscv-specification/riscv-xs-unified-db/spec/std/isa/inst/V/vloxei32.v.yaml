@@ -9,6 +9,28 @@ name: vloxei32.v
 long_name: "Vector ordered load 1 element of 32 bits with index"
 description: |
   Loads 1 segment of 32-bit elements from memory using ordered access pattern with index register vs1, starting at address in xs1 register, using vector mask vm, and stores results in vector register vd. The effective element width is 32 bits.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vd
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vs2
+            -   type: vm
+                literal: v0.t
+                option: true
+
 definedBy:
   extension:
     name: Zvl32b

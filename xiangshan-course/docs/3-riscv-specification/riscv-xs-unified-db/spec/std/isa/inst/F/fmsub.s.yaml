@@ -15,6 +15,19 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: freg
+                reg_type: FLOAT
+            -   type: freg
+                reg_type: FLOAT
+            -   type: freg
+                reg_type: FLOAT
+            -   type: freg
+                reg_type: FLOAT
+
 definedBy:
   extension:
     name: F

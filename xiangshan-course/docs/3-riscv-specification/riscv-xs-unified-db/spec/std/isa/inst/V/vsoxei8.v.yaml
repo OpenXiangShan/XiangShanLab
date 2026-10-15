@@ -9,6 +9,28 @@ name: vsoxei8.v
 long_name: "Vector ordered store 1 element of 8 bits with index"
 description: |
   Stores 1 segment of 8-bit elements from vector register vs2 to memory using ordered access pattern with index register vs1, starting at address in xs1 register, using vector mask vm. The effective element width is 8 bits.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vs3
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vs2
+            -   type: vm
+                literal: v0.t
+                option: true
+
 definedBy:
   extension:
     name: Zvl32b

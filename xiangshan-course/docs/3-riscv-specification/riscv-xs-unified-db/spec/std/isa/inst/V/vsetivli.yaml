@@ -8,6 +8,25 @@ kind: instruction
 name: vsetivli
 long_name: Vector Set Vector Type Immediate and Vector Length Immediate
 description: Set the vtype and vl CSRs, and write the new value of vl into rd.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rd
+            -   type: imm
+                width: 5
+                signed: false
+                field: uimm
+            -   type: imm
+                width: 10
+                signed: false
+                field: vtype
+                range: (0, 1023)
+
 definedBy:
   extension:
     name: Zvl32b

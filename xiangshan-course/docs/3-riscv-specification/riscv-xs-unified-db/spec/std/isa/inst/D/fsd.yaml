@@ -21,6 +21,18 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: freg
+                reg_type: FLOAT
+            -   type: reg
+                reg_type: INTEGER
+            -   type: imm
+                width: 12
+                signed: true
+
 assembly: fs2, imm(xs1)
 encoding:
   match: "-----------------011-----0100111"

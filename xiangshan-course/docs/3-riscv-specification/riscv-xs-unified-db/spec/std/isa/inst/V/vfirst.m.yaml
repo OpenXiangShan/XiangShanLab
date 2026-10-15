@@ -12,6 +12,23 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vipu
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rd
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vs2
+            -   type: vm
+                literal: v0.t
+                option: true
+
 definedBy:
   extension:
     name: Zvl32b

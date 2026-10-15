@@ -9,6 +9,25 @@ name: vsetvli
 long_name: Set vector length immediate
 description: |
   Sets the vector length register vl and vector type register vtype based on immediate values. Configures SEW, LMUL, and other vector parameters for subsequent vector operations.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rd
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+            -   type: imm
+                width: 11
+                signed: false
+                field: vtype
+                range: (0, 2047)
+
 definedBy:
   extension:
     name: Zvl32b

@@ -9,6 +9,28 @@ name: vlse64.v
 long_name: "Vector strided load 64-bit elements"
 description: |
   Loads 64-bit elements from memory starting at address in xs1 register with stride, using vector mask vm, and stores results in vector register vd. The effective element width is 64 bits.
+
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: vreg
+                width: 5
+                reg_type: VECTOR
+                field: vd
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs1
+                mem: true
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+                field: rs2
+            -   type: vm
+                literal: v0.t
+                option: true
+
 definedBy:
   extension:
     name: Zvl32b

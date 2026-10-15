@@ -18,6 +18,22 @@ xs-attributes:
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
+xs-constraints:
+    - microarchitectural_attributes:
+    - architectural_attributes:
+        - operands:
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+            -   type: reg
+                width: 5
+                reg_type: INTEGER
+            -   type: imm
+                width: 13
+                signed: true
+                alignment: 2
+                range: (-2048, 2047)
+
 definedBy:
   extension:
     name: I
