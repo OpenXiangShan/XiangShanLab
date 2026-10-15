@@ -9,8 +9,9 @@ name: vnclipu.wv
 long_name: "Vector narrowing unsigned clip"
 description: |
   Performs narrowing unsigned clip operation on double-width elements from vector register vs2 using clip values from vector register vs1 and stores results in vector register vd, using vector mask vm. The operation clips values to a specified range and packs the result into a narrower destination.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

@@ -11,10 +11,11 @@ description: |
   Load 32 bits of data into register `xd` from an
   address formed by adding `xs1` to a signed offset.
   Sign extend the result.
-microarchitectural_attributes:
-    - FuType: ldu
-architectural_attributes:
-    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: ldu
+    - architectural_attributes:
+        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
 definedBy:
   extension:

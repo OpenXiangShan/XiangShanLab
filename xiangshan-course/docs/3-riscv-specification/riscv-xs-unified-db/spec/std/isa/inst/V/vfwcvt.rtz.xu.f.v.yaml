@@ -9,8 +9,9 @@ name: vfwcvt.rtz.xu.f.v
 long_name: "Vector floating-point to unsigned integer widening conversion with truncation"
 description: |
   Converts floating-point elements from vector register vs2 to a wider unsigned integer format using round-toward-zero mode and stores results in vector register vd, using vector mask vm.
-microarchitectural_attributes:
-    - FuType: vfcvt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vfcvt
 definedBy:
   extension:
     name: Zvl32b

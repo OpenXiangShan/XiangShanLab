@@ -9,8 +9,9 @@ name: vfwmul.vv
 long_name: No synopsis available
 description: |
   No description available.
-microarchitectural_attributes:
-    - FuType: vfma
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vfma
 definedBy:
   extension:
     anyOf:

@@ -11,10 +11,11 @@ description: |
   Returns a single bit extracted from xs1 at the index specified in xs2.
   The index is read from the lower log2(XLEN) bits of shamt. For RV32, the encodings
   corresponding to shamt[5]=1 are reserved.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

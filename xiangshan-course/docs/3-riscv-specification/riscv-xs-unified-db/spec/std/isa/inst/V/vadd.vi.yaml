@@ -9,8 +9,9 @@ name: vadd.vi
 long_name: Vector-immediate integer addition
 description: |
   Adds immediate value to elements from vector register vs2 according to mask vm and stores results in vector register vd. Element width is determined by SEW setting.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

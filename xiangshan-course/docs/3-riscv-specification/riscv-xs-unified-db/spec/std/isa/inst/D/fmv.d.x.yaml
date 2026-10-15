@@ -15,11 +15,12 @@ long_name: Floating-Point Move Double-Precision from Integer Register
 description: |
   The `fmv.d.x` instruction moves the double-precision value encoded in `IEEE 754-2008` standard encoding from the integer
   register `xs1` to the floating-point register `fd`.
-microarchitectural_attributes:
-    - FuType: i2v
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: i2v
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 assembly: fd, xs1
 encoding:

@@ -9,10 +9,11 @@ name: fsub.h
 long_name: No synopsis available
 description: |
   No description available.
-microarchitectural_attributes:
-    - FuType: falu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: falu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

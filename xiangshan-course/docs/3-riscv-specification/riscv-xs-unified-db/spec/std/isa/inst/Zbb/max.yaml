@@ -17,10 +17,11 @@ description: |
   common sequence, it is suggested that they are scheduled with no intervening
   instructions so that implementations that are so optimized can fuse them
   together.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

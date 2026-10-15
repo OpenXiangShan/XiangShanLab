@@ -22,11 +22,12 @@ description:
   `sfence.vma` instruction with the same values of xs1 and xs2 would invalidate.
   However, unlike `sfence.vma`, `sinval.vma` instructions are only ordered with respect to
   `sfence.vma`, `sfence.w.inval`, and `sfence.inval.ir` instructions as defined below.
-microarchitectural_attributes:
-    - FuType: fence
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fence
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 access:
   s: sometimes

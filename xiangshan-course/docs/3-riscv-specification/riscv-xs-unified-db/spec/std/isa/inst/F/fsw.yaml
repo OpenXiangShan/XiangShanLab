@@ -10,11 +10,12 @@ long_name: Floating-Point Store Single-Precision
 description: |
   The `fsw` instruction stores a single-precision floating-point value in `fs2` to memory at address `xs1` + `imm`.
   It does not modify the bits being transferred; in particular, the payloads of non-canonical NaNs are preserved.
-microarchitectural_attributes:
-    - FuType: stu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: stu
 
-architectural_attributes:
-    - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+    - architectural_attributes:
+        - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
 definedBy:
   extension:

@@ -16,11 +16,12 @@ description: |
   The `fcvt.d.w` instruction converts a 32-bit signed integer, in integer register `xs1` into a double-precision
   floating-point number in floating-point register `fd`. Note `fcvt.d.w` always produces an exact result and is
   unaffected by rounding mode.
-microarchitectural_attributes:
-    - FuType: i2f
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: i2f
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 assembly: fd, xs1, rm
 encoding:

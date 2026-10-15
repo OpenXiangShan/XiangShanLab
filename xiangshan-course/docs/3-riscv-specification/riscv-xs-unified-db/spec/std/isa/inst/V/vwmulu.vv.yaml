@@ -9,8 +9,9 @@ name: vwmulu.vv
 long_name: "Vector widening unsigned multiplication"
 description: |
   Performs unsigned multiplication on elements from vector registers vs2 and vs1, widens the results, and stores them in vector register vd, using vector mask vm. The operation follows standard unsigned arithmetic rules.
-microarchitectural_attributes:
-    - FuType: vimac
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vimac
 definedBy:
   extension:
     name: Zvl32b

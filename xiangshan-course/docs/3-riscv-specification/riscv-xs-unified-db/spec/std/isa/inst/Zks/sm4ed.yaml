@@ -9,10 +9,11 @@ name: sm4ed
 long_name: No synopsis available
 description: |
   No description available.
-microarchitectural_attributes:
-    - FuType: bku
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: bku
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

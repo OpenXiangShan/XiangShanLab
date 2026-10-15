@@ -9,10 +9,11 @@ name: sh2add
 long_name: Shift left by 2 and add
 description: |
   Shifts `xs1` to the left by 2 places and adds it to `xs2`.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

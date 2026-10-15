@@ -11,10 +11,11 @@ description: |
   Performs an XLEN-wide addition of two addends. The first addend is xs2.
   The second addend is the unsigned value formed by extracting the least-significant word of xs1
   and shifting it left by 2 places.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   allOf:

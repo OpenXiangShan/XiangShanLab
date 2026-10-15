@@ -15,11 +15,12 @@ definedBy:
 description: |
   Uses the two 64-bit source registers to represent the entire AES state, and produces _half_ of the next
   round output, applying the ShiftRows and SubBytes steps.
-microarchitectural_attributes:
-    - FuType: bku
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: bku
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 assembly: xd, xs1, xs2
 encoding:

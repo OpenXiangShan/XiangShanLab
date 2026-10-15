@@ -10,10 +10,11 @@ long_name: Hypervisor store byte
 description: |
   Store 8 bits of data from register `xs2` to guest physical memory at the
   address in `xs1`, as though V=1.
-microarchitectural_attributes:
-    - FuType: stu
-architectural_attributes:
-    - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: stu
+    - architectural_attributes:
+        - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
 definedBy:
   extension:

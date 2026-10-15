@@ -19,11 +19,12 @@ description: |
   (source register specifiers must be in same order and xdh cannot be the same as xs1 or xs2).
   Microarchitectures can then fuse these into a single multiply operation instead of
   performing two separate multiplies.
-microarchitectural_attributes:
-    - FuType: mul
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: mul
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

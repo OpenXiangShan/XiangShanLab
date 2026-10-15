@@ -8,10 +8,11 @@ kind: instruction
 name: lui
 long_name: Load upper immediate
 description: Load the zero-extended imm into xd.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

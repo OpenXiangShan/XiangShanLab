@@ -9,8 +9,9 @@ name: vand.vv
 long_name: Vector-vector bitwise AND
 description: |
   Performs bitwise AND on corresponding elements from vs1 and vs2 according to mask vm and stores results in vd. Element width is determined by SEW setting.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

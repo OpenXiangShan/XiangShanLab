@@ -16,11 +16,12 @@ definedBy:
           - name: Zhinx
 description: |
   `fcvt.lu.h` converts a half-precision floating-point number to an unsigned 64-bit integer.
-microarchitectural_attributes:
-    - FuType: fcvt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fcvt
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 assembly: xd, fs1, rm
 encoding:

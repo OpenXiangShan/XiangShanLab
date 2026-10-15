@@ -9,8 +9,9 @@ name: vmv.v.x
 long_name: "Vector scalar to vector move"
 description: |
   Broadcasts scalar register xs1 to all elements of vector register vd, using vector mask vm. This operation creates a vector with identical elements.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

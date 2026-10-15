@@ -9,8 +9,9 @@ name: vfredmin.vs
 long_name: No synopsis available
 description: |
   No description available.
-microarchitectural_attributes:
-    - FuType: vfalu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vfalu
 definedBy:
   extension:
     name: Zvl32b

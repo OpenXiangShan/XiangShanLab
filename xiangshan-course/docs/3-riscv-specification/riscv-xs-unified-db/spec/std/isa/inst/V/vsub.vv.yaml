@@ -9,8 +9,9 @@ name: vsub.vv
 long_name: Vector-vector integer subtraction
 description: |
   Subtracts corresponding elements of vs1 from vs2 according to mask vm and stores results in vd. Element width is determined by SEW setting.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

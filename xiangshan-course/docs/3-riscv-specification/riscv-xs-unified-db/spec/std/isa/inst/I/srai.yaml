@@ -10,10 +10,11 @@ long_name: Shift right arithmetic immediate
 description: |
   Arithmetic shift (the original sign bit is copied into the vacated upper bits) the
   value in xs1 right by shamt, and store the result in xd.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

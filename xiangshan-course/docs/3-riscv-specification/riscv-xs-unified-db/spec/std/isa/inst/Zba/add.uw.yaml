@@ -10,10 +10,11 @@ long_name: Add unsigned word
 description: |
   Performs an XLEN-wide addition between xs2 and the
   zero-extended least-significant word of xs1.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   allOf:

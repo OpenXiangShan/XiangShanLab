@@ -10,10 +10,11 @@ long_name: Store byte
 description: |
   Store 8 bits of data from register `xs2` to an
   address formed by adding `xs1` to a signed offset.
-microarchitectural_attributes:
-    - FuType: stu
-architectural_attributes:
-    - exceptions: [AccessFault_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: stu
+    - architectural_attributes:
+        - exceptions: [AccessFault_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
 definedBy:
   extension:

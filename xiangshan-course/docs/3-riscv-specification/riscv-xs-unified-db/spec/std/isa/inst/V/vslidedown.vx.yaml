@@ -9,8 +9,9 @@ name: vslidedown.vx
 long_name: "Vector slide down with scalar"
 description: |
   Slides elements in vector register vs2 down by 1 position, inserting scalar register xs1 at the top, and stores results in vector register vd, using vector mask vm.
-microarchitectural_attributes:
-    - FuType: vppu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vppu
 definedBy:
   extension:
     name: Zvl32b

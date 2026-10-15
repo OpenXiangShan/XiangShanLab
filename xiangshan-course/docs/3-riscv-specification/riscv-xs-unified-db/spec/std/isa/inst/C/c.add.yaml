@@ -10,10 +10,11 @@ long_name: Add
 description: |
   Add the value in xs2 to xd, and store the result in xd.
   C.ADD expands into `add xd, xd, xs2`.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

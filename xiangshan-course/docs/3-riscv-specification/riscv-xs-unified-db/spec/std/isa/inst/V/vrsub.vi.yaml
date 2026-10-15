@@ -9,8 +9,9 @@ name: vrsub.vi
 long_name: "Vector reverse subtract with immediate"
 description: |
   Performs reverse subtraction on elements from immediate value and vector register vs2 and stores results in vector register vd, using vector mask vm.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

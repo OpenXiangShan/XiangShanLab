@@ -10,10 +10,11 @@ long_name: Sign-extend halfword
 description: |
   Sign-extends the least-significant halfword in the source to XLEN by copying the
   most-significant bit in the halfword (i.e., bit 15) to all of the more-significant bits.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

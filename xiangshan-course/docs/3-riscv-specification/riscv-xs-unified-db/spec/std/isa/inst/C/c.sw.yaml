@@ -12,10 +12,11 @@ description: |
   It computes an effective address by adding the zero-extended offset, scaled by 4,
   to the base address in register xs1.
   It expands to `sw` `rs2, offset(xs1)`.
-microarchitectural_attributes:
-    - FuType: stu
-architectural_attributes:
-    - exceptions: [AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: stu
+    - architectural_attributes:
+        - exceptions: [AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
 definedBy:
   extension:

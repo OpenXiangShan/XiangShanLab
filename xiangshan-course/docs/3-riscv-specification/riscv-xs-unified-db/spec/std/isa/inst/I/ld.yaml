@@ -16,11 +16,12 @@ description: |
   The effective address is obtained by adding
   register xs1 to the sign-extended 12-bit offset.
   <% end %>
-microarchitectural_attributes:
-    - FuType: ldu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: ldu
 
-architectural_attributes:
-    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+    - architectural_attributes:
+        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
 definedBy:
   anyOf:

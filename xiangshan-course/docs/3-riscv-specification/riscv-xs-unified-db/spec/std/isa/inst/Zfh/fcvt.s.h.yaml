@@ -18,11 +18,12 @@ description: |
   floating-point register _fd_.
 
   `fcvt.s.h` will never round, and so the 'rm' field is effectively ignored.
-microarchitectural_attributes:
-    - FuType: fcvt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fcvt
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 encoding:
   match: 010000000010-------------1010011

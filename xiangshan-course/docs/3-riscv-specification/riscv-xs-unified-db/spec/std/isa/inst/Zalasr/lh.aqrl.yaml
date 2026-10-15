@@ -21,10 +21,11 @@ description: |
 
   The address must be naturally aligned (2-byte aligned); if not, an
   address-misaligned or access-fault exception will be raised.
-microarchitectural_attributes:
-    - FuType: ldu
-architectural_attributes:
-    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: ldu
+    - architectural_attributes:
+        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
 definedBy:
   extension:

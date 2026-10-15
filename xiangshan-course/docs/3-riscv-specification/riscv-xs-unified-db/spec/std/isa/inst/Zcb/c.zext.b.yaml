@@ -11,11 +11,12 @@ description: |
   Takes a single source/destination operand.
   This instruction zero-extends the least-significant byte of the source to XLEN by inserting
   0's into all of the bits more significant than 7.
-microarchitectural_attributes:
-    - FuType: alu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

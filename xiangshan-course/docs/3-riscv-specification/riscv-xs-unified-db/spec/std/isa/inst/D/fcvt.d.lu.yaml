@@ -17,11 +17,12 @@ definedBy:
 description: |
   The `fcvt.d.lu` instruction converts to or from a 64-bit unsigned integer, `xs1` into a double-precision
   floating-point number in floating-point register `fd`.
-microarchitectural_attributes:
-    - FuType: i2f
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: i2f
 
-architectural_attributes:
-    - exceptions: [IllegalInst, NX, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, NX, AddrMisalign_inst, PageFault_inst]
 
 assembly: fd, xs1, rm
 encoding:

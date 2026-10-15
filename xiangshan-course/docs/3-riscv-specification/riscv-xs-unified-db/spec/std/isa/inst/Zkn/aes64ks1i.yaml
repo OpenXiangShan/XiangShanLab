@@ -11,10 +11,11 @@ description: |
   This instruction implements the rotation, SubBytes and Round Constant addition steps of the AES
   block cipher Key Schedule.
   `rnum` must be in the range `0x0..0xA`. The values `0xB..0xF` are reserved.
-microarchitectural_attributes:
-    - FuType: bku
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: bku
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   allOf:

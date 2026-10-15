@@ -9,8 +9,9 @@ name: vfsqrt.v
 long_name: No synopsis available
 description: |
   No description available.
-microarchitectural_attributes:
-    - FuType: vfdiv
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vfdiv
 definedBy:
   extension:
     name: Zvl32b

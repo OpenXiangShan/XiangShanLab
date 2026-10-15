@@ -12,10 +12,11 @@ description: |
   starting at the most-significant bit (i.e., XLEN-1) and progressing to bit 0.
   Accordingly, if the input is 0, the output is XLEN, and if the most-significant
   bit of the input is a 1, the output is 0.
-microarchitectural_attributes:
-    - FuType: bku
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: bku
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

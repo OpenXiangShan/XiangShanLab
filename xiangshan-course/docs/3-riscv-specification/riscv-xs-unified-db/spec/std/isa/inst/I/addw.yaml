@@ -10,10 +10,11 @@ long_name: Add word
 description: |
   Add the 32-bit values in xs1 to xs2, and store the sign-extended result in xd.
   Any overflow is thrown away.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   allOf:

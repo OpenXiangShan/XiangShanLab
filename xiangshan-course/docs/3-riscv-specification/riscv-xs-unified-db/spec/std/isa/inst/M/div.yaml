@@ -14,10 +14,11 @@ description: |
 
   Division resulting in signed overflow (when most negative number is divided by -1)
   will put the most negative number into xd;
-microarchitectural_attributes:
-    - FuType: div
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: div
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

@@ -9,8 +9,9 @@ name: vwmacc.vx
 long_name: "Vector widening multiply-add with scalar"
 description: |
   Performs widening multiplication on elements from vector register vs2 and scalar register xs1, adds the result to elements from vector register vd, and stores the final results in vector register vd, using vector mask vm.
-microarchitectural_attributes:
-    - FuType: vimac
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vimac
 definedBy:
   extension:
     name: Zvl32b

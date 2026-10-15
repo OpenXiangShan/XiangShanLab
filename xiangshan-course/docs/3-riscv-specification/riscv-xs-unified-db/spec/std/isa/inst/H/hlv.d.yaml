@@ -10,10 +10,11 @@ long_name: Hypervisor load doubleword
 description: |
   Load 64 bits of data into register `xd` from guest physical memory at the
   address in `xs1`, as though V=1.
-microarchitectural_attributes:
-    - FuType: ldu
-architectural_attributes:
-    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: ldu
+    - architectural_attributes:
+        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
 definedBy:
   allOf:

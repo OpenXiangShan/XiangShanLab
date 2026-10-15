@@ -9,8 +9,9 @@ name: vzext.vf4
 long_name: "Vector zero-extend by factor of 4"
 description: |
   Zero-extends elements from vector register vs2 by a factor of 4 and stores results in vector register vd, using vector mask vm. The operation extends SEW to 4×SEW.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

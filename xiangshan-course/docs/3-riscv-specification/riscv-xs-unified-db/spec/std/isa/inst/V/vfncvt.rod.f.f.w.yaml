@@ -9,8 +9,9 @@ name: vfncvt.rod.f.f.w
 long_name: "Vector floating-point narrowing conversion with round-to-odd"
 description: |
   Converts double-width floating-point elements from vector register vs2 to a single-width floating-point format using round-to-odd mode and stores results in vector register vd, using vector mask vm.
-microarchitectural_attributes:
-    - FuType: vfcvt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vfcvt
 definedBy:
   extension:
     anyOf:

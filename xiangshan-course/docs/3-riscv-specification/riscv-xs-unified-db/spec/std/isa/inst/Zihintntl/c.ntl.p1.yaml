@@ -11,10 +11,11 @@ description: |
   The C.NTL.P1 instruction indicates that the immediately subsequent instruction
   does not exhibit temporal locality within the capacity of the innermost level
   of private cache in the memory hierarchy. C.NTL.P1 is encoded as C.ADD x0, x2.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

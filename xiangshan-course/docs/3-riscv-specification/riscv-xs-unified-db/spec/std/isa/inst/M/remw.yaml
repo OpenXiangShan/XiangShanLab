@@ -14,10 +14,11 @@ description: |
   If the value in register xs2 is zero, write the sign-extended 32-bit value in xs1 into xd;
 
   If the result of the division overflows, write zero into xd;
-microarchitectural_attributes:
-    - FuType: div
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: div
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   allOf:

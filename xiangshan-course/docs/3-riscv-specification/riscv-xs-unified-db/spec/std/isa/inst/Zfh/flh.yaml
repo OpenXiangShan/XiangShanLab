@@ -13,11 +13,12 @@ description: |
   `flh` does not modify the bits being transferred; in particular, the payloads of non-canonical NaNs are preserved.
 
   `flh` is only guaranteed to execute atomically if the effective address is naturally aligned.
-microarchitectural_attributes:
-    - FuType: ldu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: ldu
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

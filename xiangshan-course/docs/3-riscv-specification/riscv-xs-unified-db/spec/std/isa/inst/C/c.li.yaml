@@ -11,8 +11,9 @@ description: |
   C.LI loads the sign-extended 6-bit immediate, imm, into register xd.
   C.LI expands into `addi xd, x0, imm`.
   C.LI is only valid when xd &ne; x0; the code points with xd=x0 encode HINTs.
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

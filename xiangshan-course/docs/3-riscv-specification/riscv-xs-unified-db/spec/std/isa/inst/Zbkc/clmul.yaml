@@ -9,10 +9,11 @@ name: clmul
 long_name: Carry-less multiply (low-part)
 description: |
   `clmul` produces the lower half of the 2*XLEN carry-less product
-microarchitectural_attributes:
-    - FuType: bku
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: bku
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

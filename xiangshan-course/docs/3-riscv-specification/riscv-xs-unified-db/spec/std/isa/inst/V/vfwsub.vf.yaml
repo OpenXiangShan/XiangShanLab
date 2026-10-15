@@ -9,8 +9,9 @@ name: vfwsub.vf
 long_name: "Vector floating-point widening subtraction with scalar"
 description: |
   Performs floating-point subtraction on elements from vector register vs2 and floating-point scalar register fs1, widens the results, and stores them in vector register vd, using vector mask vm. The operation follows IEEE 754 floating-point arithmetic rules.
-microarchitectural_attributes:
-    - FuType: vfalu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vfalu
 definedBy:
   extension:
     anyOf:

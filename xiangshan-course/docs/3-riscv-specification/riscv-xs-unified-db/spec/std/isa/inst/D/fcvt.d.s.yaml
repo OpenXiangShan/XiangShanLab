@@ -17,11 +17,12 @@ description: |
   major opcode space and both the source and destination are floating-point registers. The `xs2` field
   encodes the datatype of the source, and the `fmt` field encodes the datatype of the destination.
   `fcvt.d.s` will never round.
-microarchitectural_attributes:
-    - FuType: fcvt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fcvt
 
-architectural_attributes:
-    - exceptions: [IllegalInst, NX, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, NX, AddrMisalign_inst, PageFault_inst]
 
 assembly: fd, fs1, rm
 encoding:

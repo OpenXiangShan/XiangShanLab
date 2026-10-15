@@ -11,11 +11,12 @@ description: |
   The `flw` instruction loads a single-precision floating-point value from memory at address `xs1` + `imm` into floating-point register `fd`.
   It does not modify the bits being transferred; in particular, the payloads of non-canonical NaNs are preserved.
 
-microarchitectural_attributes:
-    - FuType: ldu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: ldu
 
-architectural_attributes:
-    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+    - architectural_attributes:
+        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
 definedBy:
   extension:

@@ -9,8 +9,9 @@ name: vmsgtu.vi
 long_name: Vector mask greater than unsigned immediate
 description: |
   Sets mask bits where elements in vs2 are greater than immediate value (unsigned), according to mask vm, and stores results in vd. Element width is determined by SEW setting. Supports vector masking and follows vector tail policy.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

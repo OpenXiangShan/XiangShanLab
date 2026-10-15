@@ -9,10 +9,11 @@ name: clmulh
 long_name: Carry-less multiply (high-part)
 description: |
   `clmulh` produces the upper half of the 2*XLEN carry-less product
-microarchitectural_attributes:
-    - FuType: bku
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: bku
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

@@ -8,10 +8,11 @@ kind: instruction
 name: auipc
 long_name: Add upper immediate to pc
 description: Add an immediate to the current PC.
-microarchitectural_attributes:
-    - FuType: jmp
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: jmp
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

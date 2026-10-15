@@ -16,8 +16,9 @@ description: |
   write any register. Their encoding allows future extensions to define them to read register x[11].
 
   This is c.mop.11 from the compressed MOP instruction family.
-microarchitectural_attributes:
-    - FuType: alu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
 definedBy:
   extension:
     name: Zcmop

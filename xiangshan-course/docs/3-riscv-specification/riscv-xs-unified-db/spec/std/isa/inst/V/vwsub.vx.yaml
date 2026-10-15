@@ -9,8 +9,9 @@ name: vwsub.vx
 long_name: "Vector widening signed subtraction with scalar"
 description: |
   Performs signed subtraction on elements from vector register vs2 and scalar register xs1, widens the results, and stores them in vector register vd, using vector mask vm. The operation follows standard signed arithmetic rules.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

@@ -9,8 +9,9 @@ name: vremu.vv
 long_name: "Vector unsigned remainder"
 description: |
   Performs unsigned remainder operation on elements from vector registers vs2 and vs1 and stores results in vector register vd, using vector mask vm.
-microarchitectural_attributes:
-    - FuType: vidiv
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vidiv
 definedBy:
   extension:
     name: Zvl32b

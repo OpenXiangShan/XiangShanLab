@@ -35,10 +35,11 @@ description: |
   The duration of a `wrs.sto` instruction's timeout may vary significantly within and among implementations.
   In typical implementations this duration should be roughly in the range of 10 to 100 times an on-chip
   cache miss latency or a cacheless access to main memory.
-microarchitectural_attributes:
-    - FuType: csr
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: csr
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

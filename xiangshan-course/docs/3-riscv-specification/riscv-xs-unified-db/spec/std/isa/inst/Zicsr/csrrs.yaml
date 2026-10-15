@@ -16,10 +16,11 @@ description: |
   to be set in the CSR. Any bit that is high in `xs1` will cause the
   corresponding bit to be set in the CSR, if that CSR bit is writable.
   Other bits in the CSR are not explicitly written.
-microarchitectural_attributes:
-    - FuType: csr
-architectural_attributes:
-    - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: csr
+    - architectural_attributes:
+        - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

@@ -11,10 +11,11 @@ description: |
   Loads a 16-bit value from memory into register xd.
   It computes an effective address by adding the zero-extended offset, to the base address in register xs1.
   It expands to `lh` `xd, offset(xs1)`.
-microarchitectural_attributes:
-    - FuType: ldu
-architectural_attributes:
-    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: ldu
+    - architectural_attributes:
+        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
 definedBy:
   extension:

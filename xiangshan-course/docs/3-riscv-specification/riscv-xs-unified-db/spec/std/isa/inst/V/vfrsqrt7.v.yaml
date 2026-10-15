@@ -9,8 +9,9 @@ name: vfrsqrt7.v
 long_name: No synopsis available
 description: |
   No description available.
-microarchitectural_attributes:
-    - FuType: vfcvt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vfcvt
 definedBy:
   extension:
     anyOf:

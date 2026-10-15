@@ -15,11 +15,12 @@ definedBy:
 description: |
   The `fadd.d` instruction is analogous to `fadd.s` and performs double-precision floating-point addition of
   `fs1` and `fs2` and writes the final result to `fd`.
-microarchitectural_attributes:
-    - FuType: falu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: falu
 
-architectural_attributes:
-    - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
+    - architectural_attributes:
+        - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
 assembly: fd, fs1, fs2, rm
 encoding:

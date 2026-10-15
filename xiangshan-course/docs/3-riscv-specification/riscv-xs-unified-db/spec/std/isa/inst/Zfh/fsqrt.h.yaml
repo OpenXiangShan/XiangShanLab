@@ -9,10 +9,11 @@ name: fsqrt.h
 long_name: No synopsis available
 description: |
   No description available.
-microarchitectural_attributes:
-    - FuType: fDivSqrt
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fDivSqrt
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

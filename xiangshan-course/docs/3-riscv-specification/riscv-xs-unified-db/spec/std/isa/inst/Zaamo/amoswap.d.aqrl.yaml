@@ -17,10 +17,11 @@ description: |
     * Load the doubleword at address _xs1_
     * Write the loaded value into _xd_
     * Store the value of register _xs2_ to the address in _xs1_
-microarchitectural_attributes:
-    - FuType: mou
-architectural_attributes:
-    - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: mou
+    - architectural_attributes:
+        - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
 
 definedBy:
   allOf:

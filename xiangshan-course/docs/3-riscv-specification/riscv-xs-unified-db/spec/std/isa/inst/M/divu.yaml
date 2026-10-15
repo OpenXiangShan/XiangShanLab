@@ -13,10 +13,11 @@ description: |
   The remainder is discarded.
 
   If the value in xs2 is zero, xd gets the largest unsigned value.
-microarchitectural_attributes:
-    - FuType: div
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: div
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

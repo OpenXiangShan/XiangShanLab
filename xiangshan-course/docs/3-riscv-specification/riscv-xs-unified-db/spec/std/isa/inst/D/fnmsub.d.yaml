@@ -15,11 +15,12 @@ definedBy:
 description: |
   The `fnmsub.d` instruction multiplies the values in `fs1` and `fs2`, negates the product, adds the value in `fs3`, and
   writes the final result to `fd`.
-microarchitectural_attributes:
-    - FuType: fmac
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fmac
 
-architectural_attributes:
-    - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
+    - architectural_attributes:
+        - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
 assembly: fd, fs1, fs2, fs3, rm
 encoding:

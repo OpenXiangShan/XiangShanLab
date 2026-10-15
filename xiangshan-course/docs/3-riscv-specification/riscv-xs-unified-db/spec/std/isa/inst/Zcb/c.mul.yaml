@@ -9,11 +9,12 @@ name: c.mul
 long_name: Multiply, 16-bit encoding
 description: |
   Multiplies XLEN bits of the source operands from rsd' and xs2' and writes the lowest XLEN bits of the result to rsd'.
-microarchitectural_attributes:
-    - FuType: mul
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: mul
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

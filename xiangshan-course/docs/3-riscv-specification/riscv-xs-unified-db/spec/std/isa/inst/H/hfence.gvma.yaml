@@ -13,10 +13,11 @@ description: |
   applies to any guest physical addresses within the range specified by
   `xs1` and `xs2`, for all address spaces if `xs2`=0, or for the address
   space identified by the VMID in `xs2` otherwise.
-microarchitectural_attributes:
-    - FuType: fence
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fence
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

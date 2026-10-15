@@ -13,10 +13,11 @@ description: |
   to the most-significant bit of the least-significant word (i.e., 31). Accordingly, if the
   least-significant word is 0, the output is 32, and if the least-significant bit
   of the input is a 1, the output is 0.
-microarchitectural_attributes:
-    - FuType: bku
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: bku
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   allOf:

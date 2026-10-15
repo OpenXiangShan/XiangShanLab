@@ -19,10 +19,11 @@ description: |
 
   All floating-point conversion instructions set the Inexact exception flag if the rounded
   result differs from the operand value and the Invalid exception flag is not set.
-microarchitectural_attributes:
-    - FuType: i2f
-architectural_attributes:
-    - exceptions: [IllegalInst, NX, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: i2f
+    - architectural_attributes:
+        - exceptions: [IllegalInst, NX, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

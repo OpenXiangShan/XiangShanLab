@@ -11,10 +11,11 @@ description: |
   Performs a rotate right on the least-significant word of xs1 by the amount in
   least-significant 5 bits of xs2. The resultant word is sign-extended by copying bit 31 to all
   of the more-significant bits.
-microarchitectural_attributes:
-    - FuType: alu
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: alu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   allOf:

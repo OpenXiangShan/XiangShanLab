@@ -16,11 +16,12 @@ description: |
   The `sfence.w.inval` instruction guarantees that any previous stores already visible to the
   current RISC-V hart are ordered before subsequent `sinval.vma` instructions executed by the
   same hart.
-microarchitectural_attributes:
-    - FuType: fence
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fence
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 access:
   s: sometimes

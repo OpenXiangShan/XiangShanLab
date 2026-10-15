@@ -7,12 +7,13 @@ name: mret
 long_name: Machine-mode Return from Trap
 description: |
   Return from machine mode after handling a trap.
-microarchitectural_attributes:
-    - FuType: csr
-assembly: ""
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: csr
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
+assembly: ""
 definedBy:
   extension:
     name: Sm

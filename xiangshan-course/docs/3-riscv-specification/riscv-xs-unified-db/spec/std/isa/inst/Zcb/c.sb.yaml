@@ -11,10 +11,11 @@ description: |
   Stores a 8-bit value from register xs2 into memory.
   It computes an effective address by adding the zero-extended offset, to the base address in register xs1.
   It expands to `sb` `xs2, offset(xs1)`.
-microarchitectural_attributes:
-    - FuType: stu
-architectural_attributes:
-    - exceptions: [AccessFault_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: stu
+    - architectural_attributes:
+        - exceptions: [AccessFault_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
 definedBy:
   extension:

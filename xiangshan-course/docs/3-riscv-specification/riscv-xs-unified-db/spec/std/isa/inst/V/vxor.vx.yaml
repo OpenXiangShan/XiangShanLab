@@ -9,8 +9,9 @@ name: vxor.vx
 long_name: "Vector bitwise XOR with scalar"
 description: |
   Performs bitwise XOR operation on elements from vector register vs2 and scalar register xs1 and stores results in vector register vd, using vector mask vm.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

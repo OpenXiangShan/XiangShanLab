@@ -9,8 +9,9 @@ name: vfwcvt.x.f.v
 long_name: "Vector floating-point to integer widening conversion"
 description: |
   Converts floating-point elements from vector register vs2 to a wider integer format and stores results in vector register vd, using vector mask vm. The conversion follows IEEE 754 rounding rules.
-microarchitectural_attributes:
-    - FuType: vfcvt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vfcvt
 definedBy:
   extension:
     name: Zvl32b

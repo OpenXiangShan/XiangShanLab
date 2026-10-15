@@ -48,10 +48,11 @@ description: |
   Software should not set the _rl_ bit on an LR instruction unless the _aq_ bit is also set.
   LR.rl and SC.aq instructions are not guaranteed to provide any stronger ordering than those
   with both bits clear, but may result in lower performance.
-microarchitectural_attributes:
-    - FuType: mou
-architectural_attributes:
-    - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: mou
+    - architectural_attributes:
+        - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
 
 definedBy:
   allOf:

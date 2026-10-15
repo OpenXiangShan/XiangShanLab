@@ -16,11 +16,12 @@ description: |
   The `sfence.inval.ir` instruction guarantees that any previous `sinval.vma`
   instructions executed by the current hart are ordered before subsequent implicit references by
   that hart to the memory-management data structures.
-microarchitectural_attributes:
-    - FuType: fence
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fence
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 access:
   s: sometimes

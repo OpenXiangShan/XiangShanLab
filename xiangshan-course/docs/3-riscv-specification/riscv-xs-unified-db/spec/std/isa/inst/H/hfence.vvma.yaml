@@ -14,10 +14,11 @@ description: |
   and `xs2`, for all address spaces if `xs2`=0, or for the address space
   identified by the ASID in `xs2` otherwise. Only entries for the current
   virtual machine (as identified by hgatp.VMID) are affected.
-microarchitectural_attributes:
-    - FuType: fence
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fence
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

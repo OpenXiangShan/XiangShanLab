@@ -12,10 +12,11 @@ description: |
   from the lower 16 bits of integer register `xs1` to the floating-point
   register `fd`. The bits are not modified in the transfer, and in particular,
   the payloads of non-canonical NaNs are preserved.
-microarchitectural_attributes:
-    - FuType: i2v
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: i2v
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

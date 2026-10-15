@@ -12,10 +12,11 @@ description: |
   the unsigned value in register xs1 is greater than or equal to the unsigned value in register xs2.
 
   Raise a `MisalignedAddress` exception if PC + imm is misaligned.
-microarchitectural_attributes:
-    - FuType: brh
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: brh
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

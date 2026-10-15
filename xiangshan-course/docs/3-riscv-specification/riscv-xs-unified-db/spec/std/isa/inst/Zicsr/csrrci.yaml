@@ -14,10 +14,11 @@ description: |
   will not write to the CSR, and shall not cause any of the side effects that might otherwise occur on
   a CSR write, nor raise illegal-instruction exceptions on accesses to read-only CSRs. The CSRRCI will
   always read the CSR and cause any read side effects regardless of `xd` and `xs1` fields.
-microarchitectural_attributes:
-    - FuType: csr
-architectural_attributes:
-    - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: csr
+    - architectural_attributes:
+        - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

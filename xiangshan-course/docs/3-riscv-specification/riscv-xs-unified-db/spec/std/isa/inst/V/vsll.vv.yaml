@@ -9,8 +9,9 @@ name: vsll.vv
 long_name: Vector shift left logical
 description: |
   Performs logical left shift on elements from vs2 using shift amounts from vs1, according to mask vm, and stores results in vd. Only the low lg2(SEW) bits of the shift amount are used. Supports vector masking and follows vector tail policy.
-microarchitectural_attributes:
-    - FuType: vialuF
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
 definedBy:
   extension:
     name: Zvl32b

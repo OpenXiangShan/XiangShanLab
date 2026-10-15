@@ -16,11 +16,12 @@ description: |
   The `fsqrt.d` instruction computes the square root of `fs1` and result is written in `fd`. It is defined
   analogously to its single-precision counterpart, but operates on double-precision operands and produces
   double-precision results.
-microarchitectural_attributes:
-    - FuType: fDivSqrt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fDivSqrt
 
-architectural_attributes:
-    - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
+    - architectural_attributes:
+        - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
 assembly: fd, fs1, rm
 encoding:

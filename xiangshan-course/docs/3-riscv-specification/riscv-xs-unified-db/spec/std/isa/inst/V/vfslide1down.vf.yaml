@@ -9,8 +9,9 @@ name: vfslide1down.vf
 long_name: No synopsis available
 description: |
   No description available.
-microarchitectural_attributes:
-    - FuType: vppu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vppu
 definedBy:
   extension:
     anyOf:

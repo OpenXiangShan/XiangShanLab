@@ -14,11 +14,12 @@ description: |
   The `fsd` instruction stores a double-precision value from the floating-point registers to memory. It is guaranteed to execute
   atomically if the effective address is naturally aligned and XLEN≥64. It doesn't modify the bits being transferred; in particular,
   the payloads of non-canonical NaNs are preserved.
-microarchitectural_attributes:
-    - FuType: stu
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: stu
 
-architectural_attributes:
-    - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+    - architectural_attributes:
+        - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
 assembly: fs2, imm(xs1)
 encoding:

@@ -9,8 +9,9 @@ name: vfcvt.f.xu.v
 long_name: "Vector unsigned integer to floating-point conversion"
 description: |
   Converts unsigned integer elements from vector register vs2 to floating-point format and stores results in vector register vd, using vector mask vm. The conversion follows IEEE 754 standards.
-microarchitectural_attributes:
-    - FuType: vfcvt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vfcvt
 definedBy:
   extension:
     name: Zvl32b

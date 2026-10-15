@@ -15,11 +15,12 @@ definedBy:
 description: |
   The `fcvt.w.d` instruction converts a double-precision floating-point number in floating-point register `fs1` to a
   signed 32-bit integer, in integer register `xd`.
-microarchitectural_attributes:
-    - FuType: fcvt
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fcvt
 
-architectural_attributes:
-    - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
+    - architectural_attributes:
+        - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
 assembly: xd, fs1, rm
 encoding:

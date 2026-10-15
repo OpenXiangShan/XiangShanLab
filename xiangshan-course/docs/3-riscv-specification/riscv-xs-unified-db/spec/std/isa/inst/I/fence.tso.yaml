@@ -19,11 +19,12 @@ description: |
 
   In modes other than M-mode, `fence.tso` is further affected by `menvcfg.FIOM`,
   `senvcfg.FIOM`<% if ext?(:H) %>, and/or `henvcfg.FIOM`<% end %>.
-microarchitectural_attributes:
-    - FuType: fence
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: fence
 
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

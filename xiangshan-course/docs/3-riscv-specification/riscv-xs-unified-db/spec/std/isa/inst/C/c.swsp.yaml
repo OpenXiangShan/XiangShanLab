@@ -12,8 +12,9 @@ description: |
   It computes an effective address by adding the zero-extended offset, scaled by 4,
   to the stack pointer, x2.
   It expands to `sw` `xs2, offset(x2)`.
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:

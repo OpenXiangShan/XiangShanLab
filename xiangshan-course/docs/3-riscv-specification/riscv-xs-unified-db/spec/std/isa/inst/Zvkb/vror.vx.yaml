@@ -9,10 +9,11 @@ name: vror.vx
 long_name: Vector rotate right by scalar
 description: |
   Rotates each element in vector register vs2 right by the amount specified in scalar register xs1, storing results in vector register vd according to mask vm. The rotation amount is taken modulo the element width.
-microarchitectural_attributes:
-    - FuType: vialuF
-architectural_attributes:
-    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+xs-attributes:
+    - microarchitectural_attributes:
+        - FuType: vialuF
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 definedBy:
   extension:
