@@ -27,6 +27,9 @@ xs-constraints:
                 field: vtype
                 range: (0, 1023)
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - throughput: 0.441379
 definedBy:
   extension:
     name: Zvl32b

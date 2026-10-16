@@ -15,7 +15,9 @@ description: |
   regardless of vstart. The vstart CSR is reset to 0 after execution.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 9.029297
         - FuType: vipu
+        - throughput: 0.775758
 
 xs-constraints:
     - microarchitectural_attributes:

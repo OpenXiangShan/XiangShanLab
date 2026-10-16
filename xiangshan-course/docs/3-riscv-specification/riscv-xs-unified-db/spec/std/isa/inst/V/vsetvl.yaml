@@ -26,6 +26,10 @@ xs-constraints:
                 reg_type: INTEGER
                 field: rs2
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 26.195312
+        - throughput: 0.038175
 definedBy:
   extension:
     name: Zvl32b

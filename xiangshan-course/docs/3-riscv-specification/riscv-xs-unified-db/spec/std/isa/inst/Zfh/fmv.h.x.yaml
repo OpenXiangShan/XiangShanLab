@@ -15,6 +15,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: i2v
+        - latency: 5.029297
+        - throughput: 0.795031
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

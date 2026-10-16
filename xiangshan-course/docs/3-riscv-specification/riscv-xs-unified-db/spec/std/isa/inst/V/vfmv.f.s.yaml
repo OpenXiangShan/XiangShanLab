@@ -11,7 +11,9 @@ description: |
   Moves floating-point element from vector register vs2 to scalar floating-point register fd, using vector mask vm. This operation extracts a single element from the vector.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 8.030273
         - FuType: vfalu
+        - throughput: 0.780488
 
 xs-constraints:
     - microarchitectural_attributes:

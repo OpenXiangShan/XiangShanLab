@@ -12,6 +12,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vimac
+        - latency: 7.273438
+        - throughput: 0.757396
 
 xs-constraints:
     - microarchitectural_attributes:

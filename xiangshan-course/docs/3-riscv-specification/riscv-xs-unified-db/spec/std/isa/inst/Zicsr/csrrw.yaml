@@ -18,6 +18,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: csr
+        - latency: 9.273438
+        - throughput: 0.107835
     - architectural_attributes:
         - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
 

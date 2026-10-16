@@ -12,6 +12,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vialuF
+        - latency: 12.273438
+        - throughput: 0.426667
 
 xs-constraints:
     - microarchitectural_attributes:

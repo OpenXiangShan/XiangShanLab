@@ -12,6 +12,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vfdiv
+        - latency: 13.242188
+        - throughput: 0.107835
 
 xs-constraints:
     - microarchitectural_attributes:

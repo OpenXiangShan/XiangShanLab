@@ -12,7 +12,9 @@ description: |
   address in `xs1`, as though V=1.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 3.666016
         - FuType: stu
+        - throughput: 0.711111
     - architectural_attributes:
         - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 

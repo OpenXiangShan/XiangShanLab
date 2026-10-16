@@ -12,6 +12,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vidiv
+        - latency: 11.242188
+        - throughput: 0.137487
 
 xs-constraints:
     - microarchitectural_attributes:

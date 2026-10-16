@@ -11,7 +11,9 @@ description: |
   Sign-extends elements from vector register vs2 by a factor of 2 and stores results in vector register vd, using vector mask vm. The operation extends SEW to 2×SEW.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 6.530273
         - FuType: vialuF
+        - throughput: 0.780488
 
 xs-constraints:
     - microarchitectural_attributes:

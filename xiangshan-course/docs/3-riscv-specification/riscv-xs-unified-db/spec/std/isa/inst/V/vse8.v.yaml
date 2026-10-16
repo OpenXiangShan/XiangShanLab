@@ -27,6 +27,10 @@ xs-constraints:
                 literal: v0.t
                 option: true
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 8.543945
+        - throughput: 0.270042
 definedBy:
   extension:
     name: Zvl32b

@@ -15,7 +15,9 @@ description: |
   <% end %>
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 3.703125
         - FuType: stu
+        - throughput: 0.465878
     - architectural_attributes:
         - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 

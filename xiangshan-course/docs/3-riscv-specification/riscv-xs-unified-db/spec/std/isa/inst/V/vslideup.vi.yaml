@@ -11,7 +11,9 @@ description: |
   Slides elements in vector register vs2 up by 1 position, inserting immediate value at the bottom, and stores results in vector register vd, using vector mask vm.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 7.034180
         - FuType: vppu
+        - throughput: 0.673684
 
 xs-constraints:
     - microarchitectural_attributes:

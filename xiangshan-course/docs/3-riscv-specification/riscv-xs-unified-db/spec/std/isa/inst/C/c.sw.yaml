@@ -14,7 +14,9 @@ description: |
   It expands to `sw` `rs2, offset(xs1)`.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 3.763672
         - FuType: stu
+        - throughput: 0.711111
     - architectural_attributes:
         - exceptions: [AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 

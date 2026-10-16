@@ -11,7 +11,9 @@ description: |
   Broadcasts scalar register xs1 to all elements of vector register vd, using vector mask vm. This operation creates a vector with identical elements.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 9.029297
         - FuType: vialuF
+        - throughput: 0.761905
 
 xs-constraints:
     - microarchitectural_attributes:

@@ -28,6 +28,10 @@ xs-constraints:
                 field: vtype
                 range: (0, 2047)
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 5.265625
+        - throughput: 0.441379
 definedBy:
   extension:
     name: Zvl32b

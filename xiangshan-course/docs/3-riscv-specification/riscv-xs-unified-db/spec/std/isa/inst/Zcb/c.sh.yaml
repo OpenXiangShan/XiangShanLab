@@ -13,7 +13,9 @@ description: |
   It expands to `sh` `xs2, offset(xs1)`.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 3.764648
         - FuType: stu
+        - throughput: 0.711111
     - architectural_attributes:
         - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 

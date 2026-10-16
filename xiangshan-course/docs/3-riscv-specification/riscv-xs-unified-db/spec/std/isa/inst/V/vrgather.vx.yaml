@@ -11,7 +11,9 @@ description: |
   Gathers elements from vector register vs2 using scalar index from register xs1 and stores results in vector register vd, using vector mask vm. This operation performs indexed element selection.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 7.034180
         - FuType: vppu
+        - throughput: 0.673684
 
 xs-constraints:
     - microarchitectural_attributes:

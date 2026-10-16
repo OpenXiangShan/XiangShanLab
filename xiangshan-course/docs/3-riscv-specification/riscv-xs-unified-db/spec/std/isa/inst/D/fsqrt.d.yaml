@@ -19,6 +19,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: fDivSqrt
+        - latency: 5.234375
+        - throughput: 0.707182
 
     - architectural_attributes:
         - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]

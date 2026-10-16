@@ -24,6 +24,10 @@ xs-constraints:
                 field: rs1
                 mem: true
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 8.543945
+        - throughput: 0.177040
 definedBy:
   extension:
     name: Zvl32b

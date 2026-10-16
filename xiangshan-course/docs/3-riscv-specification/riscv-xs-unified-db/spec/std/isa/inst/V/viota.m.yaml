@@ -11,7 +11,9 @@ description: |
   No description available.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 6.530273
         - FuType: vipu
+        - throughput: 0.775758
 
 xs-constraints:
     - microarchitectural_attributes:

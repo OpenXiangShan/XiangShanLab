@@ -19,6 +19,7 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: alu
+        - throughput: 1.910448
 
 xs-constraints:
     - microarchitectural_attributes:

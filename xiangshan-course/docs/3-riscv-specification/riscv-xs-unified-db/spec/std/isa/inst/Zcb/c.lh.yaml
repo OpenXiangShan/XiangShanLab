@@ -13,7 +13,9 @@ description: |
   It expands to `lh` `xd, offset(xs1)`.
 xs-attributes:
     - microarchitectural_attributes:
+        - latency: 3.764648
         - FuType: ldu
+        - throughput: 1.163636
     - architectural_attributes:
         - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
