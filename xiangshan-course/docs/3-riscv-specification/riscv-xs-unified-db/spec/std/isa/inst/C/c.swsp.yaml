@@ -13,6 +13,9 @@ description: |
   to the stack pointer, x2.
   It expands to `sw` `xs2, offset(x2)`.
 xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 3.743164
+        - throughput: 0.711111
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign, AddrMisalign_inst, PageFault_inst]
 

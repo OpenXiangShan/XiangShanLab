@@ -11,6 +11,9 @@ description: |
   No description available.
 
 xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 74.534180
+        - throughput: 0.012155
     - architectural_attributes:
         - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

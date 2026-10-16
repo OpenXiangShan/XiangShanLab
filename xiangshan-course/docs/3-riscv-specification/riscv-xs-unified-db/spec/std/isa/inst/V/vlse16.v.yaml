@@ -13,6 +13,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - VlduType: vlse
+        - latency: 12.037109
+        - throughput: 0.092552
     - architectural_attributes:
         - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

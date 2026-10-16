@@ -11,6 +11,9 @@ description: |
   C.MV (move register) performs copy of the data in register xs2 to register xd
   C.MV expands to add xd, x0, xs2.
 xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 0.429688
+        - throughput: 2.327273
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

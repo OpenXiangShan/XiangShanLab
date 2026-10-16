@@ -13,6 +13,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - VSETOpType: uvsetvcfg_xi
+        - latency: 5.265625
+        - throughput: 0.441379
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, IllegalVtype, PageFault_inst]
 

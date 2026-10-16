@@ -12,6 +12,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vppu.vmv8r
+        - latency: 8.289062
+        - throughput: 0.120641
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

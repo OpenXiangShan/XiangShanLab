@@ -18,6 +18,7 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: csr
+        - throughput: 0.107835
     - architectural_attributes:
         - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
 

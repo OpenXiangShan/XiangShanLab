@@ -12,6 +12,8 @@ description: Set the vtype and vl CSRs, and write the new value of vl into rd.
 xs-attributes:
     - microarchitectural_attributes:
         - VSETOpType: uvsetvcfg_xx
+        - latency: 26.195312
+        - throughput: 0.038175
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, IllegalVtype, PageFault_inst]
 

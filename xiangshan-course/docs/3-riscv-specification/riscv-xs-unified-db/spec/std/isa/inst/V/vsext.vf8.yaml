@@ -12,6 +12,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vialuF.vsext_vf8
+        - latency: 6.530273
+        - throughput: 0.780488
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

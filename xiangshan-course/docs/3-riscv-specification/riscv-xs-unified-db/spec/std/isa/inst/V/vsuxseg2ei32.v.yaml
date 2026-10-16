@@ -11,6 +11,9 @@ description: |
   Stores 2 segments of 32-bit elements from vector register vs2 to memory using unordered access pattern with index register vs1, starting at address in xs1 register, using vector mask vm. The effective element width is 32 bits.
 
 xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 74.534180
+        - throughput: 0.014863
     - architectural_attributes:
         - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

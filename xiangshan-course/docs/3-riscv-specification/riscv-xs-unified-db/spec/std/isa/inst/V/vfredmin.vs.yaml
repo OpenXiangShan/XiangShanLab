@@ -12,6 +12,8 @@ description: |
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: vfalu.vfredmin
+        - latency: 18.242188
+        - throughput: 0.299065
     - architectural_attributes:
         - exceptions: [FP, IllegalInst, AddrMisalign_inst, PageFault_inst]
 

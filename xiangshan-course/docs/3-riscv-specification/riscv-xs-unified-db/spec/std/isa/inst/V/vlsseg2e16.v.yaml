@@ -11,6 +11,9 @@ description: |
   Loads 2 segments of 16-bit elements from memory starting at address in xs1 register with stride, using vector mask vm, and stores results in vector register vd. The effective element width is 16 bits.
 
 xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 76.034180
+        - throughput: 0.012009
     - architectural_attributes:
         - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

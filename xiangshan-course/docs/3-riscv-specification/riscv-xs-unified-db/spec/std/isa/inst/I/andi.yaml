@@ -11,6 +11,8 @@ description: And an immediate to the value in xs1, and store the result in xd
 xs-attributes:
     - microarchitectural_attributes:
         - FuType: alu.and
+        - latency: 0.533203
+        - throughput: 2.652850
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

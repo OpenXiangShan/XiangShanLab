@@ -11,6 +11,9 @@ description: |
   Loads 2 segments of 8-bit elements from memory starting at address in xs1 register, using vector mask vm, and stores results in vector register vd. The effective element width is 8 bits regardless of SEW setting.
 
 xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 74.534180
+        - throughput: 0.012155
     - architectural_attributes:
         - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

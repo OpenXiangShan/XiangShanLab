@@ -12,6 +12,9 @@ description: |
   This instruction takes the one's complement of xd'/xs1' and writes the result to the same register.
 
 xs-attributes:
+    - microarchitectural_attributes:
+        - latency: 1.257812
+        - throughput: 1.454545
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
