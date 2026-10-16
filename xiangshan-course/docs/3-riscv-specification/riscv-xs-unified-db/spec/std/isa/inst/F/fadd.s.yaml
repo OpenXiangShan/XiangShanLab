@@ -12,7 +12,7 @@ description: |
   and writes the final result to `fd`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: falu
+        - FuType: falu.vfadd
     - architectural_attributes:
         - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

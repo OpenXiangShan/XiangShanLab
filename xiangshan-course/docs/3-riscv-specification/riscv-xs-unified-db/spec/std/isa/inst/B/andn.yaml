@@ -12,7 +12,7 @@ description: |
   bitwise inversion of `xs2`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.andn
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

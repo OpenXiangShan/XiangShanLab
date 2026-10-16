@@ -11,7 +11,9 @@ description: |
   Performs narrowing logical right shift on double-width elements from vector register vs2 by immediate shift amount and stores results in vector register vd, using vector mask vm. The operation fills with zeros and writes a single-width destination.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vnsrl_wv
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

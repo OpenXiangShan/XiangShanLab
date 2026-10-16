@@ -10,6 +10,12 @@ long_name: Vector unordered load 1 element of 8 bits with index
 description: |
   Loads 1 segment of 8-bit elements from memory using unordered access pattern with index register vs1, starting at address in xs1 register, using vector mask vm, and stores results in vector register vd. The effective element width is 8 bits.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VlduType: vluxe
+    - architectural_attributes:
+        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

@@ -11,7 +11,9 @@ description: |
   Performs logical left shift on elements from vs2 using immediate shift amount, according to mask vm, and stores results in vd. Only the low lg2(SEW) bits of the shift amount are used. Supports vector masking and follows vector tail policy.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vsll_vv
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

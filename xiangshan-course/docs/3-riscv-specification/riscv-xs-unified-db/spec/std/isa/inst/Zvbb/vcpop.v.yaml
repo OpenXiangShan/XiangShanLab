@@ -11,7 +11,7 @@ description: |
   Counts the number of set bits (population count) in each element of vector register vs2, storing results in vector register vd according to mask vm.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vcpop_v
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

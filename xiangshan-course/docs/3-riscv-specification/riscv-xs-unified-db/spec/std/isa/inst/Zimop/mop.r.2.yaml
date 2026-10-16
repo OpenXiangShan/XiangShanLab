@@ -17,7 +17,9 @@ description: |
   This is mop.r.2 from the MOP.R instruction family (n=2).
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.add
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

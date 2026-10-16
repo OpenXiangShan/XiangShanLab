@@ -14,7 +14,7 @@ description: |
   The code points with xd=x0 encode the C.NOP instruction; the remaining code points with imm=0 encode HINTs.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.add
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

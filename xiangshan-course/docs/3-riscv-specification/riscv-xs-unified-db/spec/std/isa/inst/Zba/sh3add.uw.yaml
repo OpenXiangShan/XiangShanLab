@@ -13,7 +13,7 @@ description: |
   and shifting it left by 3 places.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.sh3adduw
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

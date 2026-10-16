@@ -10,6 +10,12 @@ long_name: "Vector strided load 64-bit elements"
 description: |
   Loads 64-bit elements from memory starting at address in xs1 register with stride, using vector mask vm, and stores results in vector register vd. The effective element width is 64 bits.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VlduType: vlse
+    - architectural_attributes:
+        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

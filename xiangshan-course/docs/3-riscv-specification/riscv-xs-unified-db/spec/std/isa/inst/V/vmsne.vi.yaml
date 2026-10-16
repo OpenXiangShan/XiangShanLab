@@ -11,7 +11,9 @@ description: |
   Sets mask bits where elements in vs2 do not equal immediate value, according to mask vm, and stores results in vd. Element width is determined by SEW setting. Supports vector masking and follows vector tail policy.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vmsne_vv
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

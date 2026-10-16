@@ -13,7 +13,7 @@ description: |
   0's into all of the bits more significant than 15.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.sexth
 
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]

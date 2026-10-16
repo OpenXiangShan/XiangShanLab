@@ -12,7 +12,9 @@ description: |
   Add source vector register groups from vs1 and vs2 according to mask vm and store results in vd.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vadd_vv
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

@@ -16,7 +16,7 @@ description: |
   `fcvt.w.h` converts a half-precision floating-point number to a signed 32-bit integer.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fcvt
+        - FuType: fcvt.fcvt_w_h
 
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]

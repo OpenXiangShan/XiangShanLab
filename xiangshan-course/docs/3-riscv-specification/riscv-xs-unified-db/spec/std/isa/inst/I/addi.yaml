@@ -12,7 +12,7 @@ description:
   xd
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.add
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

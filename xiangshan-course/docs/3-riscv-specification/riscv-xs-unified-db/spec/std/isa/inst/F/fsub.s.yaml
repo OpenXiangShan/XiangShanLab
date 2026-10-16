@@ -11,7 +11,7 @@ description: |
   The `fsub.s` instruction performs the single-precision floating-point subtraction of `fs2` from `fs1` and writes the result in `fd`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: falu
+        - FuType: falu.vfsub
     - architectural_attributes:
         - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

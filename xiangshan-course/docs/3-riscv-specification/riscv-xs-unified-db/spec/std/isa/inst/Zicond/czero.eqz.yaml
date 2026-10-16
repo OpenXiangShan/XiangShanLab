@@ -14,7 +14,7 @@ description: |
   extension is implemented, this instruction's timing is independent of the data values in xs1 and xs2.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.czero_eqz
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

@@ -18,7 +18,9 @@ description: |
   This is mop.rr.6 from the MOP.RR instruction family (n=6).
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.add
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

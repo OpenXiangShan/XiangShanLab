@@ -18,7 +18,7 @@ description: |
   The *zext.h* instruction is a pseudo-op for `packw` when `Zbkb` is implemented and XLEN == 64.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.sexth
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

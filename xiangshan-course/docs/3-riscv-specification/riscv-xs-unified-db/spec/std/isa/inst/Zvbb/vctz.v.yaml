@@ -11,7 +11,7 @@ description: |
   Counts the number of trailing zero bits in each element of vector register vs2, storing results in vector register vd according to mask vm. For zero elements, returns the element width.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vctz_v
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

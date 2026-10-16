@@ -12,7 +12,7 @@ description: |
   writes the result in `fd`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fmac
+        - FuType: fmac.vfmul
     - architectural_attributes:
         - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

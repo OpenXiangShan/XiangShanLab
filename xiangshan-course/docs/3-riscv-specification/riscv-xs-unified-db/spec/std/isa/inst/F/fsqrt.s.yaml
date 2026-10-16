@@ -11,7 +11,7 @@ description: |
   The `fsqrt.s` instruction computes the square root of `fs1` and writes the result is written to `fd`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fDivSqrt
+        - FuType: fDivSqrt.vfsqrt
     - architectural_attributes:
         - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

@@ -10,6 +10,12 @@ long_name: Vector store mask
 description: |
   Stores a vector mask from vector register vs2 to memory starting at address in xs1 register. This operation is used to save vector masks for later restoration.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VstuType: vsm
+    - architectural_attributes:
+        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

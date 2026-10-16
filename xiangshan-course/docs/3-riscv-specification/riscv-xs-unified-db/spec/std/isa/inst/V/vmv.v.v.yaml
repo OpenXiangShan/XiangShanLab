@@ -11,7 +11,9 @@ description: |
   Copies elements from vector register vs2 to vector register vd, using vector mask vm. This operation performs a simple register-to-register copy.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vmv_v_v
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

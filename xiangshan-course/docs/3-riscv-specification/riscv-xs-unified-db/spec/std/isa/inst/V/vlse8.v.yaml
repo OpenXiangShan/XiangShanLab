@@ -10,6 +10,12 @@ long_name: Vector load 8-bit elements with stride
 description: |
   Loads 8-bit elements from memory starting at address in xs1 register with stride in xs2, using vector mask vm, and stores results in vector register vd. The effective element width is 8 bits.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VlduType: vlse
+    - architectural_attributes:
+        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

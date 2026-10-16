@@ -11,7 +11,7 @@ description: |
   Performs a bitwise AND operation between vector register vs2 and the bitwise NOT of scalar register xs1, storing results in vector register vd according to mask vm.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vandn_vv
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

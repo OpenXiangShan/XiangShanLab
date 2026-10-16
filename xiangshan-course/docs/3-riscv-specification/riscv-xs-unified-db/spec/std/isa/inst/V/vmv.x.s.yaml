@@ -15,7 +15,9 @@ description: |
   regardless of vstart. The vstart CSR is reset to 0 after execution.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vipu
+        - FuType: vipu.vmv_x_s
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

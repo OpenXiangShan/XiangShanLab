@@ -11,7 +11,7 @@ description: |
   Reverses the byte order within each element of vector register vs2, storing results in vector register vd according to mask vm. This is equivalent to a byte-level reversal of each element.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vrev8_v
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

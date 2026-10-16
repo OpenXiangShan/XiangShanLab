@@ -10,6 +10,12 @@ long_name: Set vector length immediate
 description: |
   Sets the vector length register vl and vector type register vtype based on immediate values. Configures SEW, LMUL, and other vector parameters for subsequent vector operations.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VSETOpType: uvsetvcfg_xi
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, IllegalVtype, PageFault_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

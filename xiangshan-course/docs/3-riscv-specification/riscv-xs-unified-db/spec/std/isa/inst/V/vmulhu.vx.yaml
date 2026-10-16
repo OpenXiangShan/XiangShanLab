@@ -11,7 +11,9 @@ description: |
   No description available.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vimac
+        - FuType: vimac.vmulhu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

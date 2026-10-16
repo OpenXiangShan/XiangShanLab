@@ -17,7 +17,7 @@ description: |
   to its single-precision counterpart, but operates on double-precision operands and produces double-precision results.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fDivSqrt
+        - FuType: fDivSqrt.vfdiv
 
     - architectural_attributes:
         - exceptions: [DZ, NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]

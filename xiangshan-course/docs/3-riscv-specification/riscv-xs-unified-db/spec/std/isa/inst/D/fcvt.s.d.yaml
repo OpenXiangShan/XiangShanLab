@@ -19,7 +19,7 @@ description: |
   destination. `fcvt.s.d` rounds according to the `rm` field.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fcvt
+        - FuType: fcvt.vfncvt_ffw
 
     - architectural_attributes:
         - exceptions: [NX, UF, OF, PageFault_inst, IllegalInst, AddrMisalign_inst]

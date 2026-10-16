@@ -12,7 +12,7 @@ description: |
   writes the final result to `fd`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fDivSqrt
+        - FuType: fDivSqrt.vfdiv
     - architectural_attributes:
         - exceptions: [DZ, NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

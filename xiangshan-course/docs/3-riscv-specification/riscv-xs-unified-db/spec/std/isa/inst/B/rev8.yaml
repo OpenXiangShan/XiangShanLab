@@ -19,7 +19,7 @@ description: |
   is XLEN-32 and XLEN-16, respectively.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.rev8
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

@@ -11,9 +11,9 @@ description: |
   Converts floating-point elements from vector register vs2 to a wider floating-point format and stores results in vector register vd, using vector mask vm. The conversion follows IEEE 754 standards.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vfcvt
+        - FuType: vfcvt.vfwcvt_ffv
     - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst, FP]
 
 xs-constraints:
     - microarchitectural_attributes:

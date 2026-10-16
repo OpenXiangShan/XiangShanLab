@@ -19,7 +19,7 @@ description: |
   `fcvt.d.s` will never round.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fcvt
+        - FuType: fcvt.vfwcvt_ffv
 
     - architectural_attributes:
         - exceptions: [IllegalInst, NX, AddrMisalign_inst, PageFault_inst]

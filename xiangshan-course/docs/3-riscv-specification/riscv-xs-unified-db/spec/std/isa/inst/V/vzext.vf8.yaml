@@ -11,7 +11,9 @@ description: |
   Zero-extends elements from vector register vs2 by a factor of 8 and stores results in vector register vd, using vector mask vm. The operation extends SEW to 8×SEW.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vzext_vf8
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

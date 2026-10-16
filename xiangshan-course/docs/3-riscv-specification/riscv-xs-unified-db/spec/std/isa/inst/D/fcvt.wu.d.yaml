@@ -17,7 +17,7 @@ description: |
   unsigned 32-bit integer, in integer register `xd`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fcvt
+        - FuType: fcvt.vfncvt_xufw
 
     - architectural_attributes:
         - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]

@@ -11,7 +11,9 @@ description: |
   Gathers elements from vector register vs2 using indices from vector register vs1 and stores results in vector register vd, using vector mask vm. This operation performs indexed element selection.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vppu
+        - FuType: vppu.vrgather
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

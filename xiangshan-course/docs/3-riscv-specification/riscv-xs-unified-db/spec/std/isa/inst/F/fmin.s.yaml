@@ -21,12 +21,9 @@ description: |
   ====
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: falu
+        - FuType: falu.vfmin
     - architectural_attributes:
-        - exceptions: [IllegalInst]
-            - NV​
-            - AddrMisalign_inst
-            - PageFault_inst
+        - exceptions: [IllegalInst, NV​, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

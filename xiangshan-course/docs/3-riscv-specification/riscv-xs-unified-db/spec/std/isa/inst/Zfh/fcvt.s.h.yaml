@@ -20,7 +20,7 @@ description: |
   `fcvt.s.h` will never round, and so the 'rm' field is effectively ignored.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fcvt
+        - FuType: fcvt.fcvt_s_h
 
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]

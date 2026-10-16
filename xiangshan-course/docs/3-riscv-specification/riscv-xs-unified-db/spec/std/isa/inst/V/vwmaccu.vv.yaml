@@ -11,7 +11,9 @@ description: |
   Performs widening unsigned multiplication on elements from vector registers vs2 and vs1, adds the result to elements from vector register vd, and stores the final results in vector register vd, using vector mask vm.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vimac
+        - FuType: vimac.vwmaccu
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

@@ -11,7 +11,9 @@ description: |
   Converts double-width floating-point elements from vector register vs2 to a single-width floating-point format using round-to-odd mode and stores results in vector register vd, using vector mask vm.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vfcvt
+        - FuType: vfcvt.vfncvt_rod_ffw
+    - architectural_attributes:
+        - exceptions: [FP, IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

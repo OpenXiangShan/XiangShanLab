@@ -12,7 +12,7 @@ description: |
   32-bit value in xs1 right by shamt, and store the sign-extended result in xd.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.sraw
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

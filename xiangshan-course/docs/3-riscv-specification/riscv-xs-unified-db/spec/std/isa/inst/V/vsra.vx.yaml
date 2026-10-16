@@ -11,7 +11,9 @@ description: |
   Performs arithmetic right shift on elements from vs2 using shift amount from rs1, according to mask vm, and stores results in vd. Only the low lg2(SEW) bits of the shift amount are used. Supports vector masking and follows vector tail policy.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vsra_vv
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

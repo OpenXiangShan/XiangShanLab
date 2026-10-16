@@ -18,7 +18,7 @@ description: |
   `fcvt.lu.h` converts a half-precision floating-point number to an unsigned 64-bit integer.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fcvt
+        - FuType: fcvt.fcvt_lu_h
 
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]

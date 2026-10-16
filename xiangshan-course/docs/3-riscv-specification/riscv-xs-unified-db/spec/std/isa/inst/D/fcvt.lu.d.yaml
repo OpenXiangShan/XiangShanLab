@@ -19,7 +19,7 @@ description: |
   to an unsigned 64-bit integer, in integer register `xd`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fcvt
+        - FuType: fcvt.vfcvt_xufv
 
     - architectural_attributes:
         - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]

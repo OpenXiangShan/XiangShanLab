@@ -9,6 +9,12 @@ name: vsetvl
 long_name: Vector Set Vector Type and Vector Length
 description: Set the vtype and vl CSRs, and write the new value of vl into rd.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VSETOpType: uvsetvcfg_xx
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, IllegalVtype, PageFault_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

@@ -11,7 +11,7 @@ description: |
   The `fmadd.s` multiplies the values in `fs1` and `fs2`, adds the value in `fs3`, and writes the final result to `fd`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: fmac
+        - FuType: fmac.vfmacc
     - architectural_attributes:
         - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 

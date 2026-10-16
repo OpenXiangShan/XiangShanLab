@@ -13,7 +13,7 @@ description: |
   of xs1 is set, or to all ones if any bit within the respective byte of xs1 is set.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.orcb
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

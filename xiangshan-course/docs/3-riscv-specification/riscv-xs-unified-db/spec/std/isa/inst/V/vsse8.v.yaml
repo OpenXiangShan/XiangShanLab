@@ -10,6 +10,12 @@ long_name: Vector store 8-bit elements with stride
 description: |
   Stores 8-bit elements from vector register vs2 to memory starting at address in xs1 register with stride in xs2, using vector mask vm. The effective element width is 8 bits.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VstuType: vsse
+    - architectural_attributes:
+        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

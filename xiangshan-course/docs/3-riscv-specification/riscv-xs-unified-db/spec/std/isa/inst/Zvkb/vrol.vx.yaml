@@ -11,7 +11,7 @@ description: |
   Rotates each element in vector register vs2 left by the amount specified in scalar register xs1, storing results in vector register vd according to mask vm. The rotation amount is taken modulo the element width.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vrol_vv
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

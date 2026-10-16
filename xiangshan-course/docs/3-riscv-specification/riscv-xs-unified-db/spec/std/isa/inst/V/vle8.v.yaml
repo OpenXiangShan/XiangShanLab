@@ -10,6 +10,12 @@ long_name: Vector 8-bit unit-stride load
 description: |
   Loads 8-bit elements from memory starting at address in xs1 register, using vector mask vm, and stores results in vector register vd. The effective element width is 8 bits regardless of SEW setting. Supports vector masking and follows vector tail policy.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VlduType: vle
+    - architectural_attributes:
+        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

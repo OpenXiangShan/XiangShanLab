@@ -11,7 +11,9 @@ description: |
   No description available.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vfma
+        - FuType: vfma.vfnmsub
+    - architectural_attributes:
+        - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

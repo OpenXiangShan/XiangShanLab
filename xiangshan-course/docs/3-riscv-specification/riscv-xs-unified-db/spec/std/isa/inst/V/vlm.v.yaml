@@ -10,6 +10,12 @@ long_name: Vector load mask
 description: |
   Loads a vector mask from memory starting at address in xs1 register and stores it in vector register vd. This operation is used to load previously saved vector masks.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VlduType: vlm
+    - architectural_attributes:
+        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

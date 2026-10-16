@@ -11,7 +11,9 @@ description: |
   Performs signed arithmetic right shift on elements from vector register vs2 by shift amounts from vector register vs1 and stores results in vector register vd, using vector mask vm. The operation preserves the sign bit.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vssra_vv
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

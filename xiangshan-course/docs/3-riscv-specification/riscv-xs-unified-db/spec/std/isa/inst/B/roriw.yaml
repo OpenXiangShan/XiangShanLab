@@ -13,7 +13,7 @@ description: |
   copying bit 31 to all of the more-significant bits.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.rorw
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

@@ -11,7 +11,7 @@ description: |
   No description available.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: falu
+        - FuType: falu.vfmax
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 

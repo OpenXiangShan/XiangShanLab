@@ -10,6 +10,12 @@ long_name: "Vector store 2 elements"
 description: |
   Stores 2 elements from vector register vs2 to memory starting at address in xs1 register, using vector mask vm. This operation stores elements with register stride.
 
+xs-attributes:
+    - microarchitectural_attributes:
+        - VstuType: vsr
+    - architectural_attributes:
+        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+
 xs-constraints:
     - microarchitectural_attributes:
     - architectural_attributes:

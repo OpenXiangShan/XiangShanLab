@@ -17,7 +17,9 @@ description: |
   Tail elements (indices >= vl) are handled according to the tail agnostic/undisturbed policy.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vmv_v_v
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

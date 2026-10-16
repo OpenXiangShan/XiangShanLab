@@ -11,7 +11,9 @@ description: |
   Merges elements from vs1 and vs2 using mask register v0 and stores results in vd. Where mask bits are set, elements from vs1 are selected; otherwise elements from vs2 are selected.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: vialuF
+        - FuType: vialuF.vmerge_vvm
+    - architectural_attributes:
+        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
 xs-constraints:
     - microarchitectural_attributes:

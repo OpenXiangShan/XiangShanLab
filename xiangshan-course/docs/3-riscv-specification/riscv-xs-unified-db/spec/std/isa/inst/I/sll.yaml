@@ -11,7 +11,7 @@ description: |
   Shift the value in `xs1` left by the value in the lower 6 bits of `xs2`, and store the result in `xd`.
 xs-attributes:
     - microarchitectural_attributes:
-        - FuType: alu
+        - FuType: alu.sll
     - architectural_attributes:
         - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
