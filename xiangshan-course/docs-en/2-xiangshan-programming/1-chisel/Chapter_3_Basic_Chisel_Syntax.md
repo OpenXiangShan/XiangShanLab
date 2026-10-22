@@ -1,6 +1,26 @@
 <!-- # 第三章 Chisel 基础语法 -->
 # Chapter 3: Basic Chisel Syntax
 
+## Recommended Reading: *Digital Design with Chisel*
+
+Before starting this chapter, **beginners are strongly encouraged to read through, or at least skim,** the accompanying book [*Digital Design with Chisel*](./references/chisel-book.pdf) (PDF, 315 pages, 6th edition) by Martin Schoeberl. It offers a systematic path from the fundamentals of digital circuits to a complete processor design.
+
+The book has fourteen chapters, covering:
+
+* Combinational and sequential logic: multiplexers, decoders, encoders, registers, counters, and memories;
+* Finite state machines (Moore / Mealy), communicating state machines, and ready-valid handshaking;
+* Building projects with sbt and writing tests in Chisel;
+* Parameterization and hardware generators;
+* Design examples such as FIFOs and a serial port (UART);
+* Implementing a simple processor step by step in Chisel.
+
+**Why we strongly recommend it to beginners:**
+
+1. **Build hardware thinking before memorizing syntax.** This chapter explains *how* to write Chisel; the book explains *why* it is written that way. It treats Chisel as a hardware construction language throughout, helping readers move from software programming habits to hardware thinking: how circuits are generated, how signals operate in parallel, and how timing is constrained.
+2. **A gradual path that closes the loop.** From installing the tools, Hello World, and simulation-based testing all the way to FSMs, FIFOs, UARTs, and a processor, every concept comes with runnable code, circuit diagrams, and waveforms, so readers with no background can follow it in order.
+3. **Exercise-driven.** Almost every chapter ends with exercises, and later chapters tie the concepts together through design examples; by the end you can build a small digital system independently rather than merely recalling syntax.
+4. **It complements this chapter.** Use the book as a textbook and this chapter as a quick reference and supplement. When you meet `Wire`, `Reg`, `Bundle`, `Vec`, or `when`, go back to the book for the circuit background; after finishing this chapter, the book's examples will also be easier to follow.
+
 <!-- ## 前言 -->
 ## Preface
 
