@@ -1,0 +1,72 @@
+digraph QuadRingDiplomacy {
+  graph [
+    label="QuadRing Diplomacy and physical transport topology"
+    labelloc=t
+    fontname="Helvetica"
+    fontsize=20
+    rankdir=LR
+    ranksep=0.8
+    nodesep=0.45
+    pad=0.25
+    bgcolor="white"
+    splines=polyline
+  ]
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=12,
+        color="#334155", fillcolor="#e2e8f0", margin="0.14,0.08"]
+  edge [fontname="Helvetica", fontsize=10, color="#475569", arrowsize=0.75]
+
+  subgraph cluster_diplomacy {
+    label="Diplomacy parameter graph"
+    labelloc=t
+    color="#64748b"
+    style="rounded,dashed"
+    fontname="Helvetica"
+    fontsize=14
+
+    d_rn0 [label="RN0\nSourceNode\nnode ID 0", fillcolor="#dbeafe"]
+    d_hn  [label="HN\nSourceNode\nnode ID 1", fillcolor="#fef3c7"]
+    d_rn1 [label="RN1\nSourceNode\nnode ID 2", fillcolor="#dbeafe"]
+    d_sn  [label="SN\nSourceNode\nnode ID 3", fillcolor="#dcfce7"]
+    d_noc [label="ChiNoC\nSinkNode\n4 negotiated edges", shape=component,
+         fillcolor="#ede9fe"]
+    d_quad [label="QuadRing\nREQ · RSP · SNP · DAT", shape=component,
+          fillcolor="#f1f5f9"]
+
+    d_rn0 -> d_noc [label="RN:0"]
+    d_hn  -> d_noc [label="HN:1"]
+    d_rn1 -> d_noc [label="RN:2"]
+    d_sn  -> d_noc [label="SN:3"]
+    d_noc -> d_quad [label="typed payload transport"]
+    {rank=same; d_rn0; d_hn; d_rn1; d_sn}
+  }
+
+  subgraph cluster_physical {
+    label="Physical ring positions"
+    labelloc=t
+    color="#64748b"
+    style="rounded,dashed"
+    fontname="Helvetica"
+    fontsize=14
+
+    p_rn0 [label="RN0", fillcolor="#dbeafe"]
+    p_hn  [label="HN", fillcolor="#fef3c7"]
+    p_rn1 [label="RN1", fillcolor="#dbeafe"]
+    p_sn  [label="SN", fillcolor="#dcfce7"]
+    stop0 [label="RingStop 0", fillcolor="#e0f2fe"]
+    stop1 [label="RingStop 1", fillcolor="#e0f2fe"]
+    stop2 [label="RingStop 2", fillcolor="#e0f2fe"]
+    stop3 [label="RingStop 3", fillcolor="#e0f2fe"]
+
+    stop0 -> stop1 [label="REQ / RSP / SNP / DAT"]
+    stop1 -> stop2 [label="REQ / RSP / SNP / DAT"]
+    stop2 -> stop3 [label="REQ / RSP / SNP / DAT"]
+    stop3 -> stop0 [label="REQ / RSP / SNP / DAT"]
+
+    p_rn0 -> stop0 [dir=both, label="ChiPort"]
+    p_hn  -> stop1 [dir=both, label="ChiPort"]
+    p_rn1 -> stop2 [dir=both, label="ChiPort"]
+    p_sn  -> stop3 [dir=both, label="ChiPort"]
+
+    {rank=same; p_rn0; p_hn; p_rn1; p_sn}
+  }
+}
