@@ -1,0 +1,637 @@
+{
+  "cycles": [
+    6704,
+    6705,
+    6721,
+    6724,
+    7160,
+    7161,
+    7162
+  ],
+  "signals": {
+    "deqPtrExt_0_first_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqPtrExt_0_first_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "deqPtrExt_0_second_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqPtrExt_0_second_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "deqPtrExt_0_value[5:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqPtrExt_0_value[5:0]",
+      "width": 6,
+      "values": {
+        "6704": 4,
+        "6705": 4,
+        "6721": 4,
+        "6724": 4,
+        "7160": 4,
+        "7161": 4,
+        "7162": 4
+      }
+    },
+    "rdataPtrExt_0_first_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.rdataPtrExt_0_first_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "rdataPtrExt_0_second_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.rdataPtrExt_0_second_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "rdataPtrExt_0_value[5:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.rdataPtrExt_0_value[5:0]",
+      "width": 6,
+      "values": {
+        "6704": 4,
+        "6705": 4,
+        "6721": 4,
+        "6724": 4,
+        "7160": 4,
+        "7161": 4,
+        "7162": 4
+      }
+    },
+    "commitPtrExt_0_first_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.commitPtrExt_0_first_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "commitPtrExt_0_second_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.commitPtrExt_0_second_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "commitPtrExt_0_value[5:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.commitPtrExt_0_value[5:0]",
+      "width": 6,
+      "values": {
+        "6704": 4,
+        "6705": 4,
+        "6721": 4,
+        "6724": 4,
+        "7160": 4,
+        "7161": 4,
+        "7162": 4
+      }
+    },
+    "validCount[7:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.validCount[7:0]",
+      "width": 8,
+      "values": {
+        "6704": 2,
+        "6705": 3,
+        "6721": 4,
+        "6724": 4,
+        "7160": 6,
+        "7161": 6,
+        "7162": 6
+      }
+    },
+    "addrReadyPtr_value[5:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.addrReadyPtr_value[5:0]",
+      "width": 6,
+      "values": {
+        "6704": 4,
+        "6705": 5,
+        "6721": 8,
+        "6724": 8,
+        "7160": 10,
+        "7161": 10,
+        "7162": 10
+      }
+    },
+    "dataReadyPtr_value[5:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.dataReadyPtr_value[5:0]",
+      "width": 6,
+      "values": {
+        "6704": 6,
+        "6705": 7,
+        "6721": 8,
+        "6724": 8,
+        "7160": 10,
+        "7161": 10,
+        "7162": 10
+      }
+    },
+    "redirectNeedClean": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.redirectNeedClean",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "needCancel_4": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.needCancel_4",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "deqCancel_4": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqCancel_4",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "ctrlEntries_4_addrValid": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.ctrlEntries_4_addrValid",
+      "width": 1,
+      "values": {
+        "6704": 1,
+        "6705": 1,
+        "6721": 1,
+        "6724": 1,
+        "7160": 1,
+        "7161": 1,
+        "7162": 1
+      }
+    },
+    "ctrlEntries_4_dataValid": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.ctrlEntries_4_dataValid",
+      "width": 1,
+      "values": {
+        "6704": 1,
+        "6705": 1,
+        "6721": 1,
+        "6724": 1,
+        "7160": 1,
+        "7161": 1,
+        "7162": 1
+      }
+    },
+    "ctrlEntries_4_hasException": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.ctrlEntries_4_hasException",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 1,
+        "6721": 1,
+        "6724": 1,
+        "7160": 1,
+        "7161": 1,
+        "7162": 1
+      }
+    },
+    "ctrlEntries_4_committed": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.ctrlEntries_4_committed",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "dataEntries_4_memoryType[2:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.dataEntries_4_memoryType[2:0]",
+      "width": 3,
+      "values": {
+        "6704": 4,
+        "6705": 7,
+        "6721": 7,
+        "6724": 7,
+        "7160": 7,
+        "7161": 7,
+        "7162": 7
+      }
+    },
+    "dataEntries_4_debugPaddr[47:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.dataEntries_4_debugPaddr[47:0]",
+      "width": 48,
+      "values": {
+        "6704": 8388849,
+        "6705": 8388849,
+        "6721": 8388849,
+        "6724": 8388849,
+        "7160": 8388849,
+        "7161": 8388849,
+        "7162": 8388849
+      }
+    },
+    "dataEntries_4_debugUop_robIdx_value[8:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.dataEntries_4_debugUop_robIdx_value[8:0]",
+      "width": 9,
+      "values": {
+        "6704": 145,
+        "6705": 145,
+        "6721": 145,
+        "6724": 145,
+        "7160": 145,
+        "7161": 145,
+        "7162": 145
+      }
+    },
+    "dataEntries_4_debugUop_sqIdx_value[5:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.dataEntries_4_debugUop_sqIdx_value[5:0]",
+      "width": 6,
+      "values": {
+        "6704": 4,
+        "6705": 4,
+        "6721": 4,
+        "6724": 4,
+        "7160": 4,
+        "7161": 4,
+        "7162": 4
+      }
+    },
+    "dataEntries_4_debugUop_pc[49:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.dataEntries_4_debugUop_pc[49:0]",
+      "width": 50,
+      "values": {
+        "6704": 18,
+        "6705": 18,
+        "6721": 18,
+        "6724": 18,
+        "7160": 18,
+        "7161": 18,
+        "7162": 18
+      }
+    },
+    "deqModule.io_rdataCtrlEntries_0_hasException": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqModule.io_rdataCtrlEntries_0_hasException",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 1,
+        "6721": 1,
+        "6724": 1,
+        "7160": 1,
+        "7161": 1,
+        "7162": 1
+      }
+    },
+    "deqModule.io_rdataCtrlEntries_0_committed": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqModule.io_rdataCtrlEntries_0_committed",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "deqModule.io_rdataDataEntries_0_memoryType[2:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqModule.io_rdataDataEntries_0_memoryType[2:0]",
+      "width": 3,
+      "values": {
+        "6704": 4,
+        "6705": 7,
+        "6721": 7,
+        "6724": 7,
+        "7160": 7,
+        "7161": 7,
+        "7162": 7
+      }
+    },
+    "deqModule.uncacheState[2:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqModule.uncacheState[2:0]",
+      "width": 3,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "deqModule.io_toUncacheBuffer_req_valid_0": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqModule.io_toUncacheBuffer_req_valid_0",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "deqModule.io_writeBack_valid": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.physicalQueue.deqModule.io_writeBack_valid",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "enqPtrVec_0_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.enqPtrVec_0_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "enqPtrVec_0_value[6:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.enqPtrVec_0_value[6:0]",
+      "width": 7,
+      "values": {
+        "6704": 5,
+        "6705": 5,
+        "6721": 5,
+        "6724": 5,
+        "7160": 7,
+        "7161": 7,
+        "7162": 7
+      }
+    },
+    "deqPtrVec_0_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.deqPtrVec_0_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "deqPtrVec_0_value[6:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.deqPtrVec_0_value[6:0]",
+      "width": 7,
+      "values": {
+        "6704": 4,
+        "6705": 4,
+        "6721": 5,
+        "6724": 5,
+        "7160": 5,
+        "7161": 5,
+        "7162": 5
+      }
+    },
+    "preCommitPtr_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.preCommitPtr_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "preCommitPtr_value[6:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.preCommitPtr_value[6:0]",
+      "width": 7,
+      "values": {
+        "6704": 4,
+        "6705": 4,
+        "6721": 5,
+        "6724": 5,
+        "7160": 5,
+        "7161": 6,
+        "7162": 6
+      }
+    },
+    "physicalQueueEnqPtr_value[5:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.physicalQueueEnqPtr_value[5:0]",
+      "width": 6,
+      "values": {
+        "6704": 8,
+        "6705": 8,
+        "6721": 8,
+        "6724": 8,
+        "7160": 10,
+        "7161": 10,
+        "7162": 10
+      }
+    },
+    "io_toPhysicalQueue_headRobIdx_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.io_toPhysicalQueue_headRobIdx_flag",
+      "width": 1,
+      "values": {
+        "6704": 1,
+        "6705": 1,
+        "6721": 1,
+        "6724": 1,
+        "7160": 1,
+        "7161": 1,
+        "7162": 1
+      }
+    },
+    "io_toPhysicalQueue_headRobIdx_value[8:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.io_toPhysicalQueue_headRobIdx_value[8:0]",
+      "width": 9,
+      "values": {
+        "6704": 136,
+        "6705": 136,
+        "6721": 145,
+        "6724": 145,
+        "7160": 145,
+        "7161": 187,
+        "7162": 187
+      }
+    },
+    "io_toPhysicalQueue_redirectPtr_valid": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.io_toPhysicalQueue_redirectPtr_valid",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 1,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "io_toPhysicalQueue_redirectPtr_bits_first_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.io_toPhysicalQueue_redirectPtr_bits_first_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "io_toPhysicalQueue_redirectPtr_bits_second_flag": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.io_toPhysicalQueue_redirectPtr_bits_second_flag",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "io_toPhysicalQueue_redirectPtr_bits_value[5:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.io_toPhysicalQueue_redirectPtr_bits_value[5:0]",
+      "width": 6,
+      "values": {
+        "6704": 3,
+        "6705": 3,
+        "6721": 3,
+        "6724": 8,
+        "7160": 8,
+        "7161": 8,
+        "7162": 8
+      }
+    },
+    "preCommitMoveValid": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.preCommitMoveValid",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 1,
+        "7161": 0,
+        "7162": 0
+      }
+    },
+    "preCommitValid": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.preCommitValid",
+      "width": 1,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 1,
+        "7162": 1
+      }
+    },
+    "toPhysicalQueueRetirePtr_value[5:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.toPhysicalQueueRetirePtr_value[5:0]",
+      "width": 6,
+      "values": {
+        "6704": 4,
+        "6705": 4,
+        "6721": 8,
+        "6724": 8,
+        "7160": 8,
+        "7161": 8,
+        "7162": 8
+      }
+    },
+    "dataEntries_4_robIdx_value[8:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.dataEntries_4_robIdx_value[8:0]",
+      "width": 9,
+      "values": {
+        "6704": 145,
+        "6705": 145,
+        "6721": 145,
+        "6724": 145,
+        "7160": 145,
+        "7161": 145,
+        "7162": 145
+      }
+    },
+    "dataEntries_4_uopIdx[6:0]": {
+      "path": "TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner_lsq.storeQueue.virtualStoreQueue.dataEntries_4_uopIdx[6:0]",
+      "width": 7,
+      "values": {
+        "6704": 0,
+        "6705": 0,
+        "6721": 0,
+        "6724": 0,
+        "7160": 0,
+        "7161": 0,
+        "7162": 0
+      }
+    }
+  }
+}
