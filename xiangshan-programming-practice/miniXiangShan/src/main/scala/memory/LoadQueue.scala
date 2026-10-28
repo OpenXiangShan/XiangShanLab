@@ -56,6 +56,7 @@ class LoadQueue(implicit p: Parameters) extends NSModule {
     val addrWrite = new Bundle {
       val valid     = Input(Bool())
       val idx       = Input(UInt(log2Ceil(LqSize).W))
+      val robIdx    = Input(new RobPtr(RobSize))
       val vaddr     = Input(UInt(XLEN.W))
       val paddr     = Input(UInt(XLEN.W))
       val cacheable = Input(Bool())
@@ -163,7 +164,13 @@ class LoadQueue(implicit p: Parameters) extends NSModule {
     // ================================================================
     //  2. 地址写入
     // ================================================================
-    when(io.addrWrite.valid) {
+    val addrTargetMatches =
+      (!entries(io.addrWrite.idx).issued &&
+       entries(io.addrWrite.idx).valid &&
+       entries(io.addrWrite.idx).robIdxFull === io.addrWrite.robIdx) ||
+      (enqFire && enqPtr.value === io.addrWrite.idx &&
+       io.enq.robIdx === io.addrWrite.robIdx)
+    when(io.addrWrite.valid && addrTargetMatches) {
       val idx = io.addrWrite.idx
       entries(idx).addrValid := true.B
       entries(idx).vaddr     := io.addrWrite.vaddr
@@ -575,7 +582,13 @@ class LoadQueue(implicit p: Parameters) extends NSModule {
     // ================================================================
     //  2. 地址写入
     // ================================================================
-    when(io.addrWrite.valid) {
+    val addrTargetMatches =
+      (!entries(io.addrWrite.idx).issued &&
+       entries(io.addrWrite.idx).valid &&
+       entries(io.addrWrite.idx).robIdxFull === io.addrWrite.robIdx) ||
+      (enqFire && enqPtr.value === io.addrWrite.idx &&
+       io.enq.robIdx === io.addrWrite.robIdx)
+    when(io.addrWrite.valid && addrTargetMatches) {
       val idx = io.addrWrite.idx
       entries(idx).addrValid := true.B
       entries(idx).vaddr     := io.addrWrite.vaddr
@@ -961,7 +974,13 @@ class LoadQueue(implicit p: Parameters) extends NSModule {
     // ================================================================
     //  2. 地址写入
     // ================================================================
-    when(io.addrWrite.valid) {
+    val addrTargetMatches =
+      (!entries(io.addrWrite.idx).issued &&
+       entries(io.addrWrite.idx).valid &&
+       entries(io.addrWrite.idx).robIdxFull === io.addrWrite.robIdx) ||
+      (enqFire && enqPtr.value === io.addrWrite.idx &&
+       io.enq.robIdx === io.addrWrite.robIdx)
+    when(io.addrWrite.valid && addrTargetMatches) {
       val idx = io.addrWrite.idx
       entries(idx).addrValid := true.B
       entries(idx).vaddr     := io.addrWrite.vaddr
@@ -1244,4 +1263,3 @@ class LoadQueue(implicit p: Parameters) extends NSModule {
   }
   
 }
-  

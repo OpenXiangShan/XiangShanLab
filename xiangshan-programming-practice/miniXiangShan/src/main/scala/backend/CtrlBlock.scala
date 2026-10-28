@@ -61,8 +61,8 @@ class CtrlBlockIO(implicit p: Parameters) extends NSBundle {
   val trapEnv             = Input(new TrapEnv)
   /** CSR 给出的最高优先级中断编号 */
   val intrCode            = Input(UInt(IntrCode.width.W))
-  /** 本周期是否有指令提交（用于 minstret） */
-  val commitValid         = Output(Bool())
+  /** 本周期退休的指令数（用于 minstret） */
+  val commitCount         = Output(UInt(log2Ceil(CommitWidth + 1).W))
   
 
 
@@ -194,7 +194,7 @@ class CtrlBlock(implicit p: Parameters) extends NSModule {
   //缓解时序~
   renameStage.io.archCommit <>  RegNext( rob.io.archCommit               )
   io.commitToCsr            :=  RegNext( rob.io.commitToCsr              )
-  io.commitValid            :=  rob.io.commit.valid.asUInt.orR
+  io.commitCount            :=  PopCount(rob.io.commit.valid)
 
   rob.io.currentPriv := io.currentPriv
 

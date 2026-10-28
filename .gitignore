@@ -30,6 +30,7 @@ myworkspace
 # Scala / Java / Chisel build products
 **/target/
 **/out/
+**/out-perf/
 **/build/
 **/project/boot/
 **/project/target/

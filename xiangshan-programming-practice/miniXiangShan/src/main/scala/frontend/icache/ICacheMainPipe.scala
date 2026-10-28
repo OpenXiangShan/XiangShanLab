@@ -41,9 +41,9 @@ class ICacheMainPipe(implicit p: Parameters) extends NSModule {
     val s1_fire  = Wire(Bool())
 
     val s1_accepts = !s1_valid || s1_fire || io.redirect
-    io.cpu_req.ready := s1_accepts
+    io.cpu_req.ready := s1_accepts && io.mmu.toMmu.ready
     
-    val s0_fire = io.cpu_req.valid && s1_accepts && !io.redirect
+    val s0_fire = io.cpu_req.valid && io.cpu_req.ready && !io.redirect
 
     io.mmu.toMmu.valid := s0_fire
     io.mmu.toMmu.bits.vaddr := io.cpu_req.bits.addr
@@ -307,9 +307,9 @@ class ICacheMainPipe(implicit p: Parameters) extends NSModule {
     val s1_fire  = Wire(Bool())
 
     val s1_accepts = !s1_valid || s1_fire || io.redirect
-    io.cpu_req.ready := s1_accepts
+    io.cpu_req.ready := s1_accepts && io.mmu.toMmu.ready
     
-    val s0_fire = io.cpu_req.valid && s1_accepts && !io.redirect
+    val s0_fire = io.cpu_req.valid && io.cpu_req.ready && !io.redirect
 
     io.arrays_read.req.valid := s0_fire
     io.arrays_read.req.idx   := io.cpu_req.bits.addr(blockOffBits + idxBitsI - 1, blockOffBits)

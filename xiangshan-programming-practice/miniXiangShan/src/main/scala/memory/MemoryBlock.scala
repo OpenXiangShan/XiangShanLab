@@ -124,6 +124,7 @@ class MemoryBlock(implicit p: Parameters) extends NSModule {
  
   loadQueue.io.addrWrite.valid     := addrFire && addrUop.ctrl.memRead
   loadQueue.io.addrWrite.idx       := addrUop.lqIdx.value
+  loadQueue.io.addrWrite.robIdx    := addrUop.robIdxFull
   loadQueue.io.addrWrite.vaddr     := addrChannel.bits.exeRes.data
   loadQueue.io.addrWrite.paddr     := addrChannel.bits.mmuRes.paddr
   loadQueue.io.addrWrite.cacheable := addrChannel.bits.mmuRes.cacheable
@@ -132,6 +133,7 @@ class MemoryBlock(implicit p: Parameters) extends NSModule {
  
   storeQueue.io.addrWrite.valid     := addrFire && addrUop.isSta
   storeQueue.io.addrWrite.idx       := addrUop.sqIdx.value
+  storeQueue.io.addrWrite.robIdx    := addrUop.robIdxFull
   storeQueue.io.addrWrite.vaddr     := addrChannel.bits.exeRes.data
   storeQueue.io.addrWrite.paddr     := addrChannel.bits.mmuRes.paddr
   storeQueue.io.addrWrite.cacheable := addrChannel.bits.mmuRes.cacheable
@@ -140,6 +142,7 @@ class MemoryBlock(implicit p: Parameters) extends NSModule {
  
   storeQueue.io.dataWrite.valid := dataFire && dataUop.isStd
   storeQueue.io.dataWrite.idx   := dataUop.sqIdx.value
+  storeQueue.io.dataWrite.robIdx := dataUop.robIdxFull
   storeQueue.io.dataWrite.data  := dataChannel.bits.data
  
   io.fromExeResult.ready    := true.B
