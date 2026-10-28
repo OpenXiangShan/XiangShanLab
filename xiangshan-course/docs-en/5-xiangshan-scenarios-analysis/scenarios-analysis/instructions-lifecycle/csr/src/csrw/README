@@ -1,0 +1,36 @@
+# csr_mtvec_write Notes
+
+At the entry point, the program executes one CSR write instruction that writes `0x80001234` into the M-mode CSR `mtvec` (address `0x305`), then loops forever waiting for the simulation to end.
+
+### Direct Build (one command, no make)
+
+```bash
+cd /nfs/home/yaoliping/xs_workspace/task_note/CSR/src && /nfs/home/yaoliping/xs_workspace/riscv-verify/tools/riscv64-elf/bin/riscv64-unknown-elf-gcc -march=rv64imac_zicsr -mabi=lp64 -nostdlib -nostartfiles -ffreestanding -O0 -T link.ld -o csr_mtvec_write.elf csr_mtvec_write.c && /nfs/home/yaoliping/xs_workspace/riscv-verify/tools/riscv64-elf/bin/riscv64-unknown-elf-objcopy -O binary csr_mtvec_write.elf csr_mtvec_write.bin && /nfs/home/yaoliping/xs_workspace/riscv-verify/tools/riscv64-elf/bin/riscv64-unknown-elf-objdump -d csr_mtvec_write.elf > csr_mtvec_write.txt
+```
+
+Three commands chained with `&&`, doing exactly what `make` does:
+
+| Segment | Artifact | Corresponding make rule |
+|---|---|---|
+| `gcc ... -o csr_mtvec_write.elf` | `.elf` ELF with symbols | `$(TARGET).elf` |
+| `objcopy -O binary ... .bin` | `.bin` bare-metal image for emu | `$(TARGET).bin` |
+| `objdump -d ... > .txt` | `.txt` disassembly | `$(TARGET).txt` |
+
+If only the `.elf` is needed, delete the latter two `&&` segments.
+The linker script cannot produce a runnable image.
+
+## Run Simulation + Dump Waveform
+
+Input commands
+```bash
+***Create a folder to save waveforms
+mkdir -p /nfs/home/yaoliping/xs_workspace/task_note/CSR/wave
+
+***Run simulation + waveform
+cd /nfs/home/yaoliping/XiangShan/build
+./emu \
+  -i /nfs/home/yaoliping/xs_workspace/task_note/CSR/src/csr_mtvec_write.bin \
+  -C 4500 -b 4000 -e 4400 \
+  --no-diff --dump-wave \
+  --wave-path=/nfs/home/yaoliping/xs_workspace/task_note/CSR/wave/csr_mtvec_write.fst
+```
