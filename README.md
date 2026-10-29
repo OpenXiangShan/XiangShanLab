@@ -2,7 +2,7 @@
 
 [English](./README_EN.md) | [香山官网](https://openxiangshan.cc/) | [GitHub Issues](https://github.com/OpenXiangShan/XiangShanLab/issues)
 
-XiangShanLab 是面向香山处理器学习、开发、验证和研究的开放仓库。仓库以课程文档为主，同时收录编程实践、问题题库、Bug 案例、分析工具、研究论文、周报、合作机构资料、外部贡献项目以及竞赛项目。
+XiangShanLab 是面向香山处理器学习、开发、验证和研究的开放仓库。仓库以课程文档为主，同时收录编程实践、问题题库、Bug 案例、分析工具、研究论文、合作机构资料、外部贡献项目以及竞赛项目。
 
 ## 快速开始
 
@@ -68,7 +68,6 @@ git submodule update --init --recursive
 | [`XiangShanLab-user-guide/`](./XiangShanLab-user-guide/) | 学习路径、任务提交、文档反馈和社区协作说明 | [学习路径指引](./XiangShanLab-user-guide/XiangShanLab‑Learning‑Path‑Guide.md) |
 | [`xiangshan-research/`](./xiangshan-research/) | 香山相关论文、研究方向和文献索引 | [论文索引](./xiangshan-research/xiangshan-related-papers.md) |
 | [`xiangshan-collaborators/`](./xiangshan-collaborators/) | 香山合作高校和科研机构资料 | [合作机构](./xiangshan-collaborators/xiangshan-collaborators.md) |
-| [`weekly-status/`](./weekly-status/) | 周报、状态模板和周报生成脚本 | [周报目录](./weekly-status/) |
 | [`external-contribution-project/`](./external-contribution-project/) | 香山社区、合作机构和个人贡献的外部项目登记资料 | [项目说明](./external-contribution-project/README.md) |
 | [`2026-CIE-RISC-V-Contest-Application-Track/`](./2026-CIE-RISC-V-Contest-Application-Track/) | 2026 CIE RISC-V 大赛应用方向赛题与提交文件 | [赛题说明](./2026-CIE-RISC-V-Contest-Application-Track/README.md) |
 | [`RISC-V-International-Participation-Guide/`](./RISC-V-International-Participation-Guide/) | RISC-V International 参与指南：会员注册、群组/邮件列表与委员会加入 | [参与指南](./RISC-V-International-Participation-Guide/README.md) |
