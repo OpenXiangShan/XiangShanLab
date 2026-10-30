@@ -9,10 +9,6 @@ cache line，再访问第 9 条不同 tag 的目标 line。目标访问应在 L1
 该程序验证的不只是 replacement metadata 变化，还要求波形中出现 victim 地址的
 CHI eviction 请求。
 
-本程序按昆明湖 V3 的缓存参数重新运行：L1 DCache 为 8-way、128 sets，L2 为
-4 banks × 128 sets × 8 ways；XiangShan 基线 `6705b636`，XSCache 子模块
-`e9488ae`。
-
 ## 2. 参数与地址布局
 
 程序定义：
@@ -30,15 +26,15 @@ CHI eviction 请求。
 
 | 逻辑对象 | 地址 | L2 tag | 作用 |
 | --- | --- | --- | --- |
-| `fill_line_1` | `0x80024000` | `0x10004` | 预期 victim |
-| `fill_line_2` | `0x80044000` | `0x10008` | 填充 way |
-| `fill_line_3` | `0x80064000` | `0x1000c` | 填充 way |
-| `fill_line_4` | `0x80084000` | `0x10010` | 填充 way |
-| `fill_line_5` | `0x800a4000` | `0x10014` | 填充 way |
-| `fill_line_6` | `0x800c4000` | `0x10018` | 填充 way |
-| `fill_line_7` | `0x800e4000` | `0x1001c` | 填充 way |
-| `fill_line_8` | `0x80104000` | `0x10020` | 填充 way，链尾为零 |
-| `target_line` | `0x80124000` | `0x10024` | 第九条目标 line |
+| `fill_line_1` | `0x80024000` | `0x4001` | 预期 victim |
+| `fill_line_2` | `0x80044000` | `0x4002` | 填充 way |
+| `fill_line_3` | `0x80064000` | `0x4003` | 填充 way |
+| `fill_line_4` | `0x80084000` | `0x4004` | 填充 way |
+| `fill_line_5` | `0x800a4000` | `0x4005` | 填充 way |
+| `fill_line_6` | `0x800c4000` | `0x4006` | 填充 way |
+| `fill_line_7` | `0x800e4000` | `0x4007` | 填充 way |
+| `fill_line_8` | `0x80104000` | `0x4008` | 填充 way，链尾为零 |
+| `target_line` | `0x80124000` | `0x4009` | 第九条目标 line |
 
 8 条 fill line 的 tag 不同但 set 相同，正好覆盖报告所依据的 8-way L2 set。
 
@@ -102,24 +98,11 @@ target_load:
 
 1. L1 发出目标地址的 `AcquireBlock`，证明 L1 miss。
 2. L2 目录查询返回 `dir_hit=0`，并分配目标 MSHR。
-3. MSHR 记录新 tag `reqTag=0x10024` 和候选旧 tag `metaTag=0x10004`。
+3. MSHR 记录新 tag `reqTag=0x4009` 和候选旧 tag `metaTag=0x4001`。
 4. replacement policy 返回有效 victim，选择 way 0。
 5. L2 为目标 line 发出 CHI `ReadNotSharedDirty`。
 6. 对 clean victim `0x80024000` 发出 `WriteEvictOrEvict`。
-7. 目标数据返回，L1 完成 `GrantData`、`GrantAck`，程序最终返回 0。
-
-目标 load 之后增加了一个 512 次空转循环：
-
-```asm
-target_load_end:
-    li   t5, 512
-.Lsettle_target:
-    addi t5, t5, -1
-    bnez t5, .Lsettle_target
-```
-
-它让 victim release 在程序退出前完成，避免只看到 target refill、看不到
-`WriteEvictOrEvict`。
+7. 目标数据返回，L1 完成 `GrantData`、`GrantAck`，目标 load 提交。
 
 ### 3.5 目标数据校验
 
@@ -139,10 +122,10 @@ victim CHI eviction 证据。
 | 8 次 pointer-chain load | 8 个同 set、不同 tag 的 `AcquireBlock` | L2 set 被填充 |
 | 第九条目标 load | 目标 `0x80124000` 的 `AcquireBlock` | L1 miss |
 | 目标 L2 查询 | `dir_hit=0`、`need_mshr=1`、MSHR allocation | L2 miss |
-| MSHR 状态 | `reqTag=0x10024`、`metaTag=0x10004`、`needsRepl=1` | 需要 replacement |
-| replacement 返回 | victim tag `0x10004`、way 0、state 有效、clean | 选定真实 victim |
+| MSHR 状态 | `reqTag=0x4009`、`metaTag=0x4001`、`needsRepl=1` | 需要 replacement |
+| replacement 返回 | victim tag `0x4001`、way 0、state 有效、clean | 选定真实 victim |
 | CHI 请求 | 目标 `ReadNotSharedDirty` + victim `WriteEvictOrEvict` | refill 与 eviction 均发出 |
-| 目标完成 | 两拍无错误 `GrantData`、`GrantAck`、程序返回 0 | replacement 后事务完成 |
+| 目标完成 | 两拍无错误 `GrantData`、`GrantAck`、commit | replacement 后事务完成 |
 
 ## 5. 构造成立的前提与限制
 
@@ -153,8 +136,6 @@ victim CHI eviction 证据。
   的条件，不应仅根据源代码断言一定选择 way 0；way 0 需要由波形确认。
 - `WriteEvictOrEvict` 的实际出现是“真实 eviction”的关键证据；只有 metadata 中出现
   victim tag 还不足以证明下级 eviction 已发生。
-- 目标 load 后的 512 次空转只用于给 release 留出时间；当前 V3 构建未导出逐指令
-  commit 端，程序结果以最终 GOOD TRAP 和返回值为准。
 
 ## 6. 相关文件
 

@@ -3,14 +3,10 @@
 ## 1. 场景目标
 
 本程序构造最小的冷 cache line 访问场景，用一次目标 load 验证完整的
-**L1 miss、L2 miss、向 CHI/L3 取数、返回 L1 并让程序返回 0** 路径。
+**L1 miss、L2 miss、向 CHI/L3 取数、返回 L1 并提交**路径。
 
 程序不包含冲突访问、预取控制或多核同步，因此观察到的目标事务主要由唯一的
 `target_load` 产生，适合作为 miss 路径基线。
-
-本程序按昆明湖 V3 的缓存参数重新运行：L1 DCache 为 8-way、128 sets，L2 为
-4 banks × 128 sets × 8 ways；XiangShan 基线 `6705b636`，XSCache 子模块
-`e9488ae`。
 
 ## 2. 参数与数据布局
 
@@ -29,7 +25,7 @@ target_line = 0x0000000012345678
 ```
 
 数据地址按 64-byte cache line 对齐，目标地址对应报告中的 L2 slice 0、set `0x40`、
-tag `0x10004`。
+tag `0x4001`。
 
 ## 3. 指令执行流程
 
@@ -56,7 +52,7 @@ target_load:
 3. L2 令 `need_mshr_s3=1`，并分配 MSHR。
 4. L2 通过 CHI 发出 `ReadNotSharedDirty`，地址仍为目标 line。
 5. 下级返回完整 cache line，L1 接收两拍 `GrantData`。
-6. L1 发送 `GrantAck`，目标 load 返回正确值，程序最终 HIT GOOD TRAP。
+6. L1 发送 `GrantAck`，目标 load 最终提交。
 
 反汇编中该 load 位于 PC `0x80000132`，对应场景配置中的 `target_load_pc`。
 
@@ -76,12 +72,12 @@ bne t1, t2, fail
 | 程序位置 | 关键波形现象 | 判定 |
 | --- | --- | --- |
 | `target_load`，PC `0x80000132` | 目标地址 `AcquireBlock` 握手 | L1 miss |
-| 目标请求进入 L2 | `io_taskFromArb_s2_valid=1`、目标 set/tag 匹配、`dir_hit=0` | L2 directory miss |
-| L2 miss 处理 | `mshr_alloc_s3_valid=1` | 进入 MSHR 路径 |
+| 目标请求进入 L2 | `task_s3_valid=1`、目标 set/tag 匹配、`dir_hit=0` | L2 directory miss |
+| L2 miss 处理 | `need_mshr_s3=1`、MSHR allocation 有效 | 进入 MSHR 路径 |
 | 下级请求 | 目标地址 CHI `ReadNotSharedDirty` | 向 CHI/L3 取数 |
 | 数据返回 | 两拍无错误 `GrantData` | 目标 line 返回 |
 | 接收确认 | `GrantAck` 握手 | L1 完成接收 |
-| 完成 | 程序返回 0、HIT GOOD TRAP | 目标 load 完成 |
+| 提交 | PC `0x80000132`、写 x6 | 目标 load 完成 |
 
 ## 5. 场景隔离性
 
