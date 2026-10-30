@@ -10,6 +10,10 @@ core 0 L2 将 snoop 转换为 L1 TileLink `Probe`，L1 返回 `ProbeAck`，随�
 该场景验证的是 **LLC/CHI snoop 到 L2/L1 Probe 的跨层路径**，不是普通的单核 miss
 或 replacement 场景。
 
+本程序按昆明湖 V3 重新运行：L1 DCache 为 8-way、128 sets，L2 为 4 banks × 128 sets
+× 8 ways，OpenLLC 在本配置下为 1 个 slice；XiangShan 基线 `6705b636`，XSCache
+子模块 `e9488ae`。V2 时代的 “LLC slice 2” 说法在 V3 不适用。
+
 ## 2. 共享数据与同步变量
 
 程序定义：
@@ -113,7 +117,8 @@ core 1 对与 core 0 完全相同的 `0x80001680` 发起 load，反汇编中的�
 5. core 0 L1 接收 TileLink B `Probe`。
 6. core 0 L1 返回 TileLink C `ProbeAck`。
 7. core 0 L2 返回 CHI `SnpResp`，txnID 与 snoop 请求一致。
-8. core 1 收到正确 `GrantData` 并提交目标 load。
+8. OpenLLC 为目标行发出 `ReadNoSnp`，随后向 core 1 返回 `CompData`。
+9. core 1 收到正确 `GrantData`，目标 load 返回正确值并让程序 GOOD TRAP。
 
 ### 5.3 通知完成并保持运行
 
@@ -139,8 +144,8 @@ core 1 完成目标 load 后写 `hart1_done=1`，通知 core 0 可以退出。�
 | LLC 决策 | `peerRNs_hit=1`、`request_snoop=1`、snoop vector `1/0` | 选择 RN0 作为 probe 对象 |
 | CHI snoop | LLC TxSnp 与 core 0 L2 RxSnp 地址/opcode/txnID 一致 | snoop 跨层传递 |
 | L1 一致性动作 | B `Probe`，C `ProbeAck` | core 0 L1 参与一致性 |
-| CHI 响应 | `SnpResp` txnID 与 1041 一致 | snoop 往返完成 |
-| core 1 完成 | 正确 `GrantData`、E `GrantAck`、目标 commit | 请求方事务完成 |
+| CHI 响应 | `SnpResp` txnID 与 81 一致 | snoop 往返完成 |
+| core 1 完成 | 正确 `GrantData`、E `GrantAck`、程序 GOOD TRAP | 请求方事务完成 |
 
 ## 7. 构造成立的前提与限制
 
@@ -153,6 +158,8 @@ core 1 完成目标 load 后写 `hart1_done=1`，通知 core 0 可以退出。�
 - `while (1)` 是为了保留双核测试窗口，不是缓存协议的一部分。
 - 若平台地址映射、RN 编号或 LLC slice 数变化，必须重新确认目标地址、snoop vector
   和信号路径。
+- 当前 V3 构建未导出逐指令 commit 端；完成证据是 D/E 完成、程序返回值检查和两个
+  hart 的最终 GOOD TRAP。
 
 ## 8. 相关文件
 
