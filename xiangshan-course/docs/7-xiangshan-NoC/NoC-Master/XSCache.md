@@ -2,6 +2,8 @@
 
 本文逐题回答《缓存理解要点_G6FAsVr79K66FT33/index.md》。涉及实现的结论均以本工作区的源码为准：XiangShan 主仓库 `022cee074`（分支 `kunminghu-v3`），CoupledL2 子仓 `82079f40`，HuanCun 子仓 `90aaf59`。行号按当前工作区 `nl -ba` 输出；代码片段保留了决定行为的 RTL，省略与问题无关的字段连接。
 
+同章的四个 XSCache 场景包也统一在昆明湖 V3 上重跑：波形与 RTL 行号基于 XiangShan `6705b63685d301f8c0960f7cbcc8b964660dc58e`、XSCache 子模块 `e9488aed486358e3e5984b531aab601f9b91a9c0`，见 `XSCache-Scenarios.md`。总述与场景包同属 `kunminghu-v3` 分支，不再引用 V2 波形。
+
 ## 15.1 概念部分
 
 ### 15.1.1 什么是组相连、全相连、直接相连

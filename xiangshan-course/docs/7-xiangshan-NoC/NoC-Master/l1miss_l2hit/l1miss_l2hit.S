@@ -1,5 +1,6 @@
-.equ LOCAL_SET_STRIDE,  128 * 1024
-.equ TARGET_SET_OFFSET,  16 * 1024
+.equ LOCAL_SET_STRIDE,   8 * 1024
+.equ TARGET_ALIGNMENT, 128 * 1024
+.equ TARGET_SET_OFFSET, 16 * 1024
 .equ LINE_DATA_SIZE,              8
 .equ SETTLE_ITERATIONS,         512
 
@@ -8,7 +9,7 @@
 .type   main, @function
 
 main:
-    # Warm the target before walking six lines in the same cache set.
+    # Warm the target before walking sixteen lines that alias the same L1 set.
     la      t0, target_line
     ld      t1, 0(t0)
 
@@ -18,6 +19,16 @@ main:
     and     t1, t1, zero
     add     t2, t2, t1
 
+    ld      t2, 0(t2)
+    ld      t2, 0(t2)
+    ld      t2, 0(t2)
+    ld      t2, 0(t2)
+    ld      t2, 0(t2)
+    ld      t2, 0(t2)
+    ld      t2, 0(t2)
+    ld      t2, 0(t2)
+    ld      t2, 0(t2)
+    ld      t2, 0(t2)
     ld      t2, 0(t2)
     ld      t2, 0(t2)
     ld      t2, 0(t2)
@@ -54,7 +65,7 @@ fail:
 
 
 .section .data.cache_test, "aw", @progbits
-.balign LOCAL_SET_STRIDE
+.balign TARGET_ALIGNMENT
 .space  TARGET_SET_OFFSET
 .globl  target_line
 
@@ -83,4 +94,44 @@ conflict_line_5:
 
 .space LOCAL_SET_STRIDE - LINE_DATA_SIZE
 conflict_line_6:
+    .dword  conflict_line_7
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_7:
+    .dword  conflict_line_8
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_8:
+    .dword  conflict_line_9
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_9:
+    .dword  conflict_line_10
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_10:
+    .dword  conflict_line_11
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_11:
+    .dword  conflict_line_12
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_12:
+    .dword  conflict_line_13
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_13:
+    .dword  conflict_line_14
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_14:
+    .dword  conflict_line_15
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_15:
+    .dword  conflict_line_16
+
+.space LOCAL_SET_STRIDE - LINE_DATA_SIZE
+conflict_line_16:
     .dword  0
