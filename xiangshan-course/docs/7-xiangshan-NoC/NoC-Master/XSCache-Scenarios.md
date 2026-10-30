@@ -11,42 +11,16 @@ OpenLLC/CHI 之间如何传递，以及波形用什么证据判定事务成立�
 详细的程序构造、逐周期波形和 RTL 路径分别位于每个场景目录的
 `CONSTRUCTION_ANALYSIS.md`、`WAVEFORM_ANALYSIS.md` 和 `RTL_CODE_ANALYSIS.md`。
 
-## 0. 版本基线
-
-本章统一采用昆明湖 **V3**，不再混用 V2 的缓存参数和波形：
-
-- XSCache 总述（`XSCache.md`）：`kunminghu-v3` 分支，XiangShan `022cee074` 快照；
-- 四个场景包：`kunminghu-v3` 分支，XiangShan
-  `6705b63685d301f8c0960f7cbcc8b964660dc58e`，XSCache 子模块
-  `e9488aed486358e3e5984b531aab601f9b91a9c0`。
-
-波形由 `TestkitV3Config` 构建的单核/双核仿真器产生。该配置的缓存参数为：L1
-DCache 64 KiB、128 sets × 8 ways；L2 256 KiB、4 banks × 128 sets × 8 ways；
-OpenLLC 1 个 slice。表中所有地址、set、tag 和周期都按这个配置核对。
-
-四个场景的波形、RTL 行号和程序地址均按上述 V3 基线重新生成/核对。V2 时代的
-“6 条 128 KiB 冲突、4-way L1、LLC slice 2、txnID 1041”等结论已按 V3 参数改写，
-不能与 V3 波形混用。
-
 ## 1. 分析对象与统一判据
 
 前三个场景使用单核环境，主要观察 L1 DCache 与 CoupledL2 之间的 TileLink，以及
 CoupledL2 与下一级之间的 CHI。第四个场景使用双核环境，并额外观察 OpenLLC 的 peer RN
 目录和 snoop 路径。
 
-V3 的缓存参数：
-
-| 层次 | 参数 |
-| --- | --- |
-| L1 DCache | 64 KiB，128 sets × 8 ways |
-| L2 CoupledL2 | 4 banks × 128 sets × 8 ways（每 bank 64 KiB） |
-| L2 set index | `addr[14:8]` |
-| L2 bank | `addr[7:6]` |
-| L1 set index | `addr[12:6]` |
-| OpenLLC | 本配置 1 个 slice |
-
-本文沿用各报告的判定方式：总线字段只有在 `valid=1 && ready=1` 时才作为真实事务
-证据，不能根据非握手周期残留在总线上的 opcode、地址或数据判断行为。
+报告中的 RTL 基线为 XiangShan commit
+`53ace33fd6b9c7c4289bb4751e3bb6ac3348075f`。本文沿用各报告的判定方式：总线字段只有在
+`valid=1 && ready=1` 时才作为真实事务证据，不能根据非握手周期残留在总线上的 opcode、
+地址或数据判断行为。
 
 ### 1.1 TileLink 侧
 
@@ -65,9 +39,9 @@ V3 的缓存参数：
 
 | 信号组合 | 判定意义 |
 | --- | --- |
-| `io_dirResp_s3_hit=1`、`io_toMSHRCtl_mshr_alloc_s3_valid=0`、D 通道 `GrantData` | L2 hit，main pipe 直接响应 |
-| `io_dirResp_s3_hit=0`、`io_toMSHRCtl_mshr_alloc_s3_valid=1` | L2 miss，进入 MSHR 路径 |
-| `io_replResp_bits_tag/way/meta_state` 返回有效 victim | miss 需要使用有效 victim，而不是填入空 way |
+| `dir_hit=1`、`need_mshr=0`、`mshr_alloc=0`、`sink_resp=1` | L2 hit，main pipe 直接响应 |
+| `dir_hit=0`、`need_mshr=1`、`mshr_alloc=1`、`sink_resp=0` | L2 miss，进入 MSHR 路径 |
+| `needsRepl=1` 且 replacement response 返回有效 tag/way/meta | miss 需要使用有效 victim，而不是填入空 way |
 
 只看到目录 `hit` 或 `miss` 还不足以描述完整路径。是否分配 MSHR、是否直接生成响应、
 是否出现同地址 CHI 请求，构成相互独立的交叉证据。
@@ -80,16 +54,15 @@ V3 的缓存参数：
 | `WriteEvictOrEvict`，opcode `0x42` | L2 淘汰 clean victim |
 | `SnpNotSharedDirty`，opcode `4` | LLC 请求 peer RN 对目标 line 执行 snoop |
 | `SnpResp`，opcode `1` | 被 snoop 的 RN 完成一致性响应 |
-| `ReadNoSnp`，opcode `4` | L3/OpenLLC 向内存读取目标 line |
 
 ## 2. 四个场景总览
 
 | 场景 | 构造方法 | L1/L2 结果 | 关键下级或一致性动作 | 场景结论 |
 | --- | --- | --- | --- | --- |
-| [`l1miss_l2hit`](./l1miss_l2hit/) | 先加载目标行，再访问 16 条同 L1 set、不同 L2 set 的冲突行 | 第二次目标访问 L1 miss、L2 hit | 第二次访问无目标地址 CHI 请求 | L2 main pipe 直接返回 `GrantData` |
+| [`l1miss_l2hit`](./l1miss_l2hit/) | 先加载目标行，再访问 6 条同 set 冲突行 | 第二次目标访问 L1 miss、L2 hit | 第二次访问无目标地址 CHI 请求 | L2 main pipe 直接返回 `GrantData` |
 | [`l1miss_l2miss`](./l1miss_l2miss/) | 冷启动后只加载一次目标行 | L1 miss、L2 miss | CHI `ReadNotSharedDirty` | 完整覆盖普通 miss/refill 路径 |
 | [`l1miss_l2miss_replace`](./l1miss_l2miss_replace/) | 用 8 条同 set line 填满 8-way L2，再访问第 9 条 | L1 miss、L2 miss | 目标 read + victim `WriteEvictOrEvict` | 完整覆盖 clean victim replacement |
-| [`l3_probe_l1`](./l3_probe_l1/) | core 0 先持有共享行，core 1 再读同一行 | core 1 请求触发 peer RN snoop | LLC snoop -> L2 -> L1 `Probe/ProbeAck` -> `SnpResp` -> `ReadNoSnp` | 完整覆盖跨层共享一致性路径 |
+| [`l3_probe_l1`](./l3_probe_l1/) | core 0 先持有共享行，core 1 再读同一行 | core 1 请求触发 peer RN snoop | LLC snoop -> L2 -> L1 `Probe/ProbeAck` -> `SnpResp` | 完整覆盖跨层共享一致性路径 |
 
 从请求方向看，前三个场景是由 L1 向下发起：
 
@@ -108,21 +81,18 @@ OpenLLC --CHI Snoop--> CoupledL2 --TileLink Probe--> L1 DCache
 
 ### 3.1 构造方法
 
-目标 line 为 `0x80024000`。程序首先访问目标行，使其进入 L1 和 L2；然后串行访问
-16 条相隔 `8 KiB` 的冲突 line：
+目标 line 为 `0x80024000`。程序首先访问目标行，使其进入 L1 和 L2；然后串行访问六条
+相隔 `128 KiB` 的冲突 line：
 
 ```text
-0x80026000 -> 0x80028000 -> 0x8002a000 -> 0x8002c000
-           -> 0x8002e000 -> 0x80030000 -> 0x80032000 -> 0x80034000
-           -> 0x80036000 -> 0x80038000 -> 0x8003a000 -> 0x8003c000
-           -> 0x8003e000 -> 0x80040000 -> 0x80042000 -> 0x80044000
+0x80044000 -> 0x80064000 -> 0x80084000
+           -> 0x800a4000 -> 0x800c4000 -> 0x800e4000
 ```
 
-`8 KiB` stride 使 `addr[12:6]` 不变、`addr[14:8]` 每步增加 `0x20`：17 条 line 落在
-同一个 L1 set，但分散在 4 个 L2 set。V3 的 L1 为 8-way，17 条 line 必然驱逐目标行；
-V3 的 L2 为 8-way，每个 L2 set 最多 5 条 line，目标行仍可留在 L2。指针链建立了逐次
-load 的真实数据依赖，防止处理器并行或提前发射冲突访问；之后的等待循环将第二次目标
-load 与前面的 refill 分开。
+这些地址与目标地址映射到相同 set，但 tag 不同。本配置的 L1 DCache 为 4-way，目标行
+加六条冲突行会产生足够的 L1 替换压力；L2 为 8-way，总共七条相关 line 尚未填满 L2
+set。指针链建立了逐次 load 的真实数据依赖，防止处理器并行或提前发射冲突访问；之后的
+等待循环将第二次目标 load 与前面的 refill 分开。
 
 ### 3.2 第一次访问：建立 L2 副本
 
@@ -131,7 +101,7 @@ load 与前面的 refill 分开。
 ```text
 L1 AcquireBlock NtoB
   -> L2 directory miss
-  -> mshr_alloc=1，分配 MSHR
+  -> need_mshr=1，分配 MSHR
   -> CHI ReadNotSharedDirty(0x80024000)
   -> 两拍 GrantData
 ```
@@ -145,12 +115,13 @@ L1 命中。该请求进入 CoupledL2 后满足：
 
 ```text
 dir_hit=1
+need_mshr=0
 mshr_alloc=0
-D opcode=GrantData
+sink_resp=1，opcode=GrantData
 ```
 
 L2 从 data storage 读出完整 line，以两拍无错误 `GrantData` 返回，L1 随后发送
-`GrantAck`。从第二次 `AcquireBlock` 到目标 load 完成的窗口内，没有同地址 CHI 请求，
+`GrantAck`。从第二次 `AcquireBlock` 到目标 load 提交的窗口内，没有同地址 CHI 请求，
 因此可以排除“目录显示 hit、实际仍向下级取数”的解释。
 
 最终链路为：
@@ -162,7 +133,7 @@ L2 从 data storage 读出完整 line，以两拍无错误 `GrantData` 返回，
   -> main pipe 直接 GrantData
   -> GrantAck
   -> 无目标 CHI 请求
-  -> 目标 load 返回正确值
+  -> 目标 load 提交
 ```
 
 详细报告：
@@ -182,16 +153,18 @@ L2 从 data storage 读出完整 line，以两拍无错误 `GrantData` 返回，
 ### 4.2 完整 miss/refill 路径
 
 目标 load 首先在 L1/L2 接口产生 `AcquireBlock NtoB`。CoupledL2 查询 slice 0、set
-`0x40`、tag `0x10004`，目录结果为 miss：
+`0x40`、tag `0x4001`，目录结果为 miss：
 
 ```text
 dir_hit=0
+need_mshr=1
 mshr_alloc=1
+sink_resp=0
 ```
 
 MSHR 将该 TileLink 请求映射为 CHI `ReadNotSharedDirty`，并向下级发送相同目标地址。
 数据返回后，L1 收到两拍 `GrantData`，首拍包含 `0x12345678`，两拍均
-`denied=0`、`corrupt=0`；随后 E 通道完成 `GrantAck`，程序返回 0 并 HIT GOOD TRAP。
+`denied=0`、`corrupt=0`；随后 E 通道完成 `GrantAck`，目标 load 正常提交。
 
 完整链路为：
 
@@ -203,7 +176,7 @@ MSHR 将该 TileLink 请求映射为 CHI `ReadNotSharedDirty`，并向下级发�
   -> CHI ReadNotSharedDirty
   -> 两拍无错误 GrantData
   -> GrantAck
-  -> 程序返回 0
+  -> 目标 load 提交
 ```
 
 该场景与场景一形成直接对照：两者都会出现 L1 `AcquireBlock`，但场景一本次请求由 L2
@@ -224,12 +197,11 @@ MSHR 将该 TileLink 请求映射为 CHI `ReadNotSharedDirty`，并向下级发�
 
 | 地址范围 | L2 tag | 用途 |
 | --- | --- | --- |
-| `0x80024000` 至 `0x80104000`，步长 `128 KiB` | `0x10004` 至 `0x10020` | 填满 8 个 way |
-| `0x80124000` | `0x10024` | 第 9 条目标 line |
+| `0x80024000` 至 `0x80104000`，步长 `128 KiB` | `0x4001` 至 `0x4008` | 填满 8 个 way |
+| `0x80124000` | `0x4009` | 第 9 条目标 line |
 
 8 条 fill line 通过指针链保持严格的访问顺序。第 9 条目标 load 又依赖链尾返回的零值，
-从而不会在 set 填充完成前提前发射。目标 load 之后增加 512 次空转，让 victim release
-在程序退出前完成。
+从而不会在 set 填充完成前提前发射。
 
 ### 5.2 目标 miss 与 victim 选择
 
@@ -237,15 +209,13 @@ MSHR 将该 TileLink 请求映射为 CHI `ReadNotSharedDirty`，并向下级发�
 MSHR 状态记录：
 
 ```text
-reqTag   = 0x10024
-metaTag  = 0x10004
+reqTag   = 0x4009
+metaTag  = 0x4001
 needsRepl = 1
-w_replResp = 1
 ```
 
-replacement response 返回 victim tag `0x10004`、way 0、有效 `TRUNK` 状态，且该
-victim 最终通过 clean eviction 释放。因此本次 refill 使用的是有效 clean victim，
-而不是目录中的空 way。
+replacement response 返回 victim tag `0x4001`、way 0、有效状态，且 dirty 位为 0。
+因此本次 refill 使用的是有效 clean victim，而不是目录中的空 way。
 
 ### 5.3 目标 refill 与 victim eviction
 
@@ -256,9 +226,9 @@ CoupledL2 向下级发出两个可区分的 CHI 事务：
 | `0x80124000` | `ReadNotSharedDirty` | 读取新目标 line |
 | `0x80024000` | `WriteEvictOrEvict` | 淘汰 clean victim |
 
-目标数据先通过两拍无错误 `GrantData` 返回 L1，随后完成 `GrantAck` 和程序返回；
-victim eviction 也随后发出。这说明目标请求的完成和 victim 释放都真实发生，而不只是
-replacement metadata 被更新。
+目标数据先通过两拍无错误 `GrantData` 返回 L1，随后完成 `GrantAck` 和目标 load commit；
+victim eviction 也收到 CHI completion，使 MSHR 的 `state_w_releaseack` 置位。这说明目标
+请求的完成和 victim 释放都真实发生，而不只是 replacement metadata 被更新。
 
 完整链路为：
 
@@ -268,8 +238,8 @@ replacement metadata 被更新。
   -> L2 directory miss + MSHR allocation
   -> replacement policy 返回有效 clean victim
   -> 目标 ReadNotSharedDirty
-  -> 目标 GrantData + GrantAck + 程序返回 0
-  -> victim WriteEvictOrEvict
+  -> 目标 GrantData + GrantAck + load commit
+  -> victim WriteEvictOrEvict + completion
 ```
 
 该场景只覆盖 clean victim。dirty victim 所需的 `WriteBackFull`、replacement retry，
@@ -286,26 +256,25 @@ replacement metadata 被更新。
 ### 6.1 构造方法
 
 该场景运行在双核环境，目标共享 line 为 `0x80001680`，初值为
-`0x1122334455667788`。core 0 先读取目标 line 并返回，然后通过独立 cache line 上的
+`0x1122334455667788`。core 0 先读取目标 line 并提交，然后通过独立 cache line 上的
 同步变量通知 core 1；core 1 收到通知后再读取同一目标 line。两个 hart 使用 fence 和
 轮询建立明确的先后关系，避免 core 1 在 core 0 建立副本前发起请求。
 
 ### 6.2 LLC 选择 peer RN snoop
 
 core 1 对目标地址发出 `AcquireBlock`，并经其 CoupledL2 形成
-`ReadNotSharedDirty`。OpenLLC slice 0 处理该请求时观察到：
+`ReadNotSharedDirty`。OpenLLC slice 2 处理该请求时观察到：
 
 ```text
 srcID=1
-snpVec=1/0
-self_hit=0
-snoop opcode=4 (SnpNotSharedDirty)
-snoop txnID=81
+peerRNs_hit=1
+request_snoop=1
+snoop vector=1/0
 ```
 
 这表示请求来自 RN1，而目标 line 的 peer 副本位于 RN0。LLC 因此生成只指向 RN0 的
-`SnpNotSharedDirty`。V3 OpenLLC 在本配置下只有 1 个 slice，不再使用 V2 的 slice 2
-编号。
+`SnpNotSharedDirty`。同时，`peerRNs_hit=1` 使普通 memory read 条件不成立，该请求通过
+peer snoop 完成一致性处理。
 
 ### 6.3 CHI snoop 转换为 TileLink Probe
 
@@ -324,14 +293,13 @@ core 0 DCache 的 ProbeQueue 接收请求，送入 MainPipe 和 WritebackQueue�
 ### 6.4 Snoop 和请求方事务完成
 
 收到 L1 `ProbeAck` 后，core 0 L2 向 LLC 返回 CHI `SnpResp`。LLC TxSnp、core 0 L2
-RxSnp 和 SnpResp 使用相同 txnID 81，证明跨层事务关联没有丢失。随后 OpenLLC 为
-目标行发出 `ReadNoSnp`，并向 core 1 返回 `CompData`；core 1 收到包含目标值的两拍
-无错误 `GrantData`，发送 `GrantAck`，两个 hart 最终都 HIT GOOD TRAP。
+RxSnp 和最终 TxRsp 使用相同 txnID `1041`，证明跨层事务关联没有丢失。随后 core 1 收到
+包含目标值的两拍无错误 `GrantData`，发送 `GrantAck` 并提交目标 load。
 
 完整链路为：
 
 ```text
-core 0 load -> 建立目标副本
+core 0 load -> 建立目标副本并提交
 core 1 load 同一 line
   -> OpenLLC 检测 peer RN0 hit
   -> CHI SnpNotSharedDirty(RN0)
@@ -339,9 +307,7 @@ core 1 load 同一 line
   -> TileLink Probe(toB) 到 core 0 L1
   -> core 0 L1 ProbeAck
   -> core 0 L2 CHI SnpResp
-  -> OpenLLC ReadNoSnp
-  -> OpenLLC CompData 到 core 1
-  -> core 1 GrantData + GrantAck
+  -> core 1 GrantData + GrantAck + load commit
 ```
 
 该场景覆盖的是共享读引发的降权路径，不覆盖 `ProbeAckData`、toN 失效、dirty owner、
@@ -387,15 +353,4 @@ OpenLLC、CoupledL2 与 L1 DCache 的一致性处理连接为一个完整往返�
 - clean victim 的 replacement 和 `WriteEvictOrEvict`；
 - OpenLLC peer RN 命中与 `SnpNotSharedDirty`；
 - CoupledL2 snoop-to-B、DCache `Probe/ProbeAck` 和 CHI `SnpResp`；
-- `GrantData`、`GrantAck` 以及程序返回值/GOOD TRAP 的完成路径。
-
-限制：
-
-- 当前 V3 构建未导出 ROB 的逐指令 commit 端，完成证据以 D/E 握手和程序最终
-  GOOD TRAP 为准。
-- 场景一只覆盖 clean refill 和 L2 hit；不覆盖 dirty victim、NtoT、store miss、AMO、
-  prefetch 和 CMO。
-- 场景四不覆盖 `ProbeAckData`、toN、dirty owner、forwarded snoop、多 peer RN 或
-  LLC replacement snoop。
-- `ReadNoSnp` 的精确微架构触发原因未由波形逐信号证明；报告只记录事务级事实。
-- 各报告不提供工具生成的 RTL line/branch coverage 百分比。
+- `GrantData`、`GrantAck` 以及目标 load commit 的完成路径。
