@@ -1,0 +1,22 @@
+
+csr_mtvec_write.elf:     file format elf64-littleriscv
+
+
+Disassembly of section .text:
+
+0000000080000000 <_start>:
+    80000000:	000802b7          	lui	t0,0x80
+    80000004:	2285                	addiw	t0,t0,1
+    80000006:	02b2                	slli	t0,t0,0xc
+    80000008:	23428293          	addi	t0,t0,564 # 80234 <_start-0x7ff7fdcc>
+    8000000c:	30529073          	csrw	mtvec,t0
+    80000010:	30502373          	csrr	t1,mtvec
+    80000014:	000803b7          	lui	t2,0x80
+    80000018:	2385                	addiw	t2,t2,1
+    8000001a:	03b2                	slli	t2,t2,0xc
+    8000001c:	23438393          	addi	t2,t2,564 # 80234 <_start-0x7ff7fdcc>
+    80000020:	00731363          	bne	t1,t2,80000026 <_start+0x26>
+    80000024:	a011                	j	80000028 <_start+0x28>
+    80000026:	a001                	j	80000026 <_start+0x26>
+    80000028:	a001                	j	80000028 <_start+0x28>
+    8000002a:	0001                	nop

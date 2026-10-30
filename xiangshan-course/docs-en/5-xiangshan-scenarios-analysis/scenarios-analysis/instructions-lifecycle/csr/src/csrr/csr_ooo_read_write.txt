@@ -1,0 +1,17 @@
+
+csr_ooo_read_write.elf:     file format elf64-littleriscv
+
+
+Disassembly of section .text:
+
+0000000080000000 <_start>:
+    80000000:	11100293          	li	t0,273
+    80000004:	22200313          	li	t1,546
+    80000008:	33300393          	li	t2,819
+    8000000c:	34002e73          	csrr	t3,mscratch
+    80000010:	44400e93          	li	t4,1092
+    80000014:	30002f73          	csrr	t5,mstatus
+    80000018:	34029073          	csrw	mscratch,t0
+    8000001c:	34031073          	csrw	mscratch,t1
+    80000020:	a001                	j	80000020 <_start+0x20>
+    80000022:	0001                	nop

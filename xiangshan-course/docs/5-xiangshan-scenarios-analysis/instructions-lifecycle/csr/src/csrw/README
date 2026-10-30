@@ -1,0 +1,36 @@
+# csr_mtvec_write 说明
+程序在入口执行一条 CSR 写指令，把 `0x80001234` 写入 M 模式 CSR `mtvec`（地址 `0x305`），然后死循环等待仿真结束。
+
+### 直接编译（一条命令，不用 make）
+
+```bash
+cd /nfs/home/yaoliping/xs_workspace/task_note/CSR/src && /nfs/home/yaoliping/xs_workspace/riscv-verify/tools/riscv64-elf/bin/riscv64-unknown-elf-gcc -march=rv64imac_zicsr -mabi=lp64 -nostdlib -nostartfiles -ffreestanding -O0 -T link.ld -o csr_mtvec_write.elf csr_mtvec_write.c && /nfs/home/yaoliping/xs_workspace/riscv-verify/tools/riscv64-elf/bin/riscv64-unknown-elf-objcopy -O binary csr_mtvec_write.elf csr_mtvec_write.bin && /nfs/home/yaoliping/xs_workspace/riscv-verify/tools/riscv64-elf/bin/riscv64-unknown-elf-objdump -d csr_mtvec_write.elf > csr_mtvec_write.txt
+```
+
+三条用 `&&` 串联，和 `make` 做的事完全一样：
+
+| 段 | 产物 | 对应 make 规则 |
+|---|---|---|
+| `gcc ... -o csr_mtvec_write.elf` | `.elf` 带符号 ELF | `$(TARGET).elf` |
+| `objcopy -O binary ... .bin` | `.bin` 给 emu 的裸机镜像 | `$(TARGET).bin` |
+| `objdump -d ... > .txt` | `.txt` 反汇编 | `$(TARGET).txt` |
+
+只要 `.elf` 的话，把它后面两条 `&&` 段删掉即可。
+链接脚本编不出可跑的镜像。
+
+## 运行仿真 + dump 波形
+
+输入命令
+```bash
+***新建保存波形的文件夹
+mkdir -p /nfs/home/yaoliping/xs_workspace/task_note/CSR/wave
+
+***运行仿真+波形
+cd /nfs/home/yaoliping/XiangShan/build
+./emu \
+  -i /nfs/home/yaoliping/xs_workspace/task_note/CSR/src/csr_mtvec_write.bin \
+  -C 4500 -b 4000 -e 4400 \
+  --no-diff --dump-wave \
+  --wave-path=/nfs/home/yaoliping/xs_workspace/task_note/CSR/wave/csr_mtvec_write.fst
+```
+
