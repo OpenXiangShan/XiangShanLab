@@ -425,4 +425,3 @@ io.in.ready := (state === s_idle)   // 一次只接受一条 CSR 请求
 [NCSR]: src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
 [OP]: src/main/scala/xiangshan/package.scala
 
-> 更新: 2026-10-14

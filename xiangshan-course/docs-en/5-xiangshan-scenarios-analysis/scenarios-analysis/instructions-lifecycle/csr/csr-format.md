@@ -423,5 +423,3 @@ Taking `csrrw t0, mstatus, t1` (= `0x300312F3`) as an example, here is the whole
 [WCSR]: src/main/scala/xiangshan/backend/fu/wrapper/CSR.scala
 [NCSR]: src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
 [OP]: src/main/scala/xiangshan/package.scala
-
-> Updated: 2026-10-14

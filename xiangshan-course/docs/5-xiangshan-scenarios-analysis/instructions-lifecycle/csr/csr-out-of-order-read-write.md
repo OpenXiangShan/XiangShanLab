@@ -208,8 +208,7 @@ csrw mscratch, t1           # (E) CSR 写：始终串行化
 ## 5. 波形分析
 
 ### 5.1 译码阶段
-
-![](./assets/屏幕截图 2026-10-19 153655.png)
+![](./assets/out_order_1.png)
 
 在程序执行的 **4159 拍**，流水线前端从 IBuffer 中同时出队了 6 条连续的指令进入译码器（`decoders_0` 到 `decoders_5`）。结合波形抓取的关键信号，我们可以清晰地看到译码单元对所有 CSR 指令采取的“一刀切”保守策略：
 
@@ -231,20 +230,20 @@ csrw mscratch, t1           # (E) CSR 写：始终串行化
 
 针对指令 `csrr t3, mscratch` (`34002e73`)，观察对应的 `io_enq_req_3` 端口。由于该指令属于 CSR 纯读且不在例外清单中，因此其 `waitForward` 和 `blockBackward` 标记均被清除为 0。经波形验证，结果正确。
 
-![](./assets/image-20261019162613255.png)
+![](./assets/out_order_2.png)
 
 分析指令 `csrr t5, mstatus` (`30002f73`)，重点观察 `io_enq_req_5` 端口。该指令同为 CSR 纯读，但 `mstatus` 位于 `waitForwardInOrderCsrReadList` 中。因此，其 `waitForward` 标记保留为 1，而 `blockBackward` 标记被清零为 0。
 
 **这里有一个关键现象需要结合派发逻辑（Dispatch）来看：** 在 4161 拍，6 条指令同时到达派发；lane 0~4 正常派发，lane 5 的 (C) 被挡住。此时  io_enqRob_isEmpty=1，所以直接原因不是 ROB 非空，而是同组 lane 0~4 
  是更老的指令。这 5 条进入 ROB 后，!io.enqRob.isEmpty 继续挡住 (C)；直到它们在 4171 拍全部提交、ROB 再次为空，(C) 才派发。
 
-![](./assets/屏幕截图 2026-10-19 163008.png)
+![](./assets/out_order_3.png)
 
 分析指令 `csrw mscratch, t0` (`34029073`)，观察 `io_enq_req_0` 端口。该指令属于 CSR 写操作，不满足 `isCsrr` 纯读条件，需无条件保留串行化标记。因此，其 `waitForward` 和 `blockBackward` 均保持为 1。经波形验证，结果正确。
 
 同理，`csrw mscratch, t1` (`34031073`) 作为连续的 CSR 写操作，其串行化标记同样不被清除，波形中两者均保持为 1。
 
-![](./assets/屏幕截图 2026-10-19 163241.png)
+![](./assets/out_order_4.png)
 
 ### 5.3 派发阶段
 
@@ -262,7 +261,7 @@ csrw mscratch, t1           # (E) CSR 写：始终串行化
 > - `thisCanActualOut_4` = **1**（(B) 指令所在 lane）
 > - `blockedByWaitForward_5` = **1**
 
-![](./assets/4161.png)
+![](./assets/out_order_5.png)
 
 **逻辑分析：**
 
@@ -276,9 +275,9 @@ csrw mscratch, t1           # (E) CSR 写：始终串行化
 > - 4162–4170 拍：`blockedByWaitForward_5 = 1`，`io_enqRob_isEmpty = 0`
 > - **4171 拍**：`io_enqRob_isEmpty = 1`，`firedVec_5 = 1`
 
-![](./assets/4165.png)
+![](./assets/out_order_6.png)
 
-![](./assets/4171.png)
+![](./assets/out_order_7.png)
 
 **逻辑分析：**
 `waitForward` 的硬件语义是“等待前方指令全部提交（即 ROB 排空）”。波形显示，一旦 `io_enqRob_isEmpty` 拉高，硬件即在同一拍解除对 (C) 指令的阻塞，令其成功派发（`firedVec_5 = 1`），体现了无固定周期延迟的条件触发机制。
@@ -290,7 +289,7 @@ csrw mscratch, t1           # (E) CSR 写：始终串行化
 > - **4180 拍**：`firedVec_0 = 1`（(D) 指令派发），`blockedByWaitForward_1 = 1`（(E) 指令被阻塞），`isBlockBackward_0 = 1`，`thisCanActualOut_1 = 0`。
 > - **4189 拍**：`firedVec_1 = 1`（(E) 指令成功派发）。
 
-![](./assets/4181.png)
+![](./assets/out_order_8.png)
 
 **逻辑分析：**
 在 4180 拍，(E) 指令面临双重阻塞约束：
