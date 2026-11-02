@@ -13,7 +13,7 @@ body:
           required: true
         - label: I have reproduced the issue using the latest commit on the default branch. 我已经使用默认分支最新的 commit 复现了问题。
           required: true
-        - label: If this report was generated with AI assistance (otherwise leave unchecked), I have verified the correctness of its content. 如果这是由 AI 生成的（否则请不要勾选），我已经验证了内容的正确性。
+        - label: If this report was generated with AI assistance (otherwise leave unchecked), I have used [wavekit](https://github.com/OpenXiangShan/XiangShanLab/tree/master/tools/xiangshan-wave-analysis) for waveform analysis and verified the correctness of its content. 如果这是由 AI 生成的（否则请不要勾选），我已使用 [wavekit](https://github.com/OpenXiangShan/XiangShanLab/tree/master/tools/xiangshan-wave-analysis) 进行波形分析，并已验证内容的正确性。
           required: false
 
   - type: dropdown
