@@ -477,7 +477,9 @@ KunMingHu v3 的 MDP 是一个有效连接在 backend 和 mem 之间的 Store Se
 
 ## 验证特别注意
 
-> 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。每个期望必须以当前 `kunminghu-v2` 有效 Chisel 为准。
+> 本节依据 `tools/verification-driver/skills` 中的 FSM、冲突、前向进展、索引/哈希、缓存结构、异常/虚拟化和性能瓶颈规则生成。
+>
+> **版本说明**：下表是沿用 V2 时期模板生成的检查项清单，表中的链接与行号指向 `kunminghu-v2`，**与本篇正文的 V3 基线（`055d8ad9`）不一致**。使用时应把每一行当作“要验证的性质”，再回到 V3 源码重新定位对应信号与行号；不得把表中 V2 的行号当作 V3 的实现事实。
 
 | Verification ID | 风险 / 不变量 | 定向激励 | 期望观察 | Checker / Coverage |
 | --- | --- | --- | --- | --- |

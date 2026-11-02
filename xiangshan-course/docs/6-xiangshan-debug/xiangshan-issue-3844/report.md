@@ -1,5 +1,7 @@
 # XiangShan #3844：非对齐 MMIO 存储的异常码不一致
 
+> **基线（按文中引用提交推断，原文未声明）**：昆明湖 V2 开发期。引用的提交早于 V2/V3 分叉点 `4393bdab`（2025-07-17），且缺陷本体在 NEMU 侧。登记见 [VERSIONS.md](../VERSIONS.md)。
+
 ## 1. 问题与结论
 
 [Issue #3844](https://github.com/OpenXiangShan/XiangShan/issues/3844) 报告：执行 `fsh ft0,9(sp)` 或 `flh ft0,9(sp)` 时，XiangShan 与 NEMU 的 `mcause` 不一致。本地程序使用 `fsh`，失败结果为：

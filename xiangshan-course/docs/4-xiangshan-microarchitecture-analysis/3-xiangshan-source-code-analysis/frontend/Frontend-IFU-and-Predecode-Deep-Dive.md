@@ -4,7 +4,7 @@
 > Regenerated from `OpenXiangShan/XiangShan` branch `kunminghu-v2`, source commit `52262f303fc06daf84cdab7011d59b7df65ce7e8` using the updated Frontend graph/stage rules.
 
 <!-- frontend-tutorial-generated-by-analyze-xiangshan-kunminghu -->
-> 所有实现结论均限定在 `kunminghu-v2` commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`；Design Doc 结论必须回到第 18 节的源码追溯矩阵。
+> 所有实现结论均限定在 `kunminghu-v2` commit `52262f303fc06daf84cdab7011d59b7df65ce7e8`；Design Doc 结论必须回到第 18 节的源码追溯矩阵。注意第 18 节引用的 Design Doc 是 `kunminghu-v3` 快照（`f8e258dc`），仅用于解释设计意图，**不是 V2 的同版本证据**。
 
 ## 1. Scope
 

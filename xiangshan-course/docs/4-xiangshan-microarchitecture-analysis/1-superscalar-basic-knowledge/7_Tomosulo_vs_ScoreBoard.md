@@ -173,10 +173,12 @@ SUB.D F8, F10, F12 # 重命名F8为P3
 ## <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">5. 香山 RISC-V 中的 Tomasulo 实现</font>
 <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山南湖架构采用了基于 Tomasulo 算法的乱序执行核心，并针对 RISC-V 指令集进行了大量优化。</font>
 
+> **版本提示**：下文 5.1 节的参数表描述的是**南湖**代（RobSize=256）；昆明湖 V2（RobSize=160）与 V3 的取值不同，引用前请核对目标分支源码。表中“保留站 / CDB”是 Tomasulo 经典模型的概念，香山 RTL 中对应的是 issue queue 与 wakeup 机制。
+
 ### <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">5.1 南湖架构的 Tomasulo 核心参数</font>
 | **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">组件</font>** | **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">参数</font>** |
 | :--- | :--- |
-| **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">发射宽度</font>** | <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">4 条指令 / 周期</font> |
+| **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">发射宽度</font>** | <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">6 条指令 / 周期（DecodeWidth=RenameWidth=CommitWidth=6）</font> |
 | **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">重排序缓冲区 (ROB) 大小</font>** | <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">256 项</font> |
 | **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">物理寄存器数量</font>** | <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">192 个（整数）+ 192 个（浮点）</font> |
 | **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">整数保留站数量</font>** | <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">32 项</font> |

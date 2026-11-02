@@ -2,6 +2,8 @@
 
 本文基于 XiangShan `kunminghu-v3` 分支源码梳理 Decode 端指令融合。结论只按源码证据列出，不从注释或既有文档外推。
 
+> **基线**：`kunminghu-v3`，**未固定 commit**。文中行号以撰写时的分支 HEAD 为准，会随分支更新漂移；复核前请先用 `git log -1` 固定 commit，再核对行号。
+
 核心源码：
 
 - `src/main/scala/xiangshan/backend/decode/FusionDecoder.scala`
