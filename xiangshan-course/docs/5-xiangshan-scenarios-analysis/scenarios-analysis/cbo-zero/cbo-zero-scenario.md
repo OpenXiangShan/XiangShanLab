@@ -1,5 +1,7 @@
 # 香山昆明湖 CBO Zero 三场景演示与波形分析
 
+> **版本基线**：昆明湖 V2（本章公共运行环境 `emuByYuan/stable-kmh-v2`，`kunminghu-v2 @ abd0f867a`，emu 构建于 2026-06-22）。文中周期号、队列深度与波形结论仅对 V2 成立；V3 的对应值不同，不可直接套用。登记见 [第 5 章 VERSIONS.md](../../VERSIONS.md)。 文中的 `/nfs/home/...` 是其他同学的本地目录，可能失效。
+
 ## 结论摘要
 
 本报告分析 Kunminghu V2 的完整波形 2026-08-25-13-36-09.fst。分析使用 /nfs/home/yanyusong/wavekit 开源仓库中的 wavekit.FstReader，在 TOP.SimTop.cpu.l_soc.chi_llcBridge_opt.clock 上升沿采样；对于 Decoupled 接口，fire 定义为 valid && ready。

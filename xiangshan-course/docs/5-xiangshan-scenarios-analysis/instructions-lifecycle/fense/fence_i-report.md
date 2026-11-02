@@ -1,5 +1,7 @@
 # FENCE.I 自修改代码演示报告
 
+> **版本基线**：昆明湖 V2（本章公共运行环境 `emuByYuan/stable-kmh-v2`，`kunminghu-v2 @ abd0f867a`，emu 构建于 2026-06-22）。文中周期号、队列深度与波形结论仅对 V2 成立；V3 的对应值不同，不可直接套用。登记见 [第 5 章 VERSIONS.md](../../VERSIONS.md)。 原文使用的 `~/cbo-kmhv2` 已不存在。
+
 ## 结论
 
 **场景满足。** 演示程序先对数据内存读写并执行一段可执行的数据区代码，随后将该代码首条指令从 `addi a0, zero, 1` 改写为 `addi a0, zero, 42`，执行 `fence.i`，再进行后续内存访问并重新执行该代码。昆明湖 V2 仿真打印 `FENCE.I demonstration PASSED: fetched patched instruction`，且产生 `HIT GOOD TRAP`。

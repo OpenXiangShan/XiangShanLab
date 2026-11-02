@@ -1,5 +1,7 @@
 # 昆明湖 V2：HFENCE.VVMA 演示程序与波形分析报告
 
+> **版本基线**：昆明湖 V2（本章公共运行环境 `emuByYuan/stable-kmh-v2`，`kunminghu-v2 @ abd0f867a`，emu 构建于 2026-06-22）。文中周期号、队列深度与波形结论仅对 V2 成立；V3 的对应值不同，不可直接套用。登记见 [第 5 章 VERSIONS.md](../../VERSIONS.md)。 原文使用的 `~/cbo-kmhv2` 已不存在。
+
 ## 结论摘要
 
 **场景满足。** 演示程序在机器模式执行了 `HFENCE.VVMA x0, x0`，其编码为

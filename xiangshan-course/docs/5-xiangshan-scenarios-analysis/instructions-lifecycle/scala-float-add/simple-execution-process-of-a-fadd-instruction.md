@@ -1,5 +1,7 @@
 # 一条FADD指令的简单分析过程
 
+> **版本基线**：昆明湖 V2（本章公共运行环境 `emuByYuan/stable-kmh-v2`，`kunminghu-v2 @ abd0f867a`，emu 构建于 2026-06-22）。文中周期号、队列深度与波形结论仅对 V2 成立；V3 的对应值不同，不可直接套用。登记见 [第 5 章 VERSIONS.md](../../VERSIONS.md)。
+
 基于的波形的文件：
 <a href="source-code/float-add-inst.zip" target="_blank">【附件: float-add-inst.zip】</a>
 

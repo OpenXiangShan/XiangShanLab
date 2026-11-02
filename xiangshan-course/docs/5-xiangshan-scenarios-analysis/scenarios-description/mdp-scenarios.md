@@ -1,5 +1,7 @@
 # MDP Scenario Extraction
 
+> **版本基线**：**原文未声明**，本轮未核实其所属代。补齐基线前，不得把本文结论当作 V3 事实使用。登记见 [第 5 章 VERSIONS.md](../VERSIONS.md)。 文中的 `/nfs/home/...` 是其他同学的本地目录，可能失效。
+
 ## Scope
 - Mechanism: MDP
 - Interpreted meaning: XiangShan memory dependence prediction, implemented by Store Set Identifier Table (SSIT), Last Fetched Store Table (LFST), and a currently non-wired WaitTable path.

@@ -49,7 +49,7 @@ XiangShan evolves by generation (Yanqihu, Nanhu, Kunminghu V2, Kunminghu V3). **
 
 1. **Every document states its baseline**: branch and commit, or an explicit "not declared" — never left blank.
 2. **A conclusion only holds for the declared commit.** Line numbers, cache parameters and waveform cycles must not be reused across generations; cross-generation references must be labelled "V3 evidence" and "V2 comparison" separately.
-3. **Each chapter keeps a `VERSIONS.md` index** recording the baseline, evidence type (source / waveform / program run) and status per document. Indexes exist for [chapter 4](./docs/4-xiangshan-microarchitecture-analysis/VERSIONS.md) and [chapter 6](./docs/6-xiangshan-debug/VERSIONS.md); chapter 5 is pending.
+3. **Each chapter keeps a `VERSIONS.md` index** recording the baseline, evidence type (source / waveform / program run) and status per document. Indexes exist for [chapter 4](./docs/4-xiangshan-microarchitecture-analysis/VERSIONS.md), [chapter 5](./docs/5-xiangshan-scenarios-analysis/VERSIONS.md) and [chapter 6](./docs/6-xiangshan-debug/VERSIONS.md).
 4. **RTL is the source of truth**: when design documents or older course material conflict with source code, the source at the declared baseline wins.
 5. **References to a branch HEAD are drifting evidence**: pin the commit with `git log -1` before re-checking line numbers.
 

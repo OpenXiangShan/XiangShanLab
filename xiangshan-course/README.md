@@ -47,7 +47,7 @@
 
 1. **每篇文档声明基线**：写明分支与 commit；无法确定的写“未声明”，不要留空让人猜。
 2. **结论只在声明的 commit 上成立**。行号、缓存参数、波形周期不得跨代复用；跨代引用必须分别标注“V3 证据 / V2 对照”。
-3. **每章维护 `VERSIONS.md` 索引**：逐篇登记基线、证据类型（源码 / 波形 / 程序运行）和状态。已建立：[第 4 章](./docs/4-xiangshan-microarchitecture-analysis/VERSIONS.md)、[第 6 章](./docs/6-xiangshan-debug/VERSIONS.md)；第 5 章待补。
+3. **每章维护 `VERSIONS.md` 索引**：逐篇登记基线、证据类型（源码 / 波形 / 程序运行）和状态。已建立：[第 4 章](./docs/4-xiangshan-microarchitecture-analysis/VERSIONS.md)、[第 5 章](./docs/5-xiangshan-scenarios-analysis/VERSIONS.md)、[第 6 章](./docs/6-xiangshan-debug/VERSIONS.md)。
 4. **RTL 是最终事实来源**：设计文档、旧课程文档与源码冲突时，以声明基线的源码为准。
 5. **引用分支 HEAD 属于会漂移的证据**：复核前先用 `git log -1` 固定 commit，再核对行号。
 
