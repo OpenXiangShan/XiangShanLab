@@ -14,23 +14,20 @@ description: |
 
   If the value in xs2 is zero, xd is written with all 1s.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: div
-        - latency: 8.114258
-        - throughput: 0.076721
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: div
+    - latency: 8.114258
+    - throughput: 0.076721
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                reg_type: INTEGER
-            -   type: reg
-                reg_type: INTEGER
-            -   type: reg
-                reg_type: INTEGER
+operands-constraints:
+  - type: reg
+    reg_type: INTEGER
+  - type: reg
+    reg_type: INTEGER
+  - type: reg
+    reg_type: INTEGER
 
 definedBy:
   allOf:

@@ -12,25 +12,22 @@ description: |
   block cipher Key Schedule.
   `rnum` must be in the range `0x0..0xA`. The values `0xB..0xF` are reserved.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: bku
-        - latency: 3.257812
-        - throughput: 1.242718
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: bku
+    - latency: 3.257812
+    - throughput: 1.242718
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: imm
-                width: 4
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: imm
+    width: 4
 
 definedBy:
   allOf:

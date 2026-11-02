@@ -10,26 +10,23 @@ long_name: Exclusive NOR
 description: |
   Performs the bit-wise exclusive-NOR operation on xs1 and xs2.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: alu.xnor
-        - latency: 1.032227
-        - throughput: 2.645995
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: alu.xnor
+    - latency: 1.032227
+    - throughput: 2.645995
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: reg
+    width: 5
+    reg_type: INTEGER
 
 definedBy:
   extension:

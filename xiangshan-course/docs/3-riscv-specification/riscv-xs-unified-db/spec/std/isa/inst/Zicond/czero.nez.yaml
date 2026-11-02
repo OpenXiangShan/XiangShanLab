@@ -13,23 +13,20 @@ description: |
   This instruction carries a syntactic dependency from both xs1 and xs2 to xd. Furthermore, if the Zkt
   extension is implemented, this instruction's timing is independent of the data values in xs1 and xs2.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: alu.czero_nez
-        - latency: 1.257812
-        - throughput: 1.471264
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: alu.czero_nez
+    - latency: 1.257812
+    - throughput: 1.471264
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-            -   type: reg
-                width: 5
-            -   type: reg
-                width: 5
+operands-constraints:
+  - type: reg
+    width: 5
+  - type: reg
+    width: 5
+  - type: reg
+    width: 5
 
 definedBy:
   extension:

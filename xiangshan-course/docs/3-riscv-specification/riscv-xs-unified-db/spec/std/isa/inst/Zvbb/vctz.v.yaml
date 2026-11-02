@@ -10,19 +10,16 @@ long_name: Vector count trailing zeros
 description: |
   Counts the number of trailing zero bits in each element of vector register vs2, storing results in vector register vd according to mask vm. For zero elements, returns the element width.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: vialuF.vctz_v
-        - latency: 6.242188
-        - throughput: 0.780488
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: vialuF.vctz_v
+    - latency: 6.242188
+    - throughput: 0.780488
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-            -   type: vreg
+operands-constraints:
+  - type: vreg
+  - type: vreg
 
 definedBy:
   extension:

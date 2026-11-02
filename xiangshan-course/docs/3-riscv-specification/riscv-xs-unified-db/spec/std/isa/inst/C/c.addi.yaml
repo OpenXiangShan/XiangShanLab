@@ -13,24 +13,21 @@ description: |
   C.ADDI is only valid when xd &ne; x0 and imm &ne; 0.
   The code points with xd=x0 encode the C.NOP instruction; the remaining code points with imm=0 encode HINTs.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: alu.add
-        - latency: 1.257812
-        - throughput: 1.454545
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: alu.add
+    - latency: 1.257812
+    - throughput: 1.454545
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: creg
-                width: 5
-                range: (0, 31)
-            -   type: imm
-                width: 6
-                signed: true
-                range: (-32, 31)
+operands-constraints:
+  - type: creg
+    width: 5
+    range: (0, 31)
+  - type: imm
+    width: 6
+    signed: true
+    range: (-32, 31)
 
 definedBy:
   extension:

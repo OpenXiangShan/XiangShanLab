@@ -11,23 +11,20 @@ description: |
   The `fadd.s` instruction performs single-precision floating-point addition of `fs1` and `fs2`
   and writes the final result to `fd`.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: falu.vfadd
-        - latency: 2.257812
-        - throughput: 1.662338
-    - architectural_attributes:
-        - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: falu.vfadd
+    - latency: 2.257812
+    - throughput: 1.662338
+  - architecture:
+    - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: freg
-                reg_type: FLOAT
-            -   type: freg
-                reg_type: FLOAT
-            -   type: freg
-                reg_type: FLOAT
+operands-constraints:
+  - type: freg
+    reg_type: FLOAT
+  - type: freg
+    reg_type: FLOAT
+  - type: freg
+    reg_type: FLOAT
 
 definedBy:
   extension:

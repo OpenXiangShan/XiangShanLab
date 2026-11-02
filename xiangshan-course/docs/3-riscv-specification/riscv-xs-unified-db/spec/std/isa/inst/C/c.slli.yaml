@@ -11,23 +11,20 @@ description: |
   Shift the value in xd left by shamt, and store the result back in xd.
   C.SLLI expands into `slli xd, xd, shamt`.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: alu.sll
-        - latency: 1.257812
-        - throughput: 1.454545
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: alu.sll
+    - latency: 1.257812
+    - throughput: 1.454545
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: creg
-                width: 5
-                range: (0, 31)
-            -   type: imm
-                width: 5
-                range: (1, 31)
+operands-constraints:
+  - type: creg
+    width: 5
+    range: (0, 31)
+  - type: imm
+    width: 5
+    range: (1, 31)
 
 definedBy:
   extension:

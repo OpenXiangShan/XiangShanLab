@@ -11,26 +11,23 @@ description: |
   Store 32 bits of data from register `xs2` to guest physical memory at the
   address in `xs1`, as though V=1.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: stu
-        - latency: 3.700195
-        - throughput: 0.711111
-    - architectural_attributes:
-        - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: stu
+    - latency: 3.700195
+    - throughput: 0.711111
+  - architecture:
+    - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs2
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs1
-                mem: true
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs2
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs1
+    mem: true
 
 definedBy:
   extension:

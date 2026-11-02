@@ -12,19 +12,16 @@ description: |
   This instruction zero-extends the least-significant byte of the source to XLEN by inserting
   0's into all of the bits more significant than 7.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: alu.sexth
-        - latency: 1.257812
-        - throughput: 1.454545
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: alu.sexth
+    - latency: 1.257812
+    - throughput: 1.454545
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: creg
-                width: 5
+operands-constraints:
+  - type: creg
+    width: 5
 
 definedBy:
   extension:

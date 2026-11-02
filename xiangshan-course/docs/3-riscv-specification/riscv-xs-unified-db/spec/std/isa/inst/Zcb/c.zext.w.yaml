@@ -11,19 +11,16 @@ description: |
   Takes a single source/destination operand.
   It zero-extends the least-significant word of the operand to XLEN bits by inserting zeros into all of the bits more significant than 31.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: alu.sexth
-        - latency: 1.257812
-        - throughput: 1.454545
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: alu.sexth
+    - latency: 1.257812
+    - throughput: 1.454545
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: creg
-                width: 5
+operands-constraints:
+  - type: creg
+    width: 5
 
 definedBy:
   allOf:

@@ -19,25 +19,22 @@ description: |
     * Compare the loaded value with the least-significant word of register _xs2_
     * If equal, write the least-significant word of register _xs2+1_ to the address in _xs1_
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: mou
-        - latency: 26.726562
-        - throughput: 0.037285
-    - architectural_attributes:
-        - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: mou
+    - latency: 26.726562
+    - throughput: 0.037285
+  - architecture:
+    - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                reg_type: INTEGER
-                alignment: 2
-            -   type: reg
-                reg_type: INTEGER
-                alignment: 2
-            -   type: reg
-                reg_type: INTEGER
+operands-constraints:
+  - type: reg
+    reg_type: INTEGER
+    alignment: 2
+  - type: reg
+    reg_type: INTEGER
+    alignment: 2
+  - type: reg
+    reg_type: INTEGER
 
 definedBy:
   extension:

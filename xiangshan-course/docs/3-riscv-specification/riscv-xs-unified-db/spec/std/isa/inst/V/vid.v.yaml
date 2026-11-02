@@ -10,23 +10,20 @@ long_name: No synopsis available
 description: |
   No description available.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: vipu.vid_v
-        - throughput: 0.775758
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: vipu.vid_v
+    - throughput: 0.775758
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vd
-            -   type: vm
-                literal: v0.t
-                option: true
+operands-constraints:
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vd
+  - type: vm
+    literal: v0.t
+    option: true
 
 definedBy:
   extension:

@@ -10,34 +10,31 @@ long_name: "Vector remainder"
 description: |
   Performs remainder operation on elements from vector registers vs2 and vs1 and stores results in vector register vd, using vector mask vm.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: vidiv.vrem
-        - latency: 11.242188
-        - throughput: 0.137487
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: vidiv.vrem
+    - latency: 11.242188
+    - throughput: 0.137487
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                required: '!=v0'
-                field: vd
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vs2
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                required: '!=0'
-                field: vs1
-            -   type: vm
-                literal: v0.t
-                option: true
+operands-constraints:
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    required: '!=v0'
+    field: vd
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vs2
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    required: '!=0'
+    field: vs1
+  - type: vm
+    literal: v0.t
+    option: true
 
 definedBy:
   extension:

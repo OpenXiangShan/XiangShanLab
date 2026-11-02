@@ -10,34 +10,31 @@ long_name: Vector shift right logical by vector
 description: |
   Performs a logical right shift on each element in vector register vs2 by the shift amount in vector register vs1, storing results in vector register vd according to mask vm. This is not a memory operation but a shift operation.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: vialuF.vssrl_vv
-        - latency: 6.273438
-        - throughput: 0.761905
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: vialuF.vssrl_vv
+    - latency: 6.273438
+    - throughput: 0.761905
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                required: '!=v0'
-                field: vd
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vs2
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                required: '!=x0'
-                field: rs1
-            -   type: vm
-                literal: v0.t
-                option: true
+operands-constraints:
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    required: '!=v0'
+    field: vd
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vs2
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    required: '!=x0'
+    field: rs1
+  - type: vm
+    literal: v0.t
+    option: true
 
 definedBy:
   extension:

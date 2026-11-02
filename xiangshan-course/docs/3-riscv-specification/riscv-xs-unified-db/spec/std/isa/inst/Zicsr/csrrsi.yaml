@@ -15,24 +15,21 @@ description: |
   a CSR write, nor raise illegal-instruction exceptions on accesses to read-only CSRs. The CSRRSI will
   always read the CSR and cause any read side effects regardless of `xd` and `xs1` fields.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: csr
-        - throughput: 0.107835
-    - architectural_attributes:
-        - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: csr
+    - throughput: 0.107835
+  - architecture:
+    - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: csr
-                width: 12
-            -   type: imm
-                width: 5
-                signed: false
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: csr
+    width: 12
+  - type: imm
+    width: 5
+    signed: false
 
 definedBy:
   extension:

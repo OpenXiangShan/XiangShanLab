@@ -11,26 +11,23 @@ description: |
   Load 32 bits of data into register `xd` from guest physical memory at the
   address in `xs1`, as though V=1. Sign-extend the result to XLEN bits.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: ldu
-        - latency: 3.700195
-        - throughput: 1.113043
-    - architectural_attributes:
-        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: ldu
+    - latency: 3.700195
+    - throughput: 1.113043
+  - architecture:
+    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rd
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs1
-                mem: true
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rd
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs1
+    mem: true
 
 definedBy:
   extension:

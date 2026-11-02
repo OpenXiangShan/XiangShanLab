@@ -10,33 +10,30 @@ long_name: "Vector slide down with scalar"
 description: |
   Slides elements in vector register vs2 down by 1 position, inserting scalar register xs1 at the top, and stores results in vector register vd, using vector mask vm.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: vppu.vslidedown
-        - latency: 7.273438
-        - throughput: 0.673684
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: vppu.vslidedown
+    - latency: 7.273438
+    - throughput: 0.673684
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                required: '!=v0'
-                field: vd
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vs2
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs1
-            -   type: vm
-                literal: v0.t
-                option: true
+operands-constraints:
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    required: '!=v0'
+    field: vd
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vs2
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs1
+  - type: vm
+    literal: v0.t
+    option: true
 
 definedBy:
   extension:

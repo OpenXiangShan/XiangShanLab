@@ -16,21 +16,18 @@ description: |
   The `fcvt.w.d` instruction converts a double-precision floating-point number in floating-point register `fs1` to a
   signed 32-bit integer, in integer register `xd`.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: fcvt.vfncvt_xfw
-        - latency: 6.029297
-        - throughput: 0.785276
-    - architectural_attributes:
-        - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: fcvt.vfncvt_xfw
+    - latency: 6.029297
+    - throughput: 0.785276
+  - architecture:
+    - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                reg_type: INTEGER
-            -   type: freg
-                reg_type: FLOAT
+operands-constraints:
+  - type: reg
+    reg_type: INTEGER
+  - type: freg
+    reg_type: FLOAT
 
 assembly: xd, fs1, rm
 encoding:

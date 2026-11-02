@@ -23,23 +23,20 @@ description:
   However, unlike `sfence.vma`, `sinval.vma` instructions are only ordered with respect to
   `sfence.vma`, `sfence.w.inval`, and `sfence.inval.ir` instructions as defined below.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: fence
-        - throughput: 0.097338
+  - microarchitecture:
+    - FuType: fence
+    - throughput: 0.097338
 
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: reg
+    width: 5
+    reg_type: INTEGER
 
 access:
   s: sometimes

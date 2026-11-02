@@ -11,30 +11,27 @@ description: |
   Sets the vector length register vl and vector type register vtype based on immediate values. Configures SEW, LMUL, and other vector parameters for subsequent vector operations.
 
 xs-attributes:
-    - microarchitectural_attributes:
-        - VSETOpType: uvsetvcfg_xi
-        - latency: 5.265625
-        - throughput: 0.441379
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, IllegalVtype, PageFault_inst]
+  - microarchitecture:
+    - VSETOpType: uvsetvcfg_xi
+    - latency: 5.265625
+    - throughput: 0.441379
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, IllegalVtype, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rd
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs1
-            -   type: imm
-                width: 11
-                signed: false
-                field: vtype
-                range: (0, 2047)
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rd
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs1
+  - type: imm
+    width: 11
+    signed: false
+    field: vtype
+    range: (0, 2047)
 
 definedBy:
   extension:

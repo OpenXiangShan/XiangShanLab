@@ -17,17 +17,14 @@ description: |
   instructions executed by the current hart are ordered before subsequent implicit references by
   that hart to the memory-management data structures.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: fence
-        - throughput: 0.038061
+  - microarchitecture:
+    - FuType: fence
+    - throughput: 0.038061
 
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands: []
+operands-constraints: []
 
 access:
   s: sometimes

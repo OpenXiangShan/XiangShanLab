@@ -54,21 +54,18 @@ description: |
   LR.rl and SC.aq instructions are not guaranteed to provide any stronger ordering than those
   with both bits clear, but may result in lower performance.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: mou
-        - latency: 67.945312
-        - throughput: 0.014731
-    - architectural_attributes:
-        - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: mou
+    - latency: 67.945312
+    - throughput: 0.014731
+  - architecture:
+    - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                reg_type: INTEGER
-            -   type: reg
-                reg_type: INTEGER
+operands-constraints:
+  - type: reg
+    reg_type: INTEGER
+  - type: reg
+    reg_type: INTEGER
 
 definedBy:
   extension:

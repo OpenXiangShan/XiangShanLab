@@ -11,27 +11,24 @@ description: |
   Store 32 bits of data from register `xs2` to an
   address formed by adding `xs1` to a signed offset.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: stu
-        - latency: 3.721680
-        - throughput: 0.394605
-    - architectural_attributes:
-        - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: stu
+    - latency: 3.721680
+    - throughput: 0.394605
+  - architecture:
+    - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: imm
-                width: 12
-                signed: true
-                range: (-2048, 2047)
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: imm
+    width: 12
+    signed: true
+    range: (-2048, 2047)
 
 definedBy:
   extension:

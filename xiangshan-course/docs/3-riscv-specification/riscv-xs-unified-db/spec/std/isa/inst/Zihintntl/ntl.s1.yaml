@@ -12,16 +12,13 @@ description: |
   does not exhibit temporal locality within the capacity of the innermost level
   of shared cache in the memory hierarchy. NTL.S1 is encoded as ADD x0, x0, x4.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: alu.add
-        - throughput: 1.828571
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: alu.add
+    - throughput: 1.828571
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands: []
+operands-constraints: []
 
 definedBy:
   extension:

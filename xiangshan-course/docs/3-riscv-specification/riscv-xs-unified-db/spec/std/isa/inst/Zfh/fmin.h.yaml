@@ -10,26 +10,23 @@ long_name: No synopsis available
 description: |
   No description available.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: falu.vfmin
-        - latency: 2.257812
-        - throughput: 1.662338
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: falu.vfmin
+    - latency: 2.257812
+    - throughput: 1.662338
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: freg
-                reg_type: FLOAT
-                width: 5
-            -   type: freg
-                reg_type: FLOAT
-                width: 5
-            -   type: freg
-                reg_type: FLOAT
-                width: 5
+operands-constraints:
+  - type: freg
+    reg_type: FLOAT
+    width: 5
+  - type: freg
+    reg_type: FLOAT
+    width: 5
+  - type: freg
+    reg_type: FLOAT
+    width: 5
 
 definedBy:
   extension:

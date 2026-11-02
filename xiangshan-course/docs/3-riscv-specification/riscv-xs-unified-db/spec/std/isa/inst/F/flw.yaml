@@ -12,25 +12,22 @@ description: |
   It does not modify the bits being transferred; in particular, the payloads of non-canonical NaNs are preserved.
 
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: ldu
-        - latency: 5.038086
-        - throughput: 1.113043
+  - microarchitecture:
+    - FuType: ldu
+    - latency: 5.038086
+    - throughput: 1.113043
 
-    - architectural_attributes:
-        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+  - architecture:
+    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: freg
-                reg_type: FLOAT
-            -   type: reg
-                reg_type: INTEGER
-            -   type: imm
-                width: 12
-                signed: true
+operands-constraints:
+  - type: freg
+    reg_type: FLOAT
+  - type: reg
+    reg_type: INTEGER
+  - type: imm
+    width: 12
+    signed: true
 
 definedBy:
   extension:

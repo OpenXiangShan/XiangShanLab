@@ -11,23 +11,20 @@ description: |
   The `fdiv.s` instruction performs the single-precision floating-point division of `fs1` by `fs2`, and
   writes the final result to `fd`.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: fDivSqrt.vfdiv
-        - latency: 5.234375
-        - throughput: 0.785276
-    - architectural_attributes:
-        - exceptions: [DZ, NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: fDivSqrt.vfdiv
+    - latency: 5.234375
+    - throughput: 0.785276
+  - architecture:
+    - exceptions: [DZ, NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: freg
-                reg_type: FLOAT
-            -   type: freg
-                reg_type: FLOAT
-            -   type: freg
-                reg_type: FLOAT
+operands-constraints:
+  - type: freg
+    reg_type: FLOAT
+  - type: freg
+    reg_type: FLOAT
+  - type: freg
+    reg_type: FLOAT
 
 definedBy:
   extension:

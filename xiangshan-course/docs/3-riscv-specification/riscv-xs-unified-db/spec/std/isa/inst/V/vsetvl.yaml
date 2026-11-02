@@ -10,29 +10,26 @@ long_name: Vector Set Vector Type and Vector Length
 description: Set the vtype and vl CSRs, and write the new value of vl into rd.
 
 xs-attributes:
-    - microarchitectural_attributes:
-        - VSETOpType: uvsetvcfg_xx
-        - latency: 26.195312
-        - throughput: 0.038175
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, IllegalVtype, PageFault_inst]
+  - microarchitecture:
+    - VSETOpType: uvsetvcfg_xx
+    - latency: 26.195312
+    - throughput: 0.038175
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, IllegalVtype, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rd
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs1
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs2
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rd
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs1
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs2
 
 definedBy:
   extension:

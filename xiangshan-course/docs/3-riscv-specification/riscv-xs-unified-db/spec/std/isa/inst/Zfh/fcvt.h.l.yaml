@@ -17,23 +17,20 @@ definedBy:
 description: |
   `fcvt.h.l` converts a 64-bit signed integer to a half-precision floating-point number.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: i2f
-        - latency: 6.029297
-        - throughput: 0.785276
+  - microarchitecture:
+    - FuType: i2f
+    - latency: 6.029297
+    - throughput: 0.785276
 
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: freg
-                reg_type: FLOAT
-                width: 5
-            -   type: reg
-                width: 5
+operands-constraints:
+  - type: freg
+    reg_type: FLOAT
+    width: 5
+  - type: reg
+    width: 5
 
 assembly: fd, xs1, rm
 encoding:

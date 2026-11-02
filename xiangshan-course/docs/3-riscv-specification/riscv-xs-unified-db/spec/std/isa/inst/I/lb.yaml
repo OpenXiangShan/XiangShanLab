@@ -12,27 +12,24 @@ description: |
   address formed by adding `xs1` to a signed offset.
   Sign extend the result.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: ldu
-        - latency: 3.703125
-        - throughput: 0.915103
-    - architectural_attributes:
-        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: ldu
+    - latency: 3.703125
+    - throughput: 0.915103
+  - architecture:
+    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: imm
-                width: 12
-                signed: true
-                range: (-2048, 2047)
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: imm
+    width: 12
+    signed: true
+    range: (-2048, 2047)
 
 definedBy:
   extension:

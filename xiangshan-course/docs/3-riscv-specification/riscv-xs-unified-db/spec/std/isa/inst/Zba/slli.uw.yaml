@@ -14,25 +14,22 @@ description: |
   [NOTE]
   This instruction is the same as `slli` with `zext.w` performed on xs1 before shifting.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: alu.slliuw
-        - latency: 1.032227
-        - throughput: 2.666667
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: alu.slliuw
+    - latency: 1.032227
+    - throughput: 2.666667
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-            -   type: reg
-                width: 5
-            -   type: imm
-                width: 5
-                signed: false
-                range: (0, 31)
+operands-constraints:
+  - type: reg
+    width: 5
+  - type: reg
+    width: 5
+  - type: imm
+    width: 5
+    signed: false
+    range: (0, 31)
 
 definedBy:
   allOf:

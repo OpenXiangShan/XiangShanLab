@@ -17,21 +17,18 @@ description: |
   analogously to its single-precision counterpart, but operates on double-precision operands and produces
   double-precision results.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: fDivSqrt.vfsqrt
-        - latency: 5.234375
-        - throughput: 0.707182
-    - architectural_attributes:
-        - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: fDivSqrt.vfsqrt
+    - latency: 5.234375
+    - throughput: 0.707182
+  - architecture:
+    - exceptions: [NX, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: freg
-                reg_type: FLOAT
-            -   type: freg
-                reg_type: FLOAT
+operands-constraints:
+  - type: freg
+    reg_type: FLOAT
+  - type: freg
+    reg_type: FLOAT
 
 assembly: fd, fs1, rm
 encoding:

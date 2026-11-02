@@ -13,27 +13,24 @@ description: |
   to the base address in register xs1.
   It expands to `sw` `rs2, offset(xs1)`.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: stu
-        - latency: 3.763672
-        - throughput: 0.711111
-    - architectural_attributes:
-        - exceptions: [AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: stu
+    - latency: 3.763672
+    - throughput: 0.711111
+  - architecture:
+    - exceptions: [AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: creg
-                width: 3
-                range: (8, 15)
-            -   type: creg
-                width: 3
-                range: (8, 15)
-            -   type: imm
-                width: 5
-                range: (0, 124)
-                alignment: 4
+operands-constraints:
+  - type: creg
+    width: 3
+    range: (8, 15)
+  - type: creg
+    width: 3
+    range: (8, 15)
+  - type: imm
+    width: 5
+    range: (0, 124)
+    alignment: 4
 
 definedBy:
   extension:

@@ -10,33 +10,30 @@ long_name: "Vector signed shift right arithmetic with immediate"
 description: |
   Performs signed arithmetic right shift on elements from vector register vs2 by immediate shift amount and stores results in vector register vd, using vector mask vm. The operation preserves the sign bit.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: vialuF.vssra_vv
-        - latency: 6.273438
-        - throughput: 0.761905
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: vialuF.vssra_vv
+    - latency: 6.273438
+    - throughput: 0.761905
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                required: '!=v0'
-                field: vd
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vs2
-            -   type: imm
-                width: 5
-                signed: false
-                field: imm
-            -   type: vm
-                literal: v0.t
-                option: true
+operands-constraints:
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    required: '!=v0'
+    field: vd
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vs2
+  - type: imm
+    width: 5
+    signed: false
+    field: imm
+  - type: vm
+    literal: v0.t
+    option: true
 
 definedBy:
   extension:

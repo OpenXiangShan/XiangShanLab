@@ -11,25 +11,22 @@ description: |
   The `fsw` instruction stores a single-precision floating-point value in `fs2` to memory at address `xs1` + `imm`.
   It does not modify the bits being transferred; in particular, the payloads of non-canonical NaNs are preserved.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: stu
-        - latency: 5.038086
-        - throughput: 0.711111
+  - microarchitecture:
+    - FuType: stu
+    - latency: 5.038086
+    - throughput: 0.711111
 
-    - architectural_attributes:
-        - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
+  - architecture:
+    - exceptions: [AccessFault_store, AddrMisalign_store, PageFault_inst, IllegalInst, PageFault_store, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: freg
-                reg_type: FLOAT
-            -   type: reg
-                reg_type: INTEGER
-            -   type: imm
-                width: 12
-                signed: true
+operands-constraints:
+  - type: freg
+    reg_type: FLOAT
+  - type: reg
+    reg_type: INTEGER
+  - type: imm
+    width: 12
+    signed: true
 
 definedBy:
   extension:

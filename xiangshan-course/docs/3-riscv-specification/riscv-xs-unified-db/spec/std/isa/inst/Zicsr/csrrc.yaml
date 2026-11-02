@@ -21,25 +21,22 @@ description: |
   the instruction will not action any attendant per-field side effects, but will action any
   side effects caused by writing to the entire CSR.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: csr
-        - latency: 9.273438
-        - throughput: 0.107835
-    - architectural_attributes:
-        - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: csr
+    - latency: 9.273438
+    - throughput: 0.107835
+  - architecture:
+    - exceptions: [IllegalCsr, IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: csr
-                width: 12
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: csr
+    width: 12
+  - type: reg
+    width: 5
+    reg_type: INTEGER
 
 definedBy:
   extension:

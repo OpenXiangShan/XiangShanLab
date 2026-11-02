@@ -11,29 +11,26 @@ description: |
   Stores 8-bit elements from vector register vs3 to memory starting at address in xs1 register, using vector mask vm. The effective element width is 8 bits regardless of SEW setting.
 
 xs-attributes:
-    - microarchitectural_attributes:
-        - VstuType: vse
-        - latency: 8.543945
-        - throughput: 0.270042
-    - architectural_attributes:
-        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - VstuType: vse
+    - latency: 8.543945
+    - throughput: 0.270042
+  - architecture:
+    - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vs3
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs1
-                mem: true
-            -   type: vm
-                literal: v0.t
-                option: true
+operands-constraints:
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vs3
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs1
+    mem: true
+  - type: vm
+    literal: v0.t
+    option: true
 
 definedBy:
   extension:

@@ -18,23 +18,20 @@ description: |
   register `fd`. Sign-injection instructions do not set floating-point exception flags, nor do they
   canonicalize NaNs.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: falu.vfsgnjn
-        - latency: 2.257812
-        - throughput: 1.662338
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: falu.vfsgnjn
+    - latency: 2.257812
+    - throughput: 1.662338
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: freg
-                reg_type: FLOAT
-            -   type: freg
-                reg_type: FLOAT
-            -   type: freg
-                reg_type: FLOAT
+operands-constraints:
+  - type: freg
+    reg_type: FLOAT
+  - type: freg
+    reg_type: FLOAT
+  - type: freg
+    reg_type: FLOAT
 
 assembly: fd, fs1, fs2
 encoding:

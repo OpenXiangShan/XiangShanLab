@@ -10,32 +10,29 @@ long_name: Vector mask less than or equal unsigned immediate
 description: |
   Sets mask bits where elements in vs2 are less than or equal to immediate value (unsigned), according to mask vm, and stores results in vd. Element width is determined by SEW setting. Supports vector masking and follows vector tail policy.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: vialuF.vmsleu_vv
-        - latency: 6.273438
-        - throughput: 0.761905
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: vialuF.vmsleu_vv
+    - latency: 6.273438
+    - throughput: 0.761905
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vd
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vs2
-            -   type: imm
-                width: 5
-                signed: true
-                field: imm
-            -   type: vm
-                literal: v0.t
-                option: true
+operands-constraints:
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vd
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vs2
+  - type: imm
+    width: 5
+    signed: true
+    field: imm
+  - type: vm
+    literal: v0.t
+    option: true
 
 definedBy:
   extension:

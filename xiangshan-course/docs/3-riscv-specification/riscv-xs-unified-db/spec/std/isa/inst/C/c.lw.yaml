@@ -13,27 +13,24 @@ description: |
   to the base address in register xs1.
   It expands to `lw` `xd, offset(xs1)`.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: ldu
-        - latency: 3.763672
-        - throughput: 1.163636
-    - architectural_attributes:
-        - exceptions: [PageFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: ldu
+    - latency: 3.763672
+    - throughput: 1.163636
+  - architecture:
+    - exceptions: [PageFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: creg
-                width: 3
-                range: (8, 15)
-            -   type: creg
-                width: 3
-                range: (8, 15)
-            -   type: imm
-                width: 5
-                range: (0, 124)
-                alignment: 4
+operands-constraints:
+  - type: creg
+    width: 3
+    range: (8, 15)
+  - type: creg
+    width: 3
+    range: (8, 15)
+  - type: imm
+    width: 5
+    range: (0, 124)
+    alignment: 4
 
 definedBy:
   extension:

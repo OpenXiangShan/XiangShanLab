@@ -10,33 +10,30 @@ long_name: Vector floating-point multiply scalar
 description: |
   Performs floating-point multiplication on elements from vs2 and scalar from rs1, according to mask vm, and stores results in vd. Element width is determined by SEW setting. Follows IEEE-754 floating-point standards. Supports vector masking and follows vector tail policy.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: vfma.vfmul
-        - latency: 8.273438
-        - throughput: 0.603774
-    - architectural_attributes:
-        - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: vfma.vfmul
+    - latency: 8.273438
+    - throughput: 0.603774
+  - architecture:
+    - exceptions: [NX, UF, OF, NV, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                required: '!=v0'
-                field: vd
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vs2
-            -   type: freg
-                width: 5
-                reg_type: FLOAT
-                field: rs1
-            -   type: vm
-                literal: v0.t
-                option: true
+operands-constraints:
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    required: '!=v0'
+    field: vd
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vs2
+  - type: freg
+    width: 5
+    reg_type: FLOAT
+    field: rs1
+  - type: vm
+    literal: v0.t
+    option: true
 
 definedBy:
   extension:

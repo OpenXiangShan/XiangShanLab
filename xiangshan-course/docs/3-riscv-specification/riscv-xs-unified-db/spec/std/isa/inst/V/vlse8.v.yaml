@@ -11,33 +11,30 @@ description: |
   Loads 8-bit elements from memory starting at address in xs1 register with stride in xs2, using vector mask vm, and stores results in vector register vd. The effective element width is 8 bits.
 
 xs-attributes:
-    - microarchitectural_attributes:
-        - VlduType: vlse
-        - latency: 12.037109
-        - throughput: 0.092552
-    - architectural_attributes:
-        - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - VlduType: vlse
+    - latency: 12.037109
+    - throughput: 0.092552
+  - architecture:
+    - exceptions: [AccessFault, AddrMisalign, PageFault_inst, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: vreg
-                width: 5
-                reg_type: VECTOR
-                field: vd
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs1
-                mem: true
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-                field: rs2
-            -   type: vm
-                literal: v0.t
-                option: true
+operands-constraints:
+  - type: vreg
+    width: 5
+    reg_type: VECTOR
+    field: vd
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs1
+    mem: true
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+    field: rs2
+  - type: vm
+    literal: v0.t
+    option: true
 
 definedBy:
   extension:

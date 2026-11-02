@@ -13,21 +13,18 @@ description: |
   payloads of non-canonical NaNs are preserved. For RV64, the higher 32 bits of the destination register are filled with copies
   of the floating-point number's sign bit.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: fcvt
-        - latency: 5.029297
-        - throughput: 0.785276
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: fcvt
+    - latency: 5.029297
+    - throughput: 0.785276
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                reg_type: INTEGER
-            -   type: freg
-                reg_type: FLOAT
+operands-constraints:
+  - type: reg
+    reg_type: INTEGER
+  - type: freg
+    reg_type: FLOAT
 
 definedBy:
   extension:

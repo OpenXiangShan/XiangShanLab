@@ -12,26 +12,23 @@ description: |
   It computes an effective address by adding the zero-extended offset, to the base address in register xs1.
   It expands to `lh` `xd, offset(xs1)`.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: ldu
-        - latency: 3.764648
-        - throughput: 1.163636
-    - architectural_attributes:
-        - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: ldu
+    - latency: 3.764648
+    - throughput: 1.163636
+  - architecture:
+    - exceptions: [PageFault_load, AccessFault_load, PageFault_inst, IllegalInst, AddrMisalign_load, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: creg
-                width: 5
-            -   type: creg
-                width: 5
-            -   type: imm
-                width: 5
-                signed: false
-                range: (0, 0)
-                alignment: 8
+operands-constraints:
+  - type: creg
+    width: 5
+  - type: creg
+    width: 5
+  - type: imm
+    width: 5
+    signed: false
+    range: (0, 0)
+    alignment: 8
 
 definedBy:
   extension:

@@ -10,22 +10,19 @@ long_name: Multiply, 16-bit encoding
 description: |
   Multiplies XLEN bits of the source operands from rsd' and xs2' and writes the lowest XLEN bits of the result to rsd'.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: mul
-        - latency: 3.257812
-        - throughput: 1.196262
+  - microarchitecture:
+    - FuType: mul
+    - latency: 3.257812
+    - throughput: 1.196262
 
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: creg
-                width: 5
-            -   type: creg
-                width: 5
+operands-constraints:
+  - type: creg
+    width: 5
+  - type: creg
+    width: 5
 
 definedBy:
   extension:

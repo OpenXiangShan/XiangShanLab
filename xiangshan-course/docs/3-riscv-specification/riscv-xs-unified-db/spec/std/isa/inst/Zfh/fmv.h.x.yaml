@@ -13,22 +13,19 @@ description: |
   register `fd`. The bits are not modified in the transfer, and in particular,
   the payloads of non-canonical NaNs are preserved.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: i2v
-        - latency: 5.029297
-        - throughput: 0.795031
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: i2v
+    - latency: 5.029297
+    - throughput: 0.795031
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: freg
-                reg_type: FLOAT
-                width: 5
-            -   type: reg
-                width: 5
+operands-constraints:
+  - type: freg
+    reg_type: FLOAT
+    width: 5
+  - type: reg
+    width: 5
 
 definedBy:
   extension:

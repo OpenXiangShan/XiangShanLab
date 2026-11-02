@@ -19,23 +19,20 @@ description: |
     * Unsigned compare the value of register _xs2_ to the loaded value, and select the minimum value
     * Write the minimum to the address in _xs1_
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: mou
-        - latency: 19.273438
-        - throughput: 0.051885
-    - architectural_attributes:
-        - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
+  - microarchitecture:
+    - FuType: mou
+    - latency: 19.273438
+    - throughput: 0.051885
+  - architecture:
+    - exceptions: [PageFault_amo, AddrMisalign_amo, PageFault_inst, AccessFault_amo, IllegalInst, AddrMisalign_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                reg_type: INTEGER
-            -   type: reg
-                reg_type: INTEGER
-            -   type: reg
-                reg_type: INTEGER
+operands-constraints:
+  - type: reg
+    reg_type: INTEGER
+  - type: reg
+    reg_type: INTEGER
+  - type: reg
+    reg_type: INTEGER
 
 definedBy:
   allOf:

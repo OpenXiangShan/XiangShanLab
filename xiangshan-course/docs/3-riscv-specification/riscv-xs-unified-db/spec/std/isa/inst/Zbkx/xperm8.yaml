@@ -12,26 +12,23 @@ description: |
   elements. The xs2 register contains a vector of XLEN/8 8-bit indexes. The result is each element in
   xs2 replaced by the indexed element in xs1, or zero if the index into xs2 is out of bounds.
 xs-attributes:
-    - microarchitectural_attributes:
-        - FuType: bku
-        - latency: 3.257812
-        - throughput: 1.242718
-    - architectural_attributes:
-        - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
+  - microarchitecture:
+    - FuType: bku
+    - latency: 3.257812
+    - throughput: 1.242718
+  - architecture:
+    - exceptions: [IllegalInst, AddrMisalign_inst, PageFault_inst]
 
-xs-constraints:
-    - microarchitectural_attributes:
-    - architectural_attributes:
-        - operands:
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
-            -   type: reg
-                width: 5
-                reg_type: INTEGER
+operands-constraints:
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: reg
+    width: 5
+    reg_type: INTEGER
+  - type: reg
+    width: 5
+    reg_type: INTEGER
 
 definedBy:
   extension:
