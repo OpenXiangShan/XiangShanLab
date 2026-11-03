@@ -1,5 +1,7 @@
 # 13. ROB
 
+> **版本基线**：昆明湖 V3（`kunminghu-v3 @ 055d8ad9e5`）。判定依据是文中的 `VlCommitBundle` / `vlCommits`：这一独立的 vl 提交通道只在 V3 的 `Rob.scala` / `RobBundles.scala` 出现，V2 没有 `vlCommits` 输出，不能按 V2 套用。登记见 [第 4 章 VERSIONS.md](../VERSIONS.md)。
+
 乱序处理器的核心矛盾是：指令可以乱序执行，但结果必须按序提交。ROB 就是解决这个矛盾的"秩序守护者"——它记录每条指令的状态，确保即使指令乱序完成，最终的效果也和顺序执行一模一样。
 
 📋 读完本章，你将能够：

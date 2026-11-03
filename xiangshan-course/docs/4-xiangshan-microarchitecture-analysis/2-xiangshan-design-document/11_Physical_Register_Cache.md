@@ -1,5 +1,7 @@
 # 11. Physical Register Cache
 
+> **版本基线**：昆明湖 V2（`kunminghu-v2 @ 52262f303f`）。判定依据是文中的 `val IntRegCacheRepRCIdx = RegCacheAgeDetector(...)` 直连写法：V2 的 `RegCache.scala` 正是这一行；V3 已改为 `Wire` 声明后再赋值，行文与 V3 不符。登记见 [第 4 章 VERSIONS.md](../VERSIONS.md)。
+
 上一章我们聊到了物理寄存器堆——那个所有人都要去存取货物的"总仓库"。但总仓库的窗口有限，排队太久了怎么办？香山的答案是：在总仓库旁边开一家**便利店**——RegCache。
 
 🏪读完本章，你将能够：

@@ -1,5 +1,7 @@
 # Kunminghu V2 `prefetch.r` 与普通 Load 的 MSHR 仲裁分析
 
+> **版本基线**：昆明湖 V2（本章公共运行环境 `emuByYuan/stable-kmh-v2`，`kunminghu-v2 @ abd0f867a`，emu 构建于 2026-06-22）。文中周期号、队列深度与波形结论仅对 V2 成立；V3 的对应值不同，不可直接套用。登记见 [第 5 章 VERSIONS.md](../../../VERSIONS.md)。
+
 ## 方法与结论摘要
 
 本分析使用 **wavekit 开源库**中的 `FstReader` 解析并按时钟查询 FST，而不是用文本化波形猜测时序。输入波形为

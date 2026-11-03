@@ -1,5 +1,7 @@
 # 9. Execute Unit
 
+> **版本基线**：昆明湖 V3（`kunminghu-v3 @ 055d8ad9e5`）。判定依据是文中的 `val blockBackCompress = Seq(brh, jmp)`：该定义只在 V3 的 `FuType.scala`，V2 没有 `blockBackCompress`，不能按 V2 套用。登记见 [第 4 章 VERSIONS.md](../VERSIONS.md)。
+
 在前面的章节里，我们看到了指令如何被派发、如何在发射队列中等待、如何通过旁路网络获取操作数。现在，终于到了指令真正"干活"的地方——执行单元。
 
 :::info

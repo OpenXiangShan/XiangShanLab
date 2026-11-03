@@ -1,5 +1,7 @@
 # 一条Jal/Jalr指令的执行过程
 
+> **版本基线**：**原文未声明**，本轮未核实其所属代。补齐基线前，不得把本文结论当作 V3 事实使用。登记见 [第 5 章 VERSIONS.md](../../VERSIONS.md)。 文中的 `/nfs/home/...` 是其他同学的本地目录，可能失效。
+
 波形文件相关：/nfs/home/wanghao/xs-env/myWaves/onlyjal
 
 # 一、找到一条合适的 `jal`指令

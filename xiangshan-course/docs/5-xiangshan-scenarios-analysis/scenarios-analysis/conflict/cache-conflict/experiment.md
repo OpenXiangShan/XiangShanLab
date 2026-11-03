@@ -1,5 +1,7 @@
 # 昆明湖 V2 L1 DCache Bank Conflict 实验与波形分析
 
+> **版本基线**：昆明湖 V2（本章公共运行环境 `emuByYuan/stable-kmh-v2`，`kunminghu-v2 @ abd0f867a`，emu 构建于 2026-06-22）。文中周期号、队列深度与波形结论仅对 V2 成立；V3 的对应值不同，不可直接套用。登记见 [第 5 章 VERSIONS.md](../../../VERSIONS.md)。 文中的 `/nfs/home/...` 是其他同学的本地目录，可能失效。
+
 ## 1. 方法与结论摘要
 
 本实验在 XiangShan `kunminghu-v2`（commit `485333f4dcc90156e5ada3d6420abeaad0058d22`）上运行了一个专门制造 L1 DCache 读读 bank conflict 的 Nexus-AM 程序。程序完成 64 轮，每一轮包含三个同时在窗口中飞行的 `ld`，EMU 输出为：

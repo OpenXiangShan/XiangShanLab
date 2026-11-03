@@ -1,5 +1,7 @@
 # 香山昆明湖执行 CBO Flush 指令的流程分析
 
+> **版本基线**：昆明湖 V2（本章公共运行环境 `emuByYuan/stable-kmh-v2`，`kunminghu-v2 @ abd0f867a`，emu 构建于 2026-06-22）。文中周期号、队列深度与波形结论仅对 V2 成立；V3 的对应值不同，不可直接套用。登记见 [第 5 章 VERSIONS.md](../../VERSIONS.md)。 原文使用的 `~/cbo-kmhv2` 已不存在。
+
 ## CBO Flush 指令介绍
 
 ### 这条指令是什么

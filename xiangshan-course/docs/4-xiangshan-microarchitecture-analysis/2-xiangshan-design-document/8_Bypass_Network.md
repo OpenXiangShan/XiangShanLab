@@ -1,5 +1,7 @@
 # 8. Bypass Network
 
+> **版本基线**：昆明湖 V3（`kunminghu-v3 @ 055d8ad9e5`）。判定依据是文中的 `needDataFromI2F` 判断：该字段只在 V3 的 `BypassNetwork.scala` 出现，V2 的同类逻辑没有跨域数据选择，不能按 V2 套用。登记见 [第 4 章 VERSIONS.md](../VERSIONS.md)。
+
 🔄在前面两章，我们看到了 Issue Queue 如何选出就绪的指令发射出去。但发射之后，指令的数据从哪里来？如果每条指令都要等结果写回寄存器堆再读取，那延迟可就太大了。Bypass Network 就是解决这个问题的"快递直达通道"。
 
 :::info

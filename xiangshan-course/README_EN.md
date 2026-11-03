@@ -43,6 +43,16 @@ The Chinese course currently contains 14 chapter directories:
 
 Chapters 1 through 6 currently contain the most complete foundational and advanced materials. Chapters 7 through 14 are being expanded.
 
+## Version Baseline
+
+XiangShan evolves by generation (Yanqihu, Nanhu, Kunminghu V2, Kunminghu V3). **Kunminghu V2 and V3 are both active branches** (`kunminghu-v2` and `kunminghu-v3` still receive commits), and a module's implementation, parameters and pipeline timing are not interchangeable across generations. This course therefore does not assume a single generation for the whole course; it requires the baseline to be stated:
+
+1. **Every document states its baseline**: branch and commit, or an explicit "not declared" — never left blank.
+2. **A conclusion only holds for the declared commit.** Line numbers, cache parameters and waveform cycles must not be reused across generations; cross-generation references must be labelled "V3 evidence" and "V2 comparison" separately.
+3. **Each chapter keeps a `VERSIONS.md` index** recording the baseline, evidence type (source / waveform / program run) and status per document. Indexes exist for [chapter 4](./docs/4-xiangshan-microarchitecture-analysis/VERSIONS.md), [chapter 5](./docs/5-xiangshan-scenarios-analysis/VERSIONS.md) and [chapter 6](./docs/6-xiangshan-debug/VERSIONS.md).
+4. **RTL is the source of truth**: when design documents or older course material conflict with source code, the source at the declared baseline wins.
+5. **References to a branch HEAD are drifting evidence**: pin the commit with `git log -1` before re-checking line numbers.
+
 ## English Course
 
 The English course currently contains the following chapters:

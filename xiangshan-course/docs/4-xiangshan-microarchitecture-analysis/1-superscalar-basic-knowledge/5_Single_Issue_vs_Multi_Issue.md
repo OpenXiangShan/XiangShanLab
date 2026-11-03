@@ -23,7 +23,7 @@ _<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">图 1：处
 
 ![1778480657603-fcc2cceb-c771-493a-bfe3-c713cb41164f.jpeg](img/5-single-issue-vs-multi-issue/figure-001-ilp-risc-v.jpeg)
 
-**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山 RISC-V 的演进</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：从初代单发射的 "香山 1 号" 原型，到现在 4 发射乱序执行的 "南湖" 架构，正是沿着提高指令级并行性的路线发展。</font>
+**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山 RISC-V 的演进</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：从初代单发射的 "香山 1 号" 原型，到现在 6 发射乱序执行的 "南湖" 架构，正是沿着提高指令级并行性的路线发展。</font>
 
 ---
 
@@ -912,7 +912,7 @@ document.addEventListener('DOMContentLoaded', function() {
 4. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">分支预测准确率</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：分支预测错误的代价会随着发射宽度增加而提高</font>
 
 ### <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">4.5 香山 RISC-V 中的多发射实现</font>
-**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">南湖 (Nanhu) 架构</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：香山第二代处理器，4 发射乱序执行</font>
+**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">南湖 (Nanhu) 架构</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：香山第二代处理器，6 发射乱序执行（源码中 DecodeWidth=RenameWidth=CommitWidth=6、RobSize=256，见 nanhu / kunminghu-v2 分支的 Parameters.scala）</font>
 
 | **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">核心参数</font>** | **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">数值</font>** |
 | :--- | :--- |
@@ -961,7 +961,7 @@ document.addEventListener('DOMContentLoaded', function() {
 + **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">超线程 (SMT) 与多发射</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：</font>
     - <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">多发射：挖掘</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">单线程内</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">的指令级并行性</font>
     - <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">超线程：挖掘</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">线程间</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">的并行性</font>
-+ **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山的未来</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：从 4 发射到更宽的发射宽度？</font>
++ **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山的未来</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：从 6 发射到更宽的发射宽度？</font>
 
 <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">📚</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> </font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">相关链接</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：</font>
 
@@ -976,7 +976,7 @@ document.addEventListener('DOMContentLoaded', function() {
 2. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">多发射处理器</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：每个周期可以发射多条指令，能够充分挖掘指令级并行性</font>
 3. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">实现方式</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：多发射主要有超标量（动态调度）和 VLIW（静态调度）两种，现代高性能处理器普遍采用超标量架构</font>
 4. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">设计权衡</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：单发射适合低功耗、低成本场景，多发射适合高性能场景</font>
-5. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山实践</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：从单发射原型到 4 发射乱序的南湖架构，展示处理器架构的发展趋势</font>
+5. **<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">香山实践</font>**<font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">：从单发射原型到 6 发射乱序的南湖架构，展示处理器架构的发展趋势</font>
 
 
 
