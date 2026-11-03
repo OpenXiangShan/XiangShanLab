@@ -2,3 +2,7 @@
 	path = tools/wavekit-xslab
 	url = git@github.com:XiangShanLab/wavekit-xslab.git
 	branch = main
+[submodule "xiangshan-course/docs/3-riscv-specification/riscv-xs-unified-db"]
+	path = xiangshan-course/docs/3-riscv-specification/riscv-xs-unified-db
+	url = https://github.com/XiangShanLab/riscv-xs-unified-db.git
+	branch = main
