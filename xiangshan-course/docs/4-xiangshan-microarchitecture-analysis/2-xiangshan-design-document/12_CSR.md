@@ -1,5 +1,7 @@
 # 12. CSR
 
+> **版本基线**：昆明湖 V3（`kunminghu-v3 @ 055d8ad9e5`）。判定依据是文中的 `needUncertainWakeup` / `needUncertainWakeupFuConfigs`：该命名只在 V3 出现，V2 的 `NewCSR` 没有这一参数，不能按 V2 套用。登记见 [第 4 章 VERSIONS.md](../VERSIONS.md)。
+
 在前面的章节里，我们关注的是处理器如何"计算"——加、减、乘、除、访存。但处理器还有另一面：**管理自身**——当前运行在什么特权级？中断有没有挂起？页表在哪？浮点舍入模式是什么？这些信息都存储在 CSR 中，而 CSR 指令就是读写它们的窗口。
 
 🏛️读完本章，你将能够：

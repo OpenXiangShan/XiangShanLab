@@ -1,5 +1,7 @@
 # 5. Move 指令消除
 
+> **版本基线**：昆明湖 V2（`kunminghu-v2 @ 52262f303f`）。文中引用的 `eliminatedMove` 字段只存在于 V2；V3 已删除该字段，统一使用 `isMove`，因此本节结论不能直接套用到 V3。登记见 [第 4 章 VERSIONS.md](../VERSIONS.md)。
+
 :::info
 
 ## <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">🧭</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> 学习目标</font>

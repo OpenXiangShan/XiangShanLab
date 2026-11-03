@@ -8,8 +8,7 @@
 | --- | --- | --- | --- | --- |
 | 昆明湖 V2 | `kunminghu-v2` | `52262f303fc06daf84cdab7011d59b7df65ce7e8` | 2026-07-10 | 前端 15 篇 |
 | 昆明湖 V2 | `kunminghu-v2` | `e12436c7cba86b195deec24981976d78bc263661` | 2026-08-14 | 缓存 17 篇、访存 15 篇 |
-| 昆明湖 V3 | `kunminghu-v3` | `055d8ad9e56b0b618f2d549a97f3a028986b4849` | 2026-07-14 | MDP / SSIT / LFST / foldPC / PageTableCache |
-| 昆明湖 V3 | `kunminghu-v3` | 未固定（引用分支 HEAD） | — | `Decode-Fusion.md` |
+| 昆明湖 V3 | `kunminghu-v3` | `055d8ad9e56b0b618f2d549a97f3a028986b4849` | 2026-07-14 | MDP / SSIT / LFST / foldPC / PageTableCache / `Decode-Fusion.md` |
 | 昆明湖 V3 | `kunminghu-v3` | 未固定（波形 `2026-07-21-10-21-43.fst`） | 2026-07-21 | `mdp-wave-analysis.md` |
 | Design Doc V3 | `XiangShan-Design-Doc` `kunminghu-v3` | `f8e258dc2d9c02c0616764856e1d18feedb91b81` | 2026-05-07 | 前端 13 篇的“设计意图”引用 |
 
@@ -45,8 +44,10 @@
 | 文档 | 基线 | 证据类型 | 状态 |
 | --- | --- | --- | --- |
 | `backend/{Decode,Decode-vector,Dispatch,RegCache}.md` | V2 | 源码 | V2 基线 |
-| `backend/Decode-Fusion.md` | V3（分支 HEAD） | 源码 | V3 基线，commit 未固定 |
-| `backend/{FloatAdder,Rename,Move-elimination}.md` | **未声明** | 源码 | 待补基线 |
+| `backend/Decode-Fusion.md` | V3 `055d8ad9` | 源码 | V3 基线；38 处源码链接已固定到该 commit，行号按该 commit 核对 |
+| `backend/FloatAdder.md` | V3（Yunsuan `215839f5`） | 源码 | V3 基线；Yunsuan commit 在 `kunminghu-v3` 分支，XiangShan 侧 commit 未固定 |
+| `backend/Rename.md` | V3（分支 HEAD） | 源码 | V3 基线，commit 未固定；`RenameOutUop` / 双参数 `MEFreeList` 为 V3 形态，行号与 `055d8ad9` 不一致 |
+| `backend/Move-elimination.md` | V3（分支 HEAD） | 源码 | V3 基线，commit 未固定；`MEFreeList(size, commitWidth)` 为 V3 形态，行号与 `055d8ad9` 不一致 |
 
 ### 2.5 foldPC / PageTableCache（V3）
 
@@ -63,7 +64,8 @@
 | `2-xiangshan-design-document/14_LoadStore.md` | V2 | 源码 | V2 基线 |
 | `2-xiangshan-design-document/15_MDP.md` | V3 | 设计说明 | V3 基线 |
 | `2-xiangshan-design-document/kunminghu-instruction-latency-throughput.md` | V2 `52262f3` | 源码参数 | V2 基线 |
-| `2-xiangshan-design-document/{5,6,7,8,9,10,11,12,13}_*.md`（9 篇） | **未声明** | 设计说明 | 待补基线 |
+| `2-xiangshan-design-document/{5_Move_Instructions_Elimination,11_Physical_Register_Cache}.md` | V2 `52262f3` | 设计说明 + 源码片段 | V2 基线；5 引用 `eliminatedMove`，11 引用 V2 的 `RegCacheAgeDetector` 直连写法 |
+| `2-xiangshan-design-document/{6_Dispatch_Queue,7_Issue_Queue,8_Bypass_Network,9_Execute_Unit,10_Physical_Register,12_CSR,13_ROB}.md`（7 篇） | V3 `055d8ad9` | 设计说明 + 源码片段 | V3 基线；按各篇引用的 V3 专有符号判定（见文首基线声明） |
 
 ### 2.7 超标量基础理论
 
@@ -74,6 +76,6 @@
 
 ## 3. 已知缺口与代价
 
-1. **行号漂移**：`Decode-Fusion.md`、`mdp-wave-analysis.md` 只声明分支不声明 commit，行号随分支更新漂移。补 commit 只是 `git log -1`，不需要编译。
-2. **待补基线的 12 篇**（后端 3 + 设计文档 9）：需要逐篇读源码判断属于哪一代，不需要编译。
+1. **行号漂移**：`mdp-wave-analysis.md` 只声明波形日期，源码 commit 仍未固定；`Rename.md`、`Move-elimination.md` 的行号与 `055d8ad9` 不一致，复核前先固定 commit。补 commit 只是 `git log -1`，不需要编译。
+2. **原“待补基线”的 12 篇已补齐**（后端 3 + 设计文档 9）：2 篇判为 V2（`5_Move_Instructions_Elimination`、`11_Physical_Register_Cache`），10 篇判为 V3；判定依据是各篇引用的 V2/V3 专有符号，未做编译。`Rename.md`、`Move-elimination.md`、`FloatAdder.md` 仍未固定 commit，见 2.4。
 3. **若要整体迁到 V3**：本章结论以源码证据为主，唯一含周期级证据的 `mdp-wave-analysis.md` 已是 V3，因此**不需要重建 emu、不需要重采波形**，只需按 V3 源码重新核对模块边界、参数与行号。

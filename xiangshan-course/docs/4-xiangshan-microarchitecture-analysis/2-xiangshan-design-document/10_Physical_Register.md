@@ -1,5 +1,7 @@
 # 10. Physical Register
 
+> **版本基线**：昆明湖 V3（`kunminghu-v3 @ 055d8ad9e5`）。判定依据是文中引用的 `class RegfileBank`：该类只在 V3 的 `Regfile.scala` 出现，V2 的 Bank 读逻辑仍写在 `Regfile` 内部，不能按 V2 套用。登记见 [第 4 章 VERSIONS.md](../VERSIONS.md)。
+
 在前面的章节里，我们提到"物理寄存器堆"——执行单元要从这里读操作数，写回结果也要写到那里。但你有没有想过：**什么时候读？怎么读？写回端口不够怎么办？物理寄存器的一生是怎样的？**
 
 📦读完本章，你将能够：
