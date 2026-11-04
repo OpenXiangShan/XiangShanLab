@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="480" viewBox="0 0 1220 480" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<rect x="10" y="14" width="1200" height="452" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
+<rect x="562.3560483870967" y="1.209677419354838" width="95.28790322580645" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
+<text x="610.0" y="14" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">Backend</text>
+<rect x="30" y="56" width="420" height="300" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
+<rect x="75.6197580645161" y="43.20967741935484" width="328.7604838709678" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
+<text x="240.0" y="56" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">Scheduler × 4（以浮点组为例）</text>
+<rect x="46" y="84" width="388" height="250" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text x="240" y="108" font-size="18.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">fp Scheduler</text>
+<rect x="64" y="128" width="352" height="168" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text x="240" y="152" font-size="16.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">IssueQueue × 3（各 18 项）</text>
+<rect x="85" y="180" width="316" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="82" y="176" width="316" height="56" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text x="240.0" y="204.0" font-size="16.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Entries（表项）</text>
+<text x="240" y="268" font-size="13.8" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">年龄检测为队列内组合逻辑</text>
+<rect x="33" y="392" width="240" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="30" y="388" width="240" height="56" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text x="150.0" y="406.2203225806452" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">WbFuBusyTable</text>
+<text x="150.0" y="427.1767741935484" font-size="13.8" fill="#232323" text-anchor="middle" dominant-baseline="central">Backend 级</text>
+<rect x="480" y="56" width="400" height="300" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
+<rect x="549.1943548387096" y="43.20967741935484" width="261.6112903225807" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
+<text x="680.0" y="56" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">DataPath（LazyModule）</text>
+<rect x="503" y="88" width="360" height="64" rx="14" fill="#DEDEDE"/>
+<rect x="500" y="84" width="360" height="64" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
+<text x="680.0" y="106.91887096774194" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RF 读口仲裁 × 5</text>
+<text x="680.0" y="127.17677419354838" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">int / fp / vf / v0 / vl</text>
+<rect x="503" y="168" width="360" height="100" rx="14" fill="#DEDEDE"/>
+<rect x="500" y="164" width="360" height="100" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
+<text x="680.0" y="195.83774193548385" font-size="17.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RegFile × 5</text>
+<text x="680.0" y="217.49274193548388" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">IntRegFile · FpRegFile · VfRegFile</text>
+<text x="680.0" y="235.655" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">V0RegFile · VlRegFile</text>
+<rect x="503" y="284" width="360" height="50" rx="14" fill="#DEDEDE"/>
+<rect x="500" y="280" width="360" height="50" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
+<text x="680.0" y="305.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RegCache</text>
+<rect x="483" y="392" width="210" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="480" y="388" width="210" height="56" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text x="585.0" y="416.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BypassNetwork</text>
+<rect x="723" y="392" width="200" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="720" y="388" width="200" height="56" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text x="820.0" y="416.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ExuBlock × 3</text>
+</svg>

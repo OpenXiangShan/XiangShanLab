@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1346" height="512" viewBox="0 0 1346 512" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<rect x="443" y="14" width="315" height="85" rx="14" fill="#DEDEDE"/>
+<rect x="440" y="10" width="315" height="85" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2.4"/>
+<text x="597.5" y="36.4" font-size="28" fill="#232323" text-anchor="middle" dominant-baseline="central">BusyTable</text>
+<text x="597.5" y="72.1" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">psrc 是否仍有生产者</text>
+<line x1="597" y1="95" x2="597" y2="176" stroke="#232323" stroke-width="2.6"/>
+<polygon points="597,190 602.88,176 591.12,176" fill="#232323"/>
+<text x="578" y="150" font-size="24" fill="#3A3A3A" text-anchor="end" dominant-baseline="central">忙闲</text>
+<rect x="473" y="204" width="270" height="155" rx="14" fill="#DEDEDE"/>
+<rect x="470" y="200" width="270" height="155" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2.4"/>
+<text x="605" y="245.3" font-size="28" fill="#232323" text-anchor="middle" dominant-baseline="central">NewDispatch</text>
+<text x="605" y="281" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">按 fuType 选队列</text>
+<text x="605" y="313.2" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">用忙表算 srcState</text>
+<rect x="38" y="229" width="165" height="75" rx="14" fill="#DEDEDE"/>
+<rect x="35" y="225" width="165" height="75" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2.4"/>
+<text x="117.5" y="262.5" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">Rename</text>
+<line x1="200" y1="262" x2="451" y2="262" stroke="#232323" stroke-width="2.6"/>
+<polygon points="465,262 451,256.12 451,267.88" fill="#232323"/>
+<text x="333" y="240" font-size="24" fill="#3A3A3A" text-anchor="middle" dominant-baseline="central">DynInst</text>
+<rect x="13" y="379" width="218" height="95" rx="14" fill="#DEDEDE"/>
+<rect x="10" y="375" width="218" height="95" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2.4"/>
+<text x="119" y="406.4" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">ROB</text>
+<text x="119" y="440.7" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">按序登记表项</text>
+<line x1="470" y1="330" x2="248.074" y2="414.993" stroke="#232323" stroke-width="2.6"/>
+<polygon points="235,420 250.177,420.484 245.971,409.502" fill="#232323"/>
+<text x="300" y="355" font-size="24" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">RobEnqIO</text>
+<line x1="740" y1="275" x2="1061" y2="275" stroke="#232323" stroke-width="2.6"/>
+<polygon points="1075,275 1061,269.12 1061,280.88" fill="#232323"/>
+<text x="908" y="224" font-size="24" fill="#3A3A3A" text-anchor="middle" dominant-baseline="central">DynInst</text>
+<text x="908" y="252" font-size="23" fill="#3A3A3A" text-anchor="middle" dominant-baseline="central">（fmac 三个候选）</text>
+<rect x="1083" y="229" width="210" height="125" rx="14" fill="#DEDEDE"/>
+<rect x="1080" y="225" width="210" height="125" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2.4"/>
+<text x="1185" y="272.8" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">浮点发射队列 × 3</text>
+<text x="1185" y="302.9" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central">各 18 项</text>
+</svg>
