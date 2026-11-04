@@ -1,53 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1194" height="683" viewBox="0 0 1194 683" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1194" height="683" viewBox="0 0 1194 683" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif" xml:space="preserve">
 <rect x="0" y="0" width="1194" height="683" fill="#ffffff"/>
 
 <rect x="73" y="19" width="120" height="85" rx="14" fill="#DEDEDE"/>
 <rect x="70" y="15" width="120" height="85" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="130" y="44.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FEX0</text>
-<text x="130" y="71.5" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">FMA</text>
+<text xml:space="preserve" x="130" y="44.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FEX0</text>
+<text xml:space="preserve" x="130" y="71.5" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">FMA</text>
 <rect x="73" y="159" width="120" height="85" rx="14" fill="#DEDEDE"/>
 <rect x="70" y="155" width="120" height="85" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="130" y="184.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FEX2</text>
-<text x="130" y="211.5" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">FMA</text>
+<text xml:space="preserve" x="130" y="184.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FEX2</text>
+<text xml:space="preserve" x="130" y="211.5" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">FMA</text>
 <rect x="73" y="304" width="120" height="85" rx="14" fill="#DEDEDE"/>
 <rect x="70" y="300" width="120" height="85" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="130" y="329.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FEX4</text>
-<text x="130" y="356.5" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">FMA</text>
+<text xml:space="preserve" x="130" y="329.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FEX4</text>
+<text xml:space="preserve" x="130" y="356.5" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">FMA</text>
 <rect x="533" y="174" width="220" height="110" rx="14" fill="#DEDEDE"/>
 <rect x="530" y="170" width="220" height="110" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
-<text x="640" y="212" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">WbDataPath</text>
-<text x="640" y="240" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">fpWbArbiter</text>
+<text xml:space="preserve" x="640" y="212" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">WbDataPath</text>
+<text xml:space="preserve" x="640" y="240" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">fpWbArbiter</text>
 <rect x="963" y="89" width="210" height="90" rx="14" fill="#DEDEDE"/>
 <rect x="960" y="85" width="210" height="90" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
-<text x="1065" y="117" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FpRegFile</text>
-<text x="1065" y="144" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">写口 0 / 1 / 2</text>
+<text xml:space="preserve" x="1065" y="117" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FpRegFile</text>
+<text xml:space="preserve" x="1065" y="144" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">write port 0 / 1 / 2</text>
 <rect x="1023" y="254" width="110" height="70" rx="14" fill="#DEDEDE"/>
 <rect x="1020" y="250" width="110" height="70" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="1075" y="285" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ROB</text>
+<text xml:space="preserve" x="1075" y="285" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ROB</text>
 <rect x="18" y="459" width="250" height="85" rx="14" fill="#DEDEDE"/>
 <rect x="15" y="455" width="250" height="85" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="140" y="497.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">发射队列 × 3</text>
+<text xml:space="preserve" x="140" y="497.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">issue queues × 3</text>
 <rect x="18" y="604" width="250" height="75" rx="14" fill="#DEDEDE"/>
 <rect x="15" y="600" width="250" height="75" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="140" y="625.5" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DataPath</text>
-<text x="140" y="651" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central">旁路与延迟写回</text>
+<text xml:space="preserve" x="140" y="625.5" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DataPath</text>
+<text xml:space="preserve" x="140" y="651" font-size="14" fill="#232323" text-anchor="middle" dominant-baseline="central">bypass and delayed writeback</text>
 <polygon points="530,200 513,200.5 518.5,187.5" fill="#232323"/>
 <line x1="190" y1="57" x2="516" y2="194" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="375" y="95" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
+<text xml:space="preserve" x="375" y="95" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
 <polygon points="530,220 514.5,226 515,212" fill="#232323"/>
 <line x1="190" y1="197" x2="514.5" y2="219" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="350" y="175" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
+<text xml:space="preserve" x="350" y="175" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
 <polygon points="530,245 517,256 513.5,242.5" fill="#232323"/>
 <line x1="190" y1="342" x2="515.5" y2="249" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="395" y="268" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
+<text xml:space="preserve" x="395" y="268" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
 <polygon points="960,130 947.5,141.5 943.5,128" fill="#232323"/>
 <line x1="750" y1="200" x2="945.5" y2="135" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="860" y="102.025" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">toFpPreg</text>
-<text x="860" y="127.975" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">pdest / data</text>
+<text xml:space="preserve" x="860" y="102.025" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">toFpPreg</text>
+<text xml:space="preserve" x="860" y="127.975" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">pdest / data</text>
 <polygon points="1020,285 1004,290 1005.5,276" fill="#232323"/>
 <line x1="750" y1="250" x2="1005" y2="283" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="885" y="212.025" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">toCtrlBlock</text>
-<text x="885" y="237.975" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback</text>
+<text xml:space="preserve" x="885" y="212.025" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">toCtrlBlock</text>
+<text xml:space="preserve" x="885" y="237.975" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback</text>
 <polygon points="230,455 244,446 246,459.5" fill="#965F0A"/>
 <line x1="570" y1="280" x2="570" y2="283.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="570" y1="283.5" x2="570" y2="286.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
@@ -149,8 +149,8 @@
 <line x1="245.5" y1="452.5" x2="240" y2="453.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="240" y1="453.5" x2="235" y2="454" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="235" y1="454" x2="244" y2="453" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
-<text x="400" y="355.7" font-size="16" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">toFpPreg → wakeupFromWB</text>
-<text x="400" y="380.3" font-size="16" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">（经 Backend）</text>
+<text xml:space="preserve" x="400" y="355.7" font-size="16" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">toFpPreg → wakeupFromWB</text>
+<text xml:space="preserve" x="400" y="380.3" font-size="16" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round"> (via Backend)</text>
 <polygon points="265,625 279,615.5 281,629.5" fill="#965F0A"/>
 <line x1="710" y1="280" x2="710" y2="284.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="710" y1="284.5" x2="709.5" y2="289" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
@@ -252,5 +252,5 @@
 <line x1="286" y1="621.5" x2="279" y2="623" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="279" y1="623" x2="272" y2="624" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="272" y1="624" x2="280" y2="622.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
-<text x="430" y="615" font-size="16" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">写回数据</text>
+<text xml:space="preserve" x="430" y="615" font-size="16" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback data</text>
 </svg>

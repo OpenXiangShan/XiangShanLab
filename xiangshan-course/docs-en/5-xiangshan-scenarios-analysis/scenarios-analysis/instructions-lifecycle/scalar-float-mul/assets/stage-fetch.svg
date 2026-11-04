@@ -1,57 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1537" height="879" viewBox="0 0 1537 879" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1537" height="879" viewBox="0 0 1537 879" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif" xml:space="preserve">
 <rect x="0" y="0" width="1537" height="879" fill="#ffffff"/>
 
 <rect x="321" y="14" width="127" height="85" rx="14" fill="#DEDEDE"/>
 <rect x="318" y="10" width="127" height="85" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2.4"/>
-<text x="381.5" y="35.7" font-size="30" fill="#232323" text-anchor="middle" dominant-baseline="central">BPU</text>
-<text x="381.5" y="73.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">预测器</text>
+<text xml:space="preserve" x="381.5" y="35.7" font-size="30" fill="#232323" text-anchor="middle" dominant-baseline="central">BPU</text>
+<text xml:space="preserve" x="381.5" y="73.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">predictor</text>
 <line x1="381" y1="95" x2="381" y2="171" stroke="#232323" stroke-width="2.6"/>
 <polygon points="381,185 386.88,171 375.12,171" fill="#232323"/>
-<text x="400" y="146" font-size="25" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">预测（BpuToFtqIO）</text>
+<text xml:space="preserve" x="400" y="146" font-size="25" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">prediction (BpuToFtqIO)</text>
 <rect x="278" y="194" width="205" height="90" rx="14" fill="#DEDEDE"/>
 <rect x="275" y="190" width="205" height="90" rx="14" fill="#FDF0E6" stroke="#E67E22" stroke-width="2.4"/>
-<text x="377.5" y="218.9" font-size="28" fill="#232323" text-anchor="middle" dominant-baseline="central">FTQ</text>
-<text x="377.5" y="254.6" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">取指目标队列</text>
+<text xml:space="preserve" x="377.5" y="218.9" font-size="28" fill="#232323" text-anchor="middle" dominant-baseline="central">FTQ</text>
+<text xml:space="preserve" x="377.5" y="254.6" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">fetch target queue</text>
 <line x1="300" y1="280" x2="167.078" y2="357.92" stroke="#232323" stroke-width="2.6"/>
 <polygon points="155,365 170.051,362.993 164.104,352.847" fill="#232323"/>
-<text x="205" y="332" font-size="25" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">取指请求（FtqToICacheIO）</text>
+<text xml:space="preserve" x="205" y="332" font-size="19" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">fetch request (FtqToICacheIO)</text>
 <line x1="452" y1="280" x2="599.929" y2="366.908" stroke="#232323" stroke-width="2.6"/>
 <polygon points="612,374 602.908,361.839 596.951,371.978" fill="#232323"/>
-<text x="560" y="330" font-size="25" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">取指请求（FtqToIfuIO）</text>
+<text xml:space="preserve" x="560" y="330" font-size="19" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">fetch request (FtqToIfuIO)</text>
 <rect x="13" y="374" width="165" height="98" rx="14" fill="#DEDEDE"/>
 <rect x="10" y="370" width="165" height="98" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2.4"/>
-<text x="92.5" y="402.9" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">ICache</text>
-<text x="92.5" y="437.2" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">指令缓存</text>
+<text xml:space="preserve" x="92.5" y="402.9" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">ICache</text>
+<text xml:space="preserve" x="92.5" y="437.2" font-size="15" fill="#232323" text-anchor="middle" dominant-baseline="central">instruction cache</text>
 <rect x="518" y="382" width="290" height="90" rx="14" fill="#DEDEDE"/>
 <rect x="515" y="378" width="290" height="90" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2.4"/>
-<text x="660" y="406.9" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">IFU</text>
-<text x="660" y="441.2" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">取指单元（F0–F3）</text>
+<text xml:space="preserve" x="660" y="406.9" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">IFU</text>
+<text xml:space="preserve" x="660" y="441.2" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">fetch unit (F0–F3)</text>
 <line x1="175" y1="420" x2="496" y2="420" stroke="#232323" stroke-width="2.6"/>
 <polygon points="510,420 496,414.12 496,425.88" fill="#232323"/>
-<text x="330" y="404" font-size="25" fill="#3A3A3A" text-anchor="middle" dominant-baseline="central">指令数据（IFUICacheIO）</text>
+<text xml:space="preserve" x="330" y="404" font-size="25" fill="#3A3A3A" text-anchor="middle" dominant-baseline="central">instruction data (IFUICacheIO)</text>
 <line x1="660" y1="468" x2="660" y2="531" stroke="#232323" stroke-width="2.6"/>
 <polygon points="660,545 665.88,531 654.12,531" fill="#232323"/>
-<text x="676" y="492" font-size="25" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">FetchToIBuffer</text>
-<text x="676" y="526" font-size="23" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">每拍一组指令</text>
+<text xml:space="preserve" x="676" y="492" font-size="25" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">FetchToIBuffer</text>
+<text xml:space="preserve" x="676" y="526" font-size="23" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">one group per cycle</text>
 <rect x="578" y="554" width="180" height="90" rx="14" fill="#DEDEDE"/>
 <rect x="575" y="550" width="180" height="90" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2.4"/>
-<text x="665" y="579.6" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">IBuffer</text>
-<text x="665" y="612.5" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">指令缓冲</text>
+<text xml:space="preserve" x="665" y="579.6" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">IBuffer</text>
+<text xml:space="preserve" x="665" y="612.5" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central">instruction buffer</text>
 <line x1="660" y1="640" x2="660" y2="711" stroke="#232323" stroke-width="2.6"/>
 <polygon points="660,725 665.88,711 654.12,711" fill="#232323"/>
-<text x="676" y="682" font-size="25" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">CtrlFlow × 6（cfVec）</text>
+<text xml:space="preserve" x="676" y="682" font-size="25" fill="#3A3A3A" text-anchor="start" dominant-baseline="central">CtrlFlow × 6 (cfVec)</text>
 <rect x="568" y="734" width="185" height="100" rx="14" fill="#DEDEDE"/>
 <rect x="565" y="730" width="185" height="100" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2.4"/>
-<text x="657.5" y="764.6" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">CtrlBlock</text>
-<text x="657.5" y="797.5" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">前后端边界</text>
+<text xml:space="preserve" x="657.5" y="764.6" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">CtrlBlock</text>
+<text xml:space="preserve" x="657.5" y="797.5" font-size="15" fill="#232323" text-anchor="middle" dominant-baseline="central">FE/BE boundary</text>
 <path d="M 750,780 C 950,800 1180,800 1290,700 C 1400,600 1430,420 1400,320 C 1370,220 1100,235 900,235 C 750,235 600,235 487,235" fill="none" stroke="#A5711E" stroke-width="2.6" stroke-dasharray="14 9"/>
 <polygon points="487,235 501,240.88 501,229.12" fill="#A5711E"/>
 <path d="M 1290,700 C 1150,785 950,785 850,720 C 800,680 780,620 765,600" fill="none" stroke="#A5711E" stroke-width="2.6" stroke-dasharray="14 9"/>
 <polygon points="765,600 768.696,614.728 778.104,607.672" fill="#A5711E"/>
 <path d="M 1400,320 C 1250,300 950,300 800,340 C 740,356 710,372 692,380" fill="none" stroke="#A5711E" stroke-width="2.6" stroke-dasharray="14 9"/>
 <polygon points="692,380 707.181,379.687 702.405,368.941" fill="#A5711E"/>
-<text x="860" y="340" font-size="24" fill="#A5711E" text-anchor="start" dominant-baseline="central">pdWb 预译码（IfuToFtqIO）</text>
-<text x="1523" y="503" font-size="24" fill="#A5711E" text-anchor="end" dominant-baseline="central">fob_commits / redirect</text>
-<text x="1523" y="537" font-size="24" fill="#A5711E" text-anchor="end" dominant-baseline="central">（CtrlToFtqIO）</text>
-<text x="935" y="725" font-size="24" fill="#A5711E" text-anchor="start" dominant-baseline="central">canAccept</text>
+<text xml:space="preserve" x="860" y="340" font-size="24" fill="#A5711E" text-anchor="start" dominant-baseline="central">pdWb predecode (IfuToFtqIO)</text>
+<text xml:space="preserve" x="1523" y="503" font-size="24" fill="#A5711E" text-anchor="end" dominant-baseline="central">fob_commits / redirect</text>
+<text xml:space="preserve" x="1523" y="537" font-size="24" fill="#A5711E" text-anchor="end" dominant-baseline="central"> (CtrlToFtqIO)</text>
+<text xml:space="preserve" x="935" y="725" font-size="24" fill="#A5711E" text-anchor="start" dominant-baseline="central">canAccept</text>
 </svg>

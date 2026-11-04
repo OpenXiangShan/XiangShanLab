@@ -1,167 +1,167 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1420" viewBox="0 0 1200 1420" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1420" viewBox="0 0 1200 1420" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif" xml:space="preserve">
 <rect x="0" y="0" width="1200" height="1420" fill="#ffffff"/>
 
 <rect x="413" y="14" width="120" height="58" rx="14" fill="#DEDEDE"/>
 <rect x="410" y="10" width="120" height="58" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="470" y="30.5" font-size="15" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BPU</text>
-<text x="470" y="49.5" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">预测器</text>
+<text xml:space="preserve" x="470" y="30.5" font-size="15" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BPU</text>
+<text xml:space="preserve" x="470" y="49.5" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">predictor</text>
 <rect x="383" y="104" width="180" height="58" rx="14" fill="#DEDEDE"/>
 <rect x="380" y="100" width="180" height="58" rx="14" fill="#FDF0E6" stroke="#E67E22" stroke-width="2"/>
-<text x="470" y="120.5" font-size="15" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FTQ</text>
-<text x="470" y="139.5" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">取指目标队列</text>
+<text xml:space="preserve" x="470" y="120.5" font-size="15" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FTQ</text>
+<text xml:space="preserve" x="470" y="139.5" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">fetch target queue</text>
 <rect x="783" y="104" width="130" height="58" rx="14" fill="#DEDEDE"/>
 <rect x="780" y="100" width="130" height="58" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
-<text x="845" y="120.5" font-size="14" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ICache</text>
-<text x="845" y="139" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">指令缓存</text>
+<text xml:space="preserve" x="845" y="120.5" font-size="14" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ICache</text>
+<text xml:space="preserve" x="845" y="139" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">instruction cache</text>
 <rect x="413" y="199" width="120" height="62" rx="14" fill="#DEDEDE"/>
 <rect x="410" y="195" width="120" height="62" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="470" y="217.5" font-size="14" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">IFU</text>
-<text x="470" y="236" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">F0–F3 级</text>
+<text xml:space="preserve" x="470" y="217.5" font-size="14" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">IFU</text>
+<text xml:space="preserve" x="470" y="236" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">F0–F3</text>
 <rect x="423" y="319" width="100" height="58" rx="14" fill="#DEDEDE"/>
 <rect x="420" y="315" width="100" height="58" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="470" y="336" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">IBuffer</text>
-<text x="470" y="353" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">指令缓冲</text>
+<text xml:space="preserve" x="470" y="336" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">IBuffer</text>
+<text xml:space="preserve" x="470" y="353" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">instruction buffer</text>
 <rect x="373" y="424" width="200" height="68" rx="14" fill="#DEDEDE"/>
 <rect x="370" y="420" width="200" height="68" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="470" y="445.5" font-size="14" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DecodeStage</text>
-<text x="470" y="464" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">译码</text>
+<text xml:space="preserve" x="470" y="445.5" font-size="14" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DecodeStage</text>
+<text xml:space="preserve" x="470" y="464" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central">Decode</text>
 <rect x="823" y="404" width="190" height="64" rx="14" fill="#DEDEDE"/>
 <rect x="820" y="400" width="190" height="64" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
-<text x="915" y="424" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FusionDecoder</text>
-<text x="915" y="441" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">相邻指令融合</text>
+<text xml:space="preserve" x="915" y="424" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FusionDecoder</text>
+<text xml:space="preserve" x="915" y="441" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">instruction fusion</text>
 <rect x="873" y="519" width="150" height="55" rx="14" fill="#DEDEDE"/>
 <rect x="870" y="515" width="150" height="55" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
-<text x="945" y="535.5" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RAT</text>
-<text x="945" y="551.5" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">逻辑名 → 物理名</text>
+<text xml:space="preserve" x="945" y="535.5" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RAT</text>
+<text xml:space="preserve" x="945" y="551.5" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">logical → physical</text>
 <rect x="873" y="609" width="150" height="55" rx="14" fill="#DEDEDE"/>
 <rect x="870" y="605" width="150" height="55" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="945" y="625.5" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FreeList</text>
-<text x="945" y="641.5" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">分配物理寄存器</text>
+<text xml:space="preserve" x="945" y="625.5" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FreeList</text>
+<text xml:space="preserve" x="945" y="641.5" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">allocate physical register</text>
 <rect x="113" y="604" width="190" height="60" rx="14" fill="#DEDEDE"/>
 <rect x="110" y="600" width="190" height="60" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="205" y="623" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CompressUnit</text>
-<text x="205" y="639" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">合并 ROB 表项</text>
+<text xml:space="preserve" x="205" y="623" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CompressUnit</text>
+<text xml:space="preserve" x="205" y="639" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">merge ROB entries</text>
 <rect x="393" y="574" width="160" height="58" rx="14" fill="#DEDEDE"/>
 <rect x="390" y="570" width="160" height="58" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="470" y="591" font-size="14" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rename</text>
-<text x="470" y="609" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">重命名</text>
+<text xml:space="preserve" x="470" y="591" font-size="14" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rename</text>
+<text xml:space="preserve" x="470" y="609" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">Rename</text>
 <rect x="373" y="684" width="200" height="64" rx="14" fill="#DEDEDE"/>
 <rect x="370" y="680" width="200" height="64" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="470" y="704" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">NewDispatch</text>
-<text x="470" y="721" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">派发</text>
+<text xml:space="preserve" x="470" y="704" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">NewDispatch</text>
+<text xml:space="preserve" x="470" y="721" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">Dispatch</text>
 <rect x="843" y="679" width="170" height="60" rx="14" fill="#DEDEDE"/>
 <rect x="840" y="675" width="170" height="60" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
-<text x="925" y="698" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BusyTable</text>
-<text x="925" y="714" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">psrc 忙闲</text>
+<text xml:space="preserve" x="925" y="698" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BusyTable</text>
+<text xml:space="preserve" x="925" y="714" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">psrc busy status</text>
 <rect x="393" y="799" width="160" height="64" rx="14" fill="#DEDEDE"/>
 <rect x="390" y="795" width="160" height="64" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="470" y="819" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">IssueQueue</text>
-<text x="470" y="836" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">发射队列 × 3</text>
+<text xml:space="preserve" x="470" y="819" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">IssueQueue</text>
+<text xml:space="preserve" x="470" y="836" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">issue queues × 3</text>
 <rect x="643" y="794" width="140" height="64" rx="14" fill="#DEDEDE"/>
 <rect x="640" y="790" width="140" height="64" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="710" y="814" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ROB</text>
-<text x="710" y="831" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">提交</text>
+<text xml:space="preserve" x="710" y="814" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ROB</text>
+<text xml:space="preserve" x="710" y="831" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">Commit</text>
 <rect x="373" y="914" width="200" height="58" rx="14" fill="#DEDEDE"/>
 <rect x="370" y="910" width="200" height="58" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="470" y="931" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DataPath s0</text>
-<text x="470" y="948" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">读口仲裁</text>
+<text xml:space="preserve" x="470" y="931" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DataPath s0</text>
+<text xml:space="preserve" x="470" y="948" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">read-port arbitration</text>
 <rect x="823" y="954" width="180" height="68" rx="14" fill="#DEDEDE"/>
 <rect x="820" y="950" width="180" height="68" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
-<text x="910" y="976" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">浮点寄存器堆</text>
-<text x="910" y="992.5" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">FpRegFile</text>
+<text xml:space="preserve" x="910" y="976" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FP register file</text>
+<text xml:space="preserve" x="910" y="992.5" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">FpRegFile</text>
 <rect x="373" y="1059" width="200" height="58" rx="14" fill="#DEDEDE"/>
 <rect x="370" y="1055" width="200" height="58" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="470" y="1076" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DataPath s1</text>
-<text x="470" y="1093" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">旁路选择</text>
+<text xml:space="preserve" x="470" y="1076" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DataPath s1</text>
+<text xml:space="preserve" x="470" y="1093" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">bypass select</text>
 <rect x="803" y="1094" width="200" height="58" rx="14" fill="#DEDEDE"/>
 <rect x="800" y="1090" width="200" height="58" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
-<text x="900" y="1111" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BypassNetwork</text>
-<text x="900" y="1127.5" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">前递与旁路</text>
+<text xml:space="preserve" x="900" y="1111" font-size="12" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BypassNetwork</text>
+<text xml:space="preserve" x="900" y="1127.5" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">forwarding and bypass</text>
 <rect x="363" y="1189" width="220" height="62" rx="14" fill="#DEDEDE"/>
 <rect x="360" y="1185" width="220" height="62" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="470" y="1208" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ExeUnit</text>
-<text x="470" y="1225" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">FMA 包装 → FloatFMA</text>
+<text xml:space="preserve" x="470" y="1208" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ExeUnit</text>
+<text xml:space="preserve" x="470" y="1225" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">FMA wrapper → FloatFMA</text>
 <rect x="383" y="1324" width="180" height="62" rx="14" fill="#DEDEDE"/>
 <rect x="380" y="1320" width="180" height="62" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
-<text x="470" y="1343" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">WbDataPath</text>
-<text x="470" y="1360" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">写回仲裁</text>
+<text xml:space="preserve" x="470" y="1343" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">WbDataPath</text>
+<text xml:space="preserve" x="470" y="1360" font-size="11" fill="#232323" text-anchor="middle" dominant-baseline="central">writeback arbitration</text>
 <rect x="803" y="1324" width="170" height="60" rx="14" fill="#DEDEDE"/>
 <rect x="800" y="1320" width="170" height="60" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
-<text x="885" y="1343" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CSR</text>
-<text x="885" y="1359" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">fcsr.frm / fflags</text>
+<text xml:space="preserve" x="885" y="1343" font-size="13" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CSR</text>
+<text xml:space="preserve" x="885" y="1359" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central">fcsr.frm / fflags</text>
 <polygon points="470,100 463,84.5 477,84.5" fill="#232323"/>
 <line x1="470" y1="68" x2="470" y2="84.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="478" y="84" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">BpuToFtqIO</text>
+<text xml:space="preserve" x="478" y="84" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">BpuToFtqIO</text>
 <polygon points="780,132 764.5,138.5 765,124.5" fill="#232323"/>
 <line x1="560" y1="125" x2="764.5" y2="131.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="660" y="112" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">FtqToICacheIO</text>
+<text xml:space="preserve" x="660" y="112" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">FtqToICacheIO</text>
 <polygon points="530,205 543.5,195.5 546.5,209" fill="#232323"/>
 <line x1="780" y1="158" x2="545" y2="202" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="650" y="190" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">IFUICacheIO</text>
+<text xml:space="preserve" x="650" y="190" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">IFUICacheIO</text>
 <polygon points="470,195 463,179.5 477,179.5" fill="#232323"/>
 <line x1="470" y1="158" x2="470" y2="179.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="462" y="176" font-size="10" fill="#232323" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">FtqToIfuIO</text>
+<text xml:space="preserve" x="462" y="176" font-size="10" fill="#232323" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">FtqToIfuIO</text>
 <polygon points="500,158 507,173.5 493,173.5" fill="#232323"/>
 <line x1="500" y1="195" x2="500" y2="186" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
 <line x1="500" y1="180" x2="500" y2="173.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="508" y="176" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">pdWb</text>
+<text xml:space="preserve" x="508" y="176" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">pdWb</text>
 <polygon points="470,315 463,299.5 477,299.5" fill="#232323"/>
 <line x1="470" y1="257" x2="470" y2="299.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="478" y="286" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">FetchToIBuffer</text>
+<text xml:space="preserve" x="478" y="286" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">FetchToIBuffer</text>
 <polygon points="470,420 463,404.5 477,404.5" fill="#232323"/>
 <line x1="470" y1="373" x2="470" y2="404.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="478" y="397" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">CtrlFlow（cfVec）</text>
+<text xml:space="preserve" x="478" y="397" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">CtrlFlow (cfVec)</text>
 <polygon points="820,432 805,439 804.5,425" fill="#232323"/>
 <line x1="570" y1="435" x2="804.5" y2="432" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="695" y="418" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">指令位</text>
+<text xml:space="preserve" x="695" y="418" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">instruction bits</text>
 <polygon points="540,570 533,554.5 547,554.5" fill="#232323"/>
 <path d="M 915,464 L 915,497 Q 915,505 907,505 L 548,505 Q 540,505 540,513 L 540,554.7" fill="none" stroke="#232323" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round" stroke-dasharray="9 6"/>
-<text x="720" y="520" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">fusionInfo</text>
+<text xml:space="preserve" x="720" y="520" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">fusionInfo</text>
 <polygon points="470,570 463,554.5 477,554.5" fill="#232323"/>
 <line x1="470" y1="488" x2="470" y2="554.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="462" y="530" font-size="10" fill="#232323" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DecodedInst</text>
+<text xml:space="preserve" x="462" y="530" font-size="10" fill="#232323" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DecodedInst</text>
 <polygon points="870,540 853.5,542.5 857,529" fill="#232323"/>
 <line x1="570" y1="455" x2="855.5" y2="536" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="720" y="485" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">lsrc</text>
+<text xml:space="preserve" x="720" y="485" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">lsrc</text>
 <polygon points="550,590 564.5,581 566,595" fill="#232323"/>
 <line x1="870" y1="550" x2="565" y2="588" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="700" y="540" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">psrc</text>
+<text xml:space="preserve" x="700" y="540" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">psrc</text>
 <polygon points="550,615 565.5,608.5 565,622.5" fill="#232323"/>
 <line x1="870" y1="630" x2="565.5" y2="615.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="710" y="605" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">pdest</text>
+<text xml:space="preserve" x="710" y="605" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">pdest</text>
 <polygon points="390,620 375.5,628.5 374,614.5" fill="#232323"/>
 <line x1="300" y1="630" x2="375" y2="621.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="345" y="655" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">instrSizes/masks</text>
+<text xml:space="preserve" x="345" y="655" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">instrSizes/masks</text>
 <polygon points="470,680 463,664.5 477,664.5" fill="#232323"/>
 <line x1="470" y1="628" x2="470" y2="664.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="478" y="654" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DynInst</text>
+<text xml:space="preserve" x="478" y="654" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DynInst</text>
 <polygon points="570,710 585,702.5 585.5,716.5" fill="#232323"/>
 <line x1="840" y1="705" x2="585.5" y2="709.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="700" y="690" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">忙闲</text>
+<text xml:space="preserve" x="700" y="690" font-size="10" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">busy status</text>
 <polygon points="470,795 463,779.5 477,779.5" fill="#232323"/>
 <line x1="470" y1="744" x2="470" y2="779.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="478" y="770" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DynInst</text>
+<text xml:space="preserve" x="478" y="770" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DynInst</text>
 <polygon points="640,795 624,789.5 633.5,779.5" fill="#232323"/>
 <line x1="570" y1="730" x2="629" y2="784.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="615" y="740" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">RobEnqIO</text>
+<text xml:space="preserve" x="615" y="740" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">RobEnqIO</text>
 <polygon points="470,910 463,894.5 477,894.5" fill="#232323"/>
 <line x1="470" y1="859" x2="470" y2="894.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="478" y="884" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">IssueQueueIssueBundle</text>
+<text xml:space="preserve" x="478" y="884" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">IssueQueueIssueBundle</text>
 <polygon points="820,975 804,979.5 806,965.5" fill="#232323"/>
 <line x1="570" y1="935" x2="805" y2="972.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="700" y="900" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">psrc 读地址</text>
+<text xml:space="preserve" x="700" y="900" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">psrc read address</text>
 <polygon points="570,1080 582.5,1068.5 586.5,1082" fill="#232323"/>
 <line x1="820" y1="1000" x2="584.5" y2="1075.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="700" y="1015" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">读数据</text>
+<text xml:space="preserve" x="700" y="1015" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">read data</text>
 <polygon points="570,1090 586,1084.5 584.5,1098.5" fill="#232323"/>
 <line x1="800" y1="1110" x2="585" y2="1091.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="680" y="1070" font-size="10" fill="#232323" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">前递 / 旁路数据</text>
+<text xml:space="preserve" x="680" y="1070" font-size="8" fill="#232323" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">fwd / bypass data</text>
 <polygon points="470,1185 463,1169.5 477,1169.5" fill="#232323"/>
 <line x1="470" y1="1113" x2="470" y2="1169.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="478" y="1150" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuInput</text>
+<text xml:space="preserve" x="478" y="1150" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuInput</text>
 <polygon points="940,1018 947,1033.5 933,1033.5" fill="#232323"/>
 <path d="M 560,1365 L 732,1365 Q 740,1365 740,1357 L 740,1048 Q 740,1040 748,1040 L 936.65,1040 Q 940,1040 940,1036.65 L 940,1033.3" fill="none" stroke="#232323" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
-<text x="750" y="1230" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">写端口</text>
+<text xml:space="preserve" x="750" y="1230" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">write port</text>
 <polygon points="800,1130 793.5,1145.5 784,1135" fill="#232323"/>
 <line x1="560" y1="1345" x2="566.5" y2="1339" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
 <line x1="571" y1="1335" x2="578" y2="1329" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
@@ -184,17 +184,17 @@
 <line x1="761" y1="1165" x2="768" y2="1159" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
 <line x1="772.5" y1="1155" x2="779" y2="1149" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
 <line x1="783.5" y1="1145" x2="788.5" y2="1140" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="600" y="1250" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">写回数据</text>
+<text xml:space="preserve" x="600" y="1250" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback data</text>
 <polygon points="690,854 697,869.5 683,869.5" fill="#232323"/>
 <path d="M 560,1330 L 682,1330 Q 690,1330 690,1322 L 690,869.3" fill="none" stroke="#232323" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
-<text x="680" y="990" font-size="10" fill="#232323" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback</text>
+<text xml:space="preserve" x="680" y="990" font-size="10" fill="#232323" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback</text>
 <polygon points="470,1320 463,1304.5 477,1304.5" fill="#232323"/>
 <line x1="470" y1="1247" x2="470" y2="1304.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="478" y="1284" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
+<text xml:space="preserve" x="478" y="1284" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
 <polygon points="390,859 374.5,866 374.5,852" fill="#965F0A"/>
 <path d="M 380,1340 L 358,1340 Q 350,1340 350,1332 L 350,867 Q 350,859 358,859 L 374.7,859" fill="none" stroke="#965F0A" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round" stroke-dasharray="9 6"/>
-<text x="340" y="1111.08" font-size="11" fill="#965F0A" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">wakeupFromWB</text>
-<text x="340" y="1128.92" font-size="11" fill="#965F0A" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">（经 Backend）</text>
+<text xml:space="preserve" x="340" y="1111.08" font-size="11" fill="#965F0A" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">wakeupFromWB</text>
+<text xml:space="preserve" x="340" y="1128.92" font-size="11" fill="#965F0A" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round"> (via Backend)</text>
 <polygon points="580,1215 596.5,1217 589.5,1229" fill="#232323"/>
 <line x1="800" y1="1350" x2="792.5" y2="1345.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
 <line x1="787" y1="1342" x2="779.5" y2="1337.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
@@ -213,17 +213,17 @@
 <line x1="621" y1="1240" x2="613.5" y2="1235.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
 <line x1="608" y1="1232.5" x2="600.5" y2="1227.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
 <line x1="595.5" y1="1224.5" x2="593" y2="1223" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="705" y="1258" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">frm</text>
+<text xml:space="preserve" x="705" y="1258" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">frm</text>
 <polygon points="1020,632 1035.5,625 1035.5,639" fill="#232323"/>
 <path d="M 700,790 L 733.446,766.588 Q 740,762 748,762 L 1077,762 Q 1085,762 1085,754 L 1085,640 Q 1085,632 1077,632 L 1035.3,632" fill="none" stroke="#232323" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
-<text x="860" y="747" font-size="11" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">归还物理寄存器</text>
+<text xml:space="preserve" x="860" y="747" font-size="11" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">free physical register</text>
 <polygon points="970,1350 985.5,1343 985.5,1357" fill="#232323"/>
 <path d="M 780,820 L 1042,820 Q 1050,820 1050,828 L 1050,1342 Q 1050,1350 1042,1350 L 985.3,1350" fill="none" stroke="#232323" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round"/>
-<text x="1058" y="1000" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">csr.fflags</text>
+<text xml:space="preserve" x="1058" y="1000" font-size="10" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">csr.fflags</text>
 <polygon points="560,148 575.5,141 575.5,155" fill="#965F0A"/>
 <path d="M 780,800 L 1112,800 Q 1120,800 1120,792 L 1120,96 Q 1120,88 1112,88 L 628,88 Q 620,88 620,96 L 620,140 Q 620,148 612,148 L 575.3,148" fill="none" stroke="#965F0A" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round" stroke-dasharray="9 6"/>
-<text x="1112" y="420" font-size="10" fill="#965F0A" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">重定向 / 提交</text>
+<text xml:space="preserve" x="1112" y="420" font-size="10" fill="#965F0A" text-anchor="end" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">redirect / commit</text>
 <polygon points="520,344 531,331.5 537,344" fill="#965F0A"/>
 <path d="M 1120,300 L 588,300 Q 580,300 573.979,305.268 L 542.495,332.816 Q 540,335 536.976,336.361 L 533.952,337.721" fill="none" stroke="#965F0A" stroke-width="2" stroke-linecap="butt" stroke-linejoin="round" stroke-dasharray="9 6"/>
-<text x="700" y="288" font-size="10" fill="#965F0A" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">canAccept</text>
+<text xml:space="preserve" x="700" y="288" font-size="10" fill="#965F0A" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">canAccept</text>
 </svg>

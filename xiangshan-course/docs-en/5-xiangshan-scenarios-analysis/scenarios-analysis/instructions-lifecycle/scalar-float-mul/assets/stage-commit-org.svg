@@ -1,59 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="585" viewBox="0 0 1220 585" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="585" viewBox="0 0 1220 585" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif" xml:space="preserve">
 <rect x="0" y="0" width="1220" height="585" fill="#ffffff"/>
 
 <rect x="10" y="14" width="1200" height="438" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
 <rect x="562.3560483870967" y="1.209677419354838" width="95.28790322580645" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
-<text x="610.0" y="14" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">Backend</text>
+<text xml:space="preserve" x="610.0" y="14" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">Backend</text>
 <rect x="30" y="56" width="800" height="370" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
 <rect x="370.9923387096774" y="43.20967741935484" width="118.01532258064515" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
-<text x="430.0" y="56" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">CtrlBlock</text>
+<text xml:space="preserve" x="430.0" y="56" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">CtrlBlock</text>
 <rect x="50" y="84" width="760" height="232" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="430" y="108" font-size="19.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rob（LazyModule）</text>
+<text xml:space="preserve" x="430" y="108" font-size="19.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rob (LazyModule)</text>
 <rect x="73" y="136" width="340" height="72" rx="14" fill="#DEDEDE"/>
 <rect x="70" y="132" width="340" height="72" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="240.0" y="158.91887096774192" font-size="16.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">robEntries</text>
-<text x="240.0" y="179.87532258064516" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">按序表项阵列</text>
+<text xml:space="preserve" x="240.0" y="158.91887096774192" font-size="16.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">robEntries</text>
+<text xml:space="preserve" x="240.0" y="179.87532258064516" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">in-order entry array</text>
 <rect x="433" y="136" width="360" height="72" rx="14" fill="#DEDEDE"/>
 <rect x="430" y="132" width="360" height="72" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="610.0" y="158.91887096774192" font-size="16.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ExceptionGen</text>
-<text x="610.0" y="179.87532258064516" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">异常合并与冲刷</text>
+<text xml:space="preserve" x="610.0" y="158.91887096774192" font-size="16.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ExceptionGen</text>
+<text xml:space="preserve" x="610.0" y="179.87532258064516" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">exception merge and flush</text>
 <rect x="73" y="224" width="340" height="72" rx="14" fill="#DEDEDE"/>
 <rect x="70" y="220" width="340" height="72" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="240.0" y="246.91887096774195" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RenameBuffer（RAB）</text>
-<text x="240.0" y="267.1767741935484" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">提交时更新映射</text>
+<text xml:space="preserve" x="240.0" y="246.91887096774195" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RenameBuffer (RAB)</text>
+<text xml:space="preserve" x="240.0" y="267.1767741935484" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">update mapping at commit</text>
 <rect x="433" y="224" width="360" height="72" rx="14" fill="#DEDEDE"/>
 <rect x="430" y="220" width="360" height="72" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="610.0" y="246.91887096774195" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">快照与提交指针</text>
-<text x="610.0" y="267.1767741935484" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">寄存器与组合逻辑</text>
+<text xml:space="preserve" x="610.0" y="246.91887096774195" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">snapshot and commit pointer</text>
+<text xml:space="preserve" x="610.0" y="267.1767741935484" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">registers and combinational logic</text>
 <rect x="53" y="348" width="280" height="60" rx="14" fill="#DEDEDE"/>
 <rect x="50" y="344" width="280" height="60" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
-<text x="190.0" y="374.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RedirectGenerator</text>
+<text xml:space="preserve" x="190.0" y="374.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RedirectGenerator</text>
 <rect x="363" y="348" width="200" height="60" rx="14" fill="#DEDEDE"/>
 <rect x="360" y="344" width="200" height="60" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
-<text x="460.0" y="364.9188709677419" font-size="13.8" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RenameTableWrapper</text>
-<text x="460.0" y="383.7796774193548" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">RAT</text>
+<text xml:space="preserve" x="460.0" y="364.9188709677419" font-size="13.8" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RenameTableWrapper</text>
+<text xml:space="preserve" x="460.0" y="383.7796774193548" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">RAT</text>
 <rect x="603" y="348" width="190" height="60" rx="14" fill="#DEDEDE"/>
 <rect x="600" y="344" width="190" height="60" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="695.0" y="364.91887096774195" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rename</text>
-<text x="695.0" y="385.1767741935484" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">FreeList × 5</text>
+<text xml:space="preserve" x="695.0" y="364.91887096774195" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rename</text>
+<text xml:space="preserve" x="695.0" y="385.1767741935484" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">FreeList × 5</text>
 <rect x="860" y="146" width="320" height="280" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="1020" y="172" font-size="17.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">int ExuBlock</text>
+<text xml:space="preserve" x="1020" y="172" font-size="17.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">int ExuBlock</text>
 <rect x="883" y="210" width="280" height="74" rx="14" fill="#DEDEDE"/>
 <rect x="880" y="206" width="280" height="74" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="1020.0" y="243.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">csr 执行单元</text>
+<text xml:space="preserve" x="1020.0" y="243.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">csr execution unit</text>
 <rect x="883" y="310" width="280" height="74" rx="14" fill="#DEDEDE"/>
 <rect x="880" y="306" width="280" height="74" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="1020.0" y="343.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CSR（FuncUnit）</text>
+<text xml:space="preserve" x="1020.0" y="343.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CSR (FuncUnit)</text>
 <rect x="30" y="486" width="420" height="76" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
 <rect x="186.6741935483871" y="473.2096774193548" width="106.65161290322578" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
-<text x="240.0" y="486" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">Frontend</text>
+<text xml:space="preserve" x="240.0" y="486" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">Frontend</text>
 <rect x="53" y="517" width="180" height="44" rx="14" fill="#DEDEDE"/>
 <rect x="50" y="513" width="180" height="44" rx="14" fill="#FDF0E6" stroke="#E67E22" stroke-width="2"/>
-<text x="140.0" y="535.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Ftq</text>
+<text xml:space="preserve" x="140.0" y="535.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Ftq</text>
 <rect x="620" y="486" width="420" height="76" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
 <rect x="776.674193548387" y="473.2096774193548" width="106.65161290322578" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
-<text x="830.0" y="486" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">MemBlock</text>
+<text xml:space="preserve" x="830.0" y="486" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">MemBlock</text>
 <rect x="643" y="517" width="180" height="44" rx="14" fill="#DEDEDE"/>
 <rect x="640" y="513" width="180" height="44" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="730.0" y="535.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">LSQ</text>
+<text xml:space="preserve" x="730.0" y="535.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">LSQ</text>
 </svg>

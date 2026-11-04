@@ -1,31 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1552" height="427" viewBox="0 0 1552 427" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1552" height="427" viewBox="0 0 1552 427" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif" xml:space="preserve">
 <rect x="0" y="0" width="1552" height="427" fill="#ffffff"/>
 
 <rect x="10" y="24" width="1532" height="378" rx="24" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="12 8"/>
-<text x="776" y="48" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">Frontend（LazyModule 外壳，shouldBeInlined = false）</text>
+<text xml:space="preserve" x="776" y="48" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">Frontend (LazyModule shell, shouldBeInlined = false)</text>
 <rect x="28" y="102" width="1496" height="270" rx="24" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="12 8"/>
-<text x="776" y="128" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">FrontendInlined（shouldBeInlined = true）</text>
+<text xml:space="preserve" x="776" y="128" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">FrontendInlined (shouldBeInlined = true)</text>
 <rect x="690" y="174" width="780" height="176" rx="18" fill="#FFFFFF" stroke="#B9B9B9" stroke-width="2"/>
-<text x="1080" y="196" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">FrontendInlinedImp（实际组装点）</text>
+<text xml:space="preserve" x="1080" y="196" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">FrontendInlinedImp (actual assembly point)</text>
 <rect x="78" y="244" width="257" height="90" rx="14" fill="#DEDEDE"/>
 <rect x="75" y="240" width="257" height="90" rx="14" fill="#EDEDED" stroke="#8C8C8C" stroke-width="2.4"/>
-<text x="203.5" y="268.2" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">InstrUncache</text>
-<text x="203.5" y="303.2" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">（LazyModule）</text>
+<text xml:space="preserve" x="203.5" y="268.2" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">InstrUncache</text>
+<text xml:space="preserve" x="203.5" y="303.2" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central"> (LazyModule)</text>
 <rect x="393" y="239" width="265" height="95" rx="14" fill="#DEDEDE"/>
 <rect x="390" y="235" width="265" height="95" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2.4"/>
-<text x="522.5" y="265.7" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">ICache</text>
-<text x="522.5" y="300.7" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">（LazyModule）</text>
+<text xml:space="preserve" x="522.5" y="265.7" font-size="26" fill="#232323" text-anchor="middle" dominant-baseline="central">ICache</text>
+<text xml:space="preserve" x="522.5" y="300.7" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central"> (LazyModule)</text>
 <rect x="713" y="241" width="165" height="91" rx="14" fill="#DEDEDE"/>
 <rect x="710" y="237" width="165" height="91" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2.4"/>
-<text x="792.5" y="267.1" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">Predictor</text>
-<text x="792.5" y="299.3" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">（BPU）</text>
+<text xml:space="preserve" x="792.5" y="267.1" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">Predictor</text>
+<text xml:space="preserve" x="792.5" y="299.3" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central"> (BPU)</text>
 <rect x="931" y="249" width="107" height="77" rx="14" fill="#DEDEDE"/>
 <rect x="928" y="245" width="107" height="77" rx="14" fill="#FDF0E6" stroke="#E67E22" stroke-width="2.4"/>
-<text x="981.5" y="283.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">Ftq</text>
+<text xml:space="preserve" x="981.5" y="283.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">Ftq</text>
 <rect x="1093" y="244" width="175" height="85" rx="14" fill="#DEDEDE"/>
 <rect x="1090" y="240" width="175" height="85" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2.4"/>
-<text x="1177.5" y="282.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">NewIFU</text>
+<text xml:space="preserve" x="1177.5" y="282.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">NewIFU</text>
 <rect x="1303" y="244" width="150" height="85" rx="14" fill="#DEDEDE"/>
 <rect x="1300" y="240" width="150" height="85" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2.4"/>
-<text x="1375" y="282.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">IBuffer</text>
+<text xml:space="preserve" x="1375" y="282.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">IBuffer</text>
 </svg>

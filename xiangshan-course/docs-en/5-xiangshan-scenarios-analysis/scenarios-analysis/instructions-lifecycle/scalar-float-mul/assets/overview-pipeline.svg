@@ -1,59 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1549" height="1396" viewBox="0 0 1549 1396" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1549" height="1396" viewBox="0 0 1549 1396" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif" xml:space="preserve">
 <rect x="0" y="0" width="1549" height="1396" fill="#ffffff"/>
 
 <rect x="83" y="19" width="800" height="115" rx="14" fill="#DEDEDE"/>
 <rect x="80" y="15" width="800" height="115" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="480" y="55" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">① 取指</text>
-<text x="480" y="91.5" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">BPU · FTQ · ICache · IFU · IBuffer</text>
+<text xml:space="preserve" x="480" y="55" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">① Fetch</text>
+<text xml:space="preserve" x="480" y="91.5" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">BPU · FTQ · ICache · IFU · IBuffer</text>
 <rect x="23" y="179" width="920" height="115" rx="14" fill="#DEDEDE"/>
 <rect x="20" y="175" width="920" height="115" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="480" y="216" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">② 译码</text>
-<text x="480" y="251.5" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">DecodeStage（6 × DecodeUnit + DecodeUnitComp）· FusionDecoder</text>
+<text xml:space="preserve" x="480" y="216" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">② Decode</text>
+<text xml:space="preserve" x="480" y="251.5" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">DecodeStage (6 × DecodeUnit + DecodeUnitComp)· FusionDecoder</text>
 <rect x="178" y="339" width="610" height="115" rx="14" fill="#DEDEDE"/>
 <rect x="175" y="335" width="610" height="115" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="480" y="375.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">③ 重命名</text>
-<text x="480" y="411.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">Rename · CompressUnit · RAT · FreeList</text>
+<text xml:space="preserve" x="480" y="375.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">③ Rename</text>
+<text xml:space="preserve" x="480" y="411.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">Rename · CompressUnit · RAT · FreeList</text>
 <rect x="218" y="499" width="530" height="115" rx="14" fill="#DEDEDE"/>
 <rect x="215" y="495" width="530" height="115" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="480" y="535.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">④ 派发</text>
-<text x="480" y="571.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">NewDispatch · BusyTable</text>
+<text xml:space="preserve" x="480" y="535.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">④ Dispatch</text>
+<text xml:space="preserve" x="480" y="571.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">NewDispatch · BusyTable</text>
 <rect x="43" y="659" width="880" height="115" rx="14" fill="#DEDEDE"/>
 <rect x="40" y="655" width="880" height="115" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="480" y="696" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">⑤ 发射与读操作数</text>
-<text x="480" y="731.5" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">IssueQueue × 3 · DataPath s0/s1 · FpRegFile · BypassNetwork</text>
+<text xml:space="preserve" x="480" y="696" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">⑤ Issue and operand read</text>
+<text xml:space="preserve" x="480" y="731.5" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central">IssueQueue × 3 · DataPath s0/s1 · FpRegFile · BypassNetwork</text>
 <rect x="218" y="819" width="530" height="115" rx="14" fill="#DEDEDE"/>
 <rect x="215" y="815" width="530" height="115" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="480" y="855.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">⑥ 执行</text>
-<text x="480" y="891.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">ExeUnit · FMA · FloatFMA</text>
+<text xml:space="preserve" x="480" y="855.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">⑥ Execute</text>
+<text xml:space="preserve" x="480" y="891.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">ExeUnit · FMA · FloatFMA</text>
 <rect x="183" y="979" width="600" height="115" rx="14" fill="#DEDEDE"/>
 <rect x="180" y="975" width="600" height="115" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="480" y="1015.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">⑦ 写回</text>
-<text x="480" y="1051.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">WbDataPath · fpWbArbiter · FpRegFile 写口</text>
+<text xml:space="preserve" x="480" y="1015.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">⑦ Writeback</text>
+<text xml:space="preserve" x="480" y="1051.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">WbDataPath · fpWbArbiter · FpRegFile write port</text>
 <rect x="218" y="1139" width="530" height="115" rx="14" fill="#DEDEDE"/>
 <rect x="215" y="1135" width="530" height="115" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="480" y="1175.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">⑧ 提交</text>
-<text x="480" y="1211.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">Rob · CSR</text>
+<text xml:space="preserve" x="480" y="1175.5" font-size="27" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">⑧ Commit</text>
+<text xml:space="preserve" x="480" y="1211.5" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central">Rob · CSR</text>
 <polygon points="480,175 473,159.5 487,159.5" fill="#232323"/>
 <line x1="480" y1="130" x2="480" y2="159.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="500" y="152.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">CtrlFlow → StaticInst（cfVec ×6）</text>
+<text xml:space="preserve" x="500" y="152.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">CtrlFlow → StaticInst (cfVec ×6)</text>
 <polygon points="480,335 473,319.5 487,319.5" fill="#232323"/>
 <line x1="480" y1="290" x2="480" y2="319.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="500" y="312.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DecodedInst</text>
+<text xml:space="preserve" x="500" y="312.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DecodedInst</text>
 <polygon points="480,495 473,479.5 487,479.5" fill="#232323"/>
 <line x1="480" y1="450" x2="480" y2="479.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="500" y="472.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DynInst</text>
+<text xml:space="preserve" x="500" y="472.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DynInst</text>
 <polygon points="480,655 473,639.5 487,639.5" fill="#232323"/>
 <line x1="480" y1="610" x2="480" y2="639.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="500" y="632.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DynInst</text>
+<text xml:space="preserve" x="500" y="632.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DynInst</text>
 <polygon points="480,815 473,799.5 487,799.5" fill="#232323"/>
 <line x1="480" y1="770" x2="480" y2="799.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="500" y="792.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuInput</text>
+<text xml:space="preserve" x="500" y="792.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuInput</text>
 <polygon points="480,975 473,959.5 487,959.5" fill="#232323"/>
 <line x1="480" y1="930" x2="480" y2="959.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="500" y="952.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
+<text xml:space="preserve" x="500" y="952.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
 <polygon points="480,1135 473,1119.5 487,1119.5" fill="#232323"/>
 <line x1="480" y1="1090" x2="480" y2="1119.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="500" y="1112.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback</text>
+<text xml:space="preserve" x="500" y="1112.5" font-size="19" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback</text>
 <polygon points="920,712 936,706 934.5,720" fill="#965F0A"/>
 <line x1="780" y1="1032" x2="785.5" y2="1032" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="785.5" y1="1032" x2="790.5" y2="1031.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
@@ -155,9 +155,9 @@
 <line x1="923.5" y1="713" x2="922.5" y2="712.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="922.5" y1="712.5" x2="921" y2="712" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="921" y1="712" x2="930" y2="713" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
-<text x="1040" y="854.05" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">toFpPreg →</text>
-<text x="1040" y="880" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">wakeupFromWB</text>
-<text x="1040" y="905.95" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">（经 Backend）</text>
+<text xml:space="preserve" x="1040" y="854.05" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">toFpPreg →</text>
+<text xml:space="preserve" x="1040" y="880" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">wakeupFromWB</text>
+<text xml:space="preserve" x="1040" y="905.95" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round"> (via Backend)</text>
 <polygon points="880,72 895.5,65.5 895,79.5" fill="#965F0A"/>
 <line x1="745" y1="1192" x2="754" y2="1192" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="760" y1="1191.5" x2="762.5" y2="1191.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
@@ -329,6 +329,6 @@
 <line x1="919.5" y1="75" x2="910.5" y2="74" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="906.5" y1="73.5" x2="897.5" y2="72.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="893.5" y1="72.5" x2="895.5" y2="72.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
-<text x="1220" y="587.025" font-size="17" fill="#965F0A" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">rob_commits / redirect</text>
-<text x="1220" y="612.975" font-size="17" fill="#965F0A" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">（CtrlToFtqIO）</text>
+<text xml:space="preserve" x="1220" y="587.025" font-size="17" fill="#965F0A" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">rob_commits / redirect</text>
+<text xml:space="preserve" x="1220" y="612.975" font-size="17" fill="#965F0A" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round"> (CtrlToFtqIO)</text>
 </svg>

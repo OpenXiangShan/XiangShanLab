@@ -1,40 +1,40 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1271" height="387" viewBox="0 0 1271 387" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1271" height="387" viewBox="0 0 1271 387" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif" xml:space="preserve">
 <rect x="0" y="0" width="1271" height="387" fill="#ffffff"/>
 
 <rect x="18" y="24" width="225" height="80" rx="14" fill="#DEDEDE"/>
 <rect x="15" y="20" width="225" height="80" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
-<text x="127.5" y="60" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">NewDispatch</text>
+<text xml:space="preserve" x="127.5" y="60" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">NewDispatch</text>
 <rect x="18" y="154" width="225" height="80" rx="14" fill="#DEDEDE"/>
 <rect x="15" y="150" width="225" height="80" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
-<text x="127.5" y="190" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">WbDataPath</text>
+<text xml:space="preserve" x="127.5" y="190" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">WbDataPath</text>
 <rect x="563" y="79" width="200" height="120" rx="14" fill="#DEDEDE"/>
 <rect x="560" y="75" width="200" height="120" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
-<text x="660" y="121" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ROB</text>
-<text x="660" y="151.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central">按序退休</text>
+<text xml:space="preserve" x="660" y="121" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ROB</text>
+<text xml:space="preserve" x="660" y="151.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central">in-order retirement</text>
 <rect x="988" y="19" width="230" height="90" rx="14" fill="#DEDEDE"/>
 <rect x="985" y="15" width="230" height="90" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
-<text x="1100" y="46.5" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CSR</text>
-<text x="1100" y="75" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">fcsr.fflags</text>
+<text xml:space="preserve" x="1100" y="46.5" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CSR</text>
+<text xml:space="preserve" x="1100" y="75" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">fcsr.fflags</text>
 <rect x="988" y="134" width="275" height="110" rx="14" fill="#DEDEDE"/>
 <rect x="985" y="130" width="275" height="110" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
-<text x="1122.5" y="171.5" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RAT / FreeList</text>
-<text x="1122.5" y="200" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">归还物理寄存器</text>
+<text xml:space="preserve" x="1122.5" y="171.5" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RAT / FreeList</text>
+<text xml:space="preserve" x="1122.5" y="200" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">free physical register</text>
 <rect x="18" y="279" width="170" height="80" rx="14" fill="#DEDEDE"/>
 <rect x="15" y="275" width="170" height="80" rx="14" fill="#FDF0E6" stroke="#E67E22" stroke-width="2"/>
-<text x="100" y="315" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FTQ</text>
+<text xml:space="preserve" x="100" y="315" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FTQ</text>
 <polygon points="560,105 544,110 546,96" fill="#232323"/>
 <line x1="240" y1="60" x2="545" y2="103" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="400" y="45" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">RobEnqIO</text>
+<text xml:space="preserve" x="400" y="45" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">RobEnqIO</text>
 <polygon points="560,165 545.5,173 544,159" fill="#232323"/>
 <line x1="240" y1="190" x2="544.5" y2="166" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="400" y="210" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback</text>
+<text xml:space="preserve" x="400" y="210" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">writeback</text>
 <polygon points="985,60 971.5,70 968.5,56" fill="#232323"/>
 <line x1="760" y1="105" x2="970" y2="63" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="872" y="50" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">csr.fflags</text>
+<text xml:space="preserve" x="872" y="50" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">csr.fflags</text>
 <polygon points="985,185 969,189.5 971,175.5" fill="#232323"/>
 <line x1="760" y1="150" x2="970" y2="182.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
-<text x="880" y="211.35" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">RAB</text>
-<text x="880" y="238.65" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">arch 映射更新</text>
+<text xml:space="preserve" x="880" y="211.35" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">RAB</text>
+<text xml:space="preserve" x="880" y="238.65" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">arch mapping update</text>
 <polygon points="185,315 201,310 199.5,324" fill="#965F0A"/>
 <line x1="640" y1="195" x2="640" y2="198.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="640" y1="198.5" x2="639.5" y2="201.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
@@ -136,6 +136,6 @@
 <line x1="196" y1="316" x2="192" y2="316" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="192" y1="316" x2="188.5" y2="315.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
 <line x1="188.5" y1="315.5" x2="197.5" y2="316.5" stroke="#965F0A" stroke-width="2" stroke-linecap="butt"/>
-<text x="450" y="257.025" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">rob_commits / redirect</text>
-<text x="450" y="282.975" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">（CtrlToFtqIO）</text>
+<text xml:space="preserve" x="450" y="257.025" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">rob_commits / redirect</text>
+<text xml:space="preserve" x="450" y="282.975" font-size="17" fill="#965F0A" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round"> (CtrlToFtqIO)</text>
 </svg>
