@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1321" height="579" viewBox="0 0 1321 579" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<rect x="28" y="19" width="230" height="80" rx="14" fill="#DEDEDE"/>
+<rect x="25" y="15" width="230" height="80" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
+<text x="140" y="55" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DecodeStage</text>
+<rect x="28" y="164" width="230" height="85" rx="14" fill="#DEDEDE"/>
+<rect x="25" y="160" width="230" height="85" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
+<text x="140" y="189" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RAT</text>
+<text x="140" y="217.5" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">逻辑名 → 物理名</text>
+<rect x="28" y="329" width="230" height="85" rx="14" fill="#DEDEDE"/>
+<rect x="25" y="325" width="230" height="85" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text x="140" y="354" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FreeList × 5</text>
+<text x="140" y="382.5" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">分配 pdest</text>
+<rect x="28" y="494" width="230" height="80" rx="14" fill="#DEDEDE"/>
+<rect x="25" y="490" width="230" height="80" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text x="140" y="517" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CompressUnit</text>
+<text x="140" y="544" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">合并 ROB 表项</text>
+<rect x="543" y="234" width="330" height="150" rx="14" fill="#DEDEDE"/>
+<rect x="540" y="230" width="330" height="150" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text x="705" y="292" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rename</text>
+<text x="705" y="322" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">（译码级 → 重命名级）</text>
+<rect x="1088" y="249" width="215" height="90" rx="14" fill="#DEDEDE"/>
+<rect x="1085" y="245" width="215" height="90" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text x="1192.5" y="290" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">NewDispatch</text>
+<polygon points="540,265 523.5,261.5 532,250.5" fill="#232323"/>
+<line x1="255" y1="55" x2="527.5" y2="256" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="395" y="128" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DecodedInst</text>
+<polygon points="540,300 523,301.5 528,288.5" fill="#232323"/>
+<line x1="255" y1="200" x2="525.5" y2="295" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="395" y="215" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">psrc</text>
+<polygon points="540,340 525.5,348.5 524,334.5" fill="#232323"/>
+<line x1="255" y1="365" x2="525" y2="341.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="395" y="330" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">pdest</text>
+<polygon points="620,380 608.5,392.5 603,379.5" fill="#232323"/>
+<line x1="255" y1="530" x2="606" y2="386" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="470" y="438" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">instrSizes / masks</text>
+<polygon points="1085,290 1070,297.5 1069.5,283.5" fill="#232323"/>
+<line x1="870" y1="300" x2="1069.5" y2="290.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="978" y="272" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DynInst</text>
+</svg>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1358" height="681" viewBox="0 0 1358 681" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<rect x="10" y="24" width="1338" height="632" rx="24" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="12 8"/>
+<text x="679" y="48" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">Backend（LazyModule 外壳，shouldBeInlined = false）</text>
+<rect x="38" y="106" width="1310" height="516" rx="24" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="12 8"/>
+<text x="693" y="132" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">BackendInlined（shouldBeInlined = true）</text>
+<rect x="88" y="175" width="1187" height="417" rx="18" fill="#FFFFFF" stroke="#B9B9B9" stroke-width="2"/>
+<text x="680" y="199" font-size="25" fill="#232323" text-anchor="middle" dominant-baseline="central">BackendInlinedImp（实际组装点）</text>
+<rect x="116" y="248" width="207" height="154" rx="14" fill="#DEDEDE"/>
+<rect x="113" y="244" width="207" height="154" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2.4"/>
+<text x="216.5" y="259.4" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CtrlBlock</text>
+<text x="216.5" y="291.6" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">DecodeStage</text>
+<text x="216.5" y="322.4" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">Rename</text>
+<text x="216.5" y="353.2" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">NewDispatch</text>
+<text x="216.5" y="384" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">Rob</text>
+<rect x="368" y="274" width="260" height="103" rx="14" fill="#DEDEDE"/>
+<rect x="365" y="270" width="260" height="103" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2.4"/>
+<text x="495" y="290.7" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Scheduler × 4</text>
+<text x="495" y="322.9" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">int / fp / vf / mem</text>
+<text x="495" y="353.7" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">IssueQueue × N</text>
+<rect x="681" y="279" width="270" height="93" rx="14" fill="#DEDEDE"/>
+<rect x="678" y="275" width="270" height="93" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2.4"/>
+<text x="813" y="306.1" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DataPath</text>
+<text x="813" y="338.3" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">Int / Fp / Vf / V0 / Vl</text>
+<rect x="998" y="282" width="255" height="84" rx="14" fill="#DEDEDE"/>
+<rect x="995" y="278" width="255" height="84" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2.4"/>
+<text x="1122.5" y="304.6" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BypassNetwork</text>
+<text x="1122.5" y="336.8" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">操作数旁路</text>
+<rect x="533" y="466" width="420" height="103" rx="14" fill="#DEDEDE"/>
+<rect x="530" y="462" width="420" height="103" rx="14" fill="#FDF0E6" stroke="#E67E22" stroke-width="2.4"/>
+<text x="740" y="482.7" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ExuBlock × 3</text>
+<text x="740" y="514.9" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">int / fp / vf</text>
+<text x="740" y="545.7" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">fp: ExeUnit → FMA → FloatFMA</text>
+<rect x="1013" y="466" width="240" height="103" rx="14" fill="#DEDEDE"/>
+<rect x="1010" y="462" width="240" height="103" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2.4"/>
+<text x="1130" y="482.7" font-size="24" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">写回相关</text>
+<text x="1130" y="514.9" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">WbDataPath</text>
+<text x="1130" y="545.7" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central">WbFuBusyTable</text>
+</svg>
