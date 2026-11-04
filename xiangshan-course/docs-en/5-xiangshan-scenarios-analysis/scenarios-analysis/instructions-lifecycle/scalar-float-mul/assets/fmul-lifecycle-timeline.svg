@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1110" viewBox="0 80 1240 1110" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<rect x="0" y="80" width="1240" height="1110" fill="#ffffff"/>
+<style>.cyc{font-family:'DejaVu Sans Mono','Noto Sans Mono',monospace;font-size:13.5px;font-weight:bold;fill:#222}.stage{font-size:14px;font-weight:bold;fill:#232323}.d{font-size:12.5px;fill:#333}.m{font-family:'DejaVu Sans Mono','Noto Sans Mono',monospace;font-size:11.5px;fill:#333}.v{font-family:'DejaVu Sans Mono','Noto Sans Mono',monospace;font-size:11.5px;fill:#8a3b12}.gap{font-size:12px;fill:#8a5a00}</style>
+<defs><marker id="ag" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#B8B8B8"/></marker><marker id="aa" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#D9A441"/></marker></defs>
+<line x1="140" y1="96" x2="140" y2="1180" stroke="#E2E2E2" stroke-width="2"/>
+<line x1="140" y1="115" x2="155" y2="115" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="115" r="5" fill="#4A7EBB"/>
+<rect x="158" y="104" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="101" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="120" text-anchor="middle">取指</text>
+<text class="cyc" x="125" y="120" text-anchor="end">4243</text>
+<text x="320" y="119"><tspan class="m">pc_13 = 0x80000144</tspan><tspan class="d">，</tspan><tspan class="m">instrs_13 = 0x10B50653</tspan><tspan class="d">；块首 </tspan><tspan class="v">0x8000012A</tspan><tspan class="d">，指令在第 13 个半字槽</tspan></text>
+<line x1="140" y1="135" x2="140" y2="141" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="159" x2="155" y2="159" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="159" r="5" fill="#4A7EBB"/>
+<rect x="158" y="148" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="145" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="164" text-anchor="middle">IBuffer 排队</text>
+<text class="cyc" x="125" y="164" text-anchor="end">4244</text>
+<text x="320" y="163"><tspan class="d">指令在 IBuffer 里等译码宽度；本拍译码的是同一取指块的前六条</tspan></text>
+<line x1="140" y1="179" x2="140" y2="194" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="212" x2="155" y2="212" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="212" r="5" fill="#4A7EBB"/>
+<rect x="158" y="201" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="198" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="217" text-anchor="middle">译码</text>
+<text class="cyc" x="125" y="217" text-anchor="end">4245</text>
+<text x="320" y="206"><tspan class="m">fuType = 0x1000</tspan><tspan class="d">（fmac），</tspan><tspan class="m">fuOpType = 0x0</tspan><tspan class="d">（纯乘），</tspan><tspan class="m">srcType = 2 / 2 / 0</tspan><tspan class="d">，</tspan><tspan class="m">ldest = 0xC</tspan><tspan class="d">（fa2）</tspan></text>
+<text x="320" y="224"><tspan class="m">fpu_fmt = 0x2</tspan><tspan class="d">（单精度），</tspan><tspan class="m">fpu_rm = 0x0</tspan><tspan class="d">（RNE），</tspan><tspan class="m">fpu_wflags = 1</tspan></text>
+<line x1="140" y1="232" x2="140" y2="256" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="274" x2="155" y2="274" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="274" r="5" fill="#969696"/>
+<rect x="158" y="263" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="260" width="140" height="28" rx="9" fill="#F2F2F2" stroke="#969696" stroke-width="1.6"/>
+<text class="stage" x="225" y="279" text-anchor="middle">重命名</text>
+<text class="cyc" x="125" y="279" text-anchor="end">4246</text>
+<text x="320" y="268"><tspan class="m">psrc_0 = 0x42</tspan><tspan class="d">（fa0），</tspan><tspan class="m">psrc_1 = 0x43</tspan><tspan class="d">（fa1），</tspan><tspan class="m">psrc_2 = 0x0</tspan><tspan class="d">，</tspan><tspan class="m">pdest = 0x44</tspan><tspan class="d">（fa2）</tspan></text>
+<text x="320" y="286"><tspan class="m">robIdx = 0x35</tspan><tspan class="d">；与前面的 </tspan><tspan class="m">fmv.w.x fa1, a5</tspan><tspan class="d"> 压进同一个 ROB 表项</tspan></text>
+<line x1="140" y1="296" x2="140" y2="378" stroke="#D9A441" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#aa)"/>
+<line x1="140" y1="396" x2="155" y2="396" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="396" r="5" fill="#969696"/>
+<rect x="158" y="385" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="382" width="140" height="28" rx="9" fill="#F2F2F2" stroke="#969696" stroke-width="1.6"/>
+<text class="stage" x="225" y="401" text-anchor="middle">派发</text>
+<text class="cyc" x="125" y="401" text-anchor="end">4336</text>
+<text x="320" y="390"><tspan class="m">IssueQueueFaluFmac.io_enq_0</tspan><tspan class="d"> 收下 </tspan><tspan class="v">pc = 0x80000144</tspan><tspan class="d">、</tspan><tspan class="v">robIdx = 0x35</tspan></text>
+<text x="320" y="408"><tspan class="m">dispatch.io_fromRename_1</tspan><tspan class="d"> 的 </tspan><tspan class="m">valid</tspan><tspan class="d"> 与 </tspan><tspan class="m">ready</tspan><tspan class="d"> 同拍为 1</tspan></text>
+<line x1="140" y1="416" x2="140" y2="431" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="449" x2="155" y2="449" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="449" r="5" fill="#4A7EBB"/>
+<rect x="158" y="438" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="435" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="454" text-anchor="middle">入 ROB</text>
+<text class="cyc" x="125" y="454" text-anchor="end">4337</text>
+<text x="320" y="453"><tspan class="m">rob.io_enq_req_0_valid = 1</tspan><tspan class="d">，</tspan><tspan class="v">robIdx = 0x35</tspan><tspan class="d">；uop 已在发射队列里等源</tspan></text>
+<line x1="140" y1="469" x2="140" y2="475" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="493" x2="155" y2="493" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="493" r="5" fill="#4CAF50"/>
+<rect x="158" y="482" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="479" width="140" height="28" rx="9" fill="#E8F5E9" stroke="#4CAF50" stroke-width="1.6"/>
+<text class="stage" x="225" y="498" text-anchor="middle">等源</text>
+<text class="cyc" x="125" y="498" text-anchor="end">4338</text>
+<text x="320" y="497"><tspan class="v">0x42</tspan><tspan class="d">、</tspan><tspan class="v">0x43</tspan><tspan class="d"> 尚未写回，队列条目的两个源都是 busy</tspan></text>
+<line x1="140" y1="513" x2="140" y2="519" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="537" x2="155" y2="537" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="537" r="5" fill="#4A7EBB"/>
+<rect x="158" y="526" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="523" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="542" text-anchor="middle">写回 0x42</text>
+<text class="cyc" x="125" y="542" text-anchor="end">4339</text>
+<text x="320" y="541"><tspan class="m">inner_dataPath.io_fromFpWb_2</tspan><tspan class="d"> 写 </tspan><tspan class="v">0x42</tspan><tspan class="d">，数据 </tspan><tspan class="v">0xFFFFFFFF7F7FFFFF</tspan><tspan class="d">（</tspan><tspan class="m">fmv.w.x fa0</tspan><tspan class="d">）</tspan></text>
+<line x1="140" y1="557" x2="140" y2="563" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="581" x2="155" y2="581" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="581" r="5" fill="#4A7EBB"/>
+<rect x="158" y="570" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="567" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="586" text-anchor="middle">写回 0x43</text>
+<text class="cyc" x="125" y="586" text-anchor="end">4340</text>
+<text x="320" y="585"><tspan class="m">inner_dataPath.io_fromFpWb_2</tspan><tspan class="d"> 写 </tspan><tspan class="v">0x43</tspan><tspan class="d">，数据 </tspan><tspan class="v">0xFFFFFFFF40000000</tspan><tspan class="d">（</tspan><tspan class="m">fmv.w.x fa1</tspan><tspan class="d">）</tspan></text>
+<line x1="140" y1="601" x2="140" y2="607" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="625" x2="155" y2="625" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="625" r="5" fill="#4A7EBB"/>
+<rect x="158" y="614" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="611" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="630" text-anchor="middle">源就绪</text>
+<text class="cyc" x="125" y="630" text-anchor="end">4341</text>
+<text x="320" y="629"><tspan class="d">两个 </tspan><tspan class="m">psrc</tspan><tspan class="d"> 从 busy 变 ready，条目进入本拍仲裁</tspan></text>
+<line x1="140" y1="645" x2="140" y2="651" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="669" x2="155" y2="669" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="669" r="5" fill="#4A7EBB"/>
+<rect x="158" y="658" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="655" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="674" text-anchor="middle">发射</text>
+<text class="cyc" x="125" y="674" text-anchor="end">4342</text>
+<text x="320" y="673"><tspan class="m">IssueQueueFaluFmac.io_deqDelay_0_valid = 1</tspan><tspan class="d">，</tspan><tspan class="v">robIdx = 0x35</tspan></text>
+<line x1="140" y1="689" x2="140" y2="695" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="713" x2="155" y2="713" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="713" r="5" fill="#4A7EBB"/>
+<rect x="158" y="702" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="699" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="718" text-anchor="middle">读操作数</text>
+<text class="cyc" x="125" y="718" text-anchor="end">4343</text>
+<text x="320" y="717"><tspan class="d">按 </tspan><tspan class="v">0x42</tspan><tspan class="d">、</tspan><tspan class="v">0x43</tspan><tspan class="d"> 读浮点寄存器堆，同时准备写回旁路</tspan></text>
+<line x1="140" y1="733" x2="140" y2="748" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="766" x2="155" y2="766" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="766" r="5" fill="#4A7EBB"/>
+<rect x="158" y="755" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="752" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="771" text-anchor="middle">执行 S0</text>
+<text class="cyc" x="125" y="771" text-anchor="end">4344</text>
+<text x="320" y="760"><tspan class="m">fp_a = 0xFFFFFFFF7F7FFFFF</tspan><tspan class="d">（最大有限数），</tspan><tspan class="m">fp_b = 0xFFFFFFFF40000000</tspan><tspan class="d">（2.0）</tspan></text>
+<text x="320" y="778"><tspan class="m">fp_c = 0x0</tspan><tspan class="d">；</tspan><tspan class="m">fmt = 0x2</tspan><tspan class="d">、</tspan><tspan class="m">rm = 0x0</tspan><tspan class="d">、</tspan><tspan class="m">op_code = 0x0</tspan><tspan class="d">，与译码一致</tspan></text>
+<line x1="140" y1="786" x2="140" y2="801" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="819" x2="155" y2="819" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="819" r="5" fill="#4A7EBB"/>
+<rect x="158" y="808" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="805" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="824" text-anchor="middle">执行 S1</text>
+<text class="cyc" x="125" y="824" text-anchor="end">4345</text>
+<text x="320" y="823"><tspan class="d">尾数阵列、指数相加与规格化在流水里推进；源是不是特殊值不影响这一拍</tspan></text>
+<line x1="140" y1="839" x2="140" y2="845" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="863" x2="155" y2="863" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="863" r="5" fill="#4A7EBB"/>
+<rect x="158" y="852" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="849" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="868" text-anchor="middle">执行 S2</text>
+<text class="cyc" x="125" y="868" text-anchor="end">4346</text>
+<text x="320" y="867"><tspan class="d">三级流水的最后一拍，特殊值选择与装箱在这一拍完成</tspan></text>
+<line x1="140" y1="883" x2="140" y2="898" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="916" x2="155" y2="916" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="916" r="5" fill="#4CAF50"/>
+<rect x="158" y="905" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="902" width="140" height="28" rx="9" fill="#E8F5E9" stroke="#4CAF50" stroke-width="1.6"/>
+<text class="stage" x="225" y="921" text-anchor="middle">结果</text>
+<text class="cyc" x="125" y="921" text-anchor="end">4347</text>
+<text x="320" y="910"><tspan class="m">io_fp_result = 0xFFFFFFFF7F800000</tspan><tspan class="d">，</tspan><tspan class="m">io_fflags = 0x05</tspan></text>
+<text x="320" y="928"><tspan class="m">inner_dataPath.io_fromFpWb_2</tspan><tspan class="d">：</tspan><tspan class="v">addr = 0x44</tspan><tspan class="d">，</tspan><tspan class="v">data = 0xFFFFFFFF7F800000</tspan></text>
+<line x1="140" y1="936" x2="140" y2="951" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="969" x2="155" y2="969" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="969" r="5" fill="#9B59B6"/>
+<rect x="158" y="958" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="955" width="140" height="28" rx="9" fill="#F3E8F9" stroke="#9B59B6" stroke-width="1.6"/>
+<text class="stage" x="225" y="974" text-anchor="middle">写回</text>
+<text class="cyc" x="125" y="974" text-anchor="end">4348</text>
+<text x="320" y="973"><tspan class="d">写回把 </tspan><tspan class="v">0x44</tspan><tspan class="d"> 与结果打进浮点寄存器堆；写地址、数据、使能比写回总线各晚一拍</tspan></text>
+<line x1="140" y1="989" x2="140" y2="995" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="1013" x2="155" y2="1013" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="1013" r="5" fill="#4A7EBB"/>
+<rect x="158" y="1002" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="999" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="1018" text-anchor="middle">提交</text>
+<text class="cyc" x="125" y="1018" text-anchor="end">4349</text>
+<text x="320" y="1017"><tspan class="m">rob.io_commits_commitValid_0 = 1</tspan><tspan class="d">，</tspan><tspan class="v">robIdx = 0x35</tspan><tspan class="d">；与前面的 </tspan><tspan class="m">fmv.w.x</tspan><tspan class="d"> 一起退休</tspan></text>
+<line x1="140" y1="1033" x2="140" y2="1039" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="1057" x2="155" y2="1057" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="1057" r="5" fill="#4A7EBB"/>
+<rect x="158" y="1046" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="1043" width="140" height="28" rx="9" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="1.6"/>
+<text class="stage" x="225" y="1062" text-anchor="middle">ROB→CSR</text>
+<text class="cyc" x="125" y="1062" text-anchor="end">4350</text>
+<text x="320" y="1061"><tspan class="m">rob.io_csr_fflags_valid = 1</tspan><tspan class="d">，</tspan><tspan class="m">bits = 0x05</tspan></text>
+<line x1="140" y1="1077" x2="140" y2="1083" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="1101" x2="155" y2="1101" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="1101" r="5" fill="#9B59B6"/>
+<rect x="158" y="1090" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="1087" width="140" height="28" rx="9" fill="#F3E8F9" stroke="#9B59B6" stroke-width="1.6"/>
+<text class="stage" x="225" y="1106" text-anchor="middle">CSR 收到</text>
+<text class="cyc" x="125" y="1106" text-anchor="end">4351</text>
+<text x="320" y="1105"><tspan class="m">fcsr.robCommit_fflags_valid = 1</tspan><tspan class="d">，</tspan><tspan class="m">bits = 0x05</tspan></text>
+<line x1="140" y1="1121" x2="140" y2="1136" stroke="#B8B8B8" stroke-width="2" marker-end="url(#ag)"/>
+<line x1="140" y1="1154" x2="155" y2="1154" stroke="#999" stroke-width="1.4"/>
+<circle cx="140" cy="1154" r="5" fill="#9B59B6"/>
+<rect x="158" y="1143" width="140" height="28" rx="9" fill="#DEDEDE"/>
+<rect x="155" y="1140" width="140" height="28" rx="9" fill="#F3E8F9" stroke="#9B59B6" stroke-width="1.6"/>
+<text class="stage" x="225" y="1159" text-anchor="middle">fcsr</text>
+<text class="cyc" x="125" y="1159" text-anchor="end">4352</text>
+<text x="320" y="1148"><tspan class="m">fcsr.fflags = 0x05</tspan><tspan class="d">，</tspan><tspan class="m">reg_OF = 1</tspan><tspan class="d">，</tspan><tspan class="m">reg_NX = 1</tspan></text>
+<rect x="313" y="311" width="900" height="54" rx="10" fill="#DEDEDE"/>
+<rect x="310" y="308" width="900" height="54" rx="10" fill="#FFF8E6" stroke="#E0B84C" stroke-width="1.6"/>
+<text x="326" y="328"><tspan class="gap">约 90 拍：uop 停在 </tspan><tspan class="m">renamePipeDispatch.io_in_1</tspan><tspan class="gap"> 上，</tspan><tspan class="m">valid</tspan><tspan class="gap"> 一直为 1</tspan></text>
+<text x="326" y="348"><tspan class="gap">出口被上一组的 </tspan><tspan class="v">0x80000138</tspan><tspan class="gap">（</tspan><tspan class="m">fsflags zero</tspan><tspan class="gap">）占住</tspan></text>
+</svg>

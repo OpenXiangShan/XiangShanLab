@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2062" height="258" viewBox="0 0 2062 258" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<rect x="0" y="0" width="2062" height="258" fill="#ffffff"/>
+
+<rect x="18" y="34" width="175" height="85" rx="14" fill="#DEDEDE"/>
+<rect x="15" y="30" width="175" height="85" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
+<text x="102.5" y="72.5" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DataPath</text>
+<rect x="398" y="24" width="175" height="105" rx="14" fill="#DEDEDE"/>
+<rect x="395" y="20" width="175" height="105" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text x="482.5" y="58.5" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ExeUnit</text>
+<text x="482.5" y="88" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central">端口与流水</text>
+<rect x="803" y="24" width="400" height="105" rx="14" fill="#DEDEDE"/>
+<rect x="800" y="20" width="400" height="105" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text x="1000" y="58.5" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FMA</text>
+<text x="1000" y="88" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central">opcode 截位、NaN-box 检查</text>
+<rect x="1433" y="24" width="200" height="105" rx="14" fill="#DEDEDE"/>
+<rect x="1430" y="20" width="200" height="105" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text x="1530" y="58.5" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FloatFMA</text>
+<text x="1530" y="88" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central">三级流水</text>
+<rect x="1888" y="34" width="160" height="85" rx="14" fill="#DEDEDE"/>
+<rect x="1885" y="30" width="160" height="85" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text x="1965" y="72.5" font-size="22" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">WbDataPath</text>
+<rect x="18" y="179" width="175" height="70" rx="14" fill="#DEDEDE"/>
+<rect x="15" y="175" width="175" height="70" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
+<text x="102.5" y="196.5" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">CSR</text>
+<text x="102.5" y="225" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">fcsr.frm</text>
+<polygon points="395,72 379.5,79 379.5,65" fill="#232323"/>
+<line x1="190" y1="72" x2="379.5" y2="72" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="292" y="48" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuInput</text>
+<polygon points="800,72 784.5,79 784.5,65" fill="#232323"/>
+<line x1="570" y1="72" x2="784.5" y2="72" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="685" y="31.35" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">src(0..2)</text>
+<text x="685" y="58.65" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">fuOpType / fpu</text>
+<polygon points="1430,72 1414.5,79 1414.5,65" fill="#232323"/>
+<line x1="1200" y1="72" x2="1414.5" y2="72" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="1315" y="28.35" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">fp_a fp_b fp_c</text>
+<text x="1315" y="55.65" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">rm fmt opcode</text>
+<polygon points="1885,72 1869.5,79 1869.5,65" fill="#232323"/>
+<line x1="1630" y1="72" x2="1869.5" y2="72" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="1757" y="28.35" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">结果经 ExeUnit</text>
+<text x="1757" y="55.65" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">ExuOutput</text>
+<polygon points="460,125 446,134 444,120" fill="#9B59B6"/>
+<line x1="102" y1="175" x2="111" y2="174" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="117" y1="173" x2="126" y2="171.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="131.5" y1="171" x2="140.5" y2="169.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="146.5" y1="169" x2="155.5" y2="167.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="161.5" y1="166.5" x2="170.5" y2="165.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="176.5" y1="164.5" x2="185" y2="163.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="191" y1="162.5" x2="200" y2="161.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="206" y1="160.5" x2="215" y2="159" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="221" y1="158.5" x2="230" y2="157" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="235.5" y1="156.5" x2="244.5" y2="155" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="250.5" y1="154.5" x2="259.5" y2="153" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="265.5" y1="152" x2="274.5" y2="151" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="280.5" y1="150" x2="289" y2="149" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="295" y1="148" x2="304" y2="147" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="310" y1="146" x2="319" y2="144.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="325" y1="144" x2="334" y2="142.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="339.5" y1="142" x2="348.5" y2="140.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="354.5" y1="139.5" x2="363.5" y2="138.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="369.5" y1="137.5" x2="378.5" y2="136.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="384.5" y1="135.5" x2="393" y2="134.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="399" y1="133.5" x2="408" y2="132.5" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="414" y1="131.5" x2="423" y2="130" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="429" y1="129.5" x2="437.5" y2="128" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<line x1="443.5" y1="127.5" x2="445" y2="127" stroke="#9B59B6" stroke-width="2" stroke-linecap="butt"/>
+<text x="300" y="170" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">frm</text>
+</svg>

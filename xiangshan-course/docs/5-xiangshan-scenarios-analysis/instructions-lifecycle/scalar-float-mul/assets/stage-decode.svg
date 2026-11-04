@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1779" height="329" viewBox="0 0 1779 329" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif">
+<rect x="0" y="0" width="1779" height="329" fill="#ffffff"/>
+
+<rect x="18" y="124" width="170" height="105" rx="14" fill="#DEDEDE"/>
+<rect x="15" y="120" width="170" height="105" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text x="100" y="159" font-size="21" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">IBuffer</text>
+<text x="100" y="187.5" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">cfVec × 6</text>
+<rect x="563" y="64" width="650" height="210" rx="14" fill="#DEDEDE"/>
+<rect x="560" y="60" width="650" height="210" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
+<text x="885" y="138" font-size="23" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DecodeStage</text>
+<text x="885" y="168" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">6 × DecodeUnit（主表 15 列 + FPDecoder）</text>
+<text x="885" y="195" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central">DecodeUnitComp（uop 拆分）· VTypeGen（向量类型）</text>
+<rect x="1528" y="9" width="245" height="90" rx="14" fill="#DEDEDE"/>
+<rect x="1525" y="5" width="245" height="90" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text x="1647.5" y="37" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FusionDecoder</text>
+<text x="1647.5" y="64" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central">相邻指令融合</text>
+<rect x="1298" y="239" width="170" height="70" rx="14" fill="#DEDEDE"/>
+<rect x="1295" y="235" width="170" height="70" rx="14" fill="#F3E8F9" stroke="#9B59B6" stroke-width="2"/>
+<text x="1380" y="270" font-size="19" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RAT</text>
+<rect x="1573" y="249" width="195" height="75" rx="14" fill="#DEDEDE"/>
+<rect x="1570" y="245" width="195" height="75" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text x="1667.5" y="282.5" font-size="20" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rename</text>
+<polygon points="560,172 544.5,179 544.5,165" fill="#232323"/>
+<line x1="185" y1="172" x2="544.5" y2="172" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="370" y="115.025" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">CtrlFlow × 6</text>
+<text x="370" y="140.975" font-size="17" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">（边界改名 StaticInst）</text>
+<polygon points="1525,45 1510,52.5 1509.5,38.5" fill="#232323"/>
+<line x1="1140" y1="60" x2="1509.5" y2="45.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="1330" y="28" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">指令位</text>
+<polygon points="1648,245 1641,229.5 1655,229.5" fill="#232323"/>
+<line x1="1648" y1="95" x2="1648" y2="104" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<line x1="1648" y1="110" x2="1648" y2="119" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<line x1="1648" y1="125" x2="1648" y2="134" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<line x1="1648" y1="140" x2="1648" y2="149" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<line x1="1648" y1="155" x2="1648" y2="164" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<line x1="1648" y1="170" x2="1648" y2="179" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<line x1="1648" y1="185" x2="1648" y2="194" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<line x1="1648" y1="200" x2="1648" y2="209" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<line x1="1648" y1="215" x2="1648" y2="224" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="1665" y="170" font-size="17" fill="#232323" text-anchor="start" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">fusionInfo</text>
+<polygon points="1570,255 1553,256 1558,243" fill="#232323"/>
+<line x1="1210" y1="120" x2="1555.5" y2="249.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="1365" y="136" font-size="18" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">DecodedInst</text>
+<polygon points="1295,265 1278.5,261.5 1287,250" fill="#232323"/>
+<line x1="1210" y1="200" x2="1283" y2="255.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="1248" y="188" font-size="16" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">lsrc</text>
+<polygon points="1570,295 1553.5,298.5 1556.5,284.5" fill="#232323"/>
+<line x1="1465" y1="270" x2="1555" y2="291.5" stroke="#232323" stroke-width="2" stroke-linecap="butt"/>
+<text x="1518" y="260" font-size="16" fill="#232323" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="3.2" paint-order="stroke" stroke-linejoin="round">psrc</text>
+</svg>
