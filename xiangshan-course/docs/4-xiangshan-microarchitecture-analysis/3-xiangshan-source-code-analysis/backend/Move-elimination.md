@@ -2,6 +2,8 @@
 
 # 3. Move 指令消除
 
+> **版本基线**：`kunminghu-v3`，**未固定 commit**。文中 `MEFreeList(size, commitWidth)`、`RenameOutUop`、`isMove` 均为 V3 形态；V2 是单参数 `MEFreeList(size)` 且使用 `eliminatedMove`。所注行号（如 `Rename.scala L182-L188`）与 `055d8ad9e5` 不一致，复核前先固定 commit 再核对行号。登记见 [第 4 章 VERSIONS.md](../../VERSIONS.md)。
+
 > 如果你已经学完了寄存器重命名，那你一定已经知道：当一条指令写目的寄存器时，重命名模块会从 Freelist 中分配一个全新的物理寄存器（PR），然后把架构寄存器映射到这个新 PR 上。但有没有一种情况——我们其实**根本不需要分配新 PR**？答案是：有，而且非常常见。这就是 **Move 指令消除（Move Elimination）**。别担心，它比重命名还简单——本质上就是"省了一步"。
 
 :::info

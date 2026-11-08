@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="505" viewBox="0 0 1220 505" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif" xml:space="preserve">
+<rect x="0" y="0" width="1220" height="505" fill="#ffffff"/>
+
+<rect x="10" y="14" width="1200" height="477" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
+<rect x="562.3560483870967" y="1.209677419354838" width="95.28790322580645" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
+<text xml:space="preserve" x="610.0" y="14" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">Backend</text>
+<rect x="30" y="56" width="700" height="320" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
+<rect x="209.42137096774186" y="43.20967741935484" width="341.15725806451627" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
+<text xml:space="preserve" x="380.0" y="56" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">ExuBlock × 3 (int / fp / vf)</text>
+<rect x="53" y="86" width="660" height="140" rx="14" fill="#DEDEDE"/>
+<rect x="50" y="82" width="660" height="140" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="380.0" y="131.74209677419356" font-size="17.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">fp ExuBlock</text>
+<text xml:space="preserve" x="380.0" y="154.79419354838709" font-size="14.8" fill="#232323" text-anchor="middle" dominant-baseline="central">ExeUnit × 5: FEX0 / FEX1 / FEX2 / FEX3 / FEX4</text>
+<text xml:space="preserve" x="380.0" y="175.05209677419353" font-size="13.8" fill="#232323" text-anchor="middle" dominant-baseline="central">falu · fcvt · f2v · fmac (FMA)· fdiv</text>
+<rect x="53" y="250" width="320" height="104" rx="14" fill="#DEDEDE"/>
+<rect x="50" y="246" width="320" height="104" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="210.0" y="288.2203225806452" font-size="16.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">int ExuBlock</text>
+<text xml:space="preserve" x="210.0" y="309.87532258064516" font-size="13.8" fill="#232323" text-anchor="middle" dominant-baseline="central">including the csr execution unit</text>
+<rect x="393" y="250" width="320" height="104" rx="14" fill="#DEDEDE"/>
+<rect x="390" y="246" width="320" height="104" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="550.0" y="298.0" font-size="16.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">vf ExuBlock</text>
+<rect x="33" y="412" width="180" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="30" y="408" width="180" height="56" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
+<text xml:space="preserve" x="120.0" y="436.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">DataPath</text>
+<rect x="243" y="412" width="180" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="240" y="408" width="180" height="56" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text xml:space="preserve" x="330.0" y="436.0" font-size="15.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">WbDataPath</text>
+<rect x="453" y="412" width="190" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="450" y="408" width="190" height="56" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text xml:space="preserve" x="545.0" y="436.0" font-size="14.8" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BypassNetwork</text>
+<rect x="770" y="56" width="410" height="320" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
+<rect x="845.7439516129033" y="43.20967741935484" width="258.5120967741935" height="25.580645161290324" rx="0" fill="#FFFFFF"/>
+<text xml:space="preserve" x="975.0" y="56" font-size="20.7" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central" stroke="#FFFFFF" stroke-width="4" paint-order="stroke" stroke-linejoin="round">unfolding of one FMA execution unit</text>
+<rect x="793" y="86" width="370" height="72" rx="14" fill="#DEDEDE"/>
+<rect x="790" y="82" width="370" height="72" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text xml:space="preserve" x="975.0" y="108.91887096774194" font-size="17.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">ExeUnit</text>
+<text xml:space="preserve" x="975.0" y="130.57387096774195" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">generate funcUnits from FuConfig</text>
+<rect x="793" y="180" width="370" height="72" rx="14" fill="#DEDEDE"/>
+<rect x="790" y="176" width="370" height="72" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="975.0" y="202.91887096774192" font-size="17.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FMA</text>
+<text xml:space="preserve" x="975.0" y="224.57387096774195" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">wrapper class of FuConfig.fuGen</text>
+<rect x="793" y="274" width="370" height="72" rx="14" fill="#DEDEDE"/>
+<rect x="790" y="270" width="370" height="72" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="975.0" y="296.91887096774195" font-size="17.7" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">FloatFMA</text>
+<text xml:space="preserve" x="975.0" y="318.5738709677419" font-size="12.8" fill="#232323" text-anchor="middle" dominant-baseline="central">arithmetic core inside the FMA</text>
+</svg>

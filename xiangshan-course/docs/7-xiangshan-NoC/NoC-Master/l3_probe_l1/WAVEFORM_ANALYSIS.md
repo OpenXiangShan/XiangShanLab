@@ -2,178 +2,253 @@
 
 ## 结论
 
-**PASS，高置信度。** core 0 首先读取并持有目标 line `0x80001680`；core 1 随后读取
-同一 line。LLC slice 2 检测到 peer RN0 持有副本并生成 snoop，snoop 经 CHI 到达
-core 0 L2，再转换为 L1 TileLink B `Probe`。core 0 L1 返回 `ProbeAck`，core 0 L2 以
-相同 txnID 返回 CHI `SnpResp`；core 1 最终收到正确数据并提交目标 load。
+**PASS，高置信度。** core 0 先读取并持有目标 line `0x80001680`；core 1 随后读取
+同一行，core 1 的 L2 目录 miss 并向 OpenLLC 发出 `ReadNotSharedDirty`。OpenLLC 的
+client directory 检测到 RN0 持有 peer 副本，生成只指向 RN0 的
+`SnpNotSharedDirty`。core 0 的 L2 收到 CHI snoop 后向 L1 DCache 发出 TileLink
+`Probe(toB)`；L1 返回无数据 `ProbeAck`，L2 再向 OpenLLC 返回 `SnpResp`。OpenLLC
+随后读取内存并向 core 1 返回 `CompData`；core 1 收到两拍 `GrantData`，数据为
+`0x1122334455667788`，两个 hart 都最终 HIT GOOD TRAP。
 
 ## 验证对象
 
-- 波形：`kmhv2-dual/.../scenario4_l3_probe_l1/final.fst`
-- 波形 SHA-256：`1846e671dc649c0358214cc45883be15ce1c7fb80f2929bd703bd71732521a08`
-- 匹配反汇编：`scenario4_l3_probe_l1/build/scenario4_l3_probe_l1-riscv64-xs.txt`
-- 目标地址：`0x80001680`
-- core 0 load PC：`0x80000190`
-- core 1 load PC：`0x80000154`
-- 目标值：`0x1122334455667788`
+- 波形：`l3_probe_l1.fst`
+- 波形 SHA-256：`6c948d17794de9c72b457a0cacc52d11b037441e5d295ef5ab85c29ad7cf6a1e`
+- 仿真器：昆明湖 V3 `kmhv3-2c`（XiangShan `6705b63685d301f8c0960f7cbcc8b964660dc58e`，
+  XSCache `e9488aed486358e3e5984b531aab601f9b91a9c0`）
+- 采样：`TOP.SimTop.clock` 上升沿
+- 目标地址：`0x80001680`，初值 `0x1122334455667788`
+- core 0 目标 load PC：`0x80000190`
+- core 1 目标 load PC：`0x80000154`
+- 目标 L2 位置：两个核均为 slice `2`、set `0x16`、tag `0x10000`
+- 程序结果：core 0 `HIT GOOD TRAP at pc = 0x800001f6`，
+  core 1 `HIT GOOD TRAP at pc = 0x80000214`
 
-CHI snoop 地址字段不含低 3 位，报告按 `io_in_bits_addr << 3` 恢复完整物理地址。
+当前 V3 构建没有把 ROB 的逐指令 commit 端导出到波形，因此本文用“目标 load 的
+D/E 完成 + 两个 hart 最终 GOOD TRAP 且返回值为 0”作为提交证据。
 
-## Core 0 首先持有目标行
+CHI/TileLink 字段只在对应握手成立时有效。本报告只把 `valid=1 && ready=1` 的记录
+视为事务证据。
 
-原始信号作用域：`TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock`。
+## 测试如何构造该场景
 
-| Cycle | 原始信号 | 实测值 | 解释 |
-| ---: | --- | ---: | --- |
-| 4401 | `auto_inner_dcache_client_out_a_valid / auto_inner_dcache_client_out_a_ready` | `1/1` | 请求握手 |
-| 4401 | `auto_inner_dcache_client_out_a_bits_opcode` | 6 | `AcquireBlock` |
-| 4401 | `auto_inner_dcache_client_out_a_bits_address` | `0x80001680` | 目标 line |
-| 4447 | `auto_inner_dcache_client_out_d_bits_opcode` | 5 | `GrantData` |
-| 4447 | `auto_inner_dcache_client_out_d_bits_data` | `0x1122334455667788` | 目标值 |
-| 4447–4448 | `auto_inner_dcache_client_out_d_bits_denied / auto_inner_dcache_client_out_d_bits_corrupt` | `0/0` | 无错误 |
+程序运行在双核环境。core 0 先读取目标 line 并提交，然后通过独立 cache line 上的
+同步变量 `hart0_ready`（`0x80001700`）通知 core 1；core 1 收到通知后再读取同一目标
+line。两个 hart 使用 fence 和轮询建立明确的先后关系，避免 core 1 在 core 0 建立
+副本前发起请求。
 
+V3 的 L1 DCache 是 8-way、128 sets，L2 是 4 banks × 128 sets × 8 ways；OpenLLC
+在本配置下只有 1 个 slice。目标地址 `0x80001680` 在 L2 的 slice 2、set `0x16`。
 
-Core 0 ROB 作用域：
-`TOP.SimTop.cpu.l_soc.core_with_l2.core.backend.inner_ctrlBlock.rob`。
+## RTL 判据
 
-`io_commits_commitValid_0=1` 且 `io_commits_info_0_debug_pc=0x80000190` 于 cycle 4452
-成立，确认 core 0 的目标 load 已完成。
+- OpenLLC 在 s3 形成 peer RN vector：
+  `openLLC/src/main/scala/openLLC/MainPipe.scala:114`。
+- shared read 在 LLC self miss 时触发 snoop：
+  `MainPipe.scala:317-319`。
+- snoop vector 和 opcode 选择：
+  `MainPipe.scala:326-355`，其中 `ReadNotSharedDirty` 映射为
+  `SnpNotSharedDirty`（`MainPipe.scala:351`）。
+- `snp_s4.valid` 与 snoop 输出：
+  `MainPipe.scala:362-363`。
+- 普通内存 read 条件：
+  `MainPipe.scala:451-454`。
+- CoupledL2 把 snoop-to-B 转换成 pProbe：
+  `coupledL2/src/main/scala/coupledL2/MainPipe.scala:287-303`。
+- MSHR 构造 TileLink `Probe toB`：
+  `coupledL2/src/main/scala/coupledL2/MSHR.scala:436-447`。
+- MSHRCtl 的 SourceB 仲裁：
+  `coupledL2/src/main/scala/coupledL2/MSHRCtl.scala:174-177`。
+- DCache ProbeQueue 接收 B 通道：
+  `src/main/scala/xiangshan/cache/dcache/mainpipe/Probe.scala:144-164`。
+- ProbeEntry 送入 main pipe：
+  `Probe.scala:93-108`。
+- MainPipe 把 probe 送入 writeback：
+  `src/main/scala/xiangshan/cache/dcache/mainpipe/MainPipe.scala:816-818,1097-1108`。
+- WritebackQueue 构造无数据/带数据 `ProbeAck`：
+  `src/main/scala/xiangshan/cache/dcache/mainpipe/WritebackQueue.scala:226-270`。
 
-## Core 1 请求同一 line
+## core 0 建立目标副本
 
-原始信号作用域：`TOP.SimTop.cpu.l_soc.core_with_l2_1.core.memBlock`。
+core 0 的目标 load（PC `0x80000190`）在 L1 miss，向 L2 发出 `AcquireBlock NtoB`。
+L2 此时已经持有目标行（`dir_hit=1`），直接返回数据：
 
-| Cycle | 原始信号名 | 实测值 |
-| ---: | --- | ---: |
-| 4706 | `auto_inner_dcache_client_out_a_valid / auto_inner_dcache_client_out_a_ready` | `1/1` |
-| 4706 | `auto_inner_dcache_client_out_a_bits_opcode` | 6 |
-| 4706 | `auto_inner_dcache_client_out_a_bits_param` | 0 |
-| 4706 | `auto_inner_dcache_client_out_a_bits_size` | 6 |
-| 4706 | `auto_inner_dcache_client_out_a_bits_address` | `0x80001680` |
-
-
-## Cycle 4719：LLC 确认 peer RN 命中并生成 snoop
-
-原始信号作用域：
-`TOP.SimTop.cpu.l_soc.chi_openllc_opt.slices_2.mainPipe`。
-
-| 原始信号名 | 实测值 | 证明意义 |
+| 原始信号名 | 波形实测 | 解释 |
 | --- | ---: | --- |
-| `task_s4_valid` | 1 | 正在处理 core 1 请求 |
-| `task_s4_bits_tag / task_s4_bits_set / task_s4_bits_bank` | `0x800 / 0x16 / 2` | 还原地址 `0x80001680` |
-| `task_s4_bits_chiOpcode` | `0x26` | `ReadNotSharedDirty` |
-| `task_s4_bits_srcID` | 1 | 请求来自 RN/core 1 |
-| `peerRNs_hit_s4` | 1 | 其他 RN 持有该 line |
-| `request_snoop_s4` | 1 | LLC 选择 request snoop 路径 |
-| `io_snoopTask_s4_valid` | 1 | snoop task 有效 |
-| `io_snoopTask_s4_bits_chiOpcode` | 4 | `SnpNotSharedDirty` |
-| `io_snoopTask_s4_bits_snpVec_0 / io_snoopTask_s4_bits_snpVec_1` | `1/0` | 目标仅为 RN0 |
-| `io_snoopTask_s4_bits_txnID` | 1041 | 后续 snoop 关联 ID |
+| core 0 L2 `slices_2.io_in_a_bits_opcode` | 6 | `AcquireBlock` |
+| core 0 L2 `slices_2.io_in_a_bits_address` | `0x80001680` | 目标行 |
+| A 握手周期 | 1308 | L1→L2 |
+| `io_dirResp_s3_hit` | 1 | L2 命中 |
+| `io_toMSHRCtl_mshr_alloc_s3_valid` | 0 | 不分配 MSHR |
+| DCache `auto_client_nodes_out_0_d_bits_data`（首拍） | `0x1122334455667788` | 目标值 |
+| D/E 握手周期 | 1355、1356 | core 0 建立 L1 副本 |
 
-这些值证明后续 probe 是由 core 1 的目标请求和 peer RN 命中触发，而不是无关后台 snoop。
+core 0 的 L2 已经把目标行保留在自己的目录/data storage 中，因此 core 1 后续请求
+能够被 OpenLLC 识别为 peer RN hit。
 
-## Cycle 4720–4724：CHI snoop 到达 core 0 L2
+## core 1 请求触发 LLC peer snoop
 
-LLC TxSnp 作用域：
-`TOP.SimTop.cpu.l_soc.chi_openllc_opt.rnLinkMonitor.Decoupled2LCredit_txsnp`。
+core 1 的目标 load（PC `0x80000154`）在 L1 miss，L2 目录 miss，并向 OpenLLC 发出
+`ReadNotSharedDirty`：
 
-| 原始信号名 | 实测值 |
-| --- | ---: |
-| `io_in_valid / io_in_ready` | `1/1` |
-| `io_in_bits_addr` | `0x100002d0` |
-| `io_in_bits_addr << 3` | `0x80001680` |
-| `io_in_bits_opcode` | 4 |
-| `io_in_bits_txnID` | 1041 |
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| core 1 L2 `slices_2.io_in_a_bits_opcode` | 6 | `AcquireBlock` |
+| `io_in_a_bits_address` | `0x80001680` | 目标行 |
+| A 握手周期 | 1605 | core 1 L1→L2 |
+| `io_dirResp_s3_hit` | 0 | core 1 L2 目录 miss |
+| `io_toMSHRCtl_mshr_alloc_s3_valid` | 1 | 分配 MSHR |
+| core 1 L2 `txreq.io_out_bits_opcode` | `38 (0x26)` | `ReadNotSharedDirty` |
+| core 1 L2 CHI 请求周期 | 1609 | L2→OpenLLC |
 
+OpenLLC slice 0 在 cycle 1613 接收该请求：
 
-Core 0 L2 RxSnp 作用域：
-`TOP.SimTop.cpu.l_soc.core_with_l2.l2top.inner_l2cache.linkMonitor`。
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| `io_in_tx_req_bits_opcode` | `38 (0x26)` | `ReadNotSharedDirty` |
+| `io_in_tx_req_bits_srcID` | `1` | 请求来自 RN1 |
+| `io_in_tx_req_bits_txnID` | `1024` | core 1 事务 ID |
+| `io_in_tx_req_bits_addr` | `0x80001680` | 目标行 |
 
-Cycle 4724 的 `io_in_rx_snp_valid / io_in_rx_snp_ready=1/1`，地址恢复后仍为
-`0x80001680`，opcode 为 4，txnID 为 1041。跨 LLC→L2 边界地址、opcode 和事务 ID
-完全一致。
+OpenLLC mainPipe 在 s4 形成 snoop 任务：
 
-## Cycle 4730–4739：Core 0 L1 Probe/ProbeAck
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| `io_snoopTask_s4_valid` | 1（cycle 1617） | 产生 snoop |
+| `io_snoopTask_s4_bits_snpVec_0` | 1 | 指向 RN0 |
+| `io_snoopTask_s4_bits_snpVec_1` | 0 | 不指向 RN1 |
+| `io_snoopTask_s4_bits_chiOpcode` | `4` | `SnpNotSharedDirty` |
+| `io_snoopTask_s4_bits_txnID` | `81` | snoop 事务 ID |
+| `io_dirResp_s3_self_hit` | 0 | LLC 自身未命中 |
 
-原始信号作用域：`TOP.SimTop.cpu.l_soc.core_with_l2.core.memBlock`。
+OpenLLC 在 cycle 1617 通过 `txsnpUp` 发出 snoop：
 
-| Cycle | 原始信号名 | 实测值 | 解释 |
-| ---: | --- | ---: | --- |
-| 4730 | `auto_inner_dcache_client_out_b_valid / auto_inner_dcache_client_out_b_ready` | `1/1` | Probe 握手 |
-| 4730 | `auto_inner_dcache_client_out_b_bits_opcode` | 6 | TileLink `Probe` |
-| 4730 | `auto_inner_dcache_client_out_b_bits_param` | 1 | 降权到 `toB` |
-| 4730 | `auto_inner_dcache_client_out_b_bits_address` | `0x80001680` | 目标 line |
-| 4739 | `auto_inner_dcache_client_out_c_valid / auto_inner_dcache_client_out_c_ready` | `1/1` | 响应握手 |
-| 4739 | `auto_inner_dcache_client_out_c_bits_opcode` | 4 | `ProbeAck` |
-| 4739 | `auto_inner_dcache_client_out_c_bits_address` | `0x80001680` | 同一 line |
-| 4739 | `auto_inner_dcache_client_out_c_bits_corrupt` | 0 | 响应无错误 |
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| `io_snp_valid` | 1 | snoop 有效 |
+| `io_snp_ready` | 1 | 被 RN0 接收 |
+| `io_snp_bits_opcode` | `4` | `SnpNotSharedDirty` |
+| `io_snp_bits_txnID` | `81` | 与 snoop task 一致 |
 
-实测是 `ProbeAck` 而非 `ProbeAckData`。对于 `toB` 降权，core 0 保留共享副本，不需要
-上传数据，这是合法响应。
+## CHI snoop 转换为 TileLink Probe
 
-## Cycle 4745：Core 0 L2 返回 CHI SnpResp
+core 0 的 L2 在 cycle 1622 收到 snoop：
 
-原始信号作用域：
-`TOP.SimTop.cpu.l_soc.core_with_l2.l2top.inner_l2cache.linkMonitor.Decoupled2LCredit_txrspLink`。
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| core 0 L2 `slices_2.rxsnp.io_rxsnp_valid` | 1 | RxSnp 有效 |
+| `io_rxsnp_bits_opcode` | `4` | `SnpNotSharedDirty` |
+| `io_rxsnp_bits_txnID` | `81` | 与 LLC snoop 一致 |
+| `io_rxsnp_bits_addr` | `0x10001690` | CHI 地址编码 |
 
-| 原始信号名 | 实测值 |
-| --- | ---: |
-| `io_in_valid / io_in_ready` | `1/1` |
-| `io_in_bits_opcode` | 1 |
-| `io_in_bits_txnID` | 1041 |
-| `io_in_bits_dbID` | 1041 |
+core 0 L1 DCache 收到 TileLink B 通道 Probe：
 
-CHI opcode 1 是 `SnpResp`，txnID 与 LLC TxSnp 的 1041 一致，完成 snoop 往返关联。
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| `auto_client_nodes_out_0_b_valid` | 1 | Probe 有效 |
+| `auto_client_nodes_out_0_b_ready` | 1 | L1 接收 |
+| `auto_client_nodes_out_0_b_bits_opcode` | 6 | `Probe` |
+| `auto_client_nodes_out_0_b_bits_param` | 1 | `toB` |
+| `auto_client_nodes_out_0_b_bits_address` | `0x80001680` | 目标行 |
+| B 握手周期 | 1628 | L2→L1 |
 
-## Cycle 4782–4787：Core 1 得到数据并提交
+core 0 L1 通过 C 通道返回无数据 `ProbeAck`：
 
-原始信号作用域：`TOP.SimTop.cpu.l_soc.core_with_l2_1.core.memBlock`。
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| `auto_client_nodes_out_0_c_valid` | 1 | ProbeAck 有效 |
+| `auto_client_nodes_out_0_c_ready` | 1 | L2 接收 |
+| `auto_client_nodes_out_0_c_bits_opcode` | 4 | `ProbeAck` |
+| `auto_client_nodes_out_0_c_bits_address` | `0x80001680` | 同一 line |
+| C 握手周期 | 1635 | L1→L2 |
 
-| Cycle | 原始信号名 | 实测值 |
-| ---: | --- | ---: |
-| 4782 | `auto_inner_dcache_client_out_d_valid / auto_inner_dcache_client_out_d_ready` | `1/1` |
-| 4782 | `auto_inner_dcache_client_out_d_bits_opcode` | 5 |
-| 4782 | `auto_inner_dcache_client_out_d_bits_data` | `0x1122334455667788` |
-| 4782–4783 | `auto_inner_dcache_client_out_d_bits_denied / auto_inner_dcache_client_out_d_bits_corrupt` | `0/0` |
-| 4785 | `auto_inner_dcache_client_out_e_valid / auto_inner_dcache_client_out_e_ready` | `1/1` |
-| 4785 | `auto_inner_dcache_client_out_e_bits_sink` | 256 |
+`toB` 表示降权到共享状态，因此 core 0 可以保留共享副本，不需要返回
+`ProbeAckData`（opcode 5）。
 
+## CHI SnpResp 与 core 1 完成
 
-Core 1 ROB 作用域：
-`TOP.SimTop.cpu.l_soc.core_with_l2_1.core.backend.inner_ctrlBlock.rob`。
+core 0 的 L2 在 cycle 1641 向 OpenLLC 返回 `SnpResp`：
 
-Cycle 4787 的 `io_commits_commitValid_0=1` 且
-`io_commits_info_0_debug_pc=0x80000154`，确认 core 1 目标 load 完成。
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| core 0 L2 `slices_2.txrsp.io_out_bits_opcode` | `1` | `SnpResp` |
+| `io_out_bits_txnID` | `81` | 与 snoop 一致 |
 
-## 反证检查
+OpenLLC 在 cycle 1646 为目标行发出 `ReadNoSnp`：
 
-- **不是无关 snoop：** LLC 同周期处理目标地址的 core 1 请求，`peerRNs_hit_s4=1`，且
-  snoop vector 只选择 RN0。
-- **没有丢失跨层关联：** LLC TxSnp、core 0 L2 RxSnp、core 0 L2 TxRsp 的 txnID 都为
-  1041。
-- **L1 确实参与一致性：** core 0 的 B/C 通道分别出现目标地址 Probe 和 ProbeAck。
-- **请求 core 正常完成：** core 1 收到正确目标值、无错误 GrantData、GrantAck，并提交
-  目标 load。
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| `io_out_tx_req_bits_opcode` | `4` | `ReadNoSnp` |
+| `io_out_tx_req_bits_addr` | `0x80001680` | 目标行 |
+| `io_out_tx_req_bits_txnID` | `81` | 与 snoop 事务关联 |
 
-## 最终证据链
+随后 OpenLLC 通过 `txdatUp` 向 core 1 返回 `CompData`：
+
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| `txdatUp.io_dat_valid` | 1（cycle 1667、1668） | 两拍数据 |
+| `txdatUp.io_dat_bits_opcode` | `4` | `CompData` |
+| `txdatUp.io_dat_bits_txnID` | `1024` | 与 core 1 请求一致 |
+
+core 1 的 L1 收到两拍 `GrantData`：
+
+| 原始信号名 | 波形实测 | 解释 |
+| --- | ---: | --- |
+| core 1 `auto_client_nodes_out_0_d_bits_opcode` | 5 | `GrantData` |
+| `auto_client_nodes_out_0_d_bits_data`（首拍） | `0x1122334455667788` | 目标值 |
+| `auto_client_nodes_out_0_d_bits_denied` | 0 | 无错误 |
+| `auto_client_nodes_out_0_d_bits_corrupt` | 0 | 无错误 |
+| D 握手周期 | 1678、1679 | 完整 line |
+| E 握手周期 | 1679 | GrantAck |
+
+完整链路：
 
 ```text
-core 0 AcquireBlock -> 得到目标值 -> load commit
-core 1 AcquireBlock 同一 line
-  -> LLC peerRNs_hit_s4=1
-  -> LLC 为 RN0 生成 SnpNotSharedDirty, txnID=1041
-  -> core 0 L2 接收同 txnID RxSnp
-  -> core 0 L1 B Probe
-  -> core 0 L1 C ProbeAck
-  -> core 0 L2 CHI SnpResp, txnID=1041
-  -> core 1 两拍正确 GrantData + GrantAck
-  -> core 1 load commit
-  => L3/LLC 正确 probe core 0 的 L1，一致性事务完成
+core 0 load（PC 0x80000190）
+  -> core 0 L1 fill（D/E 1355、1356）
+  -> core 0 持有目标副本
+
+core 1 load 同一 line（PC 0x80000154）
+  -> core 1 L2 AcquireBlock（1605）
+  -> L2 目录 miss + MSHR（1607）
+  -> CHI ReadNotSharedDirty（1609）
+  -> OpenLLC 检测 peer RN0 hit（1617，snpVec=1/0）
+  -> CHI SnpNotSharedDirty（1617，txnID 81）
+  -> core 0 L2 RxSnp（1622）
+  -> TileLink Probe(toB)（1628）
+  -> core 0 L1 ProbeAck（1635）
+  -> core 0 L2 SnpResp（1641，txnID 81）
+  -> OpenLLC ReadNoSnp（1646）
+  -> OpenLLC CompData（1667、1668，txnID 1024）
+  -> core 1 两拍 GrantData + GrantAck（1678、1679）
+  -> 两个 hart 均 HIT GOOD TRAP
 ```
 
-## 分析输入
+## 否定证据与对照
 
-- 构造程序：`scenario4_l3_probe_l1.c`
+- core 1 目标请求在 L2 目录 miss 并分配 MSHR，排除 core 1 本地命中。
+- OpenLLC `snpVec=1/0` 且 `self_hit=0`，说明 snoop 只指向 RN0，而不是广播给两个 RN。
+- core 0 的 B 通道 opcode 为 `Probe`、param 为 `toB`；C 通道 opcode 为 `ProbeAck`，
+  不是 `ProbeAckData`，与 clean/shared 降权一致。
+- core 0 的 `SnpResp` txnID 81 与 LLC snoop txnID 81 一致，证明跨层事务关联没有丢失。
+- core 1 的 `CompData` txnID 1024 与 core 1 请求 txnID 1024 一致，数据为
+  `0x1122334455667788`。
+
+## 覆盖范围与限制
+
+- 本场景覆盖 shared read 引发的 peer RN snoop、CHI snoop→TileLink Probe、
+  `ProbeAck`、`SnpResp`、LLC `ReadNoSnp` 和 `CompData`。
+- 不覆盖 `ProbeAckData`、toN invalidation、dirty owner、forwarded snoop、多 peer RN
+  snoop vector 或 LLC replacement snoop。
+- V3 OpenLLC 在本配置下只有 1 个 slice，因此报告中不再出现 V2 的 slice 2 说法。
+- 当前 V3 构建未导出逐指令 commit 端；提交证据是 D/E 完成、程序返回值检查和最终
+  GOOD TRAP。
+- 本文不提供工具生成的 RTL line/branch coverage 数值。
+
+## 相关文件
+
+- 源程序：`scenario4_l3_probe_l1.c`
 - 反汇编：`disassembly.txt`
-- 原始波形：`l3_probe_l1.fst`
-- 波形会话：`l3_probe_l1.ron`
+- 波形：`l3_probe_l1.fst`
+- 构造分析：`CONSTRUCTION_ANALYSIS.md`
+- RTL 代码覆盖分析：`RTL_CODE_ANALYSIS.md`

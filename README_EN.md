@@ -2,7 +2,7 @@
 
 [中文](./README.md) | [XiangShan Website](https://openxiangshan.cc/) | [GitHub Issues](https://github.com/OpenXiangShan/XiangShanLab/issues)
 
-XiangShanLab is an open repository for learning, developing, verifying, and researching the XiangShan processor. It contains the main course documentation together with programming exercises, question banks, bug cases, analysis tools, research papers, weekly reports, collaborator information, externally contributed projects, and contest materials.
+XiangShanLab is an open repository for learning, developing, verifying, and researching the XiangShan processor. It contains the main course documentation together with programming exercises, question banks, bug cases, analysis tools, research papers, collaborator information, externally contributed projects, and contest materials.
 
 ## Quick Start
 
@@ -63,7 +63,6 @@ English coverage is currently smaller than the Chinese course. For the complete 
 | [`XiangShanLab-user-guide/`](./XiangShanLab-user-guide/) | Learning paths, task submission, documentation feedback, and community collaboration | [Learning-path guide](./XiangShanLab-user-guide/XiangShanLab‑Learning‑Path‑Guide.md) |
 | [`xiangshan-research/`](./xiangshan-research/) | XiangShan-related papers, research directions, and literature index | [Paper index](./xiangshan-research/xiangshan-related-papers.md) |
 | [`xiangshan-collaborators/`](./xiangshan-collaborators/) | XiangShan collaborators from universities and research institutions | [Collaborators](./xiangshan-collaborators/xiangshan-collaborators.md) |
-| [`weekly-status/`](./weekly-status/) | Weekly reports, status template, and report-generation scripts | [Weekly reports](./weekly-status/) |
 | [`external-contribution-project/`](./external-contribution-project/) | Registration materials for external projects contributed by the XiangShan community, collaborating organizations, and individuals | [Project guide](./external-contribution-project/README.md) |
 | [`2026-CIE-RISC-V-Contest-Application-Track/`](./2026-CIE-RISC-V-Contest-Application-Track/) | 2026 CIE RISC-V Contest application-track materials and submission files | [Contest description](./2026-CIE-RISC-V-Contest-Application-Track/README.md) |
 | [`RISC-V-International-Participation-Guide/`](./RISC-V-International-Participation-Guide/) | RISC-V International participation guide: membership registration, groups/mailing lists, and committee joining | [Participation guide](./RISC-V-International-Participation-Guide/README.md) |

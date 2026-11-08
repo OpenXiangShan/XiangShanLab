@@ -62,7 +62,7 @@ class CsrFile(implicit p: Parameters) extends NSModule with HasCsrParameters {
   val timer64   = RegInit(0.U(TimerLen.W))
   mcycle  := mcycle + 1.U
   timer64 := timer64 + 1.U
-  when(io.commitValid) { minstret := minstret + 1.U }
+  when(io.commitCount =/= 0.U) { minstret := minstret + io.commitCount }
 
   // LL/SC reservation bit
   val lrValid = RegInit(false.B)

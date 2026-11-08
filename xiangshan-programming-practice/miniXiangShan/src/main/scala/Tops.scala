@@ -130,25 +130,33 @@ object CoreGen extends App {
   // 读取第一个参数，默认 simu
   val mode = args.headOption.getOrElse("simu").toLowerCase match {
     case "fpga" => "fpga"
+    case "perf" => "perf"
     case _      => "simu"
   }
 
   val targetDirPath = mode match {
     case "simu" => "./out"
     case "fpga" => "./out"
+    case "perf" => "./out-perf"
   }
 
   val enableDifftest = mode == "simu"  // simu 开启 difftest，fpga 关闭
+  val useBehavioralMemories = mode != "fpga"
+  val resetPC = if (mode == "perf") BigInt("80000000", 16)
+    else CoreConfigKeys.ResetPC.default
 
   val targetDir = cleanAndMkdir(targetDirPath)
   val repoRoot = new File(".").getCanonicalFile
 
   implicit val config: Parameters = new Parameters(Map(
-    DebugConfigKeys.EnableDifftest -> enableDifftest
+    DebugConfigKeys.EnableDifftest -> enableDifftest,
+    DebugConfigKeys.UseBehavioralMemories -> useBehavioralMemories,
+    CoreConfigKeys.ResetPC -> resetPC
   ))
 
+  def top: NSRawModule = if (mode == "perf") new perf.MiniPerfTop else new core_top
   emitVerilog(
-    new core_top,
+    top,
     Array(
       "--target-dir", targetDirPath,
       "--emit-modules", "verilog"
@@ -156,7 +164,8 @@ object CoreGen extends App {
   )
 
   // 清理多余文件
-  val filesToDelete = List("core_top.anno.json", "core_top.fir")
+  val filesToDelete = List("core_top.anno.json", "core_top.fir",
+    "MiniPerfTop.anno.json", "MiniPerfTop.fir")
   filesToDelete.foreach { filename =>
     val fileToDelete = new File(targetDirPath, filename)
     if (fileToDelete.exists()) fileToDelete.delete()

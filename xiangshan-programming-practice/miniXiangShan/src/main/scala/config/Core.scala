@@ -11,6 +11,10 @@ object MmuconfigKeys {
 
 object DebugConfigKeys {
   val EnableDifftest = new Field[Boolean](true)
+  // Keep simulation and FPGA memory implementations selectable independently.
+  // Performance builds disable difftest but still need synthesizable,
+  // Verilator-friendly synchronous memories.
+  val UseBehavioralMemories = new Field[Boolean](false)
 }
 
 object L2PrefetchMode {
@@ -27,6 +31,7 @@ object L2PrefetchMode {
 }
 
 object CoreConfigKeys {
+  val ResetPC = new Field[BigInt](BigInt("1bfffffc", 16))
   val FetchWidth = new Field[Int](4)
   val CtrlBlockWidth = new Field[Int](3)
   // 256、128、64
@@ -81,6 +86,8 @@ trait HasCoreParameters {
   val XLEN: Int = 32
   val customInstrEnable: Boolean = false
 //>>>>>>> 54959d9721e27e04de23b63d4323d2985b48c173
+
+  val resetPC: BigInt = p(CoreConfigKeys.ResetPC)
 
   val fetchWidth: Int = p(CoreConfigKeys.FetchWidth)
   val CtrlBlockWidth: Int = p(CoreConfigKeys.CtrlBlockWidth)
@@ -158,6 +165,7 @@ trait HasCoreParameters {
   val IQNumWakeupPorts : Int = WbBusWidth
   val IQNum : Int = p(CoreConfigKeys.IQNum) 
   val EnableDifftest: Boolean = p(DebugConfigKeys.EnableDifftest)
+  val UseBehavioralMemories: Boolean = p(DebugConfigKeys.UseBehavioralMemories)
   val IQ1Params = p(CoreConfigKeys.IQ1Params)
   val IQ2Params = p(CoreConfigKeys.IQ2Params)
   val IQ3Params = p(CoreConfigKeys.IQ3Params)

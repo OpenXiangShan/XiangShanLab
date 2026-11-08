@@ -77,8 +77,8 @@ class CsrFileIo(implicit p: Parameters) extends CsrFileBundleSkel {
   val lrValidClear = Input(Bool())
   val lrValid = Output(Bool())
 
-  /** ROB 本周期是否有指令提交（用于 minstret） */
-  val commitValid = Input(Bool())
+  /** ROB 本周期退休的指令数（用于 minstret） */
+  val commitCount = Input(UInt(log2Ceil(CommitWidth + 1).W))
 }
 
 /* ============================================================================

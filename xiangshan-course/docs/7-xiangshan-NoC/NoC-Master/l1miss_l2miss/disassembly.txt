@@ -1,5 +1,5 @@
 
-build/l1miss_l2miss-riscv64-xs.elf:     file format elf64-littleriscv
+/nfs/home/sunyuhang/work/xs-env/nexus-am/apps/l1miss_l2miss/build/l1miss_l2miss-riscv64-xs.elf:     file format elf64-littleriscv
 
 
 Disassembly of section .text:

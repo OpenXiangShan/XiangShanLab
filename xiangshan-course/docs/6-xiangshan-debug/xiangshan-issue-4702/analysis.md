@@ -1,5 +1,7 @@
 # XiangShan PR #4702：CBO.INVAL 权限检查类型错误分析
 
+> **基线（按文中引用提交推断，原文未声明）**：昆明湖 V2 开发期，缺陷提交 `92a95fb4`（2025-05-21），修复 `0390f4d1`（2025-05-21）。登记见 [VERSIONS.md](../VERSIONS.md)。
+
 ## 1. 摘要
 
 本文分析香山昆明湖旧版代码中的一个 CBO 权限检查错误，以及 [OpenXiangShan/XiangShan#4702](https://github.com/OpenXiangShan/XiangShan/pull/4702/changes) 为什么能够修复它。

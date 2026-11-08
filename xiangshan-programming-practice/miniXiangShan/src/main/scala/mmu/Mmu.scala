@@ -54,10 +54,8 @@ class Mmu(implicit p: Parameters) extends NSModule with HasCsrParameters {
   val acceptI = io.fromIcache.valid && io.fromIcache.ready
   val acceptM = io.fromMem.valid    && io.fromMem.ready
 
-  io.fromIcache.ready := (state === sIdle) && io.fromIcache.valid &&
-    (!io.fromMem.valid || prioIcache)
-  io.fromMem.ready := (state === sIdle) && io.fromMem.valid &&
-    (!io.fromIcache.valid || !prioIcache)
+  io.fromIcache.ready := (state === sIdle) && (!io.fromMem.valid || prioIcache)
+  io.fromMem.ready := (state === sIdle) && (!io.fromIcache.valid || !prioIcache)
 
   val inVaddr = Mux(acceptI, io.fromIcache.bits.vaddr, io.fromMem.bits.vaddr)
   val inPort  = Mux(acceptI, 0.U(1.W), 1.U(1.W))
@@ -96,8 +94,8 @@ class Mmu(implicit p: Parameters) extends NSModule with HasCsrParameters {
 
   def fetchMisalign(vaddr: UInt): Bool = vaddr(1, 0) =/= 0.U
 
-  // MMIO 区域不可缓存（与 chiplab SoC 地址映射一致的简化实现）
-  def isCacheable(paddr: UInt): Bool = paddr(31, 16) =/= 0xbfaf.U
+  // Match NutShell's physical address map: CLINT/PLIC and external MMIO are uncached.
+  def isCacheable(paddr: UInt): Bool = PerfAddressMap.isCacheable(paddr)
 
   // ---------------- PTW 请求默认值 ----------------
   ptw.io.req.valid       := false.B

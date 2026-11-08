@@ -47,7 +47,7 @@ class BackendIO(implicit p: Parameters) extends NSBundle {
   val trapReq             = Output(new TrapReq)
   val trapEnv             = Input(new TrapEnv)
   val intrCode            = Input(UInt(IntrCode.width.W))
-  val commitValid         = Output(Bool())
+  val commitCount         = Output(UInt(log2Ceil(CommitWidth + 1).W))
   val timerInfo =        Input(new TimerBundle)
 
   val bpuUpdate = Output(new BpuUpdateReq)                    // BPU 更新数据（始终发出）
@@ -67,7 +67,7 @@ class Backend(implicit p: Parameters) extends NSModule with HasCoreParameters {
   io.trapReq := ctrlBlock.io.trapReq
   io.trapEnv <> ctrlBlock.io.trapEnv
   ctrlBlock.io.intrCode := io.intrCode
-  io.commitValid := ctrlBlock.io.commitValid
+  io.commitCount := ctrlBlock.io.commitCount
 
   io.robHead := ctrlBlock.io.robHead
   

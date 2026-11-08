@@ -199,7 +199,7 @@ class core_top(implicit p: Parameters) extends NSRawModule {
   
   csr.io.trapReq := backend.io.trapReq
   csr.io.trapEnv <> backend.io.trapEnv
-  csr.io.commitValid := backend.io.commitValid
+  csr.io.commitCount := backend.io.commitCount
 
   // ---------- TLB 冲刷（sfence.vma / satp 写） ----------
   val sfenceFlush = Wire(new TlbFlush)

@@ -63,7 +63,7 @@ class L2DataRAM(val depth: Int, val width: Int)(implicit p: Parameters)
     }
   })
 
-  if (EnableDifftest) {
+  if (UseBehavioralMemories) {
     val memory = SyncReadMem(depth, UInt(width.W))
     when(io.write.valid) {
       memory.write(io.write.bits.addr, io.write.bits.data)
@@ -103,7 +103,7 @@ class L2MetadataRAM(val depth: Int, val width: Int)(implicit p: Parameters)
     }
   })
 
-  if (EnableDifftest) {
+  if (UseBehavioralMemories) {
     val memory = SyncReadMem(depth, UInt(width.W))
     when(io.write.valid) {
       memory.write(io.write.bits.addr, io.write.bits.data)

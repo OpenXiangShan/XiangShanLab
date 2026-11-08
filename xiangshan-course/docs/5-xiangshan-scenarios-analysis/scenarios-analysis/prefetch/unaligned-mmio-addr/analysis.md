@@ -1,5 +1,7 @@
 # `prefetch.r` 非对齐 MMIO：波形与源码交叉验证报告
 
+> **版本基线**：昆明湖 V2（本章公共运行环境 `emuByYuan/stable-kmh-v2`，`kunminghu-v2 @ abd0f867a`，emu 构建于 2026-06-22）。文中周期号、队列深度与波形结论仅对 V2 成立；V3 的对应值不同，不可直接套用。登记见 [第 5 章 VERSIONS.md](../../../VERSIONS.md)。
+
 ## 结论
 
 本次测试在昆明湖 V2 emu 上执行了地址为 `0x38000001` 的 `prefetch.r`。该地址位于片上 TIMER 的 MMIO 区间，且对 `prefetch.r` 的半字对齐要求而言是非对齐的。最终没有进入 cause 4（load address misaligned）或 cause 5（load access fault）处理函数：

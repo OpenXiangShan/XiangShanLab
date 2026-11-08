@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a bug (incorrect behaviors) of XiangShan Processor Cores.
+labels: ["bug"]
+body:
+  - type: checkboxes
+    id: before-start
+    attributes:
+      label: Before start
+      options:
+        - label: I have read the RISC-V ISA Manual and XiangShan Documents, and I believe this is a XiangShan RTL issue. 我已经阅读过 RISC-V 指令集手册和香山文档，确认这应该是香山 RTL 的问题。
+          required: true
+        - label: I have searched previous issues and PRs and did not find anything relevant. 我已经搜索过之前的 issue 和 PR，并没有找到相关的。
+          required: true
+        - label: I have reproduced the issue using the latest commit on the default branch. 我已经使用默认分支最新的 commit 复现了问题。
+          required: true
+        - label: If this report was generated with AI assistance (otherwise leave unchecked), I have used [wavekit](https://github.com/OpenXiangShan/XiangShanLab/tree/master/tools/xiangshan-wave-analysis) for waveform analysis and verified the correctness of its content. 如果这是由 AI 生成的（否则请不要勾选），我已使用 [wavekit](https://github.com/OpenXiangShan/XiangShanLab/tree/master/tools/xiangshan-wave-analysis) 进行波形分析，并已验证内容的正确性。
+          required: false
+
+  - type: dropdown
+    id: branch
+    attributes:
+      label: Branch
+      options:
+        - kunminghu-v2
+        - kunminghu-v3
+        - nanhu
+        - yanqihu
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: describe
+    attributes:
+      label: Describe the bug
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: To Reproduce
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+    validations:
+      required: false

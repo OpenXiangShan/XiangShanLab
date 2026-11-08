@@ -52,7 +52,10 @@ class L2ReadArbiter(implicit p: Parameters) extends NSModule {
   io.s.resp.ready := Mux(!busy, true.B,
     Mux(owner === 1.U, io.m(1).resp.ready, io.m(0).resp.ready))
 
-  when(io.s.resp.fire) { busy := false.B }
+  // A native read is a multi-beat response.  Keep ownership until the final
+  // beat, otherwise the next request can be routed while this one is still
+  // draining and the current master never observes `last`.
+  when(io.s.resp.fire && io.s.resp.bits.last) { busy := false.B }
 
   // 取消：只允许当前 owner 是 I-Cache 时透传，并释放占用
   io.s.cancel := busy && (owner === 0.U) && io.m(0).cancel

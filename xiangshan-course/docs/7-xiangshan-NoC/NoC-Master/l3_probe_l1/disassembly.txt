@@ -1,5 +1,5 @@
 
-/nfs/home/sunyuhang/xs/kmhv2-dual/xs-env/nexus-am/tests/dualcoretest/scenario4_l3_probe_l1/build/scenario4_l3_probe_l1-riscv64-xs.elf:     file format elf64-littleriscv
+/nfs/home/sunyuhang/work/xs-env/nexus-am/apps/scenario4_l3_probe_l1/build/scenario4_l3_probe_l1-riscv64-xs.elf:     file format elf64-littleriscv
 
 
 Disassembly of section .text:

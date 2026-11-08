@@ -1,5 +1,7 @@
 # 6. Dispatch Queue
 
+> **版本基线**：昆明湖 V3（`kunminghu-v3 @ 055d8ad9e5`）。文中引用的 `Dispatch.scala`、`isMove` 与 `BusyTable ×4 + VlBusyTable ×1` 实例化按 V3 复核；V2 的对应文件是 `NewDispatch.scala`，且 `busyTables` 含 5 项，不要按 V2 套用。登记见 [第 4 章 VERSIONS.md](../VERSIONS.md)。
+
 :::info
 
 ## <font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);">🧭</font><font style="color:rgb(0, 0, 0);background-color:rgba(0, 0, 0, 0);"> 学习目标</font>

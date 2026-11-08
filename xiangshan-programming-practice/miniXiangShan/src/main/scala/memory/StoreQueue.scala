@@ -71,6 +71,7 @@ class StoreQueue(implicit p: Parameters) extends NSModule {
     val addrWrite = new Bundle {
       val valid     = Input(Bool())
       val idx       = Input(UInt(log2Ceil(SqSize).W))
+      val robIdx    = Input(new RobPtr(RobSize))
       val vaddr     = Input(UInt(XLEN.W))
       val paddr     = Input(UInt(XLEN.W))
       val excp      = Input(new ExceptionBundle)
@@ -81,6 +82,7 @@ class StoreQueue(implicit p: Parameters) extends NSModule {
     val dataWrite = new Bundle {
       val valid = Input(Bool())
       val idx   = Input(UInt(log2Ceil(SqSize).W))
+      val robIdx = Input(new RobPtr(RobSize))
       val data  = Input(UInt(XLEN.W))
     }
  
@@ -234,12 +236,14 @@ class StoreQueue(implicit p: Parameters) extends NSModule {
   // ================================================================
   when(io.addrWrite.valid) {
     val idx = io.addrWrite.idx
-    entries(idx).addrValid := true.B
-    entries(idx).vaddr     := io.addrWrite.vaddr
-    entries(idx).paddr     := io.addrWrite.paddr
-    entries(idx).excp      := io.addrWrite.excp
-    entries(idx).cacheable := io.addrWrite.cacheable
-    entries(idx).scSuccess := io.addrWrite.scSuccess
+    when(entries(idx).valid && entries(idx).robIdxFull === io.addrWrite.robIdx) {
+      entries(idx).addrValid := true.B
+      entries(idx).vaddr     := io.addrWrite.vaddr
+      entries(idx).paddr     := io.addrWrite.paddr
+      entries(idx).excp      := io.addrWrite.excp
+      entries(idx).cacheable := io.addrWrite.cacheable
+      entries(idx).scSuccess := io.addrWrite.scSuccess
+    }
   }
  
   // ================================================================
@@ -247,13 +251,15 @@ class StoreQueue(implicit p: Parameters) extends NSModule {
   // ================================================================
   when(io.dataWrite.valid) {
     val idx = io.dataWrite.idx
-    entries(idx).dataValid := true.B
-    entries(idx).data := MuxLookup(entries(idx).lsuOp, io.dataWrite.data)(Seq(
-      LsuOp.sb -> Cat(0.U(24.W), io.dataWrite.data(7, 0)),
-      LsuOp.sh -> Cat(0.U(16.W), io.dataWrite.data(15, 0)),
-      LsuOp.sw -> io.dataWrite.data,
-      LsuOp.scw -> io.dataWrite.data,
-    ))
+    when(entries(idx).valid && entries(idx).robIdxFull === io.dataWrite.robIdx) {
+      entries(idx).dataValid := true.B
+      entries(idx).data := MuxLookup(entries(idx).lsuOp, io.dataWrite.data)(Seq(
+        LsuOp.sb -> Cat(0.U(24.W), io.dataWrite.data(7, 0)),
+        LsuOp.sh -> Cat(0.U(16.W), io.dataWrite.data(15, 0)),
+        LsuOp.sw -> io.dataWrite.data,
+        LsuOp.scw -> io.dataWrite.data,
+      ))
+    }
   }
  
   // ================================================================
@@ -391,7 +397,7 @@ class StoreQueue(implicit p: Parameters) extends NSModule {
     val idx = (deqPtr.value + i.U)(log2Ceil(SqSize) - 1, 0)
     val e = entries(idx)
     val scFailed = e.lsuOp === LsuOp.scw && !e.scSuccess
-    dcacheCandidates(i) := e.valid && e.committed && !scFailed &&
+    dcacheCandidates(i) := e.valid && e.committed && e.addrValid && e.dataValid && !scFailed &&
       !e.excp.hasException && !e.dcacheIssued && !e.alreadyFlush
   }
  

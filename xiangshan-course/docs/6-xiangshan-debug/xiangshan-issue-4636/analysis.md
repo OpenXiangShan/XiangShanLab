@@ -1,5 +1,7 @@
 # PR #4636：LoadUnit S1 NC 逻辑对软件 Prefetch 的影响
 
+> **基线（按文中引用提交推断，原文未声明）**：昆明湖 V2 开发期，`acf3dcce`（2025-04-29，属 V2/V3 分叉前的共同祖先）。登记见 [VERSIONS.md](../VERSIONS.md)。
+
 本文分析香山昆明湖在 Pull Request [#4636](https://github.com/OpenXiangShan/XiangShan/pull/4636) 合入前，`LoadUnit` 如何处理命中 Svpbmt `PBMT.NC` 的软件预取，以及 PR 将 `s1_out.nc` 增加 `!s1_prf` 门控后改变了什么。
 
 ## 1. 分析范围、基线与证据等级

@@ -71,7 +71,7 @@ class SimpleBlockRAM(
     //val rd_valid = Output(Bool())
   })
  
-  if (EnableDifftest) {
+  if (UseBehavioralMemories) {
     // ============ 仿真模式：行为级 RAM ============
     val mem = initVals match {
       case Some(vals) =>

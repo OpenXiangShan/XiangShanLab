@@ -35,7 +35,7 @@ class IFU(implicit p: Parameters) extends NSModule {
 
   })
   // ==================== PC生成单元 ====================
-  val pcReg    = RegInit(0x1BFFFFFC.U(32.W))
+  val pcReg    = RegInit(resetPC.U(32.W))
   val pcValid  = RegInit(false.B)
   pcValid := RegNext(true.B)
   diffDontTouch(pcValid)
@@ -96,7 +96,7 @@ class IFU(implicit p: Parameters) extends NSModule {
  
   // ==================== ICache请求 ====================
   io.icache_req.addr  := pcReg
-  io.icache_req.valid := !io.idle && pcReg =/= 0x1BFFFFFC.U &&
+  io.icache_req.valid := !io.idle && pcValid &&
                          !backendRedirectValid &&
                          !frontendRedirect.valid //当重定向来了之后，不给Cache发当前请求
   io.icache_req.flush  := backendRedirectValid || frontendRedirect.valid
@@ -111,7 +111,7 @@ class IFU(implicit p: Parameters) extends NSModule {
   currentPredInfo.meta        := bpuMeta
   diffDontTouch(currentPredInfo)
   // ==================== bpuInfoQueue请求 ====================
-  io.bpuInfoQueuEnq.valid := pc_fire && pcReg =/= 0x1BFFFFFC.U
+  io.bpuInfoQueuEnq.valid := pc_fire
   io.bpuInfoQueuEnq.bits  := currentPredInfo
 
 }

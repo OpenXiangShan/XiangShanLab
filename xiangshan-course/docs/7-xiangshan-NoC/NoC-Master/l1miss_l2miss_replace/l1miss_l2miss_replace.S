@@ -37,6 +37,13 @@ target_load:
 
 .globl target_load_end
 target_load_end:
+    # Let the refill and the victim release (WriteEvictOrEvict) complete
+    # before the program exits, so both transactions are observable.
+    li      t5, SETTLE_ITERATIONS
+.Lsettle_target:
+    addi    t5, t5, -1
+    bnez    t5, .Lsettle_target
+
     li      t4, TARGET_VALUE
     bne     t3, t4, fail
 

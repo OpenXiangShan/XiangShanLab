@@ -30,6 +30,7 @@ myworkspace
 # Scala / Java / Chisel build products
 **/target/
 **/out/
+**/out-perf/
 **/build/
 **/project/boot/
 **/project/target/
@@ -49,6 +50,13 @@ myworkspace
 **/.history
 **/.ivy2/
 **/.coursier/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
 
 # Generated Chisel/FIRRTL/RTL and simulation outputs
 **/test_run_dir/

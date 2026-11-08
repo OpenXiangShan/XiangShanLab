@@ -1,5 +1,7 @@
 # 7. Issue Queue
 
+> **版本基线**：昆明湖 V3（`kunminghu-v3 @ 055d8ad9e5`）。判定依据是文中的 `srcStateVl` / `allSrcStateVl` 信号：V2 的 `Bundles.scala` 与 `NewDispatch.scala` 没有 vl 源状态，不能按 V2 套用。登记见 [第 4 章 VERSIONS.md](../VERSIONS.md)。
+
 在上一章，我们看到了 Dispatch 如何把 uop 分配到各个发射队列。那么 uop 进入 Issue Queue 之后呢？它们要在这里**排队等待"登机"**——直到所有操作数就绪、功能单元空闲，才能被发射出去执行。
 
 :::info

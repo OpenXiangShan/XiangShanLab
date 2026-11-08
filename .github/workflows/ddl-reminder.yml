@@ -24,7 +24,7 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const reminderWindow = 12 * 60 * 60 * 1000;
+            const reminderWindow = 2 * 60 * 60 * 1000;
             const ddlPattern = /^(\d{4})-(\d{2})-(\d{2}) ((?:[01]\d|2[0-3]):[0-5]\d|24:00)$/;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner,
@@ -92,6 +92,6 @@ jobs:
                 owner,
                 repo,
                 issue_number: issue.number,
-                body: `${marker}\n${mentions}，距离任务 DDL 已不足 12 小时。截止时间：\`${ddl}\`（北京时间 UTC+8），请及时完成交付。`
+                body: `${marker}\n${mentions}，距离任务 DDL 已不足 2 小时。截止时间：\`${ddl}\`（北京时间 UTC+8），请及时完成交付。`
               });
             }

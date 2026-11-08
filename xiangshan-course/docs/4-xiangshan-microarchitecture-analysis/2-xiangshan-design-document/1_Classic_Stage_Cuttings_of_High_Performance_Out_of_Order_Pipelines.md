@@ -15,7 +15,7 @@
 
 ### 1.1 流水线整体架构与设计哲学
 #### 1.1.1 为什么是 11 级流水线？
-现代高性能处理器都采用深度流水线设计，但流水线深度并不是越深越好。香山处理器（雁栖湖 / 南湖架构）选择 11 级流水线，是在频率、功耗、指令延迟三者之间做出的最优权衡。
+现代高性能处理器都采用深度流水线设计，但流水线深度并不是越深越好。香山处理器（雁栖湖 / 南湖代）采用 11 级流水线，是在频率、功耗、指令延迟三者之间做出的最优权衡。本文的源码链接以昆明湖 V2（分支 `kunminghu-v2`）为基线；引用流水级划分前，请按目标分支源码复核。
 
 :::warning
 ⚠️ 性能权衡：流水线越深，单条指令的总延迟越长，但处理器的时钟频率可以做得更高。11 级是 RISC-V 架构乱序处理器的 "黄金深度"—— 既能在 14nm 工艺下达到 2GHz 以上的频率，又能将关键指令（如整数加法）的延迟控制在 4 个周期以内。
@@ -72,9 +72,9 @@
 
 #### 1.2.3 源码导航
 前端流水线的核心实现位于以下目录：  
-前端顶层模块定义于[src/main/scala/xiangshan/frontend/Frontend.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/frontend/Frontend.scala)  
-指令缓存(ICache)定义于[src/main/scala/xiangshan/cache/CacheInstruction.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/cache/CacheInstruction.scala)  
-分支预测器(BPU定义于[src/main/scala/xiangshan/frontend/bpu/BPU.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/frontend/bpu/Bpu.scala)
+前端顶层模块定义于[src/main/scala/xiangshan/frontend/Frontend.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/Frontend.scala)  
+指令缓存(ICache)定义于[src/main/scala/xiangshan/cache/CacheInstruction.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/cache/CacheInstruction.scala)  
+分支预测器(BPU定义于[src/main/scala/xiangshan/frontend/BPU.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/frontend/BPU.scala)
 
 ### 1.3 后端流水线 (DEC-EXE)：指令的 "生产车间"
 后端是处理器的 "心脏"，也是乱序执行架构最复杂、最精妙的部分。它的任务是将前端送来的指令流，转化为可以并行执行的微操作流，最大限度地挖掘指令级并行性。
@@ -127,9 +127,9 @@ Load 指令：4 周期延迟（命中 L1 缓存）
 
 #### 1.3.4 源码导航
 后端流水线的核心实现位于以下目录：  
-译码单元定义于 [src/main/scala/xiangshan/backend/decode/DecodeUnit.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala)  
-重命名单元定义于 [src/main/scala/xiangshan/backend/rename/Rename.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/rename/Rename.scala)  
-分派单元定义于 [src/main/scala/xiangshan/backend/dispatch/Dispatch.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/dispatch/Dispatch.scala)
+译码单元定义于 [src/main/scala/xiangshan/backend/decode/DecodeUnit.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala)  
+重命名单元定义于 [src/main/scala/xiangshan/backend/rename/Rename.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/rename/Rename.scala)  
+分派单元定义于 [src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/dispatch/NewDispatch.scala)
 
 ### 1.4 提交阶段 (CM)：指令的 "成品交付部"
 提交阶段是流水线的最后一级，也是唯一按程序顺序执行的阶段。它的任务是将乱序执行的结果，按原始程序顺序提交到架构状态，并处理异常和中断。
@@ -145,7 +145,7 @@ Load 指令：4 周期延迟（命中 L1 缓存）
 
 #### 1.4.3 源码导航
 提交阶段的核心实现位于以下目录：  
-重排序缓存定义于 [src/main/scala/xiangshan/backend/rob/ROB.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v3/src/main/scala/xiangshan/backend/rob/Rob.scala)
+重排序缓存定义于 [src/main/scala/xiangshan/backend/rob/Rob.scala](https://github.com/OpenXiangShan/XiangShan/blob/kunminghu-v2/src/main/scala/xiangshan/backend/rob/Rob.scala)
 
 ### 1.5 特殊流水线：访存流水线
 访存指令（Load/Store）有自己独立的流水线，这是因为访存操作涉及到缓存、TLB、内存等多个层次，延迟远高于算术运算。

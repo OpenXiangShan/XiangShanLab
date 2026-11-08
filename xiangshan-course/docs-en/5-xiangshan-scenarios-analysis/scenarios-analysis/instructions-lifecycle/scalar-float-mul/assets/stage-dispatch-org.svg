@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="490" viewBox="0 0 1180 490" font-family="'Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei','PingFang SC',sans-serif" xml:space="preserve">
+<rect x="0" y="0" width="1180" height="490" fill="#ffffff"/>
+
+<rect x="10" y="14" width="1160" height="462" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
+<rect x="543.9181451612903" y="1.629032258064516" width="92.16370967741935" height="24.741935483870968" rx="0" fill="#FFFFFF"/>
+<text xml:space="preserve" x="590.0" y="14" font-size="20.0" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">Backend</text>
+<rect x="30" y="56" width="600" height="400" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
+<rect x="272.92701612903227" y="43.62903225806451" width="114.1459677419355" height="24.741935483870968" rx="0" fill="#FFFFFF"/>
+<text xml:space="preserve" x="330.0" y="56" font-size="20.0" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">CtrlBlock</text>
+<rect x="58" y="88" width="190" height="54" rx="14" fill="#DEDEDE"/>
+<rect x="55" y="84" width="190" height="54" rx="14" fill="#F2F2F2" stroke="#969696" stroke-width="2"/>
+<text xml:space="preserve" x="150.0" y="111.0" font-size="17.1" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rename</text>
+<rect x="55" y="160" width="550" height="190" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
+<text xml:space="preserve" x="330" y="184" font-size="19.0" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">NewDispatch</text>
+<rect x="78" y="210" width="230" height="70" rx="14" fill="#DEDEDE"/>
+<rect x="75" y="206" width="230" height="70" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="190.0" y="232.2166129032258" font-size="16.2" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">BusyTable × 5</text>
+<text xml:space="preserve" x="190.0" y="252.48596774193547" font-size="12.4" fill="#232323" text-anchor="middle" dominant-baseline="central">int / fp / vec / v0 / vl</text>
+<rect x="333" y="210" width="250" height="70" rx="14" fill="#DEDEDE"/>
+<rect x="330" y="206" width="250" height="70" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="455.0" y="241.0" font-size="15.2" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">RegCacheTagTable</text>
+<text xml:space="preserve" x="330" y="316" font-size="13.3" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central"> (queue selection and same-package deduction are combinational)</text>
+<rect x="58" y="379" width="190" height="54" rx="14" fill="#DEDEDE"/>
+<rect x="55" y="375" width="190" height="54" rx="14" fill="#E8F1FB" stroke="#4A7EBB" stroke-width="2"/>
+<text xml:space="preserve" x="150.0" y="402.0" font-size="16.2" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">Rob</text>
+<rect x="660" y="56" width="480" height="400" rx="0" fill="none" stroke="#6E6E6E" stroke-width="2" stroke-dasharray="10 7"/>
+<rect x="696.5451612903224" y="43.62903225806451" width="406.9096774193551" height="24.741935483870968" rx="0" fill="#FFFFFF"/>
+<text xml:space="preserve" x="900.0" y="56" font-size="20.0" fill="#6E6E6E" text-anchor="middle" dominant-baseline="central">Scheduler × 4 (int / fp / vf / mem)</text>
+<rect x="680" y="84" width="440" height="236" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="900" y="110" font-size="18.1" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">fp Scheduler</text>
+<rect x="703" y="142" width="400" height="116" rx="14" fill="#DEDEDE"/>
+<rect x="700" y="138" width="400" height="116" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="900.0" y="185.86532258064514" font-size="17.1" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">IssueQueue × 3</text>
+<text xml:space="preserve" x="900.0" y="208.16161290322577" font-size="14.3" fill="#232323" text-anchor="middle" dominant-baseline="central">18 entries each</text>
+<rect x="683" y="360" width="140" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="680" y="356" width="140" height="56" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="750.0" y="384.0" font-size="16.2" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">int</text>
+<rect x="833" y="360" width="140" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="830" y="356" width="140" height="56" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="900.0" y="384.0" font-size="16.2" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">vf</text>
+<rect x="983" y="360" width="140" height="56" rx="14" fill="#DEDEDE"/>
+<rect x="980" y="356" width="140" height="56" rx="14" fill="#E8F5E9" stroke="#4CAF50" stroke-width="2"/>
+<text xml:space="preserve" x="1050.0" y="384.0" font-size="16.2" fill="#232323" text-anchor="middle" dominant-baseline="central" font-weight="bold">mem</text>
+</svg>

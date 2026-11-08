@@ -1,5 +1,7 @@
 # 2.寄存器重命名
 
+> **版本基线**：`kunminghu-v3`，**未固定 commit**。文中 `RenameOutUop`、`MEFreeList(IntPhyRegs, RabCommitWidth)`、`VCSR.vl` 专属重命名等均为 V3 形态；V2 使用 `DynInst` 与单参数 `MEFreeList`。所注行号（如 `Rename.scala L154-L158`）与 `055d8ad9e5` 不一致，复核前先固定 commit 再核对行号。登记见 [第 4 章 VERSIONS.md](../../VERSIONS.md)。
+
 > 如果你是第一次接触寄存器重命名，看到"映射表"、"Freelist"、"Bypass转发"、"快照恢复"这些术语可能会感到有些复杂。别担心——寄存器重命名本质上就是一件事：给指令换一个"真名"，让它们不再因为"撞名"而互相等待。让我们一步步来，你会发现它比想象中直观得多。
 
 :::info

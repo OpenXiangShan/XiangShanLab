@@ -198,6 +198,8 @@ val issueQueueCountAddEnq = VecInit(issueQueueCount.zip(needAppendIQValidNumVec)
 
 ### 4.3.5 香山南湖的 Issue Queue 配置
 
+> **版本提示**：本节参数取自**南湖**代的 `Dispatch.scala`，本文未声明固定 commit。昆明湖 V2 的对应文件是 `NewDispatch.scala`、V3 是 `Dispatch.scala`，队列划分与行号均不同，引用前请以目标分支源码为准。
+
 从源码的调试输出中，我们可以看到香山南湖架构的完整 Issue Queue 配置：
 
 ```scala

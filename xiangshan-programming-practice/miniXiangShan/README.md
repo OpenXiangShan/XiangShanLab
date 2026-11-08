@@ -3,6 +3,8 @@
 以香山（XiangShan）微架构为原型的教学级乱序处理器，指令集为 **RISC-V RV32IM
 （Zicsr + M/S/U 特权模式 + Sv32 分页）**。
 
+![miniXiangShan 微架构](miniXiangShan-architecture.png)
+
 ## 指令集与特权架构
 
 - **RV32I**：LUI / AUIPC / JAL / JALR / 六条条件分支 / LB-LHU / SB-SW /
@@ -53,8 +55,3 @@ sbt "runMain minixiangshan.CoreGen fpga"   # 生成上板用 Verilog
 | `frontend` | 取指、BPU、预译码、I-Cache |
 | `memory` | LSQ、D-Cache、L2 Cache |
 
-## TODO（后续）
-
-- 更完整的 PMP/PMA 检查（当前仅占位，不产生 access fault）
-- Sv32 的 A/D 位硬件置位与写回
-- RISC-V NEMU 对拍环境与测试程序迁移
