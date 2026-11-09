@@ -2,7 +2,7 @@
 >
 > Yunsuan：215839f51983bf8d1c2be0107866016749cf0f1b。
 >
-> **版本基线**：昆明湖 V3。该 Yunsuan commit 在 `kunminghu-v3` 分支；V2 的 `yunsuan` 子模块固定在 `9559211`，文件与行号不同。XiangShan 侧 commit 未固定，复核前先用 `git log -1` 固定。登记见 [第 4 章 VERSIONS.md](../../VERSIONS.md)。
+> 适配昆明湖架构
 
 # 1. 标量浮点加法
 

@@ -2,7 +2,7 @@
 
 本文基于 XiangShan `kunminghu-v3` 分支源码梳理 Decode 端指令融合。结论只按源码证据列出，不从注释或既有文档外推。
 
-> **基线**：`kunminghu-v3 @ 055d8ad9e56b0b618f2d549a97f3a028986b4849`。文中行号已按该 commit 复核，源码链接也固定到该 commit，不再指向会漂移的分支 HEAD。
+> 适配昆明湖架构
 
 核心源码：
 
