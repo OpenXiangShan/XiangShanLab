@@ -8,7 +8,8 @@ XiangShanLab 是面向香山处理器学习、开发、验证和研究的开放�
 
 ### 克隆仓库
 
-仓库包含 `tools/wavekit-xslab` Git 子模块，建议递归克隆：
+仓库包含 `tools/wavekit-xslab` 和
+`xiangshan-programming-practice/miniXiangShan` Git 子模块，建议递归克隆：
 
 ```bash
 git clone --recursive https://github.com/OpenXiangShan/XiangShanLab.git

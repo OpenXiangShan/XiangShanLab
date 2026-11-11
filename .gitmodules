@@ -2,3 +2,6 @@
 	path = tools/wavekit-xslab
 	url = git@github.com:XiangShanLab/wavekit-xslab.git
 	branch = main
+[submodule "xiangshan-programming-practice/miniXiangShan"]
+	path = xiangshan-programming-practice/miniXiangShan
+	url = https://github.com/XiangShanLab/miniXiangShan.git

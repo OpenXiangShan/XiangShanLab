@@ -56,5 +56,9 @@
 - 支持与参考模型对拍（`difftest/`，需配套 RISC-V NEMU）
 
 **对应目录**: `miniXiangShan/`
+- 通过 Git 子模块接入独立仓库 `XiangShanLab/miniXiangShan`，父仓库固定使用的提交版本。
+- 初始化：在 XiangShanLab 根目录执行
+  `git submodule update --init --recursive -- xiangshan-programming-practice/miniXiangShan`。
 - 构建: `sbt "runMain minixiangshan.CoreGen simu"`（仿真）/ `fpga`（上板）
+- 性能对比：进入 `miniXiangShan/` 执行 `make perf`。
 - 详细说明见 [`miniXiangShan/README.md`](./miniXiangShan/README.md)

@@ -8,7 +8,8 @@ XiangShanLab is an open repository for learning, developing, verifying, and rese
 
 ### Clone the Repository
 
-The repository includes the `tools/wavekit-xslab` Git submodule. A recursive clone is recommended:
+The repository includes the `tools/wavekit-xslab` and
+`xiangshan-programming-practice/miniXiangShan` Git submodules. A recursive clone is recommended:
 
 ```bash
 git clone --recursive https://github.com/OpenXiangShan/XiangShanLab.git
