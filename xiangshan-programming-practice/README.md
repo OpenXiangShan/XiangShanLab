@@ -48,17 +48,52 @@
 ## 学习乱序处理器微架构的项目
 
 ### miniXiangShan
-**描述**:
-- 以香山（XiangShan）微架构为原型的教学级乱序处理器
-- 指令集为 RISC-V RV32IM（Zicsr + M/S/U 特权模式 + Sv32 分页）
-- 覆盖译码、重命名、发射、访存队列、提交与重定向等乱序后端各级
-- 支持分支预测（BTB/PHT/RAS）、L1 分离 I/D Cache、统一 L2 Cache 与 AXI3 对外接口
-- 支持与参考模型对拍（`difftest/`，需配套 RISC-V NEMU）
 
-**对应目录**: `miniXiangShan/`
-- 通过 Git 子模块接入独立仓库 `XiangShanLab/miniXiangShan`，父仓库固定使用的提交版本。
-- 初始化：在 XiangShanLab 根目录执行
-  `git submodule update --init --recursive -- xiangshan-programming-practice/miniXiangShan`。
-- 构建: `sbt "runMain minixiangshan.CoreGen simu"`（仿真）/ `fpga`（上板）
-- 性能对比：进入 `miniXiangShan/` 执行 `make perf`。
-- 详细说明见 [`miniXiangShan/README.md`](./miniXiangShan/README.md)
+miniXiangShan 是使用 Scala/Chisel 实现、用于学习香山风格乱序微架构的处理器项目，
+覆盖取指、译码、寄存器重命名、分派、发射、执行、访存、提交和重定向。
+仿真、FPGA 和性能实验统一使用 RV64IM，支持 Zicsr/Zifencei；
+性能实验与 NutShell 乱序核运行同一份 RV64 机器码。
+
+**主要模块**:
+
+- 前端：BTB/PHT 分支预测、取指流水线与指令缓存。
+- 后端：寄存器重命名、发射队列、整数与乘除执行单元、Load/Store 队列、ROB 和重定向恢复。
+- 存储系统：分离的 L1 I/D Cache、统一 L2 Cache，以及 AXI3 对外接口；性能平台适配为共享 AXI4 环境。
+- 特权与地址翻译：64 位 CSR、M/S/U 特权模式，以及 Bare/Sv39 MMU、TLB 和三级硬件页表遍历器。
+  支持 4 KiB、2 MiB 和 1 GiB 页，A/D 位由软件维护；尚未实现 PMP/PMA 检查。
+- 验证：仿真配置提供 Difftest 接口；仓库包含 MMU、访存、唤醒、取指等模块的功能回归。
+
+**获取与运行**:
+
+对应目录为 `miniXiangShan/`，通过 Git 子模块引用独立仓库
+`XiangShanLab/miniXiangShan`，由父仓库固定使用的提交版本。
+在 XiangShanLab 根目录初始化：
+
+```bash
+git submodule update --init --recursive -- xiangshan-programming-practice/miniXiangShan
+cd xiangshan-programming-practice/miniXiangShan
+```
+
+| 命令 | 用途 |
+| --- | --- |
+| `make sim` | 生成 RV64 仿真 RTL，启用 Difftest 接口 |
+| `make fpga` | 生成 RV64 FPGA RTL，AXI3 地址与数据均为 64 位 |
+| `make test` | 运行全部 RV64 模块回归 |
+| `make test-mmu` | 运行 MMU 功能与流水线回归 |
+| `make test-pipeline` | 运行 MMU、访存、唤醒、取指和立即数生成回归 |
+| `make perf` | 获取固定版本依赖，构建并运行 miniXiangShan 与 NutShell 的 CoreMark 对比 |
+
+**性能对比**:
+
+`make perf` 使用同一份 RV64 CoreMark 镜像和同一个 AXI4 仿真平台，
+校验 host 参考程序与两个 RTL 运行的 CRC，再比较周期数、退休指令数和 IPC。
+NutShell 与 CoreMark 的源码按锁定版本下载到 `.deps/`，无需手动放入仓库。
+
+子模块 README 中记录的 CoreMark 2K、10 次迭代结果为：
+miniXiangShan 使用 3,255,350 周期，NutShell OOO 使用 3,406,098 周期，
+miniXiangShan 少用约 4.43% 周期，双方 CRC 校验通过。
+该结果仅比较同频条件下的周期数，未测量综合频率；实际运行结果以 `perf/results/` 为准。
+
+环境要求与项目结构见 [miniXiangShan README](./miniXiangShan/README.md)，
+性能命令细节见 [性能实验说明](./miniXiangShan/perf/README.md)，
+比较口径与适用范围见 [性能测试方法](./miniXiangShan/perf/METHODOLOGY.md)。
