@@ -1,0 +1,30 @@
+name: Task Automation Tests
+
+on:
+  push:
+    paths:
+      - ".github/scripts/**"
+      - ".github/task-calendar.json"
+      - ".github/ISSUE_TEMPLATE/task_request.yml"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - ".github/scripts/**"
+      - ".github/task-calendar.json"
+      - ".github/ISSUE_TEMPLATE/task_request.yml"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: node --test .github/scripts/*.test.cjs

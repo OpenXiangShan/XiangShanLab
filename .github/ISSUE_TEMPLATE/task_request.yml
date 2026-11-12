@@ -7,9 +7,9 @@ body:
       value: |
         ## 模板说明
 
-        使用本模板发布一个目标明确、可以被认领并按截止时间交付的任务。请把交付物写成可逐项验收的清单，并填写合理的工时、质押积分和 DDL。
+        使用本模板发布一个目标明确、可以被认领并按期交付的任务。请把交付物写成可逐项验收的清单，并填写合理的预估工时和质押积分。
 
-        执行人评论 `/assign` 后，由 Issue 发布者回复 `/confirm` 确认认领；完成后由执行人评论 `/complete` 提交完成并关闭任务。任务认领、同步和交付规则见[社区去中心化治理策略](https://github.com/OpenXiangShan/XiangShanLab/blob/master/XiangShanLab-user-guide/XiangShan-Community-Decentralized-Governance-Strategy.md)。
+        执行人评论 `/assign` 后，由 Issue 发布者回复 `/confirm`；机器人确认 Assignee 设置成功后才按预估工时计算 DDL，并在评论公布北京时间的截止时间。每天计 8 小时，默认工作时间为北京时间 09:00–17:00；非工作时间和休息日不计时，周六、周日默认休息，额外休息日和补班日由仓库日历配置。等待认领及等待确认期间不计时。完成后由执行人评论 `/complete` 提交完成并关闭任务。任务认领、同步和交付规则见[社区去中心化治理策略](https://github.com/OpenXiangShan/XiangShanLab/blob/master/XiangShanLab-user-guide/XiangShan-Community-Decentralized-Governance-Strategy.md)。
 
   - type: dropdown
     id: course_directory
@@ -69,7 +69,7 @@ body:
     id: estimated_hours
     attributes:
       label: 预估工时
-      description: 填写大于 0 的小时数，可使用小数。
+      description: 填写大于 0、不超过 2920 的小时数，可使用小数。成功认领后按每天 8 小时计算 DDL，跳过非工作时间和休息日，无需填写固定截止日期。
       placeholder: "8"
     validations:
       required: true
@@ -80,15 +80,6 @@ body:
       label: 质押积分
       description: 填写大于 0 的整数，例如低难度 10 分、高难度 50 分。
       placeholder: "10"
-    validations:
-      required: true
-
-  - type: input
-    id: ddl
-    attributes:
-      label: 截止时间（DDL）
-      description: 精确到分钟即可，无需填写时区；CI 将统一按北京时间（UTC+8）解释。
-      placeholder: "2026-08-30 23:59"
     validations:
       required: true
 
