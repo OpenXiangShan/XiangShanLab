@@ -1,0 +1,4 @@
+# Everything the venue builds or publishes stays under the work dir
+# (default: build/). Nothing in this directory's own sources is generated.
+/build/
+__pycache__/

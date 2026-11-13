@@ -7,7 +7,7 @@
 | 目录 | 当前定位 | 公开仓库 | 状态 |
 | --- | --- | --- | --- |
 | [`haco/`](./haco/) | HACO 项目资料目录；项目全称、技术范围和维护组织待补充 | 待补充 | 占位 |
-| [`memory-safety/`](./memory-safety/) | 面向内存安全的项目资料目录；具体实现和公开仓库待补充 | 待补充 | 占位 |
+| [`memory-safety/`](./memory-safety/) | 基于 cpu-sec-bench 的香山内存安全测试（NEMU ISA 基线，含自包含执行脚本） | [cpu-sec-bench](https://github.com/comparch-security/cpu-sec-bench) | 已登记 |
 | [`xiangshan-verification/`](./xiangshan-verification/) | 香山处理器外部验证项目资料目录 | [UnityChipForXiangShan](https://github.com/XS-MLVP/UnityChipForXiangShan) | 已登记 |
 
 新增项目时，请复制 [`CONTRIBUTION_TEMPLATE.md`](./CONTRIBUTION_TEMPLATE.md)，将副本放到对应项目目录，并完整填写项目简介、关系、链接、环境和贡献者信息。
