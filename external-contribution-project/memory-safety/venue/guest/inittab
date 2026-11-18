@@ -1,0 +1,17 @@
+# Guest init actions for the cpu-sec-bench NEMU platform (busybox init).
+#
+# Verbatim port of cpu-sec-test-env scripts/riscv64_nemu/venue/guest/inittab
+# (2026-10-31).
+#
+# /proc and /sys are mounted first: the bench's own support library reads
+# /proc/self/maps (lib/common/temp_file.cpp, get_region_base), so without
+# /proc the stack-region ASLR case opens nothing, sees a zero base in both of
+# its runs, and misreports "no ASLR" -- measured 2026-10-20: the guest scored
+# 0 where the native host reference scores 1.  /dev needs no line here (the
+# kernel mounts devtmpfs itself: CONFIG_DEVTMPFS_MOUNT=y).
+#
+# sysinit actions run before the once action, so the bench always sees the
+# mounted trees.
+::sysinit:/bin/mount -t proc proc /proc
+::sysinit:/bin/mount -t sysfs sysfs /sys
+::once:/bench/bench.sh
