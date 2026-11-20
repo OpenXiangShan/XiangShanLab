@@ -1,0 +1,22 @@
+# trimmed log: x0_readback.nodiff.log (full: x0_readback.nodiff.full.log.gz)
+emu-revert-b9638259 compiled at Nov 20 2026, 17:42:12
+[INFO] init for constantin: loaded from init.
+Using simulated 1048576B flash
+Using simulated 8386560MB RAM
+The image is /nfs/home/sunyuhang/work/xs-6668/case/x0_readback.elf
+ELF file detected and loading image from extracted elf file
+Assertion failed at /nfs/home/sunyuhang/work/xs-6668/XiangShan/build/rtl/RenameTableWrapper.sv:947.
+Assertion failed at /nfs/home/sunyuhang/work/xs-6668/XiangShan/build/rtl/RenameTableWrapper.sv:965.
+Assertion failed at /nfs/home/sunyuhang/work/xs-6668/XiangShan/build/rtl/Rename.sv:9216.
+Assertion failed at /nfs/home/sunyuhang/work/xs-6668/XiangShan/build/rtl/Rename.sv:9237.
+The simulation stopped. There might be some assertion failed.
+Core 0: [31mABORT at pc = 0xffffabbccf982372
+[0m[35mCore-0 instrCnt = 6, cycleCnt = 8,234, IPC = 0.000729
+[0m[34mSeed=0 Guest cycle spent: 8,239 (this will be different from cycleCnt if emu loads a snapshot)
+[0m[34mHost time spent: 81,436ms
+[0mAssertion failed at LogUtils.scala:133
+Assertion failed at LogUtils.scala:133
+Assertion failed: rfWen cannot be 1 when Int regfile ldest is 0
+Assertion failed: rfWen cannot be 1 when Int regfile ldest is 0
+[ERROR][time=                8238] SimTop.cpu.l_soc.core_with_l2.core.backend.inner.ctrlBlock.rename.rat: pdest for $0 should be 0
+[ERROR][time=                8238] SimTop.cpu.l_soc.core_with_l2.core.backend.inner.ctrlBlock.rename.rat: pdest for $0 should be 0
