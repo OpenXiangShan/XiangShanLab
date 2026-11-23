@@ -2,7 +2,8 @@
 
 - Issue：[OpenXiangShan/XiangShan#6668](https://github.com/OpenXiangShan/XiangShan/issues/6668)（2026-10-05，`type: bug/WIP feature`，`version: kunminghu-v3`）
 - 任务：OpenXiangShan/XiangShanLab#178
-- 分析基线（缺陷）：`kunminghu-v3` `09453ff8f44e9d2b526e6149c60e1dc3f08c7192`（2026-09-29）
+- 分析基线（缺陷）：`kunminghu-v3` `09453ff8f44e9d2b526e6149c60e1dc3f08c7192`（2026-09-29；本轮已按该 commit 重建复核，difftest 子模块 `4c64fe86`）
+- 分析基线（缺陷 + 最小补丁）：`09453ff8f` + `replay/patch/0001`（本轮重建）
 - 分析基线（修复）：`kunminghu-v3` `429980ea228c481384134abcd99a02f1ceae7440`（PR [#6779](https://github.com/OpenXiangShan/XiangShan/pull/6779)，2026-11-02）
 - 最新 `kunminghu-v3` 复核：`b9638259e98c92b4c0d9e64a09d3c504faa699e6`（2026-11-10）
 - 证据类型：源码 + 程序运行（构建/仿真 + Difftest 对照；本案例不含波形）
@@ -13,9 +14,11 @@
    `out.bits.gpWen := bundle(gpWenField) && instBitFields.RD =/= 0.U`。该 PR 的主题是把 CSRR 乱序执行重新加回译码器，这一行是顺带修掉的 `rd == x0` 写回使能问题，PR 描述与提交信息都没有提到 #6668。
 2. **根因确认**：v3 的译码被拆成 vector / vset / simple / pseudo 四个通道，“`rfWen = 1 ⇒ ldest ≠ 0`” 这条不变量由各通道自己维护。`vl` / `vlenb` 走 pseudo 通道，而该通道直接取 `gpWen` 表项，没有像其他三个通道那样用 `RD =/= 0` 过滤；Rename 侧又按 `rfWen` 无条件分配物理寄存器并把 `ldest`（= 0）写进 RAT，于是 x0 被映射到一个装载 `vl` 值的物理寄存器。
 3. **对照实验**（本文新增，不是 issue 原文的结论）：
+   - **缺陷基线本体已重建**：在 issue 报告的 `09453ff8f` 上按原配置（DefaultConfig、单核、difftest 子模块 `4c64fe86`）重建并运行 issue 原始 ELF，复现出 `RenameTableWrapper.sv:930`、`Rename.sv:5458` 两条断言与 `pdest for $0 should be 0`，`instrCnt = 38, cycleCnt = 8,321, IPC = 0.004567, time = 8325` —— 与 issue 附件日志**逐项一致，连 RTL 行号都相同**；
+   - 在缺陷基线本体上只应用 `patch/0001`（1 行 `RD =/= 0` 过滤）重建后，4 个用例全部通过，证明这一行对该缺陷既必要也充分；
    - 在最新 v3 `b9638259` 上，issue 原始 ELF 与自写的 rd=0 用例都能正常跑完，NEMU Difftest 逐指令一致；
-   - 在最新 v3 上只回退那一行（`patch/0002`），issue 原始 ELF 立刻复现，且 **`instrCnt = 38, cycleCnt = 8,321, IPC = 0.004567`、`time=8325` 与 issue 附件日志逐位一致**；两条断言与 `pdest for $0 should be 0` 也一致；
-   - `read_vlenb`（`rd = t0`）在回退构建上仍能正常跑完，说明缺陷只影响 `rd = x0`；
+   - 在最新 v3 上只回退那一行（`patch/0002`），issue 原始 ELF 立刻复现同样的失败签名（该构建的行号是 `947` / `9216`，与缺陷基线的生成代码不同）；
+   - `read_vlenb`（`rd = t0`）在缺陷基线和回退构建上都能正常跑完，说明缺陷只影响 `rd = x0`；
    - 需要在 3.4 单独说明的一点：`csrr x0, vtype` 在 `09453ff8f` 上不触发（issue 原文如此），但在“最新 v3 只回退一行”的构建上**会**触发——因为 PR #6779 把 pseudo 通道的匹配范围从 `vl`/`vlenb` 扩到了全 CSR 的 `csrrs/csrrc/csrrsi/csrrci` 纯读形式，那一行过滤在最新树上已经变成整个 CSR 读类的必要条件。两个基线的结论不能混用。
 4. **触发条件**：任意一条 `vl` / `vlenb` 的纯读，只要 `rd = x0`（例如 `csrr zero, vl`、`csrr zero, vlenb`，以及 `csrrs/csrrc/csrrsi/csrrci` 的 `rs1 = x0, rd = x0` 形式），进入 Rename 就会 abort；关掉断言时则把 x0 的架构映射改坏。issue 评论区把该问题归为“向量单元仍在开发，后续解决”，但实际修复已经在 #6779 中合入。
 
@@ -35,7 +38,8 @@
 
 | 用途 | 分支 | commit | 日期 |
 | --- | --- | --- | --- |
-| 缺陷基线（issue 报告） | `kunminghu-v3` | `09453ff8f44e9d2b526e6149c60e1dc3f08c7192` | 2026-09-29 |
+| 缺陷基线（issue 报告，本轮重建） | `kunminghu-v3` | `09453ff8f44e9d2b526e6149c60e1dc3f08c7192`（difftest `4c64fe86`） | 2026-09-29 |
+| 缺陷基线 + 最小补丁（本轮重建） | `kunminghu-v3` | `09453ff8f` + `patch/0001` | — |
 | 修复提交（PR #6779） | `kunminghu-v3` | `429980ea228c481384134abcd99a02f1ceae7440` | 2026-11-02 |
 | 最新 v3（本轮复核） | `kunminghu-v3` | `b9638259e98c92b4c0d9e64a09d3c504faa699e6` | 2026-11-10 |
 | V2 对照 | `kunminghu-v2` | `9c53db086a3b5bfe7a95a57e18de0e9662d64a38` | 2026-11-20 |
@@ -59,36 +63,37 @@ V3 引入可重命名的 `vl` 与分通道译码后，这道全局兜底被拆�
 
 ## 2. 复现结果
 
-构建耗时：修复树 `b9638259` 1874 s，回退树 `b9638259` + `patch/0002` 2126 s（同一台机器、同一套参数）。
+构建耗时：缺陷基线 `09453ff8f` 1842 s、其修复版 1797 s（两者并行构建，机器 256 线程，耗时仅供参考）；最新树 `b9638259` 1874 s，回退树 2126 s（同一台机器、同一套参数）。
 
 所有运行统一用 `-I 60 -C 20000`：本机仿真速度约 60 sim-cycle/s，前 ~8k 周期是冷启动；issue 的 abort 发生在 `instrCnt = 38`，60 条指令足以越过触发点，同时避免在 `test_exit` 自循环里空跑。`COMPLETED` 表示达到指令上限、无断言、且 NEMU Difftest 逐指令一致；`ABORT` 表示 RTL 断言或 `XSError` 触发。
 
-| 用例 | 构建 | `--no-diff` | `--diff NEMU` |
-| --- | --- | --- | --- |
-| `xs_csrr_x0_vl.elf`（issue 原样） | `b9638259`（修复后） | COMPLETED（60 / 8,379） | COMPLETED（60 / 8,379） |
-| `xs_csrr_x0_vl.elf` | `b9638259` + 0002 回退 | **ABORT（38 / 8,321）** | **ABORT（38 / 8,321）** |
-| `x0_readback.elf`（`csrr x0, vl` + `csrr x0, vlenb`） | `b9638259` | COMPLETED（60 / 8,337） | COMPLETED（60 / 8,337） |
-| `x0_readback.elf` | 回退 | **ABORT（6 / 8,234）** | **ABORT（6 / 8,234）** |
-| `read_vlenb.elf`（`csrr t0, vlenb`，rd ≠ 0） | `b9638259` | COMPLETED（60 / 8,338） | COMPLETED（60 / 8,338） |
-| `read_vlenb.elf` | 回退 | COMPLETED | COMPLETED |
-| `x0_vtype_control.elf`（`csrr x0, vtype`） | `b9638259` | COMPLETED（60 / 8,338） | COMPLETED |
-| `x0_vtype_control.elf` | 回退 | **ABORT（6 / 8,233）** | **ABORT（6 / 8,233）** |
+| 用例 | `09453ff8f`（缺陷基线） | `09453ff8f` + `0001` | `b9638259`（修复后） | `b9638259` + `0002` 回退 |
+| --- | --- | --- | --- | --- |
+| `xs_csrr_x0_vl.elf`（issue 原样） | **ABORT（38 / 8,321）** | COMPLETED（60 / 8,379） | COMPLETED（60 / 8,379） | **ABORT（38 / 8,321）** |
+| `x0_readback.elf`（`csrr x0, vl` + `csrr x0, vlenb`） | **ABORT（6 / 8,234）** | COMPLETED（60 / 8,322） | COMPLETED（60 / 8,337） | **ABORT（6 / 8,234）** |
+| `read_vlenb.elf`（`csrr t0, vlenb`，rd ≠ 0） | COMPLETED（60 / 8,325） | COMPLETED（60 / 8,325） | COMPLETED（60 / 8,338） | COMPLETED |
+| `x0_vtype_control.elf`（`csrr x0, vtype`） | COMPLETED（60 / 8,326） | COMPLETED（60 / 8,326） | COMPLETED（60 / 8,338） | **ABORT（6 / 8,233）** |
 
-括号内为 `instrCnt / cycleCnt`。
+括号内为 `instrCnt / cycleCnt`；同一格的 `--no-diff` 与 `--diff NEMU` 结果相同（逐次日志见 `replay/logs/`）。
 
-回退构建上 issue 原始 ELF 的完整失败输出：
+缺陷基线 `09453ff8f` 上 issue 原始 ELF 的完整失败输出（`replay/logs/base09453/xs_csrr_x0_vl.nodiff.log`）：
 
 ```text
-Assertion failed at .../build/rtl/RenameTableWrapper.sv:947.
-Assertion failed at .../build/rtl/Rename.sv:9216.
+Core  0's Commit SHA is: 09453ff8f4, dirty: 0
+Assertion failed at .../build/rtl/RenameTableWrapper.sv:930.
+Assertion failed at .../build/rtl/Rename.sv:5458.
 The simulation stopped. There might be some assertion failed.
-Core 0: ABORT at pc = 0xfffef5a771d71ba2
+Core 0: ABORT at pc = 0x185e2bbf3c2bc
 Core-0 instrCnt = 38, cycleCnt = 8,321, IPC = 0.004567
 Assertion failed: rfWen cannot be 1 when Int regfile ldest is 0
 [ERROR][time=                8325] SimTop.cpu.l_soc.core_with_l2.core.backend.inner.ctrlBlock.rename.rat: pdest for $0 should be 0
 ```
 
-`instrCnt = 38 / cycleCnt = 8,321 / IPC = 0.004567 / time = 8325` 与 issue 附件日志**逐位一致**；仅 RTL 行号不同（`09453ff8f` 为 `RenameTableWrapper.sv:930`、`Rename.sv:5458`），这是两个基线生成代码的差异。
+`instrCnt = 38 / cycleCnt = 8,321 / IPC = 0.004567 / time = 8325`、`pc = 0x185e2bbf3c2bc` 以及两个断言的来源（`RenameTableWrapper.sv:930`、`Rename.sv:5458`）与 issue 附件日志**逐项相同**。
+
+最新树上只回退一行（`patch/0002`）的构建复现的是同一失败签名（38 / 8,321），但生成代码的行号变成 `RenameTableWrapper.sv:947`、`Rename.sv:9216`，这是两棵树的代码布局差异，不是行为差异。
+
+同一份 ELF 在 `09453ff8f` + `0001` 上跑完 60 条指令（`60 / 8,379`，与最新树一致），`rd ≠ 0` 的 `read_vlenb` 在缺陷基线上本来就能通过，说明补丁只收窄了 `rd = 0` 的写回。
 
 补充说明：
 
@@ -191,7 +196,7 @@ val CSRR_SR_NO_BLOCK_WAIT  = noBlockAndWaitList.map(csr => PseudoInstPattern(mak
 def noBlockAndWaitList = CSROoORead.fullCSRList.diff(...).diff(List(CSRs.vl, CSRs.vlenb))
 ```
 
-所以在 `b9638259` 上，`csrr zero, vtype` 也走 pseudo 通道。此时如果把那一行过滤单独回退，`vtype` 的 `rd = x0` 读同样会 abort（见第 2 节 `x0_vtype_control` 的回退结果）。这不是 issue 描述的原始缺陷范围，而是同一行过滤在更宽匹配表下的必要性；本文的 `x0_vtype_control` 因此只作为**最新树上的回归用例**使用，不用来推断 `09453ff8f` 的行为。
+所以在 `b9638259` 上，`csrr zero, vtype` 也走 pseudo 通道。此时如果把那一行过滤单独回退，`vtype` 的 `rd = x0` 读同样会 abort（见第 2 节 `x0_vtype_control` 的回退结果）。这不是 issue 描述的原始缺陷范围，而是同一行过滤在更宽匹配表下的必要性。缺陷基线 `09453ff8f` 上 `x0_vtype_control` 确实通过（第 2 节），与 issue 一致，也印证了它当时走的是 simple 通道；所以 `x0_vtype_control` 只在最新树一侧作为回归用例解释，不用来推断旧基线行为。
 
 ### 3.5 引入与消失时间
 
@@ -214,23 +219,30 @@ PR #6779 的实质改动（与本 issue 相关的部分）：
 
 ### 4.2 缺陷基线上的最小修复
 
-`patch/0001-fix-pseudo-decode-rd-nonzero.patch` 是同一行改动在 `09453ff8f` 上的最小补丁（1 文件 +1/−1），供直接复核缺陷基线时使用；本轮没有重建 `09453ff8f`，所以“仅这一行即可消除缺陷”的实证由 `patch/0002` 在最新树上的正反实验承担（回退即复现、恢复即消失）。`patch/0002-revert-prefix-behavior.patch` 就是它的反向补丁。
+`patch/0001-fix-pseudo-decode-rd-nonzero.patch` 是同一行改动在 `09453ff8f` 上的最小补丁（1 文件 +1/−1）。本轮已按该基线重建两棵树做正反验证：
+
+- `09453ff8f` 原样：issue 原始 ELF ABORT（38 / 8,321），`pc` 与断言行号与 issue 完全一致；
+- `09453ff8f` + `0001`：4 个用例 × {no-diff, NEMU} 全部 COMPLETED，NEMU Difftest 无差异。
+
+所以“仅这一行即可消除缺陷”在缺陷基线上已经直接成立，不再需要用最新树上的回退实验来间接推断。`patch/0002-revert-prefix-behavior.patch` 是同一行在最新树上的反向补丁，用于说明该过滤在 PR #6779 扩大匹配范围后仍是必要条件。
+
+补丁只改 `gpWen`，不动 `ldest`：读照做，GPR 写回使能清零，Rename 因此既不分配物理寄存器也不写 RAT[0]。
 
 ## 5. 修复前后对照
 
-| 观察点 | 回退构建（等价缺陷） | 修复构建 `b9638259` |
-| --- | --- | --- |
-| `csrr x0, vl` 进入 Rename | `rfWen = 1`、`ldest = 0`，两条断言 + `pdest for $0 should be 0` | 不分配物理寄存器，无断言 |
-| `csrr x0, vlenb` | 同左（`x0_readback` 第 6 条指令即 abort） | 正常完成 |
-| `csrr t0, vlenb`（rd ≠ 0） | 正常完成 | 正常完成（修复没有误伤写回） |
-| RAT[0] | 被写进新分配的 `pdest`（XSError 复现） | 保持 0 |
-| issue 原始 ELF 的失败签名 | `instrCnt = 38, cycleCnt = 8,321`（与 issue 逐位一致） | COMPLETED，NEMU 逐指令一致 |
+| 观察点 | 缺陷基线 `09453ff8f`（原样） | `09453ff8f` + `0001` | 最新树 `b9638259` |
+| --- | --- | --- | --- |
+| `csrr x0, vl` 进入 Rename | `rfWen = 1`、`ldest = 0`，两条断言 + `pdest for $0 should be 0` | 不分配物理寄存器，无断言 | 不分配物理寄存器，无断言 |
+| `csrr x0, vlenb` | 同左（`x0_readback` 第 6 条指令即 abort） | 正常完成 | 正常完成 |
+| `csrr t0, vlenb`（rd ≠ 0） | 正常完成 | 正常完成（修复没有误伤写回） | 正常完成 |
+| RAT[0] | 被写进新分配的 `pdest`（XSError 复现） | 保持 0 | 保持 0 |
+| issue 原始 ELF 的失败签名 | `38 / 8,321`，`pc`、断言行号与 issue 逐项相同 | COMPLETED（60 / 8,379），NEMU 逐指令一致 | COMPLETED（60 / 8,379），NEMU 逐指令一致 |
 
 因此可以判定：`PseudoDecodeChannel` 那一行 `RD =/= 0` 过滤对该缺陷**既是必要的也是充分的**——只回退它就能复现原始失败签名，加上它就消失，且不影响 `rd != 0` 的正常读。
 
 ## 6. 边界与未覆盖
 
-- **没有重建 `09453ff8f` 本体**。该基线的失败证据有三层：issue 附件日志、该 commit 的源码（`PseudoDecodeChannel.scala:93` 无过滤）、以及最新树“只回退一行”后**逐位相同**的失败签名（`instrCnt = 38 / cycleCnt = 8,321`）。时间允许时可以按第 7 节直接构建缺陷基线复核。
+- **缺陷基线已重建，不再依赖间接推断**：`09453ff8f`（difftest `4c64fe86`）原样构建复现出 issue 的断言与计数（`38 / 8,321`、`pc = 0x185e2bbf3c2bc`、`RenameTableWrapper.sv:930` / `Rename.sv:5458`），同一基线上应用 `patch/0001` 后全部用例通过。issue 附件日志、源码行号、两次实跑三者互相对齐。
 - 本案例的断言只在带断言的 emu 构建（`make emu`）里触发。issue 提到关掉断言后 x0 会读成 `vl` 的值；本文没有单独构建无断言版本去复现该现象，但 3.3 的 RAT 写回路径（`Rename.scala:876-878`）给出了同样的结论。
 - `vl` 的**数据路径**不在本案例范围内：`vsetvli` 后立即 `csrr rd, vl` 可能读到旧值/0，是另一个仍然 Open 的 issue #6676（本案例的 `read_vlenb` 对照特意使用常量 `vlenb = 16`，避免依赖 `vl` 读数据）。
 - 回退构建上的 `csrr x0, vtype` 也会 abort，这是 PR #6779 扩大 pseudo 匹配表导致的“同一行过滤的更大作用域”，不是 `09453ff8f` 的原始缺陷范围；不要把这条结论迁移回旧基线（见 3.4）。
@@ -265,7 +277,25 @@ make emu CONFIG=DefaultConfig NUM_CORES=1 \
 bash replay/case/run_cases.sh ./build/emu replay/logs/out
 ```
 
-若要直接复核缺陷基线，把 `git checkout` 换成 `09453ff8f44e9d2b526e6149c60e1dc3f08c7192`，并在构建前应用 `replay/patch/0001-fix-pseudo-decode-rd-nonzero.patch` 做修复对照。
+若要直接复核缺陷基线，把 `git checkout` 换成 `09453ff8f44e9d2b526e6149c60e1dc3f08c7192`，并在构建前应用 `replay/patch/0001-fix-pseudo-decode-rd-nonzero.patch` 做修复对照。本文的两个 `09453ff8f` 构建就是这样做的（浅克隆 + 递归子模块）：
+
+```bash
+# 4) 缺陷基线（本文第 2 节 base09453 / base09453-fix 两列）
+git init base09453 && cd base09453
+git remote add origin https://github.com/OpenXiangShan/XiangShan.git
+git fetch --depth 1 origin 09453ff8f44e9d2b526e6149c60e1dc3f08c7192
+git checkout FETCH_HEAD
+git submodule update --init --recursive --depth 1 --jobs 8   # 必须 --recursive：rocket-chip 的 cde 是嵌套子模块
+
+# 缺陷构建
+export NOOP_HOME=$PWD TMPDIR=/some/scratch/with/space
+make emu CONFIG=DefaultConfig NUM_CORES=1 \
+    OPT_FAST="-O3 -fno-tree-slp-vectorize" -j64
+# 最小修复构建：另复制一份树后在副本里
+git apply /path/to/xiangshan-issue-6668/replay/patch/0001-fix-pseudo-decode-rd-nonzero.patch
+```
+
+注意 difftest 子模块在 `09453ff8f` 上是 `4c64fe86`（issue 报告记录的版本），`--recursive` 会按该 commit 检出，不要手工切到分支 HEAD。
 
 ## 8. 证据清单
 
@@ -276,11 +306,15 @@ bash replay/case/run_cases.sh ./build/emu replay/logs/out
 | `replay/case/read_vlenb.S/.elf` | rd ≠ 0 正向对照（`vlenb = 16`，`863c82c7…` / `8a164273…`） |
 | `replay/case/x0_vtype_control.S/.elf` | 最新树上的 rd=0 回归用例（`f9459713…` / `fadebab7…`） |
 | `replay/case/link.ld` | 裸机链接脚本（0x80000000 / tohost=0x80001000） |
-| `replay/case/run_cases.sh` | 4 用例 × {no-diff, NEMU} 一键脚本（`07369cd9…`） |
+| `replay/case/run_cases.sh` | 4 用例 × {no-diff, NEMU} 一键脚本（NEMU so 自动探测） |
+| `replay/case/build_cases.sh` | 三个自写用例的重建脚本（`objdump` 与随附 ELF 逐条一致） |
 | `replay/patch/0001-*.patch` | `09453ff8f` 上的最小修复（1 文件 +1/−1） |
 | `replay/patch/0002-*.patch` | 最新 v3 上的受控回退 |
 | `replay/logs/head/` | `b9638259` 构建日志（gz）、8 次运行的精简日志、`summary.txt` |
 | `replay/logs/revert/` | 回退构建的同一套日志；`xs_csrr_x0_vl.nodiff.full.log.gz` 为完整原始日志 |
+| `replay/logs/base09453/` | `09453ff8f` 缺陷基线重建：8 次运行 + 计数 |
+| `replay/logs/base09453-fix/` | `09453ff8f` + `0001` 最小修复：8 次运行 + 计数 |
+| `replay/logs/README.md` | 四套日志的对照索引与裁剪规则 |
 | `replay/SHA256SUMS` | 用例与补丁的 SHA-256 |
 
 完整（未裁剪）运行日志只对 `xs_csrr_x0_vl` 的两个运行保留为 `.full.log.gz`；其余精简日志保留了启动、断言/陷阱、`instrCnt` 与 `Host time` 行。

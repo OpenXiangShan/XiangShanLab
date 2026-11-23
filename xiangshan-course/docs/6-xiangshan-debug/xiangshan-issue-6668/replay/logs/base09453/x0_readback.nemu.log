@@ -1,0 +1,25 @@
+# trimmed log: x0_readback.nemu.log (PERF dump dropped; rerun with run_cases.sh to regenerate)
+emu compiled at Nov 23 2026, 10:37:34
+[INFO] init for constantin: loaded from init.
+Using simulated 1048576B flash
+Core  0's Commit SHA is: 09453ff8f4, dirty: 0
+Using simulated 8386560MB RAM
+The image is /nfs/home/sunyuhang/work/xs-6668/course-doc/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-6668/replay/case/x0_readback.elf
+ELF file detected and loading image from extracted elf file
+The reference model is /nfs/home/sunyuhang/work/xs-6668/base09453/ready-to-run/riscv64-nemu-interpreter-so
+The first instruction of core 0 has commited. Difftest enabled. 
+Assertion failed at /nfs/home/sunyuhang/work/xs-6668/base09453/build/rtl/RenameTableWrapper.sv:930.
+Assertion failed at /nfs/home/sunyuhang/work/xs-6668/base09453/build/rtl/RenameTableWrapper.sv:948.
+Assertion failed at /nfs/home/sunyuhang/work/xs-6668/base09453/build/rtl/Rename.sv:5458.
+Assertion failed at /nfs/home/sunyuhang/work/xs-6668/base09453/build/rtl/Rename.sv:5479.
+The simulation stopped. There might be some assertion failed.
+Core 0: [31mABORT at pc = 0xfffe33ea5c3568bf
+[0m[35mCore-0 instrCnt = 6, cycleCnt = 8,234, IPC = 0.000729
+[0mAssertion failed at LogUtils.scala:133
+Assertion failed at LogUtils.scala:133
+Assertion failed: rfWen cannot be 1 when Int regfile ldest is 0
+Assertion failed: rfWen cannot be 1 when Int regfile ldest is 0
+[ERROR][time=                8238] SimTop.cpu.l_soc.core_with_l2.core.backend.inner.ctrlBlock.rename.rat: pdest for $0 should be 0
+[ERROR][time=                8238] SimTop.cpu.l_soc.core_with_l2.core.backend.inner.ctrlBlock.rename.rat: pdest for $0 should be 0
+[34mSeed=0 Guest cycle spent: 8,239 (this will be different from cycleCnt if emu loads a snapshot)
+[0m[34mHost time spent: 102,478ms

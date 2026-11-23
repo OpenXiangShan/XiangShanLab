@@ -1,0 +1,8 @@
+xs_csrr_x0_vl        nodiff  rc=0   COMPLETED      instrCnt = 60, cycleCnt = 8,379,
+xs_csrr_x0_vl        nemu    rc=0   COMPLETED      instrCnt = 60, cycleCnt = 8,379,
+x0_readback          nodiff  rc=0   COMPLETED      instrCnt = 60, cycleCnt = 8,322,
+x0_readback          nemu    rc=0   COMPLETED      instrCnt = 60, cycleCnt = 8,322,
+read_vlenb           nodiff  rc=0   COMPLETED      instrCnt = 60, cycleCnt = 8,325,
+read_vlenb           nemu    rc=0   COMPLETED      instrCnt = 60, cycleCnt = 8,325,
+x0_vtype_control     nodiff  rc=0   COMPLETED      instrCnt = 60, cycleCnt = 8,326,
+x0_vtype_control     nemu    rc=0   COMPLETED      instrCnt = 60, cycleCnt = 8,326,
