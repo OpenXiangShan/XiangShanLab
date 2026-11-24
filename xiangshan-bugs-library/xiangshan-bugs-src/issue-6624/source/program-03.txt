@@ -1,0 +1,1 @@
+private val s_EX_DT  = handleTrapUnderHS && mstatus.SDT.asBool  && hasTrap

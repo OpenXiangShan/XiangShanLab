@@ -1,0 +1,7 @@
+[src/isa/riscv64/system/mmu.c:1505,isa_mpt_check_permission] Permission check fail!
+[src/memory/paddr.c:305,check_paddr] isa mpt check failed, vaddr=0x0000000040002000, paddr=0x0000000080018000, len=0x2, type=0x0, mode=0x1
+...
+   mepc different at pc = 0xfffeafb5bf994c51, right = 0x0000000040002000, wrong = 0x00000000800000f0
+  mtval different at pc = 0xfffeafb5bf994c51, right = 0x0000000040002000, wrong = 0x0000000000000000
+ mcause different at pc = 0xfffeafb5bf994c51, right = 0x0000000000000001, wrong = 0x0000000000000000
+Core 0: ABORT at pc = 0xfffeafb5bf994c51

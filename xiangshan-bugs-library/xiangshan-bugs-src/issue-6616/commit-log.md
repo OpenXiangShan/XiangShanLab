@@ -1,0 +1,107 @@
+# Commit Log
+- Issue: #6616
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/issues/6616
+- Issue state: closed
+- Tested RTL commit: 4e0288460d483e6048000a13fa7825f0f81d8e38
+- Related PR: #6017
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6017
+- Changed files: 5
+- Additions: 11
+- Deletions: 6
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/PMA.scala`
+- `src/main/scala/xiangshan/backend/fu/PMP.scala`
+- `src/main/scala/xiangshan/cache/mmu/MMUBundle.scala`
+- `src/main/scala/xiangshan/cache/mmu/TLB.scala`
+- `src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/PMA.scala b/src/main/scala/xiangshan/backend/fu/PMA.scala
+index ae7d37575eb..8aa536ee456 100644
+--- a/src/main/scala/xiangshan/backend/fu/PMA.scala
++++ b/src/main/scala/xiangshan/backend/fu/PMA.scala
+@@ -210,9 +210,9 @@ trait PMAMethod extends PMAConst {
+ trait PMACheckMethod extends PMPConst {
+   def pma_check(cmd: UInt, cfg: PMPConfig) = {
+     val resp = Wire(new PMPRespBundle)
+-    resp.ld := TlbCmd.isRead(cmd) && !cfg.r
++    resp.ld := (TlbCmd.isRead(cmd) || TlbCmd.isReadExec(cmd)) && !cfg.r
+     resp.st := Mux(TlbCmd.isAmo(cmd), !cfg.atomic || !cfg.w, Mux(TlbCmd.isWrite(cmd), !cfg.w, false.B))
+-    resp.instr := TlbCmd.isExec(cmd) && !cfg.x
++    resp.instr := (TlbCmd.isExec(cmd) || TlbCmd.isReadExec(cmd)) && !cfg.x
+     resp.mmio := !cfg.c
+     resp.atomic := cfg.atomic
+     resp
+diff --git a/src/main/scala/xiangshan/backend/fu/PMP.scala b/src/main/scala/xiangshan/backend/fu/PMP.scala
+index 224c26e9f6a..dea4d99436c 100644
+--- a/src/main/scala/xiangshan/backend/fu/PMP.scala
++++ b/src/main/scala/xiangshan/backend/fu/PMP.scala
+@@ -404,9 +404,9 @@ class PMPRespBundle(implicit p: Parameters) extends PMPBundle {
+ trait PMPCheckMethod extends PMPConst {
+   def pmp_check(cmd: UInt, cfg: PMPConfig) = {
+     val resp = Wire(new PMPRespBundle)
+-    resp.ld := TlbCmd.isRead(cmd) && !TlbCmd.isAmo(cmd) && !cfg.r
++    resp.ld := (TlbCmd.isRead(cmd) || TlbCmd.isReadExec(cmd)) && !TlbCmd.isAmo(cmd) && !cfg.r
+     resp.st := (TlbCmd.isWrite(cmd) || TlbCmd.isAmo(cmd)) && !cfg.w
+-    resp.instr := TlbCmd.isExec(cmd) && !cfg.x
++    resp.instr := (TlbCmd.isExec(cmd) || TlbCmd.isReadExec(cmd)) && !cfg.x
+     resp.mmio := false.B
+     resp.atomic := false.B
+     resp
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+index b3f52a5893f..50c6be4de18 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+@@ -420,11 +420,13 @@ object TlbCmd {
+ 
+   def atom_read  = "b100".U // lr
+   def atom_write = "b101".U // sc / amo
++  def read_exec  = "b111".U // HLVX final physical permission check
+ 
+   def apply() = UInt(3.W)
+   def isRead(a: UInt) = a(1,0)===read
+   def isWrite(a: UInt) = a(1,0)===write
+   def isExec(a: UInt) = a(1,0)===exec
++  def isReadExec(a: UInt) = a===read_exec
+ 
+   def isAmo(a: UInt) = a===atom_write // NOTE: sc mixed
+ }
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLB.scala b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+index 2ab5bc04c3e..f5c50ad0a4a 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+@@ -258,7 +258,8 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+   (0 until Width).foreach{i =>
+     val noTranslateReg = RegNext(req(i).bits.no_translate)
+     val addr = Mux(noTranslateReg, req(i).bits.pmp_addr, pmp_addr(i))
+-    pmp_check(addr, req_out(i).size, req_out(i).cmd, noTranslateReg, i)
++    val pmpCmd = Mux(req_out(i).hlvx, TlbCmd.read_exec, req_out(i).cmd)
++    pmp_check(addr, req_out(i).size, pmpCmd, noTranslateReg, i)
+     for (d <- 0 until nRespDups) {
+       pbmt_check(i, d, pbmt(i)(d), g_pbmt(i)(d), req_out_s2xlate(i))
+       perm_check(perm(i)(d), req_out(i).cmd, i, d, g_perm(i)(d), req_out(i).hlvx, req_out_s2xlate(i), prepf(i), pregpf(i), preaf(i))
+@@ -613,7 +614,8 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+         pbmt_check(idx, d, io.ptw.resp.bits.s1.entry.pbmt, io.ptw.resp.bits.s2.entry.pbmt, s2xlate)
+         perm_check(stage1, req_out(idx).cmd, idx, d, stage2, req_out(idx).hlvx, s2xlate)
+       }
+-      pmp_check(resp(idx).bits.paddr(0), req_out(idx).size, req_out(idx).cmd, false.B, idx)
++      val pmpCmd = Mux(req_out(idx).hlvx, TlbCmd.read_exec, req_out(idx).cmd)
++      pmp_check(resp(idx).bits.paddr(0), req_out(idx).size, pmpCmd, false.B, idx)
+ 
+       // NOTE: the unfiltered req would be handled by Repeater
+     }
+diff --git a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+index 0f276710cc1..114cc57bfc7 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala
+@@ -1219,6 +1219,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule
+     s2_exception_vec(loadAccessFault) := s2_vecActive && (
+       s2_in.uop.exceptionVec(loadAccessFault) ||
+       s2_pmp.ld ||
++      s2_pmp.instr && LSUOpType.isHlvx(s2_in.uop.fuOpType) ||
+       s2_isvec && s2_uncache ||
+       io.dcache.resp.bits.tag_error && GatedValidRegNext(io.csrCtrl.cache_error_enable)
+     )
+```

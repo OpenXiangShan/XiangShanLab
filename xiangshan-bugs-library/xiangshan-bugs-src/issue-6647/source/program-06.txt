@@ -1,0 +1,5 @@
+80000600  fcvt.d.w  fa5, a1
+8000060e  fsgnjn.s  ft2, ft2, fa1
+80000618  fmul.d    ft9, fa5, fs1, rmm     <-- latency 2
+8000061c  fcvt.l.s  a0,  fa1,  rne         <-- latency 3, writes a0
+80000628  fcvt.wu.d zero, fs1, rup         <-- latency 3, writes x0: reserves nothing

@@ -1,0 +1,5 @@
+Assertion failed at build/rtl/VirtualStoreQueue.sv:4999.
+Core 0: ABORT at pc = 0x1fefca1179954
+Core-0 instrCnt = 173, cycleCnt = 8,801, IPC = 0.019657
+Assertion failed at LogUtils.scala:133
+[ERROR][time=                   0] SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner.lsq.storeQueue.virtualStoreQueue: retirePtr update error!

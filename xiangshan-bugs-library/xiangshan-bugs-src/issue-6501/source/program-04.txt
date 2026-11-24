@@ -1,0 +1,2 @@
+csrw minstret,X ; csrr          -> X+1   (spec: X+0)   <-- MISMATCH
+IR=1: csrw minstret,X ; csrr    -> X+0   (spec: X+0)

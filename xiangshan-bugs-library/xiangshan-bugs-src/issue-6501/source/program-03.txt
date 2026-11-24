@@ -1,0 +1,2 @@
+make ARCH=riscv64-xs
+./build/emu -i minstret-write-poc-riscv64-xs.bin --no-diff

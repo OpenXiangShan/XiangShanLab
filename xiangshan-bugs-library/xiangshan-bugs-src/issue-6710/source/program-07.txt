@@ -1,0 +1,166 @@
+--- vsha2_minimal_vsha2ch_u_irq.S
++++ vsha2_minimal_vadd_u.S
+@@ -1,2 +1,2 @@
+-# vsha2ch.vv v4, v2, v1 at SEW 32 in U mode, with the machine timer armed, with nothing reading v4 afterwards.
++# vadd.vv v4, v2, v1 at SEW 32 in U mode, with nothing reading v4 afterwards.
+ # Each end of the run is a trap word 0x0005006b at its own pc: finish, end_exception,
+@@ -10,9 +10,2 @@
+     csrs    mstatus, t0
+-    li      t1, 0x3800bff8         # mtime
+-    ld      t2, 0(t1)
+-    addi    t2, t2, 100             # due in 100 ticks, about 10,000 cycles
+-    li      t1, 0x38004000         # mtimecmp
+-    sd      t2, 0(t1)
+-    li      t0, 0x80                # mie.MTIE
+-    csrs    mie, t0
+     li      t0, -1                  # PMP entry 0 covers all memory, RWX, so U mode may run
+@@ -32,5 +25,4 @@
+ subject:
+-    vsha2ch.vv v4, v2, v1
+-spin:
+-    j       spin                    # waits for the timer
++    vadd.vv v4, v2, v1
++    ecall                           # the user program's end: the handler goes to finish
+ finish:
+
+--- vsha2_minimal_vsha2ch_u_irq.S
++++ vsha2_minimal_vghsh_u.S
+@@ -1,2 +1,2 @@
+-# vsha2ch.vv v4, v2, v1 at SEW 32 in U mode, with the machine timer armed, with nothing reading v4 afterwards.
++# vghsh.vv v4, v2, v1 at SEW 32 in U mode, with nothing reading v4 afterwards.
+ # Each end of the run is a trap word 0x0005006b at its own pc: finish, end_exception,
+@@ -10,9 +10,2 @@
+     csrs    mstatus, t0
+-    li      t1, 0x3800bff8         # mtime
+-    ld      t2, 0(t1)
+-    addi    t2, t2, 100             # due in 100 ticks, about 10,000 cycles
+-    li      t1, 0x38004000         # mtimecmp
+-    sd      t2, 0(t1)
+-    li      t0, 0x80                # mie.MTIE
+-    csrs    mie, t0
+     li      t0, -1                  # PMP entry 0 covers all memory, RWX, so U mode may run
+@@ -32,5 +25,4 @@
+ subject:
+-    vsha2ch.vv v4, v2, v1
+-spin:
+-    j       spin                    # waits for the timer
++    vghsh.vv v4, v2, v1
++    ecall                           # the user program's end: the handler goes to finish
+ finish:
+
+--- vsha2_minimal_vsha2ch_u_irq.S
++++ vsha2_minimal_vsha2ch_u.S
+@@ -1,2 +1,2 @@
+-# vsha2ch.vv v4, v2, v1 at SEW 32 in U mode, with the machine timer armed, with nothing reading v4 afterwards.
++# vsha2ch.vv v4, v2, v1 at SEW 32 in U mode, with nothing reading v4 afterwards.
+ # Each end of the run is a trap word 0x0005006b at its own pc: finish, end_exception,
+@@ -10,9 +10,2 @@
+     csrs    mstatus, t0
+-    li      t1, 0x3800bff8         # mtime
+-    ld      t2, 0(t1)
+-    addi    t2, t2, 100             # due in 100 ticks, about 10,000 cycles
+-    li      t1, 0x38004000         # mtimecmp
+-    sd      t2, 0(t1)
+-    li      t0, 0x80                # mie.MTIE
+-    csrs    mie, t0
+     li      t0, -1                  # PMP entry 0 covers all memory, RWX, so U mode may run
+@@ -33,4 +26,3 @@
+     vsha2ch.vv v4, v2, v1
+-spin:
+-    j       spin                    # waits for the timer
++    ecall                           # the user program's end: the handler goes to finish
+ finish:
+
+--- vsha2_minimal_vsha2ch_u_irq.S
++++ vsha2_minimal_vadd_irq.S
+@@ -1,2 +1,2 @@
+-# vsha2ch.vv v4, v2, v1 at SEW 32 in U mode, with the machine timer armed, with nothing reading v4 afterwards.
++# vadd.vv v4, v2, v1 at SEW 32 in M mode, with the machine timer armed, with nothing reading v4 afterwards.
+ # Each end of the run is a trap word 0x0005006b at its own pc: finish, end_exception,
+@@ -17,12 +17,3 @@
+     csrs    mie, t0
+-    li      t0, -1                  # PMP entry 0 covers all memory, RWX, so U mode may run
+-    csrw    pmpaddr0, t0
+-    li      t0, 0x1f
+-    csrw    pmpcfg0, t0
+-    li      t0, 0x1800              # mstatus.MPP = U
+-    csrc    mstatus, t0
+-    la      t0, user
+-    csrw    mepc, t0
+-    mret
+-user:
++    csrsi   mstatus, 8              # mstatus.MIE
+     vsetivli zero, 4, e32, m1, ta, ma
+@@ -32,3 +23,3 @@
+ subject:
+-    vsha2ch.vv v4, v2, v1
++    vadd.vv v4, v2, v1
+ spin:
+
+--- vsha2_minimal_vsha2ch_u_irq.S
++++ vsha2_minimal_vsha2ch_irq.S
+@@ -1,2 +1,2 @@
+-# vsha2ch.vv v4, v2, v1 at SEW 32 in U mode, with the machine timer armed, with nothing reading v4 afterwards.
++# vsha2ch.vv v4, v2, v1 at SEW 32 in M mode, with the machine timer armed, with nothing reading v4 afterwards.
+ # Each end of the run is a trap word 0x0005006b at its own pc: finish, end_exception,
+@@ -17,12 +17,3 @@
+     csrs    mie, t0
+-    li      t0, -1                  # PMP entry 0 covers all memory, RWX, so U mode may run
+-    csrw    pmpaddr0, t0
+-    li      t0, 0x1f
+-    csrw    pmpcfg0, t0
+-    li      t0, 0x1800              # mstatus.MPP = U
+-    csrc    mstatus, t0
+-    la      t0, user
+-    csrw    mepc, t0
+-    mret
+-user:
++    csrsi   mstatus, 8              # mstatus.MIE
+     vsetivli zero, 4, e32, m1, ta, ma
+
+--- vsha2_minimal_vsha2ch_u_irq.S
++++ vsha2_minimal_vadd_u_irq.S
+@@ -1,2 +1,2 @@
+-# vsha2ch.vv v4, v2, v1 at SEW 32 in U mode, with the machine timer armed, with nothing reading v4 afterwards.
++# vadd.vv v4, v2, v1 at SEW 32 in U mode, with the machine timer armed, with nothing reading v4 afterwards.
+ # Each end of the run is a trap word 0x0005006b at its own pc: finish, end_exception,
+@@ -32,3 +32,3 @@
+ subject:
+-    vsha2ch.vv v4, v2, v1
++    vadd.vv v4, v2, v1
+ spin:
+
+--- vsha2_minimal_vsha2ch_u_irq.S
++++ vsha2_minimal_vsha2ch_e64.S
+@@ -1,2 +1,2 @@
+-# vsha2ch.vv v4, v2, v1 at SEW 32 in U mode, with the machine timer armed, with nothing reading v4 afterwards.
++# vsha2ch.vv v4, v2, v1 at SEW 64 in M mode, with nothing reading v4 afterwards.
+ # Each end of the run is a trap word 0x0005006b at its own pc: finish, end_exception,
+@@ -10,20 +10,3 @@
+     csrs    mstatus, t0
+-    li      t1, 0x3800bff8         # mtime
+-    ld      t2, 0(t1)
+-    addi    t2, t2, 100             # due in 100 ticks, about 10,000 cycles
+-    li      t1, 0x38004000         # mtimecmp
+-    sd      t2, 0(t1)
+-    li      t0, 0x80                # mie.MTIE
+-    csrs    mie, t0
+-    li      t0, -1                  # PMP entry 0 covers all memory, RWX, so U mode may run
+-    csrw    pmpaddr0, t0
+-    li      t0, 0x1f
+-    csrw    pmpcfg0, t0
+-    li      t0, 0x1800              # mstatus.MPP = U
+-    csrc    mstatus, t0
+-    la      t0, user
+-    csrw    mepc, t0
+-    mret
+-user:
+-    vsetivli zero, 4, e32, m1, ta, ma
++    vsetivli zero, 2, e64, m1, ta, ma
+     vmv.v.i v1, 1
+@@ -33,4 +16,3 @@
+     vsha2ch.vv v4, v2, v1
+-spin:
+-    j       spin                    # waits for the timer
++    li      a0, 0
+ finish:

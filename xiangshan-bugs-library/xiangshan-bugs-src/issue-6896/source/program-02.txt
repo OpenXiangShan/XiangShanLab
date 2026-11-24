@@ -1,0 +1,7 @@
+CTRL1 odd block, no backpressure            cbo addr=0x80001040 (-> slice 1)  received by slice 1 addr=0x80001040 src=17  CBOAck->LSU resp=1  [ok]
+CTRL2 even block, slice busy 4 cycles       cbo addr=0x80001080 (-> slice 2)  received by slice 2 addr=0x80001080 src=81  CBOAck->LSU resp=1  [ok]
+TEST1 odd block (slice 1), slice busy 4 cyc cbo addr=0x80001040 (-> slice 1)  received by slice 0 addr=0x80001040 src=81  CBOAck->LSU resp=1  [FAIL]
+    A-valid/ready at the two DCache client ports: [c0 ch0 v0 r1 | ch1 v1 r0] [c1 ch0 v1 r1 | ch1 v0 r0] ...
+TEST2 odd block (slice 3), slice busy 4 cyc cbo addr=0x800010c0 (-> slice 3)  received by slice 2 addr=0x800010c0 src=81  CBOAck->LSU resp=1  [FAIL]
+TEST3 odd block (slice 1), slice busy 1 cyc cbo addr=0x80001040 (-> slice 1)  received by slice 0 addr=0x80001040 src=81  CBOAck->LSU resp=1  [FAIL]
+errors=3

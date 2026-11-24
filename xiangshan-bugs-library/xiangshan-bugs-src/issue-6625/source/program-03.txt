@@ -1,0 +1,7 @@
+val frontendTriggerUpdate =
+  tdata1Update && tdata1TypeWdata.isLegal && mcontrol6Wdata.isFetchTrigger ||
+    mcontrol6Selected.isFetchTrigger && (triggerUpdate || tdata3Update)
+
+val memTriggerUpdate =
+  tdata1Update && tdata1TypeWdata.isLegal && mcontrol6Wdata.isMemAccTrigger ||
+    mcontrol6Selected.isMemAccTrigger && triggerUpdate

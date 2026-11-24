@@ -1,0 +1,4 @@
+80000312: vsetvli t0, zero, e16, m2, tu, mu     ; SEW=16, LMUL=2
+80000316: auipc   t1, 0x10
+8000031a: addi    t1, t1, -710                   ; t1 = 0x80010050
+8000031e: vsseg2e16.v v8, (t1)                    ; <- commits data=0 for a field

@@ -1,0 +1,7 @@
+[31] commit pc 0000000080001020 inst c20073f3 wen 1 dst 07 data 0000000000000000 idx 079
+     t2 different at pc = 0xffff3fff79d1ca54, right = 0xf1e92d9de21dfb55, wrong = 0x0000000000000000
+   mode different at pc = 0xffff3fff79d1ca54, right = 0x0000000000000003, wrong = 0x0000000000000001
+mstatus different at pc = 0xffff3fff79d1ca54, right = 0x0000048a00284ca2, wrong = 0x0000000a002844aa
+   mepc different at pc = 0xffff3fff79d1ca54, right = 0x0000000080001020, wrong = 0x0000000080000370
+  mtval different at pc = 0xffff3fff79d1ca54, right = 0x00000000c20073f3, wrong = 0x00000000f20285d3
+      v different at pc = 0xffff3fff79d1ca54, right = 0x0000000000000000, wrong = 0x0000000000000001

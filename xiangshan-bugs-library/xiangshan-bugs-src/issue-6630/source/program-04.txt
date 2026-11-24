@@ -1,0 +1,3 @@
+Assertion failed at /work/build/rtl/Ftq.sv:4896.
+Core-0 instrCnt = 9, cycleCnt = 2137
+ExceptionType receives input that is not one-hot

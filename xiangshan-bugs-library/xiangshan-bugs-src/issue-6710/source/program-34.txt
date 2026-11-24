@@ -1,0 +1,8 @@
+OUTPUT_ARCH(riscv)
+ENTRY(_start)
+SECTIONS
+{
+    . = 0x80000000;
+    .text : { *(.text*) }
+    /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) *(.riscv.attributes) *(.data*) *(.bss*) }
+}

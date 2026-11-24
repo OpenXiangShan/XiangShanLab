@@ -1,0 +1,5 @@
+git clone https://github.com/OpenXiangShan/XiangShan.git
+cd XiangShan
+git checkout kunminghu-v2
+make init
+NOOP_HOME=$(pwd) make emu CONFIG=MinimalConfig EMU_THREADS=4 -j$(nproc)

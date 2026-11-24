@@ -1,0 +1,5 @@
+NewLoadUnit.scala: io.tlbReq.bits.cmd := TlbCmd.read
+                   io.tlbReq.bits.hlvx := tlbHlvx
+                   pmpUnaccessable = pmp.ld && tlbHit
+PMA/PMP: resp.instr is raised only when TlbCmd.isExec(cmd).
+v3 MMUBundle has read/write/exec only; no TlbCmd.read_exec.

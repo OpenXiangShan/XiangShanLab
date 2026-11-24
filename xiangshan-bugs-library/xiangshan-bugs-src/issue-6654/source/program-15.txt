@@ -1,0 +1,13 @@
+// https://github.com/OpenXiangShan/XiangShan-User-Guide/blob/6ef9b3fe7871ec8d32e51a0f8ff0a67c4fd400ee/docs/en/instruction-set.md#L8-L19
+## Supported ISA Extensions
+
+i, m, a, f, d, c, b, v, h, sdtrig, sha, shcounterenw, shgatpa, shlcofideleg,
+shtvala, shvsatpa, shvstvala, shvstvecd, smaia, smcsrind, smdbltrp, smmpm,
+smnpm, smrnmi, smstateen, ss1p13, ssaia, ssccptr, sscofpmf, sscounterenw,
+sscsrind, ssdbltrp, ssnpm, sspm, ssstateen, ssstrict, sstc, sstvala, sstvecd,
+ssu64xl, supm, sv39, sv48, svade, svbare, svinval, svnapot, svpbmt, za64rs,
+zacas, zawrs, zba, zbb, zbc, zbkb, zbkc, zbkx, zbs, zcb, zcmop, zfa, zfh,
+zfhmin, zic64b, zicbom, zicbop, zicboz, ziccamoa, ziccif, zicclsm, ziccrse,
+zicntr, zicond, zicsr, zifencei, zihintntl, zihintpause, zihpm, zimop, zkn,
+zknd, zkne, zknh, zksed, zksh, zkt, zvbb, zvfh, zvfhmin, zvkt, zvl128b, zvl32b,
+zvl64b

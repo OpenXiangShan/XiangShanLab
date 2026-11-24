@@ -1,0 +1,2 @@
+8000102c: 09a2f057   vsetvli  zero, t0, e64, m4, tu, ma   # AVL = t0 = 6  ->  vl = 6
+80001030: 878b6257   vdiv.vx  v4, v24, s6                 # scalar divisor s6 = 0

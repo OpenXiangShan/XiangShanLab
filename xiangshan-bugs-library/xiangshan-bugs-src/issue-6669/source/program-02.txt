@@ -1,0 +1,13 @@
+Warning: l1tlb resp test of core 0 failed! vpn = 0x40007
+  DUT probe signals:
+    vpn = 0x40007, ppn = 0x80006 (aligned = 0x80006)
+  REF walk result:
+    pte.val = 0x00100000200018cf (v=1, r=1, w=1, x=1, u=0, g=0, a=1, d=1)
+    ppn = 0x40000080006, perm = 0x67, level = 0, pf = 0, pbmt = 0, napot = 0
+  Mismatch: REF ppn 0x40000080006 != DUT ppn 0x80006 (diff = 0x40000000000)
+...
+[30] commit pc 000000008000213a inst 00073e83 wen 1 dst 29 data 1122334455667788 idx 079 (0a)
+...
+   mepc different at pc = ..., right = 0x000000008000213a, wrong = 0x00000000800020ec
+  mtval different at pc = ..., right = 0x0000000040007000, wrong = 0x0000000000000000
+ mcause different at pc = ..., right = 0x0000000000000005, wrong = 0x0000000000000000

@@ -1,0 +1,8 @@
+Assertion failed at .../build/rtl/RenameTableWrapper.sv:930.
+Assertion failed at .../build/rtl/Rename.sv:5458.
+The simulation stopped. There might be some assertion failed.
+Core 0: ABORT at pc = 0x185e2bbf3c2bc
+Core-0 instrCnt = 38, cycleCnt = 8,321, IPC = 0.004567
+Assertion failed at LogUtils.scala:133
+Assertion failed: rfWen cannot be 1 when Int regfile ldest is 0
+[ERROR][time=                8325] SimTop.cpu.l_soc.core_with_l2.core.backend.inner.ctrlBlock.rename.rat: pdest for $0 should be 0

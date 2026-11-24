@@ -1,0 +1,3 @@
+mepc   = 0x0000000001fffffe
+mtval  = 0x0000000020000000
+mcause = one instruction fetch exception

@@ -1,0 +1,5 @@
+csr011-mmpma-tor-neighbor start
+cfg0_after=0x8900 old=0x0 wrote=0x12345 read=0x12000
+FAIL csr011 TOR next-lock did not freeze MMPMA addr0
+HIT GOOD TRAP at pc = 0x800001e2
+instrCnt = 5,083  cycleCnt = 30,387

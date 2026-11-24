@@ -1,0 +1,5 @@
+csr001-hs-sdt-dte start
+m_trap=1 mcause=16 s_trap=0 scause=0
+FAIL csr001 leftover SDT raised HS double-trap
+HIT GOOD TRAP at pc = 0x8000030e
+instrCnt = 3,564  cycleCnt = 23,803

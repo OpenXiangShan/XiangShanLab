@@ -1,0 +1,35 @@
+{
+  "number": 6475,
+  "title": "Legal segmented store `vsseg3e32.v` triggers `robEntries uopNum is overflow!` (ROB uop-count underflow) — deterministic assertion abort on kunminghu-v3",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6475",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: backend",
+    "version: kunminghu-v3"
+  ],
+  "author": "wndmll643",
+  "created_at": "2026-09-03T08:52:44Z",
+  "updated_at": "2026-09-04T15:34:58Z",
+  "submitted_at": "2026-09-03",
+  "source_files": [
+    "issue-6475/source/xs_v3_rob_uopnum_overflow_attachments.tar.gz",
+    "issue-6475/source/program-01.txt",
+    "issue-6475/source/program-02.scala",
+    "issue-6475/source/program-03.txt",
+    "issue-6475/source/program-04.txt"
+  ],
+  "archive_files": [
+    "issue-6475/source/xs_v3_rob_uopnum_overflow_attachments.tar.gz"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "50cdcfc2c",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

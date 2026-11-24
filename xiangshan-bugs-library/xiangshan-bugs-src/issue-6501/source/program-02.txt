@@ -1,0 +1,3 @@
+li   t0, 0x1000
+csrw minstret, t0
+csrr t1, minstret      # spec / Spike: t1 == 0x1000.  XiangShan: 0x1001

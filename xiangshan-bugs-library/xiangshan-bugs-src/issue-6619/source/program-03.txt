@@ -1,0 +1,14 @@
+NewLoadUnit.scala:
+  needTlbTransSources = Seq(unalignTail, replayHiPrio, replayLoPrio, scalarIssue)
+  firstIssueSources   = Seq(scalarIssue)
+  tlbCheckFullva      := firstIssue
+  io.tlbReq.bits.checkfullva := tlbCheckFullva
+  unalignTail.vaddr  := ((vaddr >> DCacheVWordOffset) + 1.U) << DCacheVWordOffset
+  unalignTail.fullva := ((in.fullva >> DCacheVWordOffset) + 1.U) << DCacheVWordOffset
+  unalignTail.noQuery.get := false.B   // always query TLB
+
+TLB.scala:
+  pf48 = SignExt(EffectiveVa(i)(47, 0), XLEN) =/= EffectiveVa(i)
+  when (req(i).valid && req(i).bits.checkfullva) {
+    when (Sv48Enable) { prepf(i) := pf48 }
+  }

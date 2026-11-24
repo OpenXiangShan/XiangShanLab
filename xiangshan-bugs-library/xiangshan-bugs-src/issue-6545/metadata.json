@@ -1,0 +1,35 @@
+{
+  "number": 6545,
+  "title": "`vsrl.vv` with `v0.t` mask hangs and never writes back the destination register",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6545",
+  "state": "open",
+  "labels": [
+    "module: backend",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "lhb-sec",
+  "created_at": "2026-09-10T08:04:24Z",
+  "updated_at": "2026-09-10T08:12:53Z",
+  "submitted_at": "2026-09-10",
+  "source_files": [
+    "issue-6545/source/seeds_3_.log",
+    "issue-6545/source/seeds_3_.zip",
+    "issue-6545/source/program-01.txt",
+    "issue-6545/source/program-02.txt"
+  ],
+  "archive_files": [
+    "issue-6545/source/seeds_3_.log",
+    "issue-6545/source/seeds_3_.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "eedc9aa511",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

@@ -1,0 +1,37 @@
+{
+  "number": 7028,
+  "title": "StoreMisalignBuffer: a cross-page store writes to the wrong page after ROB wraparound",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/7028",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: memory",
+    "version: kunminghu-v2"
+  ],
+  "author": "DFPMTS",
+  "created_at": "2026-11-22T07:11:57Z",
+  "updated_at": "2026-11-22T07:43:42Z",
+  "submitted_at": "2026-11-22",
+  "source_files": [
+    "issue-7028/source/smb-crosspage-flush.zip",
+    "issue-7028/source/program-01.scala",
+    "issue-7028/source/program-02.scala",
+    "issue-7028/source/program-03.scala",
+    "issue-7028/source/program-04.scala",
+    "issue-7028/source/program-05.scala",
+    "issue-7028/source/program-06.txt"
+  ],
+  "archive_files": [
+    "issue-7028/source/smb-crosspage-flush.zip"
+  ],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

@@ -1,0 +1,5 @@
+Assertion failed at .../build/rtl/ICacheMetaArray.sv:209.
+The simulation stopped. There might be some assertion failed.
+Core 0: ABORT at pc = 0x80002040
+Core-0 instrCnt = 47, cycleCnt = 8,333, IPC = 0.005640
+Assertion failed: 2 read setIdx must be in the different interleaved bank!

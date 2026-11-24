@@ -1,0 +1,34 @@
+{
+  "number": 6828,
+  "title": "MPT W/X permissions are ignored when address translation is enabled",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6828",
+  "state": "closed",
+  "labels": [
+    "type: bug/confirmed",
+    "topic: security",
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "pointerliu",
+  "created_at": "2026-11-02T11:35:01Z",
+  "updated_at": "2026-11-03T07:00:39Z",
+  "submitted_at": "2026-11-02",
+  "source_files": [
+    "issue-6828/source/program-01.txt",
+    "issue-6828/source/program-02.txt",
+    "issue-6828/source/program-03.S"
+  ],
+  "archive_files": [],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6828/commit-log.md"
+  ],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

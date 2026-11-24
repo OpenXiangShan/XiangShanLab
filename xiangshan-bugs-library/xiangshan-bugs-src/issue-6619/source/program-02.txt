@@ -1,0 +1,8 @@
+lsu05-split-load-fullva start load-alias
+Difftest enabled.
+commit pc 0000000080000260 inst 00052583 wen 1 dst 11 data ffffffff88000000
+NEMU: mcause=0xd mepc=0x80000260 mtval=0x0000800000000000
+a1 different at pc = 0x0080000346, right = 0x0000000020802401, wrong = 0xffffffff88000000
+mcause different at pc = 0x0080000346, right = 0x000000000000000d, wrong = 0x0000000000000000
+ABORT at pc = 0x80000346
+instrCnt = 13,097  cycleCnt = 35,433

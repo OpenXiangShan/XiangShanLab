@@ -1,0 +1,5 @@
+riscv64-unknown-elf-gcc -march=rv64gcv -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -static -Wl,--build-id=none -T ./link.ld ./test.s -o test.elf
+
+riscv64-unknown-elf-objdump -d -M no-aliases,numeric test.elf > test.dump
+
+riscv64-unknown-elf-objcopy -O binary test.elf test.bin

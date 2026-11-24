@@ -1,0 +1,3 @@
+./build/emu -i repro_st.bin --no-diff -C 200000
+./build/emu -i repro_ld.bin --no-diff -C 200000
+./build/emu -i control.bin  --no-diff -C 200000

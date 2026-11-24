@@ -1,0 +1,7 @@
+TB_ENABLE_DUT_TESTS=1 \
+TB_FRONTEND_SIM=verilator \
+TB_TRANSLATION_RANDOM_SEED=0x5a390001 \
+TB_TRANSLATION_RANDOM_COUNT=1 \
+TB_TRANSLATION_RANDOM_START_ORDINAL=1 \
+src/test/python/Frontend/scripts/run_pytest_with_log.sh -v \
+src/test/python/Frontend/tests/py/zhaoxinran/test_translation_random_regression_dut.py::test_translation_constrained_random_stream_dut

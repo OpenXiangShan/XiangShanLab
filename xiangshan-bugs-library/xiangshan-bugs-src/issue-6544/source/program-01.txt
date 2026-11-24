@@ -1,0 +1,5 @@
+     t0 different at pc = 0xfffee4db93ee74c9, right = 0x0000000000000010, wrong = 0x000000000000001f
+mstatus different at pc = 0xfffee4db93ee74c9, right = 0x8000004a000866a2, wrong = 0x8000040a00087e22
+   mepc different at pc = 0xfffee4db93ee74c9, right = 0x000000008000008e, wrong = 0x0000000080001034
+  mtval different at pc = 0xfffee4db93ee74c9, right = 0x0000000000000000, wrong = 0x0000000043e822d7
+ mcause different at pc = 0xfffee4db93ee74c9, right = 0x0000000000000000, wrong = 0x0000000000000002

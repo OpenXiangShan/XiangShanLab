@@ -1,0 +1,8 @@
+=== nmie0-deleg-poc: delegated S-mode exception while mnstatus.NMIE=0 ===
+mnstatus at reset = 0x8 (NMIE=1)
+[phase1] NMIE=1: S ecall -> S handler count=1 scause=9, then ebreak -> M: OK
+[phase2] after csrc mnstatus.NMIE: mnstatus=0x0 NMIE=0
+[phase2] entering S-mode and executing a delegated ecall with NMIE=0 ...
+[phase2] (if nothing is printed after this line, the hart stopped = critical error)
+Core 0: EXCEEDING CYCLE/INSTR LIMIT
+Core-0 instrCnt = 12,074, cycleCnt = 300,000, IPC = 0.040247

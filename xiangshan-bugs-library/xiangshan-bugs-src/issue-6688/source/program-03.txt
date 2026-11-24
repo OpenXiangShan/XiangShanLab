@@ -1,0 +1,4 @@
+[INFO] constant updated: ColdDownThreshold_0 = 0
+    ft0 different at pc = 0x0080000092, right = 0x0000000000000000, wrong = 0x15602b939093dce5
+Core 0: ABORT at pc = 0x80000092
+Core-0 instrCnt = 88, cycleCnt = 24079, IPC = 0.003655

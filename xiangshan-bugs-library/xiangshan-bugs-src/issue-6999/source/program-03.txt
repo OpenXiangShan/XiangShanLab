@@ -1,0 +1,4 @@
+No instruction of core 0 commits for 15000 cycles, maybe get stuck
+Let REF run one more instruction.
+[CROB-STUCK] headPC=0000080001118
+Core 0: ABORT at pc = 0x50f583752669

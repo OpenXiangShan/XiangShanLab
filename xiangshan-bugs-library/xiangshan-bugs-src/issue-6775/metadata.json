@@ -1,0 +1,34 @@
+{
+  "number": 6775,
+  "title": "PBMT=NC guest load returns zero because NC replay reuses a stale TLB physical address",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6775",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "nyh1",
+  "created_at": "2026-10-27T09:00:52Z",
+  "updated_at": "2026-11-10T15:35:45Z",
+  "submitted_at": "2026-10-27",
+  "source_files": [
+    "issue-6775/source/xs-rt-033-pbmt-nc.zip",
+    "issue-6775/source/program-01.txt",
+    "issue-6775/source/program-02.txt",
+    "issue-6775/source/program-03.txt",
+    "issue-6775/source/program-04.txt"
+  ],
+  "archive_files": [
+    "issue-6775/source/xs-rt-033-pbmt-nc.zip"
+  ],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

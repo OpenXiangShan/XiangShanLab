@@ -1,0 +1,4 @@
+    riscv64-unknown-elf-as -march=rv64gcv_zvfh -mabi=lp64d \
+      -o test.o test.S
+    riscv64-unknown-elf-ld -T link.ld \
+      -o test.elf test.o

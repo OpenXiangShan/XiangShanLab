@@ -1,0 +1,4 @@
+- corruptReg := corruptReg || io.memGrant.bits.corrupt
+- deniedReg  := deniedReg || io.memGrant.bits.denied
++ corruptReg := (corruptReg && !lastFireNext) || io.memGrant.bits.corrupt
++ deniedReg  := (deniedReg && !lastFireNext) || io.memGrant.bits.denied

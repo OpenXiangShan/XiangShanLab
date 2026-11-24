@@ -1,0 +1,27 @@
+{
+  "number": 6810,
+  "title": "[Difftest][RVV] Vector-state synchronization may hide incorrect vector execution results",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6810",
+  "state": "open",
+  "labels": [
+    "module: unknown",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "90ICEDA",
+  "created_at": "2026-10-30T09:58:09Z",
+  "updated_at": "2026-10-30T11:55:37Z",
+  "submitted_at": "2026-10-30",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "f85a1f71da8c1522035744c71e2cb266bfed1a7d",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

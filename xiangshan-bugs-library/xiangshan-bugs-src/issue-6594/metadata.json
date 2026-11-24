@@ -1,0 +1,34 @@
+{
+  "number": 6594,
+  "title": "`vsetivli` with AVL = 0 sets `vtype.vill` when it follows an LMUL = 8 configuration",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6594",
+  "state": "open",
+  "labels": [
+    "module: unknown",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "youzi27",
+  "created_at": "2026-09-18T15:28:57Z",
+  "updated_at": "2026-09-20T05:34:16Z",
+  "submitted_at": "2026-09-18",
+  "source_files": [
+    "issue-6594/source/f1_vsetivli_vill.elf.zip",
+    "issue-6594/source/program-01.S",
+    "issue-6594/source/program-02.txt",
+    "issue-6594/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-6594/source/f1_vsetivli_vill.elf.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "c8d7b3a5c1abf3f42c954e61abba20dd27e02a21",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

@@ -1,0 +1,3 @@
+800002c0: fcvt.s.l  ft7, s1, rne        ; convert int64 -> float32, round-to-nearest-even
+...
+fcsr different at pc = 0x800002ea:  right (NEMU) 0x1 (NX set)   wrong (XS) 0x0 (NX clear)

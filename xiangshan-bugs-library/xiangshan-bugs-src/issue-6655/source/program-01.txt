@@ -1,0 +1,3 @@
+[17] commit pc 0000000080000030 inst 00400393 ...  # li x7,4: last commit
+No instruction of core 0 commits for 15000 cycles, maybe get stuck
+Core-0 instrCnt = 19, cycleCnt = 23,331

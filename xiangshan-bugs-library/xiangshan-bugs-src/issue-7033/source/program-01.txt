@@ -1,0 +1,1 @@
+make emu CONFIG=DefaultConfig EMU_THREADS=2 -j16 CXX=clang++ LINK=clang++

@@ -1,0 +1,2 @@
+scause = 0x0f (store page fault)   sepc = 0x800026f6 (the fsd)   <-- both models agree
+stval different at pc = ...:  right (NEMU) 0x600fa   wrong (XS) 0x10020

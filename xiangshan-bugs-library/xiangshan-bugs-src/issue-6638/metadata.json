@@ -1,0 +1,32 @@
+{
+  "number": 6638,
+  "title": "vmv.v.x broadcasts zero despite a nonzero scalar operand",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6638",
+  "state": "open",
+  "labels": [
+    "module: unknown",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "jf-cc727",
+  "created_at": "2026-09-27T12:39:02Z",
+  "updated_at": "2026-10-10T02:45:23Z",
+  "submitted_at": "2026-09-27",
+  "source_files": [
+    "issue-6638/source/01-F05-vx-scalar-read-as-zero.zip",
+    "issue-6638/source/program-01.S"
+  ],
+  "archive_files": [
+    "issue-6638/source/01-F05-vx-scalar-read-as-zero.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

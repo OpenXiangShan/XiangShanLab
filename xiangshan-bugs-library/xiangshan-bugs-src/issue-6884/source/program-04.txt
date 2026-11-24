@@ -1,0 +1,6 @@
+-DPTE=0x000040000000009f -DACCESS=ld -DCAUSE=13
+ mcause different at pc = ..., right = 0x000000000000000d, wrong = 0x0000000000000005
+-DPTE=0x0000400000000017 -DACCESS=sd -DCAUSE=15
+ mcause different at pc = ..., right = 0x000000000000000f, wrong = 0x0000000000000007
+-DPTE=0x0000400000000057 -DACCESS=sd -DCAUSE=15
+ mcause different at pc = ..., right = 0x000000000000000f, wrong = 0x0000000000000007

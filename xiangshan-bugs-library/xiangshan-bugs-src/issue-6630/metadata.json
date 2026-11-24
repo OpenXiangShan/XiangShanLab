@@ -1,0 +1,33 @@
+{
+  "number": 6630,
+  "title": "[Bug] Cross-page uncache instruction fetch produces a multi-hot backend exception and aborts the DUT",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6630",
+  "state": "closed",
+  "labels": [
+    "type: bug/invalid"
+  ],
+  "author": "kaituo-crypto",
+  "created_at": "2026-09-23T06:50:16Z",
+  "updated_at": "2026-09-23T08:47:59Z",
+  "submitted_at": "2026-09-23",
+  "source_files": [
+    "issue-6630/source/xiangshan-c2-poc-repro.tar.gz",
+    "issue-6630/source/program-01.txt",
+    "issue-6630/source/program-02.txt",
+    "issue-6630/source/program-03.txt",
+    "issue-6630/source/program-04.txt"
+  ],
+  "archive_files": [
+    "issue-6630/source/xiangshan-c2-poc-repro.tar.gz"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "e4566c29e251c60159c6796db60a2569dd7700f2",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

@@ -1,0 +1,4 @@
+No instruction of core 0 commits for 15000 cycles, maybe get stuck
+...
+v12_low  different at pc = 0xc178ef2885de, right = 0xffffff08ffffffff, wrong = 0xfa4a5c143bf87806
+v12_high different at pc = 0xc178ef2885de, right = 0xffffffffffffffff, wrong = 0x8035ebe3997324ab

@@ -1,0 +1,6 @@
+T1 sd @4000000000 (non-canonical start): traps=1 cause=15 tval=4000000000
+T3 sd @3ffffffffc (crosses into non-canonical): traps=0 cause=0 tval=0
+  P_HI [0..7]    = 55 66 77 88 22 22 22 22
+  -> BUG: no page fault; high half written to the page mapped at ffffffc000000000
+T4 ld @3ffffffffc (crosses into non-canonical): traps=0 cause=0 tval=0 data=a3a2a1a0b3b2b1b0
+T5 sh @3fffffffff: traps=0 cause=0 tval=0 P_HI[0]=cd

@@ -1,0 +1,2 @@
+   ./build/emu -i xs_csrr_x0_vl.bin --diff ready-to-run/riscv64-nemu-interpreter-so -I 1000
+   ./build/emu -i xs_csrr_x0_vl.bin --no-diff -I 1000

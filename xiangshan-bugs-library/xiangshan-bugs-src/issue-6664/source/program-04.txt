@@ -1,0 +1,1 @@
+   ./build/emu -i xs_fcvt_h_scope.bin --no-diff -I 3000

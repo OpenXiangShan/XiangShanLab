@@ -1,0 +1,7 @@
+c=9040 SB DREQ id=0 pa=80100040 va=80200040   older sw, synonym VA
+c=9042 MP S2   va=80200040 hit=0 -> MissQueue  store_hit_resp miss=1, sbuffer frees id 0
+c=9046 SB DREQ id=1 pa=80100040 va=80100040   younger cbo.zero, primary VA
+c=9048 MP S2   va=80100040 hit=1 -> s3 writes zeros
+c=9053 MP S2   probe pa=80100040 hit=1
+c=9066 MP S2   va=80200040 miss=1 refill
+RESULT FAIL    L+0x0c = 0x33fbb8ce, other bytes 0xff (expected all 0)

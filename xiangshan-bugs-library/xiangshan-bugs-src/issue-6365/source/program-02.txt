@@ -1,0 +1,3 @@
+for each FTQ-owned prefetch transaction,
+ITLB and metadata requests are either accepted atomically with the owner,
+or each accepted child is tracked until the full fanout transaction completes or is killed.

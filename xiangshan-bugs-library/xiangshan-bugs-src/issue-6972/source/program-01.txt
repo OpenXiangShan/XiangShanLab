@@ -1,0 +1,2 @@
+riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d -mno-relax -nostdlib -nostartfiles -static -T link.ld crt.S pmtrig.S -o pmtrig.elf
+riscv64-unknown-elf-objcopy -O binary pmtrig.elf pmtrig.bin

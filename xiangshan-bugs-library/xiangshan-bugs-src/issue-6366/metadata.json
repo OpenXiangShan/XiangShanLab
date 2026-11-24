@@ -1,0 +1,27 @@
+{
+  "number": 6366,
+  "title": "[Bug] soc: review IMSIC AXI windows in the catch-all peripheral range",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6366",
+  "state": "closed",
+  "labels": [
+    "type: bug/invalid"
+  ],
+  "author": "neosys007",
+  "created_at": "2026-08-14T23:06:51Z",
+  "updated_at": "2026-08-21T02:57:33Z",
+  "submitted_at": "2026-08-14",
+  "source_files": [
+    "issue-6366/source/program-01.txt"
+  ],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

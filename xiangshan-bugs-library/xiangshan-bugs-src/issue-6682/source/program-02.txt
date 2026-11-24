@@ -1,0 +1,6 @@
+riscv64-unknown-linux-gnu-gcc -nostdlib -nostartfiles -static -fno-pic -fno-pie -no-pie \
+  -mcmodel=medany -march=rv64gcv -mabi=lp64d -Wl,--build-id=none \
+  -T link.ld hlv_xfault.S -o case.elf
+riscv64-unknown-linux-gnu-objcopy -O binary case.elf case.bin
+
+./build/emu -b 0 -e 0 -s 0 -i case.bin --max-instr=1000000 --no-diff

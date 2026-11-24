@@ -1,0 +1,5 @@
+TEST: zero-gap (B beat0 at A lastFireNext)
+  original: B corrupt=1 denied=1 (expected 0 0) [FAIL]
+  fixed:    B corrupt=0 denied=0 (expected 0 0) [ok]
+original errors=1
+fixed errors=0

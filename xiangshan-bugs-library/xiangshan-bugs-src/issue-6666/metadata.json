@@ -1,0 +1,35 @@
+{
+  "number": 6666,
+  "title": "`cbo.inval` zeroes the cache block when `xenvcfg.CBIE` = 01 turns it into a flush",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6666",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: backend"
+  ],
+  "author": "youzi27",
+  "created_at": "2026-10-03T02:42:17Z",
+  "updated_at": "2026-10-10T02:43:00Z",
+  "submitted_at": "2026-10-03",
+  "source_files": [
+    "issue-6666/source/cbo_inval.zip",
+    "issue-6666/source/program-01.S",
+    "issue-6666/source/program-02.txt",
+    "issue-6666/source/program-03.txt",
+    "issue-6666/source/program-04.txt",
+    "issue-6666/source/program-05.scala"
+  ],
+  "archive_files": [
+    "issue-6666/source/cbo_inval.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "09453ff8f44e9d2b526e6149c60e1dc3f08c7192",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

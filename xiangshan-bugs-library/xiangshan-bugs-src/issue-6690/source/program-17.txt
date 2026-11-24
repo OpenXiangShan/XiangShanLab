@@ -1,0 +1,26 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/PMP.scala b/src/main/scala/xiangshan/backend/fu/PMP.scala
+index 0ece6ed..e7159a9 100644
+--- a/src/main/scala/xiangshan/backend/fu/PMP.scala
++++ b/src/main/scala/xiangshan/backend/fu/PMP.scala
+@@ -28,7 +28,6 @@ import xiangshan.backend.fu.util.HasCSRConst
+ import xiangshan.backend.decode.isa.CSRs
+ import utility._
+ import xiangshan.cache.mmu.TlbCmd
+-import freechips.rocketchip.rocket.CSRs
+ 
+ trait PMPConst extends HasPMParameters {
+   val PMPOffBits = 2 // minimal 4bytes
+diff --git a/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
+index b903c54..50be40a 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
+@@ -384,8 +384,7 @@ class NewLoadUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSMo
+   io.rawNukeQuery.revoke := s3.io.revoke
+   io.rollback := s3.io.rollback
+   io.cancel := s3.io.cancel
+-  s3.io.uncacheData := RegNextN(io.uncacheData, 3) // TODO
+-  io.prefetchTrain := s3.io.prefetchTrain
++  io.prefetchTrain := DontCare
+   s3.io.csrCtrl := io.csrCtrl
+ 
+   // Debug info

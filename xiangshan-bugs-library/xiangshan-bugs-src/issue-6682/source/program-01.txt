@@ -1,0 +1,3 @@
+Core 0: HIT BAD TRAP at pc = 0x8000032c
+Core-0 instrCnt = 8,319, cycleCnt = 7,009
+Seed=0

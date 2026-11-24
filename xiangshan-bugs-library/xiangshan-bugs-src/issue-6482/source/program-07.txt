@@ -1,0 +1,4 @@
+49 Vector Load -> Vector Load cases
+36 Vector Store -> Vector Store cases
+7 Vector Load -> scalar Load cases
+6 Vector Store -> scalar Store cases

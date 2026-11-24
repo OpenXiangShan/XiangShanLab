@@ -1,0 +1,4 @@
+s2 different at pc = 0x0080000112, right = 0x3333333333333333, wrong = 0x2222222222222222
+Core 0: ABORT at pc = 0x80000112
+Core-0 instrCnt = 147, cycleCnt = 5,024
+Seed=0

@@ -1,0 +1,1 @@
+val addrNextLocked: Bool = PMPCfgLField.addrLocked(pmaEntry(i).cfg, pmaEntry(i + 1).cfg)

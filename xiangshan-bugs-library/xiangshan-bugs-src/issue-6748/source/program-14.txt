@@ -1,0 +1,8 @@
+`verilator_config
+tracing_off -scope "*"
+tracing_on -scope "*.l_simMMIO.intrGen" -levels 1
+tracing_on -scope "*.csr.csrMod" -levels 1
+tracing_on -scope "*.csr.csrMod.intrMod" -levels 1
+tracing_on -scope "*.csr.csrMod.trapEntryMEvent" -levels 1
+tracing_on -scope "*.csr.csrMod.trapEntryMNEvent" -levels 1
+tracing_on -scope "*.inner_ctrlBlock" -levels 1

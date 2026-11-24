@@ -1,0 +1,6 @@
+[C] wfi;nop    delay= 4..64  cause=0x8000000000000007  mepc-wfi=+4   OK                          (control, interrupt-safe)
+[C] wfi;ld     delay= 4..64  cause=0x8000000000000007  mepc-wfi=+6   ld read flag=0 (stale)      VIOLATION
+[C] wfi;sd     delay= 4..64  cause=0x8000000000000007  mepc-wfi=+6                               VIOLATION
+[C] wfi;csrr   delay= 4..64  cause=0x8000000000000007  mepc-wfi=+8                               VIOLATION
+[C] wfi;fence  delay= 4..64  cause=0x8000000000000007  mepc-wfi=+8                               VIOLATION
+[C] wfi;ld x3  delay= 4..64  cause=0x8000000000000007  mepc-wfi=+10  ld read flag=0 (stale)      VIOLATION

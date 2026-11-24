@@ -1,0 +1,1 @@
+sstatus.SDT := regOut.SDT && menvcfg.DTE

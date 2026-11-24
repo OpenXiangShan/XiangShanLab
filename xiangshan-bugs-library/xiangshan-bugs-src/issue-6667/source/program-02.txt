@@ -1,0 +1,6 @@
+     t2 different at pc = ..., right = 0x0000000000000000, wrong = 0x857c266f857c266f
+     a0 different at pc = ..., right = 0x0000000000000002, wrong = 0x0000000000000000
+mstatus different at pc = ..., right = 0x0000040a00001800, wrong = 0x0000000a00000000
+   mepc different at pc = ..., right = 0x0000000080002034, wrong = 0x0000000000000000
+  mtval different at pc = ..., right = 0x0000000031b31393, wrong = 0x0000000000000000
+ mcause different at pc = ..., right = 0x0000000000000002, wrong = 0x0000000000000000

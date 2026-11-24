@@ -1,0 +1,10 @@
+800002c0: fmadd.s  fs1, ft1, ft2, fs8, rup     ; fs1 = ft1*ft2 + fs8  (single precision)
+
+source registers at this point (from the difftest FP dump):
+  ft1 = 0xffffffff_aaaaaaaa   (properly NaN-boxed)
+  ft2 = 0xffffffff_e1267b16   (properly NaN-boxed)
+  fs8 = 0x20fedb64_4c0bf0f2   (NOT NaN-boxed -- upper 32 bits are not all-ones)
+...
+fs1 different at pc = 0x800002e6:
+   right (NEMU) 0xffffffff_7fc00000     ; NaN-boxed canonical single NaN
+   wrong (XS)   0xffffffff_4cb4f532     ; finite -> XS used fs8's raw low bits 0x4c0bf0f2

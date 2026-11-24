@@ -1,0 +1,8 @@
+# M-mode
+li t0, 1<<9 ; csrw medeleg, t0            # delegate ecall-from-S
+la t0, s_handler ; csrw stvec, t0
+# NMIE is 0 out of reset on current v2/v3; on 2acbf327c: csrc mnstatus, 8
+li t0, 1<<11 ; csrs mstatus, t0 ; li t0, 1<<12 ; csrc mstatus, t0   # MPP = S
+la t0, s_code ; csrw mepc, t0 ; mret
+s_code:
+ecall            # expected: s_handler, scause=9.  XiangShan: critical error, hart stops here

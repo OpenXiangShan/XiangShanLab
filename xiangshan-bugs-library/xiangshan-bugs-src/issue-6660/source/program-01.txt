@@ -1,0 +1,2 @@
+RESULT: aa aa aa aa aa aa aa aa ...          (kunminghu-v3, both configs)
+s4 different at pc = ..., right = 0xbbbbbbbbbbbbbbbb, wrong = 0xaaaaaaaaaaaaaaaa   (difftest)

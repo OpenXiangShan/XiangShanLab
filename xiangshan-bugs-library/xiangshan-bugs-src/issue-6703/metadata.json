@@ -1,0 +1,31 @@
+{
+  "number": 6703,
+  "title": "Misaligned load crossing 16B receives bytes of a non-overlapping cross-16B store from StoreQueue forwarding",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6703",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: memory"
+  ],
+  "author": "youzi27",
+  "created_at": "2026-10-11T09:59:12Z",
+  "updated_at": "2026-10-14T05:26:18Z",
+  "submitted_at": "2026-10-11",
+  "source_files": [
+    "issue-6703/source/fwd_wrap.bin.zip",
+    "issue-6703/source/program-01.txt"
+  ],
+  "archive_files": [
+    "issue-6703/source/fwd_wrap.bin.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "df993b2527",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

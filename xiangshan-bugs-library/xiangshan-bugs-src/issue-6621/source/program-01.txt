@@ -1,0 +1,5 @@
+lsu02-hlv-spvp-pmp start
+trap_count=0 mcause=0 hlv=0x44332211
+FAIL lsu02 M-mode HLV bypassed unlocked PMP under SPVP=U
+HIT GOOD TRAP at pc = 0x80000262
+instrCnt = 3,608  cycleCnt = 25,144

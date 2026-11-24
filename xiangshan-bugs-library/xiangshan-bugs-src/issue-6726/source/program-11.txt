@@ -1,0 +1,80 @@
+diff --git a/src/main/scala/device/AXI4IntrGenerator.scala b/src/main/scala/device/AXI4IntrGenerator.scala
+--- a/src/main/scala/device/AXI4IntrGenerator.scala
++++ b/src/main/scala/device/AXI4IntrGenerator.scala
+@@ -26,6 +26,8 @@
+ // we support 256 interrupt bits by default
+ class IntrGenIO extends Bundle {
+   val intrVec = Output(UInt(64.W))
++  // simulation-only NMI source (offset 0x1c); SimTop drives hart 0's NMI inputs from it
++  val nmi = Output(UInt(2.W))
+ }
+ 
+ class AXI4IntrGenerator
+@@ -90,5 +92,38 @@
+     }
+ 
+     in.r.bits.data := intrReg(raddr)
++
++    // NMI source at offset 0x1c, simulation only. A 32-bit write of a nonzero value arms one
++    // pulse: bits 11:0 the width in cycles (0 holds the lines until a zero write), bits 13:12 the lines
++    // (bit 12 nmi_31, bit 13 nmi_43), bits 31:16 the delay in cycles before the pulse's first cycle. A zero
++    // write clears the source at once. The 1000-cycle delay above does not apply to this register.
++    val nmiWrite  = in.w.fire && waddr(4, 2) === 7.U
++    val nmiArmed  = RegInit(false.B)
++    val nmiActive = RegInit(false.B)
++    val nmiHold   = RegInit(false.B)
++    val nmiDelay  = RegInit(0.U(16.W))
++    val nmiWidth  = RegInit(0.U(12.W))
++    val nmiLines  = RegInit(0.U(2.W))
++    when (nmiWrite) {
++      nmiArmed  := w_data =/= 0.U
++      nmiActive := false.B
++      nmiHold   := w_data(11, 0) === 0.U
++      nmiDelay  := w_data(31, 16)
++      nmiWidth  := w_data(11, 0)
++      nmiLines  := w_data(13, 12)
++    } .elsewhen (nmiArmed) {
++      when (nmiDelay === 0.U) {
++        nmiArmed  := false.B
++        nmiActive := true.B
++      } .otherwise {
++        nmiDelay := nmiDelay - 1.U
++      }
++    } .elsewhen (nmiActive && !nmiHold) {
++      when (nmiWidth === 1.U) {
++        nmiActive := false.B
++      }
++      nmiWidth := nmiWidth - 1.U
++    }
++    io.extra.get.nmi := Mux(nmiActive, nmiLines, 0.U)
+   }
+ }
+diff --git a/src/test/scala/top/SimMMIO.scala b/src/test/scala/top/SimMMIO.scala
+--- a/src/test/scala/top/SimMMIO.scala
++++ b/src/test/scala/top/SimMMIO.scala
+@@ -191,6 +191,7 @@
+     val uart16550Int = uartIntSink.makeIOs()
+     private val uart16550IntNum = 0xa;
+     io.interrupt.intrVec := intrGen.module.io.extra.get.intrVec | uart16550Int.elts.head.head << (uart16550IntNum - 1)
++    io.interrupt.nmi := intrGen.module.io.extra.get.nmi
+ 
+     // TODO: rx not supported yet
+     uart16550.module.io.tx.ready := true.B
+diff --git a/src/test/scala/top/SimTop.scala b/src/test/scala/top/SimTop.scala
+--- a/src/test/scala/top/SimTop.scala
++++ b/src/test/scala/top/SimTop.scala
+@@ -141,7 +141,14 @@
+   soc.io.pll0_lock := true.B
+   soc.io.cacheable_check := DontCare
+   soc.io.riscv_rst_vec.foreach(_ := 0x10000000L.U)
+-  l_soc.nmi.foreach(_.foreach(intr => { intr := false.B; dontTouch(intr) }))
++  // NMI drive: hart 0's inputs (0 = nmi_31, 1 = nmi_43) follow the interrupt generator's NMI
++  // source; every other hart's inputs stay low.
++  l_soc.nmi.zipWithIndex.foreach { case (port, hart) =>
++    port.zipWithIndex.foreach { case (intr, line) =>
++      intr := (if (hart == 0) simMMIO.io.interrupt.nmi(line) else false.B)
++      dontTouch(intr)
++    }
++  }
+   soc.io.traceCoreInterface.foreach(_.fromEncoder.enable := false.B)
+   soc.io.traceCoreInterface.foreach(_.fromEncoder.stall  := false.B)

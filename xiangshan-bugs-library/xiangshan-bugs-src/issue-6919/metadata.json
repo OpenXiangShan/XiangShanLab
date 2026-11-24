@@ -1,0 +1,31 @@
+{
+  "number": 6919,
+  "title": "[BUG] Vector reductions never write element 0 and block ROB commit (CROB-STUCK) Commit: xiangshan `a253c11`.",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6919",
+  "state": "closed",
+  "labels": [
+    "module: unknown",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "skye1577",
+  "created_at": "2026-11-10T11:37:14Z",
+  "updated_at": "2026-11-10T12:22:34Z",
+  "submitted_at": "2026-11-10",
+  "source_files": [
+    "issue-6919/source/reduction-hang-upload.zip"
+  ],
+  "archive_files": [
+    "issue-6919/source/reduction-hang-upload.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "a253c1163982ae0b485b3a2ed9b61253d980d837",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

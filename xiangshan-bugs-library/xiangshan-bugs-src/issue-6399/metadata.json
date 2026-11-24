@@ -1,0 +1,37 @@
+{
+  "number": 6399,
+  "title": "`mtval` mismatch on scalar store access fault after a vector store access fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6399",
+  "state": "closed",
+  "labels": [
+    "type: bug/confirmed",
+    "module: backend",
+    "module: memory",
+    "version: kunminghu-v2"
+  ],
+  "author": "lhb-sec",
+  "created_at": "2026-08-21T09:01:58Z",
+  "updated_at": "2026-09-20T09:14:34Z",
+  "submitted_at": "2026-08-21",
+  "source_files": [
+    "issue-6399/source/t_min.log",
+    "issue-6399/source/t_min.zip",
+    "issue-6399/source/program-01.txt",
+    "issue-6399/source/program-02.txt",
+    "issue-6399/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-6399/source/t_min.log",
+    "issue-6399/source/t_min.zip"
+  ],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "e12436c7cb",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

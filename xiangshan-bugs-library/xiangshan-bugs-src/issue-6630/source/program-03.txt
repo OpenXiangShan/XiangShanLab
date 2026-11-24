@@ -1,0 +1,2 @@
+cd c2_poc/REPRO
+./run.sh /work/build/verilator-compile/emu

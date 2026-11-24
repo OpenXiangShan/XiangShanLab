@@ -1,0 +1,5 @@
+80002688: ... (setup)
+800026d8: vse32.v  v26,(t1)     ; t1 = 0x10020 (VA of symbol d_0_0) -> STORE page-faults here
+...
+800026f4: addi     t3,t3,2      ; t3 = 0x60112
+800026f6: fsd      fs10,-24(t3) ; scalar STORE, target = t3-24 = 0x600fa -> STORE page-faults here

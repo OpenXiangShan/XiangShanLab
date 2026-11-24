@@ -1,0 +1,31 @@
+{
+  "number": 6923,
+  "title": "[BUG] vnclip commits the unrounded narrow result and keeps vxsat at zero",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6923",
+  "state": "closed",
+  "labels": [
+    "module: unknown",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "skye1577",
+  "created_at": "2026-11-10T12:07:14Z",
+  "updated_at": "2026-11-12T02:13:04Z",
+  "submitted_at": "2026-11-10",
+  "source_files": [
+    "issue-6923/source/vnclip-rounding-upload.zip"
+  ],
+  "archive_files": [
+    "issue-6923/source/vnclip-rounding-upload.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "a253c1163982ae0b485b3a2ed9b61253d980d837",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

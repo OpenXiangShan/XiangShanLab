@@ -1,0 +1,95 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/PMP.scala b/src/main/scala/xiangshan/backend/fu/PMP.scala
+index 0ece6ed..e7159a9 100644
+--- a/src/main/scala/xiangshan/backend/fu/PMP.scala
++++ b/src/main/scala/xiangshan/backend/fu/PMP.scala
+@@ -28,7 +28,6 @@ import xiangshan.backend.fu.util.HasCSRConst
+ import xiangshan.backend.decode.isa.CSRs
+ import utility._
+ import xiangshan.cache.mmu.TlbCmd
+-import freechips.rocketchip.rocket.CSRs
+ 
+ trait PMPConst extends HasPMParameters {
+   val PMPOffBits = 2 // minimal 4bytes
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala b/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala
+index 1c0a161..b25c5a0 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LSQBundle.scala
+@@ -87,6 +87,10 @@ class StaUopInfo(implicit p: Parameters) extends MemBlockBundle {
+   val ftqPtr          = new FtqPtr
+   val ftqOffset       = UInt(log2Up(FetchBlockInstOffsetWidth).W)
+ 
++  // mdp
++  val isFirstIssue    = Bool()
++  val isRVC           = Bool()
++
+   // debug info
+   val pc              = Option.when(debugEn)(UInt(VAddrBits.W))
+   val debugInfo       = Option.when(debugEn)(new PerfDebugInfo)
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala
+index 0e6cb18..1cf4947 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala
+@@ -346,7 +346,7 @@ class LoadQueueRAW(implicit p: Parameters) extends XSModule
+     stFtqIdx(w) := DelayNWithValid(storeIn(w).bits.uop.ftqPtr, storeIn(w).valid, TotalSelectCycles)._2
+     stFtqOffset(w) := DelayNWithValid(storeIn(w).bits.uop.ftqOffset, storeIn(w).valid, TotalSelectCycles)._2
+     stIsRVC(w) := DelayNWithValid(storeIn(w).bits.uop.isRVC, storeIn(w).valid, TotalSelectCycles)._2
+-    stIsFirstIssue(w) := DelayNWithValid(storeIn(w).bits.isFirstIssue, storeIn(w).valid, TotalSelectCycles)._2 // for perf
++    stIsFirstIssue(w) := DelayNWithValid(storeIn(w).bits.uop.isFirstIssue, storeIn(w).valid, TotalSelectCycles)._2 // for perf
+   }
+ 
+   // select rollback (part2), generate rollback request, then fire rollback request
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+index 78de5d1..d53dbef 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+@@ -909,8 +909,8 @@ abstract class NewStoreQueueBase(implicit p: Parameters) extends LSQModule {
+       io.writeBack.bits.debug.isNCIO  := isPbmtNC(dataEntries.head.memoryType)
+       io.writeBack.bits.debug.vaddr   := dataEntries.head.debugVaddr.get
+       io.writeBack.bits.debug.paddr   := dataEntries.head.debugPaddr.get
+-      io.writeBack.bits.debug_seqNum  := dataEntries.head.debugUop.get.debug_seqNum
+-      io.writeBack.bits.debugInfo     := dataEntries.head.debugUop.get.debugInfo
++      io.writeBack.bits.debug_seqNum.foreach(_ := dataEntries.head.debugUop.get.debug_seqNum)
++      io.writeBack.bits.perfDebugInfo.foreach(_ := dataEntries.head.debugUop.get.perfDebugInfo)
+     }
+ 
+     io.exceptionInfo.valid             := (uncacheState === UncacheState.writeback) || (cboState === CboState.writeback)
+diff --git a/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala b/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
+index b903c54..50be40a 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
+@@ -384,8 +384,7 @@ class NewLoadUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSMo
+   io.rawNukeQuery.revoke := s3.io.revoke
+   io.rollback := s3.io.rollback
+   io.cancel := s3.io.cancel
+-  s3.io.uncacheData := RegNextN(io.uncacheData, 3) // TODO
+-  io.prefetchTrain := s3.io.prefetchTrain
++  io.prefetchTrain := DontCare
+   s3.io.csrCtrl := io.csrCtrl
+ 
+   // Debug info
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 8c27332..2e71cdc 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -422,6 +422,8 @@ class StoreUnit(val param: ExeUnitParams)(implicit p: Parameters) extends XSModu
+   io.toLsq.bits.mask      := s1_out.mask
+   io.toLsq.bits.size          := s1_out.alignedType
+   connectSamePort(io.toLsq.bits.uop, s1_out.uop)
++  io.toLsq.bits.uop.isRVC     := s1_out.uop.isRVC
++  io.toLsq.bits.uop.isFirstIssue := s1_out.isFirstIssue
+ 
+ 
+   //TODO: `isLastRequest` means it's last request to write to storeQueue. if is normal request, it will be true,
+diff --git a/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala b/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
+index d79dcef..91ba38f 100644
+--- a/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
++++ b/src/main/scala/xiangshan/mem/vector/VMergeBuffer.scala
+@@ -131,8 +131,6 @@ abstract class BaseVMergeBuffer(isVStore: Boolean=false)(implicit p: Parameters)
+     val hasExp                               = ExceptionNO.selectByFu(source.exceptionVec, fuCfg).asUInt.orR
+     sink.robidx                             := source.uop.robIdx
+     sink.uopidx                             := source.uop.uopIdx
+-    sink.sqIdx                              := source.uop.sqIdx
+-    sink.lqIdx                              := source.uop.lqIdx
+     sink.feedback(VecFeedbacks.COMMIT)      := !hasExp
+     sink.feedback(VecFeedbacks.FLUSH)       := hasExp
+     sink.feedback(VecFeedbacks.LAST)        := true.B

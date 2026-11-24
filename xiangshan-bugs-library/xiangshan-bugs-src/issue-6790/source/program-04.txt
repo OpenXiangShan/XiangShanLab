@@ -1,0 +1,2 @@
+    ./build/emu -b 0 -e 0 -C 3000000 \
+      -i test.elf --diff "$REF"

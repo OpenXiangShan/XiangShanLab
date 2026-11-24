@@ -1,0 +1,4 @@
+No instruction of core 0 commits for 15000 cycles, maybe get stuck
+   mode different at pc = ..., right = 0x0000000000000003, wrong = 0x0000000000000001
+   mepc different at pc = ..., right = 0x0000000080002094, wrong = 0x000000008000208c
+  mtval different at pc = ..., right = 0x0000000080202ffc, wrong = 0x0000000000000000

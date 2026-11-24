@@ -1,0 +1,2 @@
+[31] exception pc 00000000800020ea inst 00e73423 cause 0000000000000007 <--
+ mcause different at pc = ..., right = 0x000000000000000f, wrong = 0x0000000000000007

@@ -1,0 +1,2 @@
+./build/emu -i repro-2core-fill71.bin   --no-diff -C 2000000
+./build/emu -i control-2core-fill70.bin --no-diff -C 2000000

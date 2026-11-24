@@ -1,0 +1,42 @@
+{
+  "number": 6815,
+  "title": "Rob: hasWaitForward is set without checking !enqHasException, suppressing pending asynchronous interrupts on faulting waitForward instructions",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6815",
+  "state": "closed",
+  "labels": [
+    "type: bug/confirmed",
+    "topic: security",
+    "type: bug/reported",
+    "type: bug/won't fix",
+    "version: kunminghu-v2",
+    "version: kunminghu-v3"
+  ],
+  "author": "iskindar",
+  "created_at": "2026-11-01T12:41:51Z",
+  "updated_at": "2026-11-03T06:03:45Z",
+  "submitted_at": "2026-11-01",
+  "source_files": [
+    "issue-6815/source/program-01.S",
+    "issue-6815/source/program-02.txt",
+    "issue-6815/source/program-03.txt",
+    "issue-6815/source/program-04.txt",
+    "issue-6815/source/program-05.S",
+    "issue-6815/source/program-06.txt",
+    "issue-6815/source/program-07.scala",
+    "issue-6815/source/program-08.scala",
+    "issue-6815/source/program-09.scala"
+  ],
+  "archive_files": [],
+  "branch": "zicfilp` ([PR #6801](https://github.com/OpenXiangShan/XiangShan/pull/6801), HEAD `e81fa337042e07330f36bb5158850d83c6cb2d32`) and `kunminghu-v3` (`Rob.scala:610-617, 768`)",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6815/commit-log.md"
+  ],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

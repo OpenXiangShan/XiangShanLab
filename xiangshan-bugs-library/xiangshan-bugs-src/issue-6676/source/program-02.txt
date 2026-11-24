@@ -1,0 +1,3 @@
+[15] commit pc 0000000080000022 inst 01157357 wen 1 dst 06 data 0000000000000008   # vsetvli t1,a0,e32,m2 : t1 = 8, correct
+[16] commit pc 0000000080000026 inst c2002e73 wen 1 dst 28 data 0000000000000000   # csrr t3,vl           : t3 = 0, wrong
+      t3 different, right = 0x0000000000000008, wrong = 0x0000000000000000

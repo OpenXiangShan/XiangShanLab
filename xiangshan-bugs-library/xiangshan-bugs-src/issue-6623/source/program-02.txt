@@ -1,0 +1,5 @@
+csr006-m-sret-hs-sdt start
+hs_sstatus=0x8000000201006020 sdt=1
+FAIL csr006 M-mode SRET to HS left SDT set
+HIT GOOD TRAP at pc = 0x80000252
+instrCnt = 3,221  cycleCnt = 23,476

@@ -1,0 +1,44 @@
+# Commit Log
+- Issue: #6119
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6119
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6119
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6119
+- Changed files: 2
+- Additions: 2
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala`
+- `src/main/scala/xiangshan/mem/vector/VSplit.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+index 56425d4745e..817f18763a0 100644
+--- a/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/StoreUnit.scala
+@@ -182,7 +182,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule
+   )) + s0_addr_low
+   val s0_rs_cross16Bytes = s0_addr_Up_low(4) =/= s0_addr_low(4)
+   val s0_misalignWith16Byte = !s0_rs_cross16Bytes && !s0_addr_aligned && !s0_use_flow_prf
+-  val s0_misalignNeedReplay = s0_rs_cross16Bytes && !(s0_uop.sqIdx === io.sqCommitPtr)
++  val s0_misalignNeedReplay = s0_rs_cross16Bytes && !(s0_uop.sqIdx === io.sqCommitPtr || s0_uop.robIdx === io.sqCommitRobIdx && s0_uop.uopIdx === io.sqCommitUopIdx)
+   s0_is128bit := Mux(s0_use_flow_ma, io.misalign_stin.bits.is128bit, is128Bit(s0_vecstin.alignedType) || s0_misalignWith16Byte)
+ 
+   s0_fullva := Mux(
+diff --git a/src/main/scala/xiangshan/mem/vector/VSplit.scala b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+index 9f79de9d4ed..b9598e5603d 100644
+--- a/src/main/scala/xiangshan/mem/vector/VSplit.scala
++++ b/src/main/scala/xiangshan/mem/vector/VSplit.scala
+@@ -42,7 +42,7 @@ class VSplitPipeline(isVStore: Boolean = false)(implicit p: Parameters) extends
+ 
+   //                                           Ensure the sequence of vec index order uop.
+   val mergeBufferNack = (io.threshold.valid || isOrderIndexed(io.in.bits.uop.fuOpType(6,5)) && !isVStore.B) &&
+-    !(io.threshold.bits.robIdx === io.in.bits.uop.robIdx && io.threshold.bits.uopIdx === io.in.bits.uop.uopIdx)
++    !(io.threshold.bits.robIdx === io.in.bits.uop.robIdx && io.threshold.bits.uopIdx === io.in.bits.uop.vpu.vuopIdx)
+ 
+   val s1_ready = WireInit(false.B)
+   io.in.ready := s1_ready && !mergeBufferNack
+```

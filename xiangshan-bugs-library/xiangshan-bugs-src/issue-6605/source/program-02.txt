@@ -1,0 +1,4 @@
+mstatus different at pc = ..., right = 0x8000040a00001e00, wrong = 0x8000000a00000600
+   mepc different at pc = ..., right = 0x0000000080000036, wrong = 0x0000000000000000
+  mtval different at pc = ..., right = 0x0000000080600000, wrong = 0x0000000000000000
+ mcause different at pc = ..., right = 0x0000000000000007, wrong = 0x0000000000000000

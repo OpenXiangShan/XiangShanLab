@@ -1,0 +1,34 @@
+{
+  "number": 7016,
+  "title": "[kunminghu-v2] vle8ff.v incorrectly modifies vl when element 0 raises a page fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/7016",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown",
+    "version: kunminghu-v2"
+  ],
+  "author": "90ICEDA",
+  "created_at": "2026-11-19T08:37:20Z",
+  "updated_at": "2026-11-23T05:46:24Z",
+  "submitted_at": "2026-11-19",
+  "source_files": [
+    "issue-7016/source/vle8ff_vl_repro.zip",
+    "issue-7016/source/program-01.S",
+    "issue-7016/source/program-02.txt",
+    "issue-7016/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-7016/source/vle8ff_vl_repro.zip"
+  ],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

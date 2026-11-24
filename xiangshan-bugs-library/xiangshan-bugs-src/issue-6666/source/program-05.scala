@@ -1,0 +1,3 @@
+val cboOpcode = resultInstCboI2f(CboOpcodeField)        // cbo_flush when cboI2F is set and the instruction is cbo.inval
+...
+out.uop(i).bits.opcode := opcodes(i) | cboOpcode        // line 151

@@ -1,0 +1,44 @@
+{
+  "number": 6820,
+  "title": "[MMU] sfence.vma / hfence.vvma by address leaves a valid global leaf in DTLB: \"ldtlb_storage refill, duplicate with existing entries\"",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6820",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "syhhyl",
+  "created_at": "2026-11-02T06:21:08Z",
+  "updated_at": "2026-11-02T06:39:38Z",
+  "submitted_at": "2026-11-02",
+  "source_files": [
+    "issue-6820/source/bug-report.tar.gz",
+    "issue-6820/source/head-a0c2a26cbe.log",
+    "issue-6820/source/prog.c",
+    "issue-6820/source/sim.log",
+    "issue-6820/source/sim-hfence.log",
+    "issue-6820/source/TIMELINE.md",
+    "issue-6820/source/program-01.txt",
+    "issue-6820/source/program-02.scala",
+    "issue-6820/source/program-03.txt",
+    "issue-6820/source/program-04.txt"
+  ],
+  "archive_files": [
+    "issue-6820/source/bug-report.tar.gz",
+    "issue-6820/source/head-a0c2a26cbe.log",
+    "issue-6820/source/prog.c",
+    "issue-6820/source/sim.log",
+    "issue-6820/source/sim-hfence.log",
+    "issue-6820/source/TIMELINE.md"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

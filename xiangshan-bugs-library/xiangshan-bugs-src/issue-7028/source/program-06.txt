@@ -1,0 +1,2 @@
+./build/emu -i bin/smbs2_ncbr.bin --no-diff -C 3000000
+./build/emu -i bin/smbs2_ncbr.bin -C 3000000

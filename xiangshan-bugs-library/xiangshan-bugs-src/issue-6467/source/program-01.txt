@@ -1,0 +1,4 @@
+storeQueue.physicalQueue: deqPtr shouldn't exceed rdataPtr!   (XSError)
+storeQueue.physicalQueue: double deq! index: 3
+storeQueue.physicalQueue: pointer update error!
+ABORT at pc = 0x8000044a   instrCnt = 274   cycleCnt = 5468

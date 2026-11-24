@@ -1,0 +1,2 @@
+* Only keep VialuCfg and VmoveCfg in Parameters.scala
+  * Todo: support VfaluCfg, VfmaCfg, VimacCfg, VppuCfg, VfcvtCfg, VfdivCfg, VidivCfg

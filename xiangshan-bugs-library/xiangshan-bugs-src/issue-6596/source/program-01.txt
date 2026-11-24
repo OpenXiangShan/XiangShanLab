@@ -1,0 +1,2 @@
+Assertion failed: robEntries 16 uopNum is overflow!
+Core 0: ABORT at pc = 0x80000032, instrCnt = 15

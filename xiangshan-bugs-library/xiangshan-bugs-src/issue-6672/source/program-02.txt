@@ -1,0 +1,9 @@
+[31] commit pc 00000000800021cc inst 0005b503 wen 1 dst 10 data 4201418141014081 idx 0ff (01) <--
+     a0 different at pc = 0x00800020a4, right = 0x0000000080004000, wrong = 0x4201418141014081
+   mode different at pc = 0x00800020a4, right = 0x0000000000000003, wrong = 0x0000000000000001
+mstatus different at pc = 0x00800020a4, right = 0x000004ca00080880, wrong = 0x0000000a00080088
+   mepc different at pc = 0x00800020a4, right = 0x00000000800021cc, wrong = 0x00000000800021bc
+  mtval different at pc = 0x00800020a4, right = 0x0000000180000000, wrong = 0x0000000000000000
+ mcause different at pc = 0x00800020a4, right = 0x0000000000000015, wrong = 0x000000000000000a
+ mtval2 different at pc = 0x00800020a4, right = 0x0000000020002c00, wrong = 0x0000000000000000
+ mtinst different at pc = 0x00800020a4, right = 0x0000000000003000, wrong = 0x0000000000000000

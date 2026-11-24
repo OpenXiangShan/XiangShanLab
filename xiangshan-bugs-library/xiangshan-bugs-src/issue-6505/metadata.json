@@ -1,0 +1,26 @@
+{
+  "number": 6505,
+  "title": "haltreq / resethaltreq out of reset: no dedicated halt path, hart may commit instructions before entering Debug Mode",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6505",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: backend"
+  ],
+  "author": "oChunCai",
+  "created_at": "2026-09-06T20:27:52Z",
+  "updated_at": "2026-09-07T06:43:00Z",
+  "submitted_at": "2026-09-06",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "5d3934132",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

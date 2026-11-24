@@ -1,0 +1,52 @@
+OUTPUT_ARCH(riscv)
+ENTRY(_start)
+
+MEMORY
+{
+  ram (rwx) : ORIGIN = 0x80000000, LENGTH = 1M
+}
+
+SECTIONS
+{
+  .text.entry 0x80000000 : ALIGN(4)
+  {
+    KEEP(*(.text.entry))
+  } > ram
+
+  .text.subject 0x80000100 : ALIGN(4)
+  {
+    KEEP(*(.text.subject))
+  } > ram
+
+  .text.control 0x80000180 : ALIGN(4)
+  {
+    KEEP(*(.text.control))
+  } > ram
+
+  .text.unused 0x800001c0 : ALIGN(4)
+  {
+    KEEP(*(.text.unused))
+  } > ram
+
+  .text.rest 0x80000200 : ALIGN(4)
+  {
+    *(.text.rest)
+    *(.text*)
+  } > ram
+
+  .rodata : ALIGN(8)
+  {
+    *(.rodata*)
+  } > ram
+
+  .data : ALIGN(8)
+  {
+    *(.data*)
+    *(.bss*)
+  } > ram
+
+  .tohost 0x80020000 : ALIGN(64)
+  {
+    *(.tohost)
+  } > ram
+}

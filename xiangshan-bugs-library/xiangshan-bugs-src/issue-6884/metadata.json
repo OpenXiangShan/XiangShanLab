@@ -1,0 +1,31 @@
+{
+  "number": 6884,
+  "title": "Leaf PTE with PPN bits above the physical address width: access fault reported where the A/D check must raise a page fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6884",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: memory"
+  ],
+  "author": "msuadOf",
+  "created_at": "2026-11-07T10:44:03Z",
+  "updated_at": "2026-11-09T02:16:31Z",
+  "submitted_at": "2026-11-07",
+  "source_files": [
+    "issue-6884/source/program-01.txt",
+    "issue-6884/source/program-02.S",
+    "issue-6884/source/program-03.txt",
+    "issue-6884/source/program-04.txt"
+  ],
+  "archive_files": [],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "a13efc8775abb093e23727772a562f0605380685",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

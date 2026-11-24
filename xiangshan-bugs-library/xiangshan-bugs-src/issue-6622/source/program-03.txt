@@ -1,0 +1,19 @@
+Opcode.scala:
+  uvset_vtypei_nop = Value(vset, notIll, vtypeI, avlVl)   // no + VlWen
+  // comment: VSETVLI when rs1==x0 and rd==x0; does not change vl
+
+VsetDecoder.scala:
+  (rdIsZero && rs1IsZero) -> uvset_vtypei_nop
+
+DecodeChannels.scala fromVSetChannelUop:
+  uop.isVset := true.B
+  uop.vlWen  := vuop.renameInfo.bits.vlWen   // false for nop
+  uop.isFirstUop := true.B
+  uop.isLastUop  := true.B                   // single uop
+
+VTypeBuffer.scala:
+  // "There are two uops mapped to one vset inst. Only record the last here."
+  needAllocVec = req.valid && req.bits.vlWen
+
+RobBundles.scala:
+  needVTB := robEnq.isVset

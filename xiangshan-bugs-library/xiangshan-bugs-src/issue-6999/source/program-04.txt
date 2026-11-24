@@ -1,0 +1,4 @@
+   mode different at pc = 0x50f583752669, right = 0x0000000000000003, wrong = 0x0000000000000001
+mstatus different at pc = 0x50f583752669, right = 0x0000040a00300800, wrong = 0x0000000a00300080
+   mepc different at pc = 0x50f583752669, right = 0x0000000080001118, wrong = 0x0000000080001114
+  mtval different at pc = 0x50f583752669, right = 0x0000000034302073, wrong = 0x00000000c03ab053

@@ -1,0 +1,1 @@
+   ./build/emu -i xs_cbo_inval_as_flush_u_selfcheck.bin --no-diff -I 3000

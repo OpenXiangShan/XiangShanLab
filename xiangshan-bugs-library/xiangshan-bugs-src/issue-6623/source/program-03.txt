@@ -1,0 +1,4 @@
+out.mstatus.bits.SDT := MuxCase(in.mstatus.SDT.asBool, Seq(
+  sretInHS -> 0.U,
+  (sretInM && (sretToU || sretToVS || sretToVU)) -> 0.U
+))

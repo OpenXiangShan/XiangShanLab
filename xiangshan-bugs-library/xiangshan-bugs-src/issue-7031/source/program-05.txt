@@ -1,0 +1,5 @@
+./build/emu -i repro_ld.bin --no-diff -C 200000
+./build/emu -i repro_st.bin --no-diff -C 200000
+./build/emu -i control.bin  --no-diff -C 200000
+# with difftest, NEMU built with CONFIG_RV_MBMC=y:
+./build/emu -i repro_ld.bin --diff <nemu-mbmc>/build/riscv64-nemu-interpreter-so -C 400000

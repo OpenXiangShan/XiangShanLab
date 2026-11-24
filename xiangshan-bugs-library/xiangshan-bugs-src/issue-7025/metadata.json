@@ -1,0 +1,34 @@
+{
+  "number": 7025,
+  "title": "[Bug] Kunminghu-v2: vector-store exception propagates to a later scalar FSD after ROB tag reuse, silently dropping the store",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/7025",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown",
+    "version: kunminghu-v2"
+  ],
+  "author": "EasySilicon",
+  "created_at": "2026-11-20T15:34:36Z",
+  "updated_at": "2026-11-21T10:39:13Z",
+  "submitted_at": "2026-11-20",
+  "source_files": [
+    "issue-7025/source/kunminghu-v2-SQ6976D01-reproducer-20261121.zip",
+    "issue-7025/source/program-01.S",
+    "issue-7025/source/program-02.sh",
+    "issue-7025/source/program-03.scala"
+  ],
+  "archive_files": [
+    "issue-7025/source/kunminghu-v2-SQ6976D01-reproducer-20261121.zip"
+  ],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

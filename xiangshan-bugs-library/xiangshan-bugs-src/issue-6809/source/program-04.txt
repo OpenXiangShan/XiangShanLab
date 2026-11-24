@@ -1,0 +1,6 @@
+-    val hitVecReg = RegEnable(hitVec, req.fire)
++    val hitVecReg = RegEnable(VecInit(PriorityEncoderOH(hitVec.asUInt).asBools), req.fire)
++    val multiHitReg = RegEnable(PopCount(hitVec) > 1.U, req.fire)
+     // Sector tlb may trigger multi-hit, see def "wbhit"
+-    XSPerfAccumulate(s"port${i}_multi_hit", !(!resp.valid || (PopCount(hitVecReg) === 0.U || PopCount(hitVecReg) === 1.U)))
++    XSPerfAccumulate(s"port${i}_multi_hit", resp.valid && multiHitReg)

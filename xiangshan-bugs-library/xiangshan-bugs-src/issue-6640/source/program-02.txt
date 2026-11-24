@@ -1,0 +1,3 @@
+bash replay.sh 0
+bash replay.sh 1
+bash replay.sh 2

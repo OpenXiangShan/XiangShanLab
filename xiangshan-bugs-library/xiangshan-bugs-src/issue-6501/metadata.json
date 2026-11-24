@@ -1,0 +1,34 @@
+{
+  "number": 6501,
+  "title": "[Bug] `csrw minstret, X` followed by `csrr` reads X+1: the writing instruction's own retirement is added after the write",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6501",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "oChunCai",
+  "created_at": "2026-09-06T15:08:03Z",
+  "updated_at": "2026-09-09T06:54:24Z",
+  "submitted_at": "2026-09-06",
+  "source_files": [
+    "issue-6501/source/minstret-write-poc-results.zip",
+    "issue-6501/source/program-01.scala",
+    "issue-6501/source/program-02.txt",
+    "issue-6501/source/program-03.txt",
+    "issue-6501/source/program-04.txt"
+  ],
+  "archive_files": [
+    "issue-6501/source/minstret-write-poc-results.zip"
+  ],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

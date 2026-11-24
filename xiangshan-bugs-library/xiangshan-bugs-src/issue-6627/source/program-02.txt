@@ -1,0 +1,5 @@
+vec06-vl0-keep-vd start
+vl0=0 out0=255 out15=255
+FAIL vec06 vl=0 vta=1 overwrote old vd
+HIT GOOD TRAP at pc = 0x80000206
+instrCnt = 2,932  cycleCnt = 20,801

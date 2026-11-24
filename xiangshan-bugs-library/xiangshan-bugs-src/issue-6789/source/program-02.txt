@@ -1,0 +1,1 @@
+address = base + i * byte_stride + f * (EEW / 8)

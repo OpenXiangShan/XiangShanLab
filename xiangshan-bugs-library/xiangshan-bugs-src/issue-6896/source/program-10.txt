@@ -1,0 +1,2 @@
+-  io.channel_sel := Mux(RegNext(io.req.fire), selectChannel(req.address), 0.U)
++  io.channel_sel := Mux(state === s_sreq, selectChannel(req.address), 0.U)

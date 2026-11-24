@@ -1,0 +1,2 @@
+    fa4 different at pc = ..., right = 0xffffffffffff8002, wrong = 0xffffffffffff8000
+   fcsr different at pc = ..., right = 0x0000000000000000, wrong = 0x0000000000000003

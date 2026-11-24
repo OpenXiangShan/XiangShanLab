@@ -1,0 +1,31 @@
+/* Inputs and tables for an S-mode load from page 0 of an execute-only v0.4 leaf. */
+.section .scenario,"a",@progbits
+.balign 8
+    .dword 0x4738525343454e31
+    .dword 0x0000000000000012
+    .dword 0x0000000000000000
+    .dword 0x0000000000000001
+    .dword 0x0000000000000001
+    .dword 0x1000000000080100
+    .dword 0x000000000000001f
+    .dword 0xffffffffffffffff
+    .dword 0x0000000000000000
+    .dword 0x0000000080040000
+    .dword 0x0000000000000001
+    .dword 0x0000000000000001
+    .dword 0x0000000000000004
+    .dword 0x0000000000000000
+    .dword 0x0000000000000000
+.section .mpt,"a",@progbits
+.balign 4096
+    .org 0x0
+    .dword 0x0000000020040401
+    .org 0x1200
+    .dword 0x0000000020040801
+    .org 0x2000
+    .dword 0x0024924924925c03
+    .org 0x2010
+    .dword 0x0024924924927c03
+    .org 0x2020
+    .dword 0x0092492492492403
+    .org 0x3000

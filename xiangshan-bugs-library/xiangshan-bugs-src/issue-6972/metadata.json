@@ -1,0 +1,29 @@
+{
+  "number": 6972,
+  "title": "[kunminghu-v3] NewLoadUnit/NewStoreUnit: load/store address triggers compare the unmasked address under pointer masking",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6972",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: memory"
+  ],
+  "author": "fireceW",
+  "created_at": "2026-11-15T06:16:05Z",
+  "updated_at": "2026-11-16T04:01:08Z",
+  "submitted_at": "2026-11-15",
+  "source_files": [
+    "issue-6972/source/program-01.txt",
+    "issue-6972/source/program-02.txt"
+  ],
+  "archive_files": [],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "b3f903bf2e7630e582500599629e7b4c5c981711",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

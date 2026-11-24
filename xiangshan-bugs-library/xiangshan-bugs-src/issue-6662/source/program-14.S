@@ -1,0 +1,31 @@
+/* Inputs and tables for an S-mode store to page 0 of a leaf with reserved bit 3 set. */
+.section .scenario,"a",@progbits
+.balign 8
+    .dword 0x4738525343454e31
+    .dword 0x0000000000000010
+    .dword 0x0000000000000001
+    .dword 0x0000000000000001
+    .dword 0x0000000000000002
+    .dword 0x1000000000080100
+    .dword 0x000000000000001f
+    .dword 0xffffffffffffffff
+    .dword 0x0000000000000000
+    .dword 0x0000000080040000
+    .dword 0x0000000000000001
+    .dword 0x0000000000000001
+    .dword 0x0000000000000007
+    .dword 0x0000000000000000
+    .dword 0x0000000000000000
+.section .mpt,"a",@progbits
+.balign 4096
+    .org 0x0
+    .dword 0x0000000020040401
+    .org 0x1200
+    .dword 0x0000000020040801
+    .org 0x2000
+    .dword 0x02db6db6db6db403
+    .org 0x2010
+    .dword 0x01b6db6db6db6c03
+    .org 0x2020
+    .dword 0x03fffffffffffc0b
+    .org 0x3000

@@ -1,0 +1,30 @@
+{
+  "number": 6814,
+  "title": "Load DTLB keeps a translation from a page walk that overlapped sfence.vma",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6814",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: memory"
+  ],
+  "author": "youzi27",
+  "created_at": "2026-11-01T06:45:11Z",
+  "updated_at": "2026-11-02T02:05:11Z",
+  "submitted_at": "2026-11-01",
+  "source_files": [
+    "issue-6814/source/late_refill.zip"
+  ],
+  "archive_files": [
+    "issue-6814/source/late_refill.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "a0c2a26cbe3c862175174bad03a1a23c406315ed",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

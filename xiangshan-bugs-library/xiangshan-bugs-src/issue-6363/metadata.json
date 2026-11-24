@@ -1,0 +1,27 @@
+{
+  "number": 6363,
+  "title": "[Bug] frontend: review ICache doubleline fetch PMP/PMA coverage",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6363",
+  "state": "closed",
+  "labels": [
+    "type: bug/invalid"
+  ],
+  "author": "neosys007",
+  "created_at": "2026-08-14T22:48:33Z",
+  "updated_at": "2026-08-15T03:15:34Z",
+  "submitted_at": "2026-08-14",
+  "source_files": [
+    "issue-6363/source/program-01.txt"
+  ],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

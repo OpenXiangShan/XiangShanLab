@@ -1,0 +1,4 @@
+Assertion failed at PhysicalStoreQueue.sv:17820.
+[ERROR][time=1949] ...lsq.storeQueue.physicalQueue: double deq! index: 11
+Core 0: ABORT
+Core-0 instrCnt = 162, cycleCnt = 1,945

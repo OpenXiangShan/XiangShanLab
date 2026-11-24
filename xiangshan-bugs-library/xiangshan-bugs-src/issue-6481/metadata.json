@@ -1,0 +1,58 @@
+{
+  "number": 6481,
+  "title": "[Bug][Frontend] A return target misprediction no longer reaches BPU training after #6112",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6481",
+  "state": "closed",
+  "labels": [
+    "type: bug/reported",
+    "module: frontend"
+  ],
+  "author": "dreamqin68",
+  "created_at": "2026-09-04T00:09:17Z",
+  "updated_at": "2026-09-23T07:17:07Z",
+  "submitted_at": "2026-09-04",
+  "source_files": [
+    "issue-6481/source/program-01.scala",
+    "issue-6481/source/program-02.scala",
+    "issue-6481/source/program-03.scala",
+    "issue-6481/source/program-04.scala",
+    "issue-6481/source/program-05.scala",
+    "issue-6481/source/program-06.scala",
+    "issue-6481/source/program-07.scala",
+    "issue-6481/source/program-08.scala",
+    "issue-6481/source/program-09.scala",
+    "issue-6481/source/program-10.scala",
+    "issue-6481/source/program-11.scala",
+    "issue-6481/source/program-12.scala",
+    "issue-6481/source/program-13.scala",
+    "issue-6481/source/program-14.scala",
+    "issue-6481/source/program-15.scala",
+    "issue-6481/source/program-16.scala",
+    "issue-6481/source/program-17.scala",
+    "issue-6481/source/program-18.scala",
+    "issue-6481/source/program-19.scala",
+    "issue-6481/source/program-20.scala",
+    "issue-6481/source/program-21.scala",
+    "issue-6481/source/program-22.scala",
+    "issue-6481/source/program-23.S",
+    "issue-6481/source/program-24.txt",
+    "issue-6481/source/program-25.sh",
+    "issue-6481/source/program-26.scala",
+    "issue-6481/source/program-27.sh",
+    "issue-6481/source/program-28.S",
+    "issue-6481/source/program-29.scala"
+  ],
+  "archive_files": [],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "92cc48d2cb6af52a1fb2922f9eb99a37918654b3",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6481/commit-log.md"
+  ],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

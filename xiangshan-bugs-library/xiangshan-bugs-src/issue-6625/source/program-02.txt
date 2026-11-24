@@ -1,0 +1,5 @@
+csr010-trig-chain start
+traps=0 mcause=0 dummy=0x55
+FAIL csr010 execute-load chain did not fire
+HIT GOOD TRAP at pc = 0x80000264
+instrCnt = 3,064  cycleCnt = 21,869

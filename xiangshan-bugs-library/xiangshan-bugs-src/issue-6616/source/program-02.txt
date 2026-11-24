@@ -1,0 +1,5 @@
+hlvx-pma-xperm start
+trap_count=0 mcause=0 mtval=0x0 mtval2=0x0 htval=0x0 hlvx=0xc33ca55a
+FAIL hlvx bypassed PMA execute permission
+HIT GOOD TRAP at pc = 0x800002ca
+instrCnt = 8,627  cycleCnt = 46,983

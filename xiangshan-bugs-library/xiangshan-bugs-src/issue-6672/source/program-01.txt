@@ -1,0 +1,5 @@
+G stage (Sv39x4): identity, U|X|W|R leaves, except the page `vsl1` (0x8000b000): U|X only
+VS stage (Sv39):  vsroot[2] = 1 GiB leaf for the code; vsroot[6] -> vsl1; vsl1[0] = 2 MiB leaf
+                  VA 0x180000000 -> GPA 0x80000000
+test 1: mstatus.MXR = 0, in VS-mode  ld a0, 0(0x180000000)   -> load guest-page fault (21)
+test 2: mstatus.MXR = 1, same load                            -> load guest-page fault (21) expected

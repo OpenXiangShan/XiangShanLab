@@ -1,0 +1,14 @@
+OUTPUT_ARCH(riscv)
+ENTRY(_start)
+SECTIONS
+{
+    . = 0x80000000;
+    .text.entry : { *(.text.entry) }
+    ASSERT(. <= 0x80000040, "the entry must stay below every observed fetch address")
+    . = 0x80001000;
+    .text : { *(.text.main) *(.text*) }
+    ASSERT(. <= 0x80004000, "code runs into data")
+    . = 0x80004000;
+    .data : { *(.data*) }
+    /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) *(.riscv.attributes) }
+}

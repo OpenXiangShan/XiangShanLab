@@ -1,0 +1,4 @@
+   mode different ..., right = 0x0000000000000003, wrong = 0x0000000000000001
+mstatus different ..., right = 0x0000040a00200920, wrong = 0x0000000a002001a0
+   mepc different ..., right = 0x0000000080000080, wrong = 0x0000000080000060
+ mcause different ..., right = 0x0000000000000009, wrong = 0x0000000000000000

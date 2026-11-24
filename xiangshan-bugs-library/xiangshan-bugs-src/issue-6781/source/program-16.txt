@@ -1,0 +1,1 @@
+max(iEmul=8, lmul=1, 1) * seg=2 = 16

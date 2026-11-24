@@ -1,0 +1,2 @@
+-    val touchWays = Seq(writeTouchVec(nRows)) ++ hitTouchVec(nRows).filter(_.valid == true.B).take(numPorts)
++    val touchWays = Seq(writeTouchVec(nRows)) ++ hitTouchVec(nRows)

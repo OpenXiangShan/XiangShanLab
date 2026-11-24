@@ -1,0 +1,12 @@
+--- a/src/main/scala/xiangshan/Parameters.scala
++++ b/src/main/scala/xiangshan/Parameters.scala
+@@ -510,3 +510,3 @@ case class XSCoreParameters
+           "VFEX2",
+-          Seq(VialuCfg, VfmaCfg, VSha256msCfg),
++          Seq(VialuCfg),
+           Seq(VfWB(port = 5, 0)),
+@@ -521,3 +521,3 @@ case class XSCoreParameters
+           "VFEX3",
+-          Seq(VialuCfg, VfmaCfg, VSha256cCfg),
++          Seq(VialuCfg),
+           Seq(VfWB(port = 6, 0)),

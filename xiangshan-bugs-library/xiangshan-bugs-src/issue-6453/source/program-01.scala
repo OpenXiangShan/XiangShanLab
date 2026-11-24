@@ -1,0 +1,3 @@
+io.pmp.req.valid := DontCare
+...
+mem.req.valid := !mem.mask && !flush

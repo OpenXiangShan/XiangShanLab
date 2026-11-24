@@ -1,0 +1,1 @@
+   ./build/emu -i xs_cbo_inval_as_flush_u.bin --diff ready-to-run/riscv64-nemu-interpreter-so -I 3000

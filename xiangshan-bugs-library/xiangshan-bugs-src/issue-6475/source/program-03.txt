@@ -1,0 +1,2 @@
+800002d8: vsetvli t0, zero, e32, m1, tu, mu     ; SEW=32, LMUL=1
+800002e4: vsseg3e32.v v6, (t1)                   ; <- the ROB entry that underflows

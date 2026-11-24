@@ -1,0 +1,27 @@
+// https://github.com/riscv/riscv-smmtt/blob/58e864868ca4d6edf735f31b5bfc5ca622140bdf/chapter4.adoc#L293-L318
+[title="Smmpt43 non-NAPOT leaf `MPTE` entry", id="rv64-mpte-leaf"]
+[wavedrom, ,svg]
+....
+{reg: [
+  {bits:   1, name: 'V'},
+  {bits:   1, name: 'L=1'},
+  {bits:   1, name: 'N=0'},
+  {bits:   5, name: 'Reserved'},
+  {bits:   3, name: 'XWR[0]'},
+  {bits:   3, name: 'XWR[1]'},
+  {bits:   3, name: 'XWR[2]'},
+  {bits:   3, name: 'XWR[3]'},
+  {bits:   3, name: 'XWR[4]'},
+  {bits:   3, name: 'XWR[5]'},
+  {bits:   3, name: 'XWR[6]'},
+  {bits:   3, name: 'XWR[7]'},
+  {bits:   3, name: 'XWR[8]'},
+  {bits:   3, name: 'XWR[9]'},
+  {bits:   3, name: 'XWR[10]'},
+  {bits:   3, name: 'XWR[11]'},
+  {bits:   3, name: 'XWR[12]'},
+  {bits:   3, name: 'XWR[13]'},
+  {bits:   3, name: 'XWR[14]'},
+  {bits:   3, name: 'XWR[15]'},
+  {bits:   8, name: 'Reserved'},
+], config:{lanes: 4, hspace:1024}}

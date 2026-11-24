@@ -1,0 +1,2 @@
+Assertion failed: robEntries 174 uopNum is overflow!
+Core-0 instrCnt = 168, cycleCnt = 9,372

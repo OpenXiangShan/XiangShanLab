@@ -1,0 +1,3 @@
+val next_cfg = if (i == 0) 0.U.asTypeOf(new PMPConfig()) else cfg(i-1)
+...
+when (valid) { addr(i) := write_addr(next_cfg, mask(i))(...) }

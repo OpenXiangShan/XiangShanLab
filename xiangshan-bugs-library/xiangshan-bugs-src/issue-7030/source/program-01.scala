@@ -1,0 +1,9 @@
+// src/main/scala/xiangshan/cache/mmu/PageTableCache.scala:808-835
+      io.resp.bits.stage1.entry(i).ppn := Mux(resp_res.l0.hit, resp_res.l0.ppn(i)(gvpnLen - 1, sectortlbwidth),
+      ...
+      io.resp.bits.stage1.entry(i).ppn_low := Mux(resp_res.l0.hit, resp_res.l0.ppn(i)(sectortlbwidth - 1, 0),
+      ...
+    io.resp.bits.stage1.entry(i).n.map(_ := Mux(resp_res.sp.hit, resp_res.sp.n, 0.U))
+    io.resp.bits.stage1.entry(i).perm.map(_ := Mux(resp_res.l0.hit, resp_res.l0.perm(i),  Mux(resp_res.sp.hit, resp_res.sp.perm, 0.U.asTypeOf(new PtePermBundle))))
+  ...
+  XSError(stageResp.valid && resp_res.l0.hit && resp_res.sp.hit, "normal page and super page both hit")

@@ -1,0 +1,2 @@
+-  writeSstatusSDT := Mux(this.menvcfg.DTE.asBool, wAliasSstatus.wdataFields.SDT.asBool, reg.SDT.asBool)
++  writeSstatusSDT := this.menvcfg.DTE.asBool && wAliasSstatus.wdataFields.SDT.asBool

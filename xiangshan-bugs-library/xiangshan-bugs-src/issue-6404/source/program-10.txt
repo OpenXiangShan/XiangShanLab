@@ -1,0 +1,54 @@
+--- a/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala
++++ b/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala
+@@ -375,20 +375,23 @@
+ 
+   private val s1_fetchFinish = !s1_shouldFetch.reduce(_ || _)
+ 
+-  private val s1_portValid = VecInit(s1_lineValid.flatten)
+-
+   // also raise af if l2 corrupt is detected
+-  private val s1_tlException =
+-    (s1_tlCorrupt.flatten zip s1_tlDenied.flatten).zipWithIndex.map { case ((corrupt, denied), i) =>
+-      val portValid   = s1_portValid(i)
+-      val realCorrupt = corrupt && portValid
+-      val realDenied  = denied && portValid
+-      val canAssert   = s1_valid && portValid
+-      ExceptionType.fromTileLink(realCorrupt, realDenied, canAssert)
++  // NOTE: reduce WITHIN one fetch request only. The two requests address
++  // independently chosen fetch blocks, so a TileLink error on one request's
++  // cache line must not raise an exception on the other request.
++  private val s1_tlException = VecInit((0 until MaxFetchReqNum).map { reqIdx =>
++    (s1_tlCorrupt(reqIdx) zip s1_tlDenied(reqIdx)).zipWithIndex.map {
++      case ((corrupt, denied), portIdx) =>
++        val portValid   = s1_lineValid(reqIdx)(portIdx)
++        val realCorrupt = corrupt && portValid
++        val realDenied  = denied && portValid
++        val canAssert   = s1_valid && portValid
++        ExceptionType.fromTileLink(realCorrupt, realDenied, canAssert)
+     }.reduce(_ || _)
++  })
+ 
+   // merge all exceptions, itlb/pmp has the highest priority, then l2/ecc
+-  private val s1_exceptionOut = s1_exception || s1_tlException
++  private val s1_exceptionOut = VecInit(s1_tlException.map(s1_exception || _))
+ 
+   io.toIfu.req.valid := s1_valid && s1_fetchFinish && !s1_flush
+   io.toIfu.req.bits.zipWithIndex.foreach { case (req, i) =>
+@@ -403,7 +406,7 @@
+     req.maybeRvcMap          := s1_maybeRvcMap(i)
+     req.perf_isCrossLine     := s1_isCrossLine(i)
+ 
+-    req.icacheMeta.exception          := s1_exceptionOut
++    req.icacheMeta.exception          := s1_exceptionOut(i)
+     req.icacheMeta.pmpMmio            := s1_pmpMmio
+     req.icacheMeta.isBackendException := s1_req(i).hasBackendException
+     req.icacheMeta.hasSatpFlush       := s1_req(i).hasSatpFlush
+@@ -566,7 +569,7 @@
+   accessTrace.wayMask    := s1_wayMask(0)
+   accessTrace.crossLine  := s1_isCrossLine(0)
+   accessTrace.waitRefill := perf_waitRefill
+-  accessTrace.exception  := s1_exceptionOut
++  accessTrace.exception  := s1_exceptionOut(0)
+   accessTrace.pmpMmio    := s1_pmpMmio
+   accessTrace.itlbPbmt   := s1_wayLookupEntry(0).itlbPbmt
+   accessTrace.rawHits    := s1_rawHits

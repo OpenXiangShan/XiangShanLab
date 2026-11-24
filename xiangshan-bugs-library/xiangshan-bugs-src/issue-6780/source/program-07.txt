@@ -1,0 +1,3 @@
+cd /path/to/XiangShan
+export NOOP_HOME="$PWD"
+make emu CONFIG=MinimalConfig EMU_THREADS=2 -j10

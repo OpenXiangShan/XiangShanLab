@@ -1,0 +1,5 @@
+[19] commit pc 000000008000004c inst 1dcb3ca3 wen 0 dst 25 data 0000000011000000 idx 00e (01)
+[20] commit pc 0000000080000050 inst 1d6b2703 wen 1 dst 14 data 0000000011000000 idx 00f (01)
+     a4 different at pc = 0x2e07e5a88f45, right = 0x0000000012000000, wrong = 0x0000000011000000
+     a7 different at pc = 0x2e07e5a88f45, right = 0x0000000023000000, wrong = 0x0000000022000000
+Core 0: ABORT at pc = 0x2e07e5a88f45

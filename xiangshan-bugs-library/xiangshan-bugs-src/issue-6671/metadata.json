@@ -1,0 +1,33 @@
+{
+  "number": 6671,
+  "title": "`mnret` raises an illegal-instruction exception in M-mode although the Smrnmi CSRs are implemented",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6671",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: backend"
+  ],
+  "author": "youzi27",
+  "created_at": "2026-10-05T02:12:52Z",
+  "updated_at": "2026-10-09T06:36:33Z",
+  "submitted_at": "2026-10-05",
+  "source_files": [
+    "issue-6671/source/xs_mnret_m.bin.zip",
+    "issue-6671/source/program-01.S",
+    "issue-6671/source/program-02.txt",
+    "issue-6671/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-6671/source/xs_mnret_m.bin.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "09453ff8f44e9d2b526e6149c60e1dc3f08c7192",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

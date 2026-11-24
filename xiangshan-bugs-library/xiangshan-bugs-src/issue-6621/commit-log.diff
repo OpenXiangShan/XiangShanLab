@@ -1,0 +1,64 @@
+diff --git a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+index 50c6be4de18..262de95e6f8 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala
+@@ -700,6 +700,7 @@ class TlbIO(Width: Int, nRespDups: Int = 1, q: TLBParameters)(implicit p: Parame
+   val refill_to_mem = Output(new TlbRefilltoMemIO())
+   val replace = if (q.outReplace) Flipped(new TlbReplaceIO(Width, q)) else null
+   val pmp = Vec(Width, ValidIO(new PMPReqBundle(q.lgMaxSize)))
++  val pmpMode = Vec(Width, Output(UInt(2.W)))
+   val tlbreplay = Vec(Width, Output(Bool()))
+   val robPendingPtr = Input(new RobPtr)
+ }
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLB.scala b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+index f5c50ad0a4a..c17cc9eedd9 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+@@ -88,6 +88,7 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+   val ifetch = if (q.fetchi) true.B else false.B
+   val mode_tmp = if (q.useDmode) csr.priv.dmode else csr.priv.imode
+   val mode = (0 until Width).map(i => Mux(isHyperInst(i), csr.priv.spvp, mode_tmp))
++  val pmpMode = (0 until Width).map(i => Mux(req_out(i).isPrefetch, mode_tmp, mode(i)))
+   val virt_in = csr.priv.virt
+   val virt_out = req.map(a => RegEnable(csr.priv.virt, a.fire))
+   val sum = (0 until Width).map(i => Mux(virt_out(i) || isHyperInst(i), csr.priv.vsum, csr.priv.sum))
+@@ -258,6 +259,7 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+   (0 until Width).foreach{i =>
+     val noTranslateReg = RegNext(req(i).bits.no_translate)
+     val addr = Mux(noTranslateReg, req(i).bits.pmp_addr, pmp_addr(i))
++    io.pmpMode(i) := pmpMode(i)
+     val pmpCmd = Mux(req_out(i).hlvx, TlbCmd.read_exec, req_out(i).cmd)
+     pmp_check(addr, req_out(i).size, pmpCmd, noTranslateReg, i)
+     for (d <- 0 until nRespDups) {
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 21397ee138e..32e0bb3cfab 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -702,6 +702,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   val ptwio = Wire(new VectorTlbPtwIO(DTlbSize))
+   val dtlb_reqs = dtlb.map(_.requestor).flatten
+   val dtlb_pmps = dtlb.map(_.pmp).flatten
++  val dtlb_pmp_modes = dtlb.map(_.pmpMode).flatten
+   dtlb.map(_.hartId := io.hartId)
+   dtlb.map(_.sfence := sfence)
+   dtlb.map(_.csr := tlbcsr)
+@@ -789,15 +790,15 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+ 
+   val pmp_checkers = Seq.fill(DTlbSize)(Module(new PMPChecker(4, leaveHitMux = true)))
+   val pmp_check = pmp_checkers.map(_.io)
+-  for ((p,d) <- pmp_check zip dtlb_pmps) {
++  for (((p, d), pmpMode) <- pmp_check.zip(dtlb_pmps).zip(dtlb_pmp_modes)) {
+     if (HasBitmapCheck) {
+       if (KeyIDBits > 0) {
+-        p.apply(tlbcsr.mbmc.KEYIDEN.asBool, tlbcsr.mbmc.CMODE.asBool, tlbcsr.priv.dmode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
++        p.apply(tlbcsr.mbmc.KEYIDEN.asBool, tlbcsr.mbmc.CMODE.asBool, pmpMode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
+       } else {
+-        p.apply(tlbcsr.mbmc.CMODE.asBool, tlbcsr.priv.dmode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
++        p.apply(tlbcsr.mbmc.CMODE.asBool, pmpMode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
+       }
+     } else {
+-      p.apply(tlbcsr.priv.dmode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
++      p.apply(pmpMode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
+     }
+     require(p.req.bits.size.getWidth == d.bits.size.getWidth)
+   }

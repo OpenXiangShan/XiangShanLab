@@ -1,0 +1,37 @@
+{
+  "number": 6673,
+  "title": "After `csrw vstart` with a nonzero value, the vector instruction right after a `vsetvli` raises an illegal-instruction exception",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6673",
+  "state": "open",
+  "labels": [
+    "module: unknown",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "youzi27",
+  "created_at": "2026-10-05T02:19:46Z",
+  "updated_at": "2026-10-08T04:37:54Z",
+  "submitted_at": "2026-10-05",
+  "source_files": [
+    "issue-6673/source/xs_vstart_vsetvli.bin.zip",
+    "issue-6673/source/program-01.S",
+    "issue-6673/source/program-02.txt",
+    "issue-6673/source/program-03.txt",
+    "issue-6673/source/program-04.scala",
+    "issue-6673/source/program-05.scala",
+    "issue-6673/source/program-06.scala"
+  ],
+  "archive_files": [
+    "issue-6673/source/xs_vstart_vsetvli.bin.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "09453ff8f44e9d2b526e6149c60e1dc3f08c7192",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

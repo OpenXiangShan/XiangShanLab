@@ -1,0 +1,15 @@
+emu compiled at Oct 28 2026, 08:58:44
+[INFO] init for constantin: loaded from init.
+Using simulated 1048576B flash
+dump wave to /tmp/opencode/waves/dtlb-hfence/wave.fst...
+Core  0's Commit SHA is: 6705b63685, dirty: 1
+Using simulated 128MB RAM
+The image is image.bin
+Assertion failed at /tmp/test-infra-xiangshan-kmhv3/source/build/rtl/TLBFA_1.sv:13345.
+The simulation stopped. There might be some assertion failed.
+Core 0: [31mABORT at pc = 0x80000dc2
+[0m[35mCore-0 instrCnt = 71,519, cycleCnt = 23,311, IPC = 3.068037
+[0m[34mSeed=0 Guest cycle spent: 23,316 (this will be different from cycleCnt if emu loads a snapshot)
+[0m[34mHost time spent: 228,163ms
+[0mAssertion failed at LogUtils.scala:133
+[ERROR][time=               23315] SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner.dtlb_ld_tlb_ld.entries.page_ldtlb_storage_fa: ldtlb_storage refill, duplicate with existing entries

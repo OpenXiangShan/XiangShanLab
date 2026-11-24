@@ -1,0 +1,39 @@
+{
+  "number": 6998,
+  "title": "`vsetivli` with AVL immediate 0 sets `vtype.vill` on a legal configuration when VLMAX changes",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6998",
+  "state": "closed",
+  "labels": [
+    "module: unknown",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "msuadOf",
+  "created_at": "2026-11-18T05:00:05Z",
+  "updated_at": "2026-11-18T05:13:25Z",
+  "submitted_at": "2026-11-18",
+  "source_files": [
+    "issue-6998/source/program-01.scala",
+    "issue-6998/source/program-02.S",
+    "issue-6998/source/program-03.txt",
+    "issue-6998/source/program-04.txt",
+    "issue-6998/source/program-05.txt",
+    "issue-6998/source/program-06.S",
+    "issue-6998/source/program-07.txt",
+    "issue-6998/source/program-08.S",
+    "issue-6998/source/program-09.txt"
+  ],
+  "archive_files": [],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "a253c1163982ae0b485b3a2ed9b61253d980d837",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6998/commit-log.md"
+  ],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

@@ -1,0 +1,6 @@
+vec01-keepvl-polarity start
+Difftest enabled.
+Assertion failed at .../VTypeBuffer.sv:1585
+deqPtr is older than enqPtr!
+ABORT at pc = 0x80000214
+instrCnt = 786  cycleCnt = 12,400

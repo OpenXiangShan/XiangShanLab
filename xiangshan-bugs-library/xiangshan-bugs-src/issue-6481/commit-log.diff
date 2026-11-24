@@ -1,0 +1,269 @@
+diff --git a/src/main/scala/xiangshan/frontend/Bundles.scala b/src/main/scala/xiangshan/frontend/Bundles.scala
+index 5074612d70a..0149d7a579d 100644
+--- a/src/main/scala/xiangshan/frontend/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/Bundles.scala
+@@ -145,8 +145,10 @@ class FtqToIfuIO(implicit p: Parameters) extends FrontendBundle {
+ 
+ class FrontendRedirect(implicit p: Parameters) extends FrontendBundle {
+   val ftqIdx: FtqPtr = new FtqPtr
+-  val pc:     UInt   = UInt(VAddrBits.W)
+-  val taken:  Bool   = Bool()
++  //
++  val canTrain: Bool = Bool()
++  val pc:       UInt = UInt(VAddrBits.W)
++  val taken:    Bool = Bool()
+   // The early end position may not always be a branch instruction.
+   val ftqOffset: UInt            = UInt(FetchBlockInstOffsetWidth.W) // maybe use later
+   val isRVC:     Bool            = Bool()                            // seems unused for now, keep it.
+diff --git a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+index 50a75a74ad2..b7ae4dde3ad 100644
+--- a/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/bpu/Bundles.scala
+@@ -34,6 +34,7 @@ import xiangshan.frontend.bpu.ras.RasRedirectMeta
+ import xiangshan.frontend.bpu.sc.ScMeta
+ import xiangshan.frontend.bpu.tage.TageMeta
+ import xiangshan.frontend.bpu.utage.MicroTageMeta
++import xiangshan.frontend.ftq.ResolveSource
+ 
+ /* *** public const & type *** */
+ class BranchAttribute extends Bundle {
+@@ -253,6 +254,8 @@ class BpuTrain(implicit p: Parameters) extends BpuBundle with HalfAlignHelper {
+   val meta:     BpuResolveMeta         = new BpuResolveMeta
+   val perfMeta: BpuPerfMeta            = new BpuPerfMeta
+ 
++  val debug_source: UInt = ResolveSource()
++
+   def startPc: PrunedAddr = startPcVec.get.head // get one duplicate and use its head (startPc for first alignBank)
+ 
+   // we masked out all branches after the first mispredict branch in Bpu top (refer to Bpu.scala t0_firstMispredictMask)
+@@ -272,6 +275,8 @@ class Train(NumStartPcVecDup: Int = 1)(implicit p: Parameters) extends BpuTrain
+     this.branches   := that.branches
+     this.meta       := that.meta
+     this.perfMeta   := that.perfMeta
++
++    this.debug_source := that.debug_source
+   }
+ }
+ 
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+index 5977d3f873a..2b3b9210f47 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Bundles.scala
+@@ -19,6 +19,7 @@ import chisel3._
+ import chisel3.util._
+ import org.chipsalliance.cde.config.Parameters
+ import utility.HasCircularQueuePtrHelper
++import utils.EnumUInt
+ import xiangshan.frontend.FtqFetchRequest
+ import xiangshan.frontend.PrunedAddr
+ import xiangshan.frontend.TwoFetchInfo
+@@ -41,12 +42,19 @@ class MetaEntry(implicit p: Parameters) extends FtqBundle {
+   val paddingBits = if (meta.getWidth % 4 != 0) Some(UInt((4 - meta.getWidth % 4).W)) else None
+ }
+ 
++object ResolveSource extends EnumUInt(2) {
++  def Backend: UInt = 0.U(width.W)
++  def Ifu:     UInt = 1.U(width.W)
++}
++
+ class ResolveEntry(implicit p: Parameters) extends FtqBundle {
+   val ftqIdx:  FtqPtr     = new FtqPtr
+   val flushed: Bool       = Bool()
+   val startPc: PrunedAddr = PrunedAddr(VAddrBits)
+   // TODO: Reconsider branch number
+   val branches: Vec[Valid[BranchInfo]] = Vec(ResolveEntryBranchNumber, Valid(new BranchInfo))
++  // used for bptrace & other debug proposes
++  val debug_source: UInt = ResolveSource()
+ }
+ 
+ class FtqRead[T <: Data](private val gen: T)(implicit p: Parameters) extends FtqBundle {
+diff --git a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+index e24aa669108..ae8bc901269 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/Ftq.scala
+@@ -123,7 +123,7 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   private val (backendRedirectFtqIdxInAdvance, backendRedirect) = receiveBackendRedirect(io.fromBackend)
+ 
+   private val specTopAddr = metaQueueRedirect(io.fromIfu.wbRedirect.bits.ftqIdx.value).ras.topRetAddr.toUInt
+-  private val (ifuRedirectFtqIdxInAdvance, ifuRedirect) = receiveIfuRedirect(
++  private val (ifuRedirectFtqIdxInAdvance, ifuRedirect, ifuResolve) = receiveIfuRedirect(
+     io.fromIfu.wbRedirect,
+     specTopAddr,
+     backendRedirect.valid
+@@ -367,6 +367,7 @@ class Ftq(implicit p: Parameters) extends FtqModule
+   // --------------------------------------------------------------------------------
+ 
+   resolveQueue.io.backendResolve := io.fromBackend.resolve
++  resolveQueue.io.ifuResolve     := ifuResolve
+ 
+   private val trainCache      = RegInit(0.U.asTypeOf(Valid(new BpuTrain)))
+   private val trainIndexCache = RegInit(0.U.asTypeOf(new FtqPtr))
+@@ -390,9 +391,10 @@ class Ftq(implicit p: Parameters) extends FtqModule
+           startPc := getAlignedPc(resolveQueue.io.bpuTrain.bits.startPc + (i << FetchBlockAlignWidth).U)
+       }
+     }
+-    trainCache.bits.branches := resolveQueue.io.bpuTrain.bits.branches
+-    trainCache.bits.perfMeta := perfQueue(resolveQueue.io.bpuTrain.bits.ftqIdx.value).bpuPerf
+-    trainIndexCache          := resolveQueue.io.bpuTrain.bits.ftqIdx
++    trainCache.bits.branches     := resolveQueue.io.bpuTrain.bits.branches
++    trainCache.bits.perfMeta     := perfQueue(resolveQueue.io.bpuTrain.bits.ftqIdx.value).bpuPerf
++    trainCache.bits.debug_source := resolveQueue.io.bpuTrain.bits.debug_source
++    trainIndexCache              := resolveQueue.io.bpuTrain.bits.ftqIdx
+   }.elsewhen(io.toBpu.train.fire) {
+     trainCache.valid := false.B
+   }
+diff --git a/src/main/scala/xiangshan/frontend/ftq/IfuRedirectReceiver.scala b/src/main/scala/xiangshan/frontend/ftq/IfuRedirectReceiver.scala
+index 5f636b9150d..62ae6b4ebfe 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/IfuRedirectReceiver.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/IfuRedirectReceiver.scala
+@@ -19,6 +19,7 @@ import chisel3._
+ import chisel3.util._
+ import xiangshan.Redirect
+ import xiangshan.RedirectLevel
++import xiangshan.Resolve
+ import xiangshan.frontend.FrontendRedirect
+ 
+ trait IfuRedirectReceiver extends HasFtqParameters {
+@@ -26,8 +27,9 @@ trait IfuRedirectReceiver extends HasFtqParameters {
+       wbRedirect:      Valid[FrontendRedirect],
+       specTopAddr:     UInt,
+       backendRedirect: Bool
+-  ): (Valid[FtqPtr], Valid[Redirect]) = {
++  ): (Valid[FtqPtr], Valid[Redirect], Valid[Resolve]) = {
+     val redirect = WireInit(0.U.asTypeOf(Valid(new Redirect)))
++    val resolve  = WireInit(0.U.asTypeOf(Valid(new Resolve)))
+ 
+     redirect.valid          := wbRedirect.valid && !backendRedirect
+     redirect.bits.ftqIdx    := wbRedirect.bits.ftqIdx
+@@ -40,10 +42,20 @@ trait IfuRedirectReceiver extends HasFtqParameters {
+     redirect.bits.taken     := wbRedirect.bits.taken
+     redirect.bits.isMisPred := true.B
+ 
++    resolve.valid           := wbRedirect.valid && !backendRedirect && wbRedirect.bits.canTrain
++    resolve.bits.ftqIdx     := wbRedirect.bits.ftqIdx
++    resolve.bits.ftqOffset  := wbRedirect.bits.ftqOffset
++    resolve.bits.pc         := wbRedirect.bits.pc
++    resolve.bits.target     := Mux(wbRedirect.bits.attribute.isReturn, specTopAddr, wbRedirect.bits.target)
++    resolve.bits.taken      := wbRedirect.bits.taken
++    resolve.bits.mispredict := true.B
++    resolve.bits.attribute  := wbRedirect.bits.attribute
++    resolve.bits.debug_isRVC.foreach(_ := wbRedirect.bits.isRVC)
++
+     val ftqIdx = Wire(Valid(new FtqPtr))
+     ftqIdx.valid := redirect.valid
+     ftqIdx.bits  := redirect.bits.ftqIdx
+ 
+-    (ftqIdx, RegNext(redirect))
++    (ftqIdx, RegNext(redirect), RegNext(resolve, init = 0.U.asTypeOf(Valid(new Resolve))))
+   }
+ }
+diff --git a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+index 373c1404799..af4c34647bb 100644
+--- a/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
++++ b/src/main/scala/xiangshan/frontend/ftq/ResolveQueue.scala
+@@ -30,6 +30,7 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+ 
+   class ResolveQueueIO extends Bundle {
+     val backendResolve: Vec[Valid[Resolve]]       = Input(Vec(backendParams.BrhCnt, Valid(new Resolve)))
++    val ifuResolve:     Valid[Resolve]            = Input(Valid(new Resolve))
+     val bpuTrain:       DecoupledIO[ResolveEntry] = Decoupled(new ResolveEntry)
+ 
+     val backendRedirect:    Bool   = Input(Bool())
+@@ -65,13 +66,35 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+     "Backend resolves branches that should have been flushed\n"
+   )
+ 
+-  private val filteredResolve = io.backendResolve.map { backendResolve =>
+-    val filteredResolve = Wire(Valid(new Resolve))
+-    filteredResolve.valid := backendResolve.valid &&
++  private class ResolveWithSource(implicit p: Parameters) extends Resolve {
++    val debug_source: UInt = ResolveSource()
++
++    def fromResolve(source: UInt, resolve: Resolve): ResolveWithSource = {
++      this.ftqIdx     := resolve.ftqIdx
++      this.ftqOffset  := resolve.ftqOffset
++      this.pc         := resolve.pc
++      this.target     := resolve.target
++      this.taken      := resolve.taken
++      this.mispredict := resolve.mispredict
++      this.attribute  := resolve.attribute
++      this.debug_isRVC.foreach(_ := resolve.debug_isRVC.get)
++      this.debug_source := source
++      this
++    }
++  }
++
++  private val backendFilteredResolve = io.backendResolve.map { backendResolve =>
++    val filteredResolve = Wire(Valid(new ResolveWithSource))
++    filteredResolve.valid := backendResolve.valid && !(backendResolve.bits.attribute.isDirect || backendResolve.bits.attribute.isReturn) &&
+       !(backendRedirect.reduce(_ || _) && backendResolve.bits.ftqIdx > backendRedirectPtr)
+-    filteredResolve.bits := backendResolve.bits
++    filteredResolve.bits.fromResolve(ResolveSource.Backend, backendResolve.bits)
+     filteredResolve
+   }
++  private val ifuFilteredResolve = Wire(Valid(new ResolveWithSource))
++  ifuFilteredResolve.valid := io.ifuResolve.valid && !backendRedirect.reduce(_ || _)
++  ifuFilteredResolve.bits.fromResolve(ResolveSource.Ifu, io.ifuResolve.bits)
++
++  private val filteredResolve = backendFilteredResolve ++ Seq(ifuFilteredResolve)
+ 
+   /*
+    * When dropResolveCounter saturates,
+@@ -99,7 +122,7 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+     val isDirect      = filteredResolve.bits.attribute.isDirect
+     val shouldDrop    = !hasMispredict && (dropResolveCounter.isSaturatePositive || isDirect)
+ 
+-    val resolve = Wire(Valid(new Resolve))
++    val resolve = Wire(Valid(new ResolveWithSource))
+     resolve.valid := filteredResolve.valid && !shouldDrop
+     resolve.bits  := filteredResolve.bits
+     resolve
+@@ -124,8 +147,9 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+     branch.valid && !hit(i) && !hitPrevious(i).fold(false.B)(_ || _)
+   }
+ 
+-  private val enqIndex = WireDefault(VecInit.fill(backendParams.BrhCnt)(0.U(log2Ceil(ResolveQueueSize).W)))
+-  enqIndex := VecInit((0 until backendParams.BrhCnt).map { i =>
++  // Reslove consists of resolves fromt the backend andd the ifu.
++  private val enqIndex = WireDefault(VecInit.fill(backendParams.BrhCnt + 1)(0.U(log2Ceil(ResolveQueueSize).W)))
++  enqIndex := VecInit((0 until backendParams.BrhCnt + 1).map { i =>
+     val newIndex = MuxCase(
+       (enqPtr + PopCount(needNewEntry.take(i))).value,
+       hitPrevious(i).zipWithIndex.map { case (hit, j) => (hit, enqIndex(j)) }
+@@ -137,9 +161,10 @@ class ResolveQueue(implicit p: Parameters) extends FtqModule with HalfAlignHelpe
+ 
+   resolve.zipWithIndex.foreach { case (branch, i) =>
+     when(branch.valid && !full) {
+-      mem(enqIndex(i)).valid        := true.B
+-      mem(enqIndex(i)).bits.ftqIdx  := branch.bits.ftqIdx
+-      mem(enqIndex(i)).bits.startPc := branch.bits.pc
++      mem(enqIndex(i)).valid             := true.B
++      mem(enqIndex(i)).bits.ftqIdx       := branch.bits.ftqIdx
++      mem(enqIndex(i)).bits.startPc      := branch.bits.pc
++      mem(enqIndex(i)).bits.debug_source := branch.bits.debug_source
+ 
+       val firstEmpty = mem(enqIndex(i)).bits.branches.indexWhere(!_.valid)
+       val branchSlot = mem(enqIndex(i)).bits.branches(firstEmpty + PopCount(hitPrevious(i)))
+diff --git a/src/main/scala/xiangshan/frontend/ifu/Ifu.scala b/src/main/scala/xiangshan/frontend/ifu/Ifu.scala
+index 4fa81640b2c..a9d3b384b67 100644
+--- a/src/main/scala/xiangshan/frontend/ifu/Ifu.scala
++++ b/src/main/scala/xiangshan/frontend/ifu/Ifu.scala
+@@ -694,6 +694,7 @@ class Ifu(implicit p: Parameters) extends IfuModule
+   // Due to the presence of uncache requests, s3_valid && io.toIBuffer.ready is not equivalent to s3_fire.
+   uncacheFlushWb.valid :=
+     s3_valid && io.toIBuffer.ready && s3_reqIsUncache && !backendRedirect && (s3_uncacheCanGo || uncacheNeedResend)
++  uncacheFlushWb.bits.canTrain  := false.B
+   uncacheFlushWb.bits.ftqIdx    := s3_alignFetchBlock(0).ftqIdx
+   uncacheFlushWb.bits.pc        := s3_alignFetchBlock(0).startVAddr.toUInt
+   uncacheFlushWb.bits.taken     := false.B
+@@ -774,7 +775,10 @@ class Ifu(implicit p: Parameters) extends IfuModule
+     val missIdx   = checkerRedirect.bits.misIdx.bits
+     val ftqIdx    = VecInit(wbAlignFetchBlock.map(_.ftqIdx))
+     val startAddr = VecInit(wbAlignFetchBlock.map(_.startVAddr.toUInt))
++    val attribute = checkerRedirect.bits.attribute
++    val canTrain  = attribute.isDirect || attribute.isReturn
+     b.valid          := wbValid && checkerRedirect.valid
++    b.bits.canTrain  := canTrain
+     b.bits.ftqIdx    := Mux(checkerRedirect.bits.selectBlock, ftqIdx(1), ftqIdx(0))
+     b.bits.pc        := Mux(checkerRedirect.bits.selectBlock, startAddr(1), startAddr(0))
+     b.bits.taken     := checkerRedirect.bits.taken

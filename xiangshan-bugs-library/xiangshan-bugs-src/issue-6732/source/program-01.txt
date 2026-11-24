@@ -1,0 +1,4 @@
+  li x26, 0x000000e60028ccea
+  csrw 0x300, x26   # mstatus
+  ...
+  mret

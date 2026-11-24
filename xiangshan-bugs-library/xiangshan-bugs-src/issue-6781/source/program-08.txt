@@ -1,0 +1,2 @@
+spike --isa=rv64gcv_zicsr_zifencei test.elf
+echo $?

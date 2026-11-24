@@ -1,0 +1,37 @@
+{
+  "number": 6896,
+  "title": "[kunminghu-v3] DCache CMOUnit: `channel_sel` is valid for only one cycle, so a back-pressured CBO is sent on channel 0 and reaches the wrong L2 slice",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6896",
+  "state": "closed",
+  "labels": [
+    "type: bug/confirmed",
+    "module: memory"
+  ],
+  "author": "ttkxclr",
+  "created_at": "2026-11-09T11:59:09Z",
+  "updated_at": "2026-11-11T06:40:56Z",
+  "submitted_at": "2026-11-09",
+  "source_files": [
+    "issue-6896/source/program-01.scala",
+    "issue-6896/source/program-02.txt",
+    "issue-6896/source/program-03.scala",
+    "issue-6896/source/program-04.scala",
+    "issue-6896/source/program-05.cpp",
+    "issue-6896/source/program-06.txt",
+    "issue-6896/source/program-07.py",
+    "issue-6896/source/program-08.py",
+    "issue-6896/source/program-09.txt",
+    "issue-6896/source/program-10.txt"
+  ],
+  "archive_files": [],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

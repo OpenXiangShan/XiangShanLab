@@ -1,0 +1,5 @@
+commit group [15]: pc 0080000234 cmtcnt 2 <--
+[30] commit pc 0000000080000234 inst 04093a03 wen 1 dst 20 data a0a0000000000000 idx 055 (00)
+[31] commit pc 0000000080000238 inst 040c3a83 wen 1 dst 21 data b0b0000000000000 idx 056 (01) <--
+     s4 different at pc = 0x9f3d3f04c48, right = 0xb0b0000000000000, wrong = 0xa0a0000000000000
+Core 0: ABORT at pc = 0x9f3d3f04c48

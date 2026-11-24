@@ -1,0 +1,7 @@
+// https://github.com/OpenXiangShan/XiangShan-User-Guide/blob/6ef9b3fe7871ec8d32e51a0f8ff0a67c4fd400ee/docs/en/memory-model.md#L30-L35
+The cacheable memory adopts the RVWMO (RISC-V Weak Memory Ordering) memory
+model. Under this model, the actual read/write order of memory among multiple
+cores may not match the program-specified access sequence. Therefore, the RISC-V
+instruction set architecture provides Fence instructions to ensure memory access
+synchronization. Additionally, the RISC-V A extension includes LR/SC
+instructions and AMO instructions for locking and atomic operations.

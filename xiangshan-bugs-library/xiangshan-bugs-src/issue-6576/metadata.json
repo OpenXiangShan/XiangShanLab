@@ -1,0 +1,34 @@
+{
+  "number": 6576,
+  "title": "`mtval` is not written on a load access fault taken by a vector strided load (`vlse32.v`) — kunminghu-v3",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6576",
+  "state": "open",
+  "labels": [
+    "module: memory",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "wndmll643",
+  "created_at": "2026-09-16T04:06:54Z",
+  "updated_at": "2026-09-16T04:52:10Z",
+  "submitted_at": "2026-09-16",
+  "source_files": [
+    "issue-6576/source/xs_v3_mtval_vlse_attachments.tar.gz",
+    "issue-6576/source/program-01.txt",
+    "issue-6576/source/program-02.S",
+    "issue-6576/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-6576/source/xs_v3_mtval_vlse_attachments.tar.gz"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "ede751b7c5478ab4963340d8f193f38ca784982d",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

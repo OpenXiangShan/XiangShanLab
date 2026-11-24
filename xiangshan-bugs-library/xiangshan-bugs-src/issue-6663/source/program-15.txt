@@ -1,0 +1,24 @@
+/* Linker script for mpt_guest.S. */
+OUTPUT_ARCH(riscv)
+ENTRY(_start)
+SECTIONS
+{
+    . = 0x80000000;
+    .text : { *(.text.init) *(.text*) }
+    ASSERT(. <= 0x80001000, "code escapes page 0 of its range")
+    . = 0x80010000;
+    .scenario : { KEEP(*(.scenario)) }
+    ASSERT(SIZEOF(.scenario) == 120, "scenario word count differs")
+    . = 0x80021000;
+    .scratch : { *(.scratch) }
+    . = 0x80030000;
+    .record : { *(.record) }
+    . = 0x80040000;
+    .target_lo : { *(.target_lo) }
+    . = 0x8004f000;
+    .target_hi : { *(.target_hi) }
+    . = 0x80100000;
+    .mpt : { KEEP(*(.mpt)) }
+    ASSERT(SIZEOF(.mpt) == 0x3000, "the three tables are not three pages")
+    /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) *(.riscv.attributes) }
+}

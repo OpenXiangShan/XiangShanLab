@@ -1,0 +1,77 @@
+--- nmi_sweep_uartlite.S
++++ nmi_delay_uartlite.S
+@@ -50,3 +50,3 @@
+     jal ra, putchar
+-    li a0, 0x5034464f4c390001
++    li a0, 0x5034464f4c3a0001
+     li a1, 16
+@@ -77,4 +77,4 @@
+     jal ra, print_N
+-    li s4, 1
+-    li s5, 49
++    la s4, nd_table
++    la s5, nd_table + 384
+     li s6, 1
+@@ -85,4 +85,3 @@
+     csrc mstatus, t0
+-    li t2, 0x2000
+-    or t1, s4, t2
++    ld t1, 0(s4)
+     li t0, 0x4007001c
+@@ -104,3 +103,3 @@
+     jal ra, print_N
+-    addi s4, s4, 1
++    addi s4, s4, 8
+     addi s6, s6, 1
+@@ -400 +399,51 @@
+ .dword 0
++.balign 64
++nd_table:
++.dword 0x2015
++.dword 0x12015
++.dword 0x22015
++.dword 0x32015
++.dword 0x42015
++.dword 0x52015
++.dword 0x62015
++.dword 0x72015
++.dword 0x82015
++.dword 0x92015
++.dword 0xa2015
++.dword 0xb2015
++.dword 0xc2015
++.dword 0xd2015
++.dword 0xe2015
++.dword 0xf2015
++.dword 0x2019
++.dword 0x12019
++.dword 0x22019
++.dword 0x32019
++.dword 0x42019
++.dword 0x52019
++.dword 0x62019
++.dword 0x72019
++.dword 0x82019
++.dword 0x92019
++.dword 0xa2019
++.dword 0xb2019
++.dword 0xc2019
++.dword 0xd2019
++.dword 0xe2019
++.dword 0xf2019
++.dword 0x201f
++.dword 0x1201f
++.dword 0x2201f
++.dword 0x3201f
++.dword 0x4201f
++.dword 0x5201f
++.dword 0x6201f
++.dword 0x7201f
++.dword 0x8201f
++.dword 0x9201f
++.dword 0xa201f
++.dword 0xb201f
++.dword 0xc201f
++.dword 0xd201f
++.dword 0xe201f
++.dword 0xf201f

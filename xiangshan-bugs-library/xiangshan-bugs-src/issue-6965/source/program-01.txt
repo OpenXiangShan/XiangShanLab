@@ -1,0 +1,5 @@
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export NOOP_HOME="$PWD"
+make emu CONFIG=DefaultConfig CC=clang CXX=clang++ -j60 \
+  SIM_ARGS='--csr-state-cover --uarch-state-cover' \
+  PGO_CFLAGS=-fPIE PGO_LDFLAGS=-pie EMU_COMPILE_FILTER=-j60

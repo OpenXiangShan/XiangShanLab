@@ -1,0 +1,4 @@
+==============  Store Commit Event (Core 0)  ==============
+Mismatch for store commits
+  REF commits addr 0x0000000080010070, data 0x00000000dac10000, mask 0x0c, pc 0x000000008000031e   <- NEMU (correct)
+  DUT commits addr 0x0000000080010070, data 0x0000000000000000, mask 0x0c, pc 0x000000008000031e, robidx 0xbb  <- XS (WRONG: zero)

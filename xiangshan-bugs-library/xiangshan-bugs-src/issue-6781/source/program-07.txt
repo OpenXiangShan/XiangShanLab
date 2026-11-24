@@ -1,0 +1,5 @@
+TOOLCHAIN=/path/to/riscv64-unknown-elf
+
+"${TOOLCHAIN}-gcc" -march=rv64gcv -mabi=lp64d -mcmodel=medany -nostdlib -nostartfiles -static -Wl,--build-id=none -T link.ld test.s -o test.elf
+"${TOOLCHAIN}-objcopy" -O binary test.elf test.bin
+"${TOOLCHAIN}-objdump" -d -M no-aliases,numeric test.elf > test.dump

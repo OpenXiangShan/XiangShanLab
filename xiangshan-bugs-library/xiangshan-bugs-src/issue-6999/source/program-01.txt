@@ -1,0 +1,7 @@
+csrwi sstatus, 0
+add   x0, x0, x0
+fcvt.lu.s x0, f21, rup
+lw    x0, 0(x30)
+fcvt.lu.s x0, f21, rup
+csrr  x0, scause
+csrr  x0, mtval

@@ -1,0 +1,43 @@
+# Commit Log
+- Issue: #6123
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6123
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6123
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6123
+- Changed files: 1
+- Additions: 6
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/mem/MemBlock.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index 90eecf15321..870acf920a5 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -1682,7 +1682,11 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   }
+ 
+   (0 until VlduCnt).foreach{i=>
+-    io.ooo_to_mem.issueVldu(i).ready := vLoadCanAccept(i) || vStoreCanAccept(i)
++    if (i == 0) {
++      io.ooo_to_mem.issueVldu(i).ready := vLoadCanAccept(i) || vStoreCanAccept(i) || isSegment
++    } else {
++      io.ooo_to_mem.issueVldu(i).ready := vLoadCanAccept(i) || vStoreCanAccept(i)
++    }
+   }
+ 
+   vlMergeBuffer.io.redirect <> redirect
+@@ -2050,7 +2054,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   // vector segmentUnit
+   vSegmentUnit.io.in.bits <> io.ooo_to_mem.issueVldu.head.bits
+   vSegmentUnit.io.csrCtrl <> csrCtrl
+-  vSegmentUnit.io.in.valid := isSegment && io.ooo_to_mem.issueVldu.head.valid// is segment instruction
++  vSegmentUnit.io.in.valid := isSegment// is segment instruction
+   vSegmentUnit.io.dtlb.resp.bits <> dtlb_reqs.take(LduCnt).head.resp.bits
+   vSegmentUnit.io.dtlb.resp.valid <> dtlb_reqs.take(LduCnt).head.resp.valid
+   vSegmentUnit.io.pmpResp <> pmp_check.head.resp
+```

@@ -1,0 +1,4 @@
+// https://github.com/riscv/riscv-smmtt/blob/bdc11dc0ab76b4e5a782ee4305356bf504d61dbc/chapter4.adoc#L158-L160
+3. If _mpte.v_=0, or if any bits or encodings that are reserved for future
+   standard use are set within _mpte_, stop and raise an access-fault exception
+   corresponding to the original access type.

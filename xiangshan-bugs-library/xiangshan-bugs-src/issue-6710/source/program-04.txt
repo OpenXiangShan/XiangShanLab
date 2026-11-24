@@ -1,0 +1,2 @@
+Core 0: EXCEEDING CYCLE/INSTR LIMIT at pc = 0x164cad89b81ef
+Core-0 instrCnt = 15, cycleCnt = 30000, IPC = 0.000500

@@ -1,0 +1,29 @@
+{
+  "number": 6464,
+  "title": "CSRPermit: menvcfg.STCE=0 does not illegal-instruction non-M vstimecmp access",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6464",
+  "state": "closed",
+  "labels": [
+    "module: backend",
+    "type: bug/won't fix"
+  ],
+  "author": "aphlta",
+  "created_at": "2026-09-02T05:00:50Z",
+  "updated_at": "2026-09-02T05:54:39Z",
+  "submitted_at": "2026-09-02",
+  "source_files": [
+    "issue-6464/source/program-01.scala",
+    "issue-6464/source/program-02.scala"
+  ],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

@@ -1,0 +1,7 @@
+# build (nexus-am, ARCH=riscv64-xs)
+make -C nexus-am/apps/lcofip-lost-poc ARCH=riscv64-xs
+# run, ~212k cycles
+./build/emu -i nexus-am/apps/lcofip-lost-poc/build/lcofip-lost-poc-riscv64-xs.bin --no-diff
+# -> "=== BUG CONFIRMED: 104 overflow requests lost to same-cycle mip/sip writes ===", HIT BAD TRAP
+# optional: with NEMU difftest it aborts with "mip different ... right = 0x2000, wrong = 0x0"
+./build/emu -i ... --diff ready-to-run/riscv64-nemu-interpreter-so

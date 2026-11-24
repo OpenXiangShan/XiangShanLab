@@ -1,0 +1,20 @@
+OUTPUT_ARCH(riscv)
+ENTRY(_start)
+SECTIONS
+{
+    . = 0x80000000;
+    .text.entry : { *(.text.entry) }
+    . = 0x80001000;
+    .text : { *(.text.main) }
+    . = 0x80100000;
+    .data : { *(.data*) }
+    . = 0x80200000;
+    .pt : { *(.pt) }
+    . = 0x80300000;
+    .guest0 : { *(.guest0) }
+    . = 0x80301000;
+    .guest1 : { *(.guest1) }
+    . = 0x80400000;
+    .pages : { *(.pages) }
+    /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) *(.riscv.attributes) }
+}

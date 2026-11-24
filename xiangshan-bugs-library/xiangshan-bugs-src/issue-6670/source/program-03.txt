@@ -1,0 +1,1 @@
+   ./build/emu -i xs_ppn_high_perm.bin --no-diff -I 1500

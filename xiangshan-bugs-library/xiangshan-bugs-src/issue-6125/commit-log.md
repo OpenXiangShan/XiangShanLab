@@ -1,0 +1,57 @@
+# Commit Log
+- Issue: #6125
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/pull/6125
+- Issue state: closed
+- Tested RTL commit: -
+- Related PR: #6125
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6125
+- Changed files: 2
+- Additions: 5
+- Deletions: 4
+
+## Files
+- `ready-to-run`
+- `src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala`
+
+## Diff
+```diff
+diff --git a/ready-to-run b/ready-to-run
+index e79a6313ecb..8be711d0fe3 160000
+--- a/ready-to-run
++++ b/ready-to-run
+@@ -1 +1 @@
+-Subproject commit e79a6313ecb05b3beb85954baf555bcfe427eae9
++Subproject commit 8be711d0fe326d47367066150783b681a5e9f9ed
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
+index 6b75845c36a..f3fd70f09f8 100644
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/CSRPermitModule.scala
+@@ -222,7 +222,9 @@ class MLevelPermitModule extends Module {
+ 
+   private val fpVec_EX_II = fpOff_EX_II || vecOff_EX_II
+ 
+-  private val rwStimecmp_EX_II = !privState.isModeM && (!mcounterenTM || !menvcfgSTCE) && (addr === CSRs.vstimecmp.U || addr === CSRs.stimecmp.U)
++  private val rwStimecmp_EX_II = !privState.isModeM &&
++                                (!mcounterenTM && (addr === CSRs.vstimecmp.U || addr === CSRs.stimecmp.U) ||
++                                 !menvcfgSTCE && (addr === CSRs.stimecmp.U))
+ 
+   private val accessHPM_EX_II = csrIsHPM && !privState.isModeM && !mcounteren(counterAddr)
+ 
+@@ -547,7 +549,6 @@ class IndirectCSRPermitModule extends Module {
+       ) ||
+       privState.isVirtual && (
+         Iselect.isInOthers(vsiselect) ||
+-        !mstateen0.AIA.asBool && Iselect.isInAIA(vsiselect) ||
+         !mstateen0.IMSIC.asBool && Iselect.isInImsic(vsiselect)
+       )
+     ) && addr === CSRs.sireg.U
+@@ -612,7 +613,7 @@ class xcounterenIO extends Bundle {
+ 
+ class xenvcfgIO extends Bundle {
+   // Machine environment configuration register.
+-  // Accessing stimecmp or vstimecmp from **Non-M level** will trap EX_II, if menvcfg.STCE=0
++  // Accessing stimecmp from **Non-M level** will trap EX_II, if menvcfg.STCE=0
+   val menvcfg = UInt(64.W)
+   // Hypervisor environment configuration register.
+   // Accessing vstimecmp from ** V level** will trap EX_VI, if menvcfg.STCE=1 && henvcfg.STCE=0
+```

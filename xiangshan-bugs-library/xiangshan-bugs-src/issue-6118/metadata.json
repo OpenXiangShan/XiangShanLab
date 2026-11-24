@@ -1,0 +1,27 @@
+{
+  "number": 6118,
+  "title": "feat(DCache): support 32x2B banked data array",
+  "url": "https://github.com/OpenXiangShan/XiangShan/pull/6118",
+  "state": "closed",
+  "labels": [
+    "module: memory"
+  ],
+  "author": "isnthzy",
+  "created_at": "2026-06-22T10:59:35Z",
+  "updated_at": "2026-06-30T07:17:37Z",
+  "submitted_at": "2026-06-22",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": true,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6118/commit-log.md"
+  ],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

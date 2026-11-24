@@ -1,0 +1,4 @@
+   Assertion failed at build/rtl/FEX0.sv:1479.
+   Core 0: ABORT at pc = 0x80000614
+   Core-0 instrCnt = 163, cycleCnt = 9,378
+   Assertion failed: FEX0 produced multiple Exu outputs in one cycle

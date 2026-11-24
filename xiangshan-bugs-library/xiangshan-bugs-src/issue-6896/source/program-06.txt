@@ -1,0 +1,38 @@
+#!/bin/bash
+# Mode A: XS_HOME=<XiangShan checkout of a253c1163 after `make init`> ./run.sh   (uses mill; not executed by me)
+# Mode B: XS_CP=<runtime classpath of compiled a253c1163> SCALAC_CP=<scala 2.13.17 compiler jars>
+#         CHISEL_PLUGIN=<chisel-plugin 7.13.0 jar> XS_SRC=<source tree> ./run.sh            (what I ran)
+# SKIP_ELAB=1 reuses $WORK/ORIG.sv and $WORK/FIX.sv.
+# Elaborating the DCache takes about 30 min and up to 16 GB of JVM heap per variant.
+set -e
+HERE="$(cd "$(dirname "$0")" && pwd)"
+W="${WORK:-/tmp/xs_cmo_repro}"; mkdir -p "$W"; cp "$HERE/tb.cpp" "$W/tb.cpp"
+SRC=xiangshan/cache/dcache/mainpipe/MissQueue.scala
+scalac_cmd() { java -cp "$SCALAC_CP" scala.tools.nsc.Main -Xplugin:"$CHISEL_PLUGIN" -language:reflectiveCalls -Ymacro-annotations -Ytasty-reader -nowarn "$@"; }
+if [ -z "$SKIP_ELAB" ]; then
+if [ -z "$XS_CP" ]; then
+  : "${XS_HOME:?set XS_HOME (mode A) or XS_CP (mode B)}"
+  mkdir -p "$XS_HOME/src/main/scala/repro_cmo"; cp "$HERE/AuditCfg.scala" "$HERE/CmoRepro.scala" "$XS_HOME/src/main/scala/repro_cmo/"
+  trap 'rm -rf "$XS_HOME/src/main/scala/repro_cmo"' EXIT
+  (cd "$XS_HOME" && ./mill -i xiangshan.runMain xiangshan.cache.CmoMain) > "$W/ORIG.sv"
+  (cd "$XS_HOME" && git apply "$HERE/fix.diff")
+  (cd "$XS_HOME" && ./mill -i xiangshan.runMain xiangshan.cache.CmoMain) > "$W/FIX.sv" || true
+  (cd "$XS_HOME" && git apply -R "$HERE/fix.diff")
+else
+  : "${SCALAC_CP:?}" "${CHISEL_PLUGIN:?}" "${XS_SRC:?}"
+  mkdir -p "$W/cls" "$W/cls_fix" "$W/fixsrc"
+  scalac_cmd -d "$W/cls" -classpath "$XS_CP" "$HERE/AuditCfg.scala" "$HERE/CmoRepro.scala"
+  java -Xmx16g -Xss64m -cp "$W/cls:$XS_CP" xiangshan.cache.CmoMain > "$W/ORIG.sv"
+  cp "$XS_SRC/src/main/scala/$SRC" "$W/fixsrc/"; (cd "$W/fixsrc" && patch -p8 -s < "$HERE/fix.diff")
+  scalac_cmd -d "$W/cls_fix" -classpath "$W/cls:$XS_CP" "$W/fixsrc/MissQueue.scala"
+  java -Xmx16g -Xss64m -cp "$W/cls_fix:$W/cls:$XS_CP" xiangshan.cache.CmoMain > "$W/FIX.sv"
+fi
+fi
+for V in ORIG FIX; do
+  python3 "$HERE/split.py" "$W/$V.sv" "$W/$V" > /dev/null
+  python3 "$HERE/gen_dpi.py" "$W/$V" "$W/$V/dpi_stubs.cpp" > /dev/null   # Constantin DPI readers -> elaborated init values
+  # The bound TLMonitor layers are not used: the generic monitor rejects XiangShan's custom CBO opcodes (>= 8).
+  (cd "$W/$V" && verilator --cc --exe --build -j 10 --top-module CmoLM -Wno-fatal -Wno-lint -Wno-style -Wno-MULTIDRIVEN \
+     main.sv $(ls *.v) ClockGate.sv ../tb.cpp dpi_stubs.cpp -o sim -Mdir obj > build.log 2>&1)
+done
+{ for V in ORIG FIX; do echo "== $V"; "$W/$V/obj/sim"; done; } | tee "$W/run_all.log"

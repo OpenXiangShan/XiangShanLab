@@ -1,0 +1,30 @@
+{
+  "number": 6852,
+  "title": "[Bug] csrr of minstret/instret is not ordered after older instructions (counters missing from waitForwardInOrderCsrReadList)",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6852",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "module: backend"
+  ],
+  "author": "davidharrishmc",
+  "created_at": "2026-11-03T09:52:43Z",
+  "updated_at": "2026-11-12T02:22:20Z",
+  "submitted_at": "2026-11-03",
+  "source_files": [
+    "issue-6852/source/xiangshan-instret-read-order.tar.gz"
+  ],
+  "archive_files": [
+    "issue-6852/source/xiangshan-instret-read-order.tar.gz"
+  ],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "e7bab53e66dfb3c4a1d11cf9519b0396f8576cae",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

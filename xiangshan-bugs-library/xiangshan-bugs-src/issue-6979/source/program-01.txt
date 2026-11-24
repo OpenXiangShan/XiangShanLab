@@ -1,0 +1,2 @@
+mmu_write: vaddr 0xffffffffffe650ca, paddr 0x800650ca, len 8, data 0x20008
+mmu_read:  vaddr 0xffffffffffe650ca, paddr 0x800650ca, rdata 0x20008

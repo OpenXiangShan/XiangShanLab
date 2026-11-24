@@ -1,0 +1,3 @@
+800002d8: vsetvli t0, zero, e8, m1, tu, mu   ; SEW=8, LMUL=1, vl=16
+800002dc: li      t2, 267                    ; low SEW(8) bits = 267 & 0xFF = 11
+800002e0: vssubu.vx v12, v25, t2             ; v12[i] = saturate_u8( v25[i] - 11 )

@@ -1,0 +1,35 @@
+{
+  "number": 6670,
+  "title": "Leaf PTE with PPN bits above the physical address width: access fault reported where the permission check must raise a page fault",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6670",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: unknown"
+  ],
+  "author": "youzi27",
+  "created_at": "2026-10-05T02:09:10Z",
+  "updated_at": "2026-10-06T05:57:16Z",
+  "submitted_at": "2026-10-05",
+  "source_files": [
+    "issue-6670/source/xs_ppn_high_perm.bin.zip",
+    "issue-6670/source/xs_ppn.zip",
+    "issue-6670/source/program-01.txt",
+    "issue-6670/source/program-02.txt",
+    "issue-6670/source/program-03.txt"
+  ],
+  "archive_files": [
+    "issue-6670/source/xs_ppn_high_perm.bin.zip",
+    "issue-6670/source/xs_ppn.zip"
+  ],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "09453ff8f44e9d2b526e6149c60e1dc3f08c7192",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

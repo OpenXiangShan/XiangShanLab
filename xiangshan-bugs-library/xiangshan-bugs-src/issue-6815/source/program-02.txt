@@ -1,0 +1,13 @@
+Sail / Spike reference:
+  trap_count          = 2   <-- 1st trap: SSIP interrupt (0x8000000000000001); 2nd trap: Software Check (18)
+  last_mcause         = 18  (Software Check)
+  mtval               = 2   (Landing pad fault)
+  mip     (x28)       = 0x0 (SSIP cleared by interrupt handler)
+  mstatus (x10)       = 0x0000000a00000080 (MIE = 0, MPIE = 1)
+
+XiangShan (zicfilp):
+  trap_count          = 1   <-- Asynchronous interrupt was DROPPED!
+  last_mcause         = 18  (Software Check committed ahead of pending interrupt)
+  mtval               = 2
+  mip     (x28)       = 0x2 <-- mip.SSIP is STILL pending!
+  mstatus (x10)       = 0x0000000a00000088 <-- mstatus.MIE is STILL 1!

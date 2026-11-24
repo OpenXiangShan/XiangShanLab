@@ -1,0 +1,4 @@
+Core 0: ABORT at pc = 0x800000cc
+Core-0 instrCnt = 50, cycleCnt = 4,423
+Seed=0
+Assertion failed: illegal MemAttr asserted: Device

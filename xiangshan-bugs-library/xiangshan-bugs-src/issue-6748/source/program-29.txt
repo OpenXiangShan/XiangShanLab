@@ -1,0 +1,23 @@
+diff --git a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+--- a/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
++++ b/src/main/scala/xiangshan/backend/fu/NewCSR/NewCSR.scala
+@@ -430,6 +430,9 @@ class NewCSR(implicit val p: Parameters) extends Module
+   val intrVec = RegEnable(intrMod.io.out.interruptVec.bits, 0.U, intrMod.io.out.interruptVec.valid)
+   val debug = RegEnable(intrMod.io.out.debug, false.B, intrMod.io.out.interruptVec.valid)
+   val nmi = intrMod.io.out.nmi
++  // Latched with the interrupt number, as debug, irToHS and irToVS are: whether the interrupt being taken is an NMI,
++  // even if the NMI input has dropped since it was requested.
++  val nmiLatched = RegEnable(intrMod.io.out.nmi, false.B, intrMod.io.out.interruptVec.valid)
+   val virtualInterruptIsHvictlInject = intrMod.io.out.virtualInterruptIsHvictlInject
+   val irToHS = RegEnable(intrMod.io.out.irToHS, false.B, intrMod.io.out.interruptVec.valid)
+   val irToVS = RegEnable(intrMod.io.out.irToVS, false.B, intrMod.io.out.interruptVec.valid)
+@@ -842,8 +845,8 @@ class NewCSR(implicit val p: Parameters) extends Module
+     }
+   }
+ 
+-  trapEntryMNEvent.valid  := ((hasTrap && nmi) || dbltrpToMN) && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE
+-  trapEntryMEvent .valid  := hasTrap && entryPrivState.isModeM && !dbltrpToMN && !entryDebugMode && !debugMode && !nmi && mnstatus.regOut.NMIE
++  trapEntryMNEvent.valid  := ((hasTrap && (nmi || (trapIsInterrupt && nmiLatched))) || dbltrpToMN) && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE
++  trapEntryMEvent .valid  := hasTrap && entryPrivState.isModeM && !dbltrpToMN && !entryDebugMode && !debugMode && !(nmi || (trapIsInterrupt && nmiLatched)) && mnstatus.regOut.NMIE
+   trapEntryHSEvent.valid  := hasTrap && entryPrivState.isModeHS && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE
+   trapEntryVSEvent.valid  := hasTrap && entryPrivState.isModeVS && !entryDebugMode && !debugMode && mnstatus.regOut.NMIE

@@ -1,0 +1,26 @@
+{
+  "number": 6741,
+  "title": "[MemBlock] Store and CBO faults write the unmasked address to mtval/stval under pointer masking",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6741",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: memory"
+  ],
+  "author": "flaviens",
+  "created_at": "2026-10-21T05:13:55Z",
+  "updated_at": "2026-10-22T03:10:39Z",
+  "submitted_at": "2026-10-21",
+  "source_files": [],
+  "archive_files": [],
+  "branch": "",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

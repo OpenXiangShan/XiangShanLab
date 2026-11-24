@@ -1,0 +1,10 @@
+emu (MinimalConfig, VLEN=128, Verilator), REF = riscv64-nemu-interpreter-so
+vmv.v.v v3, v0 @ e32m2:
+   mcause different at pc = 0x008000006c, right = 0x2, wrong = 0x0
+    mtval different at pc = 0x008000006c, right = 0x5e0001d7, wrong = 0x0
+     mepc different at pc = 0x008000006c, right = 0x80000030, wrong = 0x0
+  mstatus different at pc = 0x008000006c, right = 0x8000040a00001e00, wrong = 0x8000000a00000600
+Core 0: ABORT at pc = 0x8000006c
+
+vmerge.vvm @ e16m4 (execute-side corruption, DUT vector regs after the op):
+  v6 : <uninitialized garbage>, v7 : <uninitialized garbage>   (REF keeps sentinel 0x70707070...)

@@ -1,0 +1,47 @@
+# Commit Log
+- Issue: #6516
+- Issue URL: https://github.com/OpenXiangShan/XiangShan/issues/6516
+- Issue state: closed
+- Tested RTL commit: 0cdabfc7c
+- Related PR: #6519
+- PR URL: https://github.com/OpenXiangShan/XiangShan/pull/6519
+- Changed files: 1
+- Additions: 3
+- Deletions: 2
+
+## Files
+- `src/main/scala/xiangshan/backend/fu/wrapper/I2F.scala`
+
+## Diff
+```diff
+diff --git a/src/main/scala/xiangshan/backend/fu/wrapper/I2F.scala b/src/main/scala/xiangshan/backend/fu/wrapper/I2F.scala
+index 908f2f06f83..f9d6f6feac5 100644
+--- a/src/main/scala/xiangshan/backend/fu/wrapper/I2F.scala
++++ b/src/main/scala/xiangshan/backend/fu/wrapper/I2F.scala
+@@ -52,7 +52,7 @@ class I2F(cfg: FuConfig)(implicit p: Parameters) extends FpPipedFuncUnit(cfg) {
+     dontTouch(outSew1H)
+   }
+ 
+-  val outIsMvInst = FCvtOpcode.getCvtSign(fuOpType).andR
++  val isMvInst = FCvtOpcode.getCvtSign(fuOpType).andR
+   val isFli = FCvtOpcode.isFli(fuOpType)
+ 
+   val fliHTable = Module(new FliHTable)
+@@ -80,6 +80,7 @@ class I2F(cfg: FuConfig)(implicit p: Parameters) extends FpPipedFuncUnit(cfg) {
+ 
+   val outIsFli = RegEnable(RegEnable(isFli, fire), fireReg)
+   val outFliData = RegEnable(RegEnable(fliData, fire), fireReg)
++  val outIsMvInst = RegEnable(RegEnable(isMvInst, fire), fireReg)
+ 
+   io.out.bits.res.fflags.get := Mux(outIsFli || outIsMvInst, 0.U, fcvt.io.fflags)
+ 
+@@ -87,7 +88,7 @@ class I2F(cfg: FuConfig)(implicit p: Parameters) extends FpPipedFuncUnit(cfg) {
+     outIsFli,
+     outFliData,
+     Mux(
+-      RegEnable(RegEnable(outIsMvInst, fire), fireReg),
++      outIsMvInst,
+       RegEnable(RegEnable(src1, fire), fireReg),
+       fcvt.io.result
+     )
+```

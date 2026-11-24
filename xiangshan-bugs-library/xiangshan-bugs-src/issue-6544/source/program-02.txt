@@ -1,0 +1,1 @@
+vs2NotAlign = useVs2 && vregNotAlign(emulVs2=m8, vs2=v30) = true   // v30[2:0] = 110 != 000

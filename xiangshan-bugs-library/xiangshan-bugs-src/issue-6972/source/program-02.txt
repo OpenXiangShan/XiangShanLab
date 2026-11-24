@@ -1,0 +1,10 @@
+--- a/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/NewLoadUnit.scala
+@@ -634 +634 @@
+-  loadTrigger.io.fromLoadStore.vaddr := vaddr
++  loadTrigger.io.fromLoadStore.vaddr := fullva
+--- a/src/main/scala/xiangshan/mem/pipeline/NewStoreUnit.scala
++++ b/src/main/scala/xiangshan/mem/pipeline/NewStoreUnit.scala
+@@ -361 +361 @@
+-  storeTrigger.io.fromLoadStore.vaddr := vaddr
++  storeTrigger.io.fromLoadStore.vaddr := fullva

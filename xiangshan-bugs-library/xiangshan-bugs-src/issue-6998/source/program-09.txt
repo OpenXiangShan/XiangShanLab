@@ -1,0 +1,2 @@
+- isVsetiVec(i) && instFieldVec(i).RD === 0.U && instFieldVec(i).RS1 === 0.U
++ isVsetvli(i)  && instFieldVec(i).RD === 0.U && instFieldVec(i).RS1 === 0.U

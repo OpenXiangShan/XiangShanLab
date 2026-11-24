@@ -1,0 +1,2 @@
+   ./build/emu -i repro_min.elf -C 15000 \
+       --diff ready-to-run/riscv64-nemu-interpreter-so

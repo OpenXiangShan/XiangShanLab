@@ -1,0 +1,5 @@
+csrs mie, MTIE
+wfi
+ld   a0, 0(a1)      # a1 -> flag written by the handler
+nop                 # XiangShan: trap taken here (mepc = this nop), a0 = old flag
+                    # spec / Spike: mepc = &ld, a0 = new flag

@@ -1,0 +1,10 @@
+// https://github.com/OpenXiangShan/XiangShan/blob/6714a69d001dbb9e213ff077a518fb78e598c48a/src/main/scala/xiangshan/backend/vector/fu/VecFuConfig.scala#L297-L305
+  val VialuCfg = VecFuConfig.fromFuConfig(FuConfig.VialuCfg, (p: Parameters, cfg: VecFuConfig) => Module(new VIAluWrapper(cfg)(p).suggestName("Vialu")))
+  val VimacCfg = VecFuConfig.fromFuConfig(FuConfig.VimacCfg, (p: Parameters, cfg: VecFuConfig) => Module(new VIMacU(cfg)(p).suggestName("Vimac")))
+  val VidivCfg = VecFuConfig.fromFuConfig(FuConfig.VidivCfg, (p: Parameters, cfg: VecFuConfig) => Module(new VIDiv(cfg)(p).suggestName("Vidiv")))
+  val VmoveCfg = VecFuConfig.fromFuConfig(FuConfig.VmoveCfg, (p: Parameters, cfg: VecFuConfig) => Module(new VMove(cfg)(p).suggestName("Vmove")))
+  val VfmacCfg = VecFuConfig.fromFuConfig(FuConfig.VfmacCfg, (p: Parameters, cfg: VecFuConfig) => Module(new VFMacWrapper(cfg)(p).suggestName("Vfmac")))
+  val VfdivCfg = VecFuConfig.fromFuConfig(FuConfig.VfdivCfg, (p: Parameters, cfg: VecFuConfig) => Module(new VFDivWrapper(cfg)(p).suggestName("Vfdiv")))
+  val VfcvtCfg = VecFuConfig.fromFuConfig(FuConfig.VfcvtCfg, (p: Parameters, cfg: VecFuConfig) => Module(new VCVTWrapper(cfg)(p).suggestName("Vfcvt")))
+  val VSha256msCfg = VecFuConfig.fromFuConfig(FuConfig.VSha256msCfg)
+  val VSha256cCfg = VecFuConfig.fromFuConfig(FuConfig.VSha256cCfg)

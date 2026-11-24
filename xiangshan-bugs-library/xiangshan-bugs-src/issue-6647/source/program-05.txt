@@ -1,0 +1,2 @@
+t = 9377   simultaneousOutCnt = 0b0010 (= 2)
+           HIGH: Fcvt.out_ex_3 , Fmul.out_ex_2

@@ -1,0 +1,2 @@
+vxsat different at pc = 0x80000306:  right (NEMU) 0x1   wrong (XS) 0x0
+vcsr  different:                     right (NEMU) 0x1   wrong (XS) 0x0

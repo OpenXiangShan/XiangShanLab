@@ -1,0 +1,17 @@
+--- a/src/main/scala/xiangshan/cache/mmu/TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+@@ class TLB
+     when (req(i).fire) {
+       req_out(i) := req(i).bits
+       req_out(i).fullva := preCheck(i).effectiveVa
++      req_out(i).vaddr := Cat(preCheck(i).query.vpn, get_off(req(i).bits.vaddr))
+     }
+@@ class TlbRequestPrepare
+-  io.resp.query.vpn := get_pn(req.vaddr)
++  val maskedVaddr = Wire(UInt(VAddrBits.W))
++  maskedVaddr := req.vaddr
++  when (pmm === PMLEN16) {
++    maskedVaddr := Mux(prevmEnable || (pres2xlateEnable && csr.vsatp.mode =/= 0.U),
++      SignExt(req.vaddr(47, 0), VAddrBits), ZeroExt(req.vaddr(47, 0), VAddrBits))
++  }
++  io.resp.query.vpn := get_pn(maskedVaddr)

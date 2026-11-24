@@ -1,0 +1,2 @@
+./build/emu -i repro-fill71.bin   -C 400000
+./build/emu -i control-fill70.bin -C 400000

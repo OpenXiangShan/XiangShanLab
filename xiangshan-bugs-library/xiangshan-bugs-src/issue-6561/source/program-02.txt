@@ -1,0 +1,2 @@
+mstatus different at pc = 0x0080000154, right = 0x0000000a0004058a, wrong = 0x8000000a0004078a
+sstatus different at pc = 0x0080000154, right = 0x0000000200040502, wrong = 0x8000000200040702

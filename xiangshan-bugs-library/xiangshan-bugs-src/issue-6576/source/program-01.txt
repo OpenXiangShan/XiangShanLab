@@ -1,0 +1,2 @@
+[31] exception pc 000000008000016c inst 0bd96187 cause 0000000000000005 <--
+  mtval different at pc = ..., right = 0x0000000080002000, wrong = 0xffffffffffffffff

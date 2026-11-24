@@ -1,0 +1,6 @@
+0000000000000001    # a) lw  0x00  -> intrGenRegs[0]  (expected 0x0000000000000001)
+0000000000000000    # b) lw  0x04  -> expected intrGenRegs[1] = 0x0000000000000002
+0000000000000001    # c) lw  0x10  -> expected intrGenRegs[4] = 0x0000000012345678
+0000000000000001    # d) ld  0x00  -> expected 0x0000000200000001
+00000000aaaa5555    # e) lwu 0x10  -> word 4 follows the rewritten word 0 (expected 0x12345678)
+0000000000000000    # f) lwu 0x04  -> expected intrGenRegs[1] = 0x0000000000000002

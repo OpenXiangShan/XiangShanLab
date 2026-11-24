@@ -1,0 +1,15 @@
+CASE_DIR="$PWD/output/kunminghu-v2-risk-closure-20261111/cpu-rebuild/debug-entry-v1/cetrig-v1/clear-after-critical-v1"
+SIM="$PWD/output/kunminghu-v2-risk-closure-20261111/cpu-rebuild/debug-entry-v1/cetrig-v1/runtime/vip-model/Vchi_eb_xiangshan_qualification_top"
+mkdir "$CASE_DIR/reproduce"
+
+docker exec -u "$(id -u):$(id -g)" -w "$CASE_DIR/reproduce" \
+  -e ‘XS_DEBUG_REQUEST=case=DBGCETRIG04;ready=000000008000003c;entry=0000000038020800;bound=100000' \
+  -e 'XS_EXPECTED_CRITICAL_WINDOW=case=DBGCETRIG04;prebound=100000;hold=8192' \
+  -e "XS_TRACE_CAPTURE=$CASE_DIR/reproduce/trace.jsonl" \
+  xiangshan_env env -u XS_CRITICAL_MONITOR \
+  timeout --signal=TERM --kill-after=5s 900s "$SIM" \
+  +XS_CASE_ID=DBGCETRIG04 \
+  "+XS_ELF=$CASE_DIR/native1/DBGCETRIG04/case.elf" \
+  +XS_RESET_VECTOR=80000000 +XS_CORES=1 +XS_PERF_MODE \
+  +XS_PERF_DONE_PC=80000138 +XS_TIMEOUT_CYCLES=100000 \
+  +UVM_VERBOSITY=UVM_LOW +verilator+seed+1

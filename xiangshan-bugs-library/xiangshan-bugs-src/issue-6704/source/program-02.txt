@@ -1,0 +1,73 @@
+diff --git a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+index f386d8c6b..88bd53bb6 100644
+--- a/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
++++ b/src/main/scala/xiangshan/mem/lsqueue/NewStoreQueue.scala
+@@ -150,6 +150,8 @@ class SQCtrlEntryBundle(implicit p: Parameters) extends MemBlockBundle {
+   // vecInactive indicate storage a inactive vector element, it will not write to Sbuffer. written when vector split.
+   val vecInactive        = Bool()
+   val cross16Byte        = Bool()
++  // The head of a split cross-16B store has written vaddr, paddr and byteMask; addrValid waits for the tail.
++  val unalignHeadValid   = Bool()
+   val hasException       = Bool()
+   val committed          = Bool()
+   val handleFinish       = Bool() // this signal is for deqPtr move, true.B indicate NC/MMIO/cbo request can deq
+@@ -345,6 +347,8 @@ abstract class PhysicalStoreQueueBase(implicit p: Parameters) extends LSQModule
+       //     2. Generate final forwarded data and mask
+ 
+       val addrValidVec = WireInit(VecInit((0 until StoreQueuePhysicalSize).map(j => io.ctrlEntriesIn(j).addrValid)))
++      val fwdAddrValidVec = WireInit(VecInit((0 until StoreQueuePhysicalSize).map(j =>
++        io.ctrlEntriesIn(j).addrValid || io.ctrlEntriesIn(j).unalignHeadValid)))
+       // if is cbo zero, it can forward; other cbo type's data is invalid.
+       val dataValidVec = WireInit(VecInit((0 until StoreQueuePhysicalSize).map(j =>
+         io.ctrlEntriesIn(j).dataValid && (isCboZero(io.dataEntriesIn(j).cboType) || !io.ctrlEntriesIn(j).isCbo))))
+@@ -473,7 +477,7 @@ abstract class PhysicalStoreQueueBase(implicit p: Parameters) extends LSQModule
+       val s1VaddrMatchVec  = VecInit(io.dataEntriesIn.zip(io.ctrlEntriesIn).zipWithIndex.map { case ((dataEntry, ctrlEntry), j) =>
+         val storeIsCbo = ctrlEntry.isCbo
+ 
+-        (s1Same16BMatchVec(j) || s1Next16BMatchVec(j) || (storeIsCbo && s1SameLineMatchVec(j))) && ctrlEntry.addrValid
++        (s1Same16BMatchVec(j) || s1Next16BMatchVec(j) || (storeIsCbo && s1SameLineMatchVec(j))) && fwdAddrValidVec(j)
+       }).asUInt
+ 
+       // An UnalignQueue hit identifies the second page of an older cross-page store.
+@@ -554,7 +558,7 @@ abstract class PhysicalStoreQueueBase(implicit p: Parameters) extends LSQModule
+       val s2SelectCtrlEntry   = RegEnable(s1SelectCtrlEntry, s1Valid)
+       val s2DataInValid       = RegEnable(s1DataInvalid, s1Valid)
+       val s2StrictMdpWait     = RegEnable(s1StrictMdpWait, s1Valid)
+-      val s2CanForward       = RegEnable((s1AgeMaskLow | s1AgeMaskHigh) & s1OverlapMask & addrValidVec.asUInt, s1Valid)
++      val s2CanForward       = RegEnable((s1AgeMaskLow | s1AgeMaskHigh) & s1OverlapMask & fwdAddrValidVec.asUInt, s1Valid)
+       val s2SelectOH         = RegEnable(s1SelectOH, s1Valid)
+       val s2LoadMaskEnd      = RegEnable(UIntToMask(MemorySize.CalculateSelectMask(s1LoadStart, s1LoadEnd), VLENB), s1Valid)
+       val s2DataInvalidSqIdx = RegEnable(s1DataInvalidSqIdx, s1Valid)
+@@ -579,7 +583,8 @@ abstract class PhysicalStoreQueueBase(implicit p: Parameters) extends LSQModule
+       val s2PreciseMdpWait     = s2MdpHitInPhysical && !io.ctrlEntriesIn(s2WaitSqIdx.value).addrValid
+       val s2NeedPreciseMdpWait = s2PreciseMdpWait || s2MdpHitOutOfRange
+       // debug
+-      XSError(s1SelectOH.orR && !s1SelectCtrlEntry.addrValid && s1Valid, "forward select a invalid entry!\n")
++      XSError(s1SelectOH.orR && !s1SelectCtrlEntry.addrValid && !s1SelectCtrlEntry.unalignHeadValid && s1Valid,
++        "forward select a invalid entry!\n")
+       /*================================================== Stage 2 ===================================================*/
+ 
+       // Data Generation Process:
+@@ -1682,6 +1687,9 @@ class PhysicalStoreQueue(implicit p: Parameters) extends PhysicalStoreQueueBase
+     val cross16ByteSet = io.fromStoreUnit.storeAddrIn.zipWithIndex.map { case (port, j) =>
+       port.bits.isUnalign && port.bits.cross16Byte && staValidSetVec(j)
+     }.reduce(_ || _)
++    val unalignHeadSet = io.fromStoreUnit.storeAddrIn.zipWithIndex.map { case (port, j) =>
++      !port.bits.isLastRequest && port.bits.cross16Byte && !port.bits.tlbMiss && staValidSetVec(j)
++    }.reduce(_ || _)
+     val cboSetVec = io.fromStoreUnit.storeAddrIn.zipWithIndex.map { case (port, j) =>
+       LSUOpType.isCboAll(port.bits.uop.fuOpType) && staValidSetVec(j)
+     }
+@@ -1696,6 +1704,12 @@ class PhysicalStoreQueue(implicit p: Parameters) extends PhysicalStoreQueueBase
+       ctrlEntries(i).addrValid    := false.B
+     }
+ 
++    when(staSetValid) {
++      ctrlEntries(i).unalignHeadValid := unalignHeadSet
++    }.elsewhen(deqCancel || needCancel(i)) {
++      ctrlEntries(i).unalignHeadValid := false.B
++    }
++
+     when(staSetValid) { // no need to clean when deq or cancel, because it will be set when set addrValid
+       ctrlEntries(i).cross16Byte  := cross16ByteSet
+       ctrlEntries(i).isCbo        := isCboSet

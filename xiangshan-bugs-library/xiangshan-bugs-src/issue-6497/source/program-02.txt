@@ -1,0 +1,7 @@
+csrrc x0,mip,SSIP      E=258 swept k=1..262  overflow=262  LOST=48  first_lost_k=43
+csrrc mip (1/cycle ev) E=43  swept k=1..47   overflow=44   LOST=8
+csrrc x0,sip,SSIP      E=258 swept k=1..262  overflow=262  LOST=48
+ctrl csrrc mscratch    E=258 swept k=1..262  overflow=262  LOST=0        <- same timing, unrelated CSR
+ctrl nop               E=42  swept k=1..46   overflow=46   LOST=0
+replay k=43: mhpmevent11.OF=1 mip.LCOFIP=0
+after delay: mip.LCOFIP=0 scountovf[11]=1 mhpmevent11.OF=1 -> PERMANENTLY LOST

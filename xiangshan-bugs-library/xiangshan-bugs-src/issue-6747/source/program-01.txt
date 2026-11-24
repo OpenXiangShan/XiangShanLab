@@ -1,0 +1,1 @@
+XS_EMU=/path/to/v2/emu XS_REF=/path/to/riscv64-spike-so bash replay.sh

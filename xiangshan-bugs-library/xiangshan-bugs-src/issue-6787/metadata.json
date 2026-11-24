@@ -1,0 +1,35 @@
+{
+  "number": 6787,
+  "title": "[RVV] vfwsub.vv writes packed FP16 results instead of widened FP32 elements",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6787",
+  "state": "open",
+  "labels": [
+    "module: unknown",
+    "type: bug/WIP feature",
+    "version: kunminghu-v3"
+  ],
+  "author": "ra4ing",
+  "created_at": "2026-10-27T16:09:29Z",
+  "updated_at": "2026-11-10T12:30:52Z",
+  "submitted_at": "2026-10-27",
+  "source_files": [
+    "issue-6787/source/vfwsub-reproducer.zip",
+    "issue-6787/source/program-01.S",
+    "issue-6787/source/program-02.txt",
+    "issue-6787/source/program-03.txt",
+    "issue-6787/source/program-04.txt"
+  ],
+  "archive_files": [
+    "issue-6787/source/vfwsub-reproducer.zip"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

@@ -1,0 +1,6 @@
+NEMU does not commit any store instruction.
+
+==============  Store Commit Event (Core 0)  ==============
+Mismatch for store commits
+  DUT commits addr 0x0000000080003000, data 0x0000000000000000, mask 0xff, pc 0x000000008000207c, robidx 0x43
+  DUT origin: addr 0x0000000080003000, high:0x0000000000000000, low 0x0000000000000000, mask:0xffff

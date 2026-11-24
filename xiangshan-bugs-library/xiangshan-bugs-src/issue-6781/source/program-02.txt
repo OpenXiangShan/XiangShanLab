@@ -1,0 +1,3 @@
+data EMUL = LMUL = 1
+data group size = data EMUL * NFIELDS = 2
+index EMUL = (index EEW / SEW) * LMUL = 8

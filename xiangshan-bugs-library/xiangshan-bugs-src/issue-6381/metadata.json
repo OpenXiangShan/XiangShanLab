@@ -1,0 +1,34 @@
+{
+  "number": 6381,
+  "title": "[BUG] With menvcfg.DTE=0, sstatus write clears mstatus.SIE when mstatus.SDT is 1",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6381",
+  "state": "open",
+  "labels": [
+    "type: bug/confirmed",
+    "type: feature/planned",
+    "module: backend"
+  ],
+  "author": "oChunCai",
+  "created_at": "2026-08-18T08:25:30Z",
+  "updated_at": "2026-08-21T02:45:33Z",
+  "submitted_at": "2026-08-18",
+  "source_files": [
+    "issue-6381/source/program-01.scala",
+    "issue-6381/source/program-02.scala",
+    "issue-6381/source/program-03.c",
+    "issue-6381/source/program-04.cpp",
+    "issue-6381/source/program-05.cpp",
+    "issue-6381/source/program-06.S"
+  ],
+  "archive_files": [],
+  "branch": "kunminghu-v2",
+  "rtl_commit": "e12436c7c",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

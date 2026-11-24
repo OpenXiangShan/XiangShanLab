@@ -1,0 +1,5 @@
+emu="${xiangshan_dir}/build/verilator-compile/emu"
+nemu="${xiangshan_dir}/ready-to-run/riscv64-nemu-interpreter-so"
+
+ulimit -s 32768
+"${emu}" -b 0 -e 15000 -C 15000 -I 200 --dump-commit-trace -i test.bin --diff "${nemu}"

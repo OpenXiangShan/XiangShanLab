@@ -1,0 +1,7 @@
+80001100: 10005073  csrwi sstatus,0
+80001104: 00000033  add   zero,zero,zero
+80001108: c03ab053  fcvt.lu.s zero,fs5,rup
+8000110c: 000f2003  lw    zero,0(t5)
+80001110: c03ab053  fcvt.lu.s zero,fs5,rup
+80001114: 14202073  csrr  zero,scause
+80001118: 34302073  csrr  zero,mtval

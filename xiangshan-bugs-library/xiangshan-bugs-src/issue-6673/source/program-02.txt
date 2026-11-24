@@ -1,0 +1,9 @@
+[27] commit pc 0000000080002018 inst 00829073 wen 0 dst 00 data 0000000000000004 idx 02d
+[28] commit pc 000000008000201c inst 00000593 wen 1 dst 11 data 0000000000000000 idx 02e
+[29] commit pc 000000008000201e inst 0005f5d7 wen 1 dst 11 data 0000000000000000 idx 02f
+[30] commit pc 0000000080002022 inst 0aa00293 wen 1 dst 05 data 00000000000000aa idx 030
+[31] exception pc 0000000080002026 inst 5e02c457 cause 0000000000000002 <--
+mstatus different at pc = ..., right = 0x8000000a00000600, wrong = 0x8000040a00001e00
+   mepc different at pc = ..., right = 0x0000000000000000, wrong = 0x0000000080002026
+  mtval different at pc = ..., right = 0x0000000000000000, wrong = 0x000000005e02c457
+ mcause different at pc = ..., right = 0x0000000000000000, wrong = 0x0000000000000002

@@ -1,0 +1,4 @@
+faulting PTE GPA:                         0x8003f000
+fetch-port adjustment: 0x8003f000 - 64 = 0x8003efc0
+instruction adjustment:          + 2*2 = 0x8003efc4
+reported second address:          >> 2 = 0x2000fbf1

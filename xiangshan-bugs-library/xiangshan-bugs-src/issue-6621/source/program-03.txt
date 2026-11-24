@@ -1,0 +1,3 @@
+TLB.scala:    mode = Mux(isHyperInst, csr.priv.spvp, mode_tmp)   // page-walk is correct
+MemBlock.scala: p.apply(tlbcsr.priv.dmode, tlbcsr.priv.debug, pmp.io.pmp, pmp.io.pma, d)
+PMP.scala:    passThrough = (mode > 1.U); ignore = passThrough && !pmp.cfg.l

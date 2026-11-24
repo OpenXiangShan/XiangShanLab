@@ -1,0 +1,3 @@
+vtype=8000000000000000   # reset (VType.init(): illegal = 1, rest zero)
+vtype=8000000000000001   # after the LEGAL vsetivli x0, 0, e8, m2   <-- should be 0x1
+vtype=8000000000000000   # after the ILLEGAL vsetivli x0, 0, 0x23   <-- correct: vill-only

@@ -1,0 +1,50 @@
+{
+  "number": 6726,
+  "title": "An RNMI taken on an M-mode ecall writes the ecall's cause (0xb) to mncause instead of the NMI's",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6726",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: backend"
+  ],
+  "author": "dreamqin68",
+  "created_at": "2026-10-14T23:11:49Z",
+  "updated_at": "2026-10-15T02:07:58Z",
+  "submitted_at": "2026-10-14",
+  "source_files": [
+    "issue-6726/source/program-01.scala",
+    "issue-6726/source/program-02.scala",
+    "issue-6726/source/program-03.scala",
+    "issue-6726/source/program-04.scala",
+    "issue-6726/source/program-05.scala",
+    "issue-6726/source/program-06.scala",
+    "issue-6726/source/program-07.scala",
+    "issue-6726/source/program-08.scala",
+    "issue-6726/source/program-09.scala",
+    "issue-6726/source/program-10.txt",
+    "issue-6726/source/program-11.txt",
+    "issue-6726/source/program-12.sh",
+    "issue-6726/source/program-13.sh",
+    "issue-6726/source/program-14.sh",
+    "issue-6726/source/program-15.sh",
+    "issue-6726/source/program-16.S",
+    "issue-6726/source/program-17.txt",
+    "issue-6726/source/program-18.scala",
+    "issue-6726/source/program-19.scala",
+    "issue-6726/source/program-20.txt",
+    "issue-6726/source/program-21.scala",
+    "issue-6726/source/program-22.scala",
+    "issue-6726/source/program-23.txt"
+  ],
+  "archive_files": [],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

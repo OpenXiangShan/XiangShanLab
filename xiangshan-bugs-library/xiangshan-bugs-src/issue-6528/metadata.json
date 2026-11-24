@@ -1,0 +1,34 @@
+{
+  "number": 6528,
+  "title": "Single-precision FP op reads an improperly NaN-boxed source register as raw bits instead of the canonical NaN — kunminghu-v3",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6528",
+  "state": "closed",
+  "labels": [
+    "module: backend",
+    "type: bug/fixed"
+  ],
+  "author": "wndmll643",
+  "created_at": "2026-09-09T07:40:22Z",
+  "updated_at": "2026-10-13T10:16:40Z",
+  "submitted_at": "2026-09-09",
+  "source_files": [
+    "issue-6528/source/xs_v3_nanbox_readside_fmadd_attachments.tar.gz",
+    "issue-6528/source/program-01.txt",
+    "issue-6528/source/program-02.txt"
+  ],
+  "archive_files": [
+    "issue-6528/source/xs_v3_nanbox_readside_fmadd_attachments.tar.gz"
+  ],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "e43c569f8",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": true,
+  "commit_log_files": [
+    "issue-6528/commit-log.md"
+  ],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

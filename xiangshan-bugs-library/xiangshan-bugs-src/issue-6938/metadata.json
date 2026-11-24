@@ -1,0 +1,30 @@
+{
+  "number": 6938,
+  "title": "[kunminghu-v3] Debug SBA 32/64-bit accesses hang: missing TLWidthWidget(1) on error_xbar path",
+  "url": "https://github.com/OpenXiangShan/XiangShan/issues/6938",
+  "state": "open",
+  "labels": [
+    "type: bug/reported",
+    "module: backend"
+  ],
+  "author": "ttkxclr",
+  "created_at": "2026-11-11T14:59:44Z",
+  "updated_at": "2026-11-12T05:33:37Z",
+  "submitted_at": "2026-11-11",
+  "source_files": [
+    "issue-6938/source/program-01.scala",
+    "issue-6938/source/program-02.sh",
+    "issue-6938/source/program-03.txt"
+  ],
+  "archive_files": [],
+  "branch": "kunminghu-v3",
+  "rtl_commit": "",
+  "has_comments": false,
+  "is_pull_request": false,
+  "has_commit_log": false,
+  "commit_log_files": [],
+  "bug_categories": [
+    "uncategorized"
+  ],
+  "bug_category_source": "unclassified"
+}

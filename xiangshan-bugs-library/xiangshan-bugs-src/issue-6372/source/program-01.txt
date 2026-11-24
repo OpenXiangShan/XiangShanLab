@@ -1,0 +1,6 @@
+owner_review_only: true
+email_sent: false
+online_pr_created: false
+dynamic_validation_performed: false
+community_confirmed: false
+dco_signoff_present: false

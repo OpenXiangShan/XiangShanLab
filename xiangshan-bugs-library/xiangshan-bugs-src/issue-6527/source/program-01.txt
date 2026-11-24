@@ -1,0 +1,3 @@
+80000340: fcvt.d.w  ft1, s10          ; int32 -> float64 (always exact, never invalid)
+...
+fcsr different at pc = 0x80000340:  right (NEMU) 0x01 (NX)   wrong (XS) 0x11 (NX | NV)

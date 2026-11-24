@@ -1,0 +1,1 @@
+   ./build/emu -i repro.bin --no-diff

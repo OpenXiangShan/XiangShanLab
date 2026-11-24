@@ -1,0 +1,14 @@
+emu compiled at Nov  2 2026, 11:25:36
+[INFO] init for constantin: loaded from init.
+Using simulated 1048576B flash
+Core  0's Commit SHA is: a0c2a26cbe, dirty: 1
+Using simulated 128MB RAM
+The image is /nfs/home/sunyuhang/Test-infra/adapters/bug-evidence-20261028-xiangshan/xiangshan/xiangshan-dtlb-duplicate-refill/program/image.bin
+Assertion failed at /tmp/opencode/xs-head/source/build/rtl/TLBFA_1.sv:13345.
+The simulation stopped. There might be some assertion failed.
+Core 0: [31mABORT at pc = 0x80000530
+[0m[35mCore-0 instrCnt = 59,223, cycleCnt = 18,674, IPC = 3.171415
+[0m[34mSeed=0 Guest cycle spent: 18,679 (this will be different from cycleCnt if emu loads a snapshot)
+[0m[34mHost time spent: 541,987ms
+[0mAssertion failed at LogUtils.scala:133
+[ERROR][time=               18678] SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner.dtlb_ld_tlb_ld.entries.page_ldtlb_storage_fa: ldtlb_storage refill, duplicate with existing entries

@@ -1,0 +1,1 @@
+   ./build/emu --no-diff --ram-size=128MB -C 100000000 -i image.bin -b0 -e0

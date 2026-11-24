@@ -1,0 +1,5 @@
+first fault address  = 0x4
+second fault address = 0x8
+
+Expected mtval = 0x8
+XiangShan mtval = 0x4

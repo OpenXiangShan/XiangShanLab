@@ -1,0 +1,334 @@
+diff --git a/src/main/scala/xiangshan/cache/mmu/L2TLB.scala b/src/main/scala/xiangshan/cache/mmu/L2TLB.scala
+index 504e8389660..498ec117889 100644
+--- a/src/main/scala/xiangshan/cache/mmu/L2TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/L2TLB.scala
+@@ -1190,7 +1190,8 @@ class FakePTW()(implicit p: Parameters) extends XSModule with HasPtwConst {
+     io.csr.tlb.satp.changed ||
+     io.csr.tlb.vsatp.changed ||
+     io.csr.tlb.hgatp.changed ||
+-    io.csr.tlb.priv.virt_changed
++    io.csr.tlb.priv.virt_changed ||
++    (if (HasMptCheck) io.csr.tlb.mmpt.changed else false.B)
+   flush(0) := DelayN(flushCond, itlbParams.fenceDelay)
+   flush(1) := DelayN(flushCond, ldtlbParams.fenceDelay)
+ 
+diff --git a/src/main/scala/xiangshan/cache/mmu/L2TLBMissQueue.scala b/src/main/scala/xiangshan/cache/mmu/L2TLBMissQueue.scala
+index b01faf4a358..7f50e96dfcd 100644
+--- a/src/main/scala/xiangshan/cache/mmu/L2TLBMissQueue.scala
++++ b/src/main/scala/xiangshan/cache/mmu/L2TLBMissQueue.scala
+@@ -41,5 +41,7 @@ class L2TlbMissQueue(implicit p: Parameters) extends XSModule with HasPtwConst {
+   require(MissQueueSize >= (l2tlbParams.ifilterSize + l2tlbParams.dfilterSize))
+   val io = IO(new L2TlbMQIO())
+ 
+-  io.out <> Queue(io.in, MissQueueSize, flush = Some(io.sfence.valid || io.csr.satp.changed || io.csr.vsatp.changed || io.csr.hgatp.changed || io.csr.priv.virt_changed))
++  io.out <> Queue(io.in, MissQueueSize, flush = Some(io.sfence.valid || io.csr.satp.changed ||
++    io.csr.vsatp.changed || io.csr.hgatp.changed || io.csr.priv.virt_changed ||
++    (if (HasMptCheck) io.csr.mmpt.changed else false.B)))
+ }
+diff --git a/src/main/scala/xiangshan/cache/mmu/L2TlbPrefetch.scala b/src/main/scala/xiangshan/cache/mmu/L2TlbPrefetch.scala
+index 38a5199fc0e..f21de3b1691 100644
+--- a/src/main/scala/xiangshan/cache/mmu/L2TlbPrefetch.scala
++++ b/src/main/scala/xiangshan/cache/mmu/L2TlbPrefetch.scala
+@@ -41,7 +41,8 @@ class L2TlbPrefetch(implicit p: Parameters) extends XSModule with HasPtwConst {
+     Cat(old_reqs.zip(old_v).map{ case (o,v) => dup(o,vpn) && v}).orR
+   }
+ 
+-  val flush = io.sfence.valid || io.csr.satp.changed || io.csr.vsatp.changed || io.csr.hgatp.changed || io.csr.priv.virt_changed
++  val flush = io.sfence.valid || io.csr.satp.changed || io.csr.vsatp.changed || io.csr.hgatp.changed ||
++    io.csr.priv.virt_changed || (if (HasMptCheck) io.csr.mmpt.changed else false.B)
+   val next_line = get_next_line(io.in.bits.vpn)
+   val next_req = RegEnable(next_line, io.in.valid)
+   val input_valid = io.in.valid && !flush && !already_have(next_line)
+diff --git a/src/main/scala/xiangshan/cache/mmu/MptChecker.scala b/src/main/scala/xiangshan/cache/mmu/MptChecker.scala
+index 84bfeca1d77..7939b69e505 100644
+--- a/src/main/scala/xiangshan/cache/mmu/MptChecker.scala
++++ b/src/main/scala/xiangshan/cache/mmu/MptChecker.scala
+@@ -124,19 +124,11 @@ class MptOutputSwitchBox(implicit p: Parameters) extends XSModule with MPTCacheP
+   io.mptIn.valid    := false.B
+   io.l1TLB.valid    := false.B
+   nextState         := curState
+-  switch(curState) {
+-    is(s_idle) {
+-      when(io.mptOut.valid && io.mptOut.bits.mptOnly) { //mptonly mode
+-        // mpt valid without merge arb first implies that it is mpt only request.try change later
+-        io.l1TLB.valid := true.B
+-        when(io.l1TLB.ready) {
+-          io.mergeArb.ready := true.B
+-          nextState         := s_idle
+-        }.otherwise {
+-          nextState := s_send_l1_tlb
+-        }
+-      }.elsewhen(io.mergeArb.valid) { // normal mode, two modes are mutually exclusive
+-        when(io.mergeArb.bits.fault || !mptEn) {
++  when(!flush) {
++    switch(curState) {
++      is(s_idle) {
++        when(io.mptOut.valid && io.mptOut.bits.mptOnly) { //mptonly mode
++          // mpt valid without merge arb first implies that it is mpt only request.try change later
+           io.l1TLB.valid := true.B
+           when(io.l1TLB.ready) {
+             io.mergeArb.ready := true.B
+@@ -144,35 +136,45 @@ class MptOutputSwitchBox(implicit p: Parameters) extends XSModule with MPTCacheP
+           }.otherwise {
+             nextState := s_send_l1_tlb
+           }
+-        }.otherwise {
+-          io.mptIn.valid := true.B
+-          when(io.mptIn.ready) {
+-            nextState := s_send_mpt
++        }.elsewhen(io.mergeArb.valid) { // normal mode, two modes are mutually exclusive
++          when(io.mergeArb.bits.fault || !mptEn) {
++            io.l1TLB.valid := true.B
++            when(io.l1TLB.ready) {
++              io.mergeArb.ready := true.B
++              nextState         := s_idle
++            }.otherwise {
++              nextState := s_send_l1_tlb
++            }
++          }.otherwise {
++            io.mptIn.valid := true.B
++            when(io.mptIn.ready) {
++              nextState := s_send_mpt
++            }
+           }
+         }
+       }
+-    }
+ 
+-    is(s_send_mpt) { // delay+1+mptclk
+-      io.mptIn.valid := false.B
+-      when(io.mptOut.valid) {
++      is(s_send_mpt) { // delay+1+mptclk
++        io.mptIn.valid := false.B
++        when(io.mptOut.valid) {
++          io.l1TLB.valid := true.B
++          when(io.l1TLB.ready) {
++            io.mergeArb.ready := true.B
++            nextState         := s_idle
++          }.otherwise {
++            nextState := s_send_l1_tlb
++          }
++        }
++      }
++
++      is(s_send_l1_tlb) {
+         io.l1TLB.valid := true.B
+         when(io.l1TLB.ready) {
+           io.mergeArb.ready := true.B
+           nextState         := s_idle
+-        }.otherwise {
+-          nextState := s_send_l1_tlb
+         }
+       }
+     }
+-
+-    is(s_send_l1_tlb) {
+-      io.l1TLB.valid := true.B
+-      when(io.l1TLB.ready) {
+-        io.mergeArb.ready := true.B
+-        nextState         := s_idle
+-      }
+-    }
+   }
+   // fsm end
+ }
+@@ -756,10 +758,10 @@ class MPTCache(implicit p: Parameters) extends XSModule with MPTCacheParam {
+   val respHitReg = RegEnable(hitPerms & stageCheck.bits.dataValid, false.B, pipeFlowEn)
+   // Data is latched regardless of dataValid. If dataValid is low, the hit signal is also considered invalid.
+   // In this case, hitPerms actually holds the result from the previous pipeline stage.
+-  
++
+   respHitRegTmp    := respHitReg || overRangeFaultReg
+   io.respHit.valid := (respHitReg || overRangeFaultReg) && !refilling && !fencePA && !flushPipeOnly
+-  
++
+   val (sphitReg, l0hitReg) = (RegEnable(sphit, pipeFlowEn), RegEnable(l0Hit, pipeFlowEn))
+   val cacheHitPerm = Mux1H(
+     Seq(sphitReg, l0hitReg),
+@@ -1131,14 +1133,22 @@ class MPTTableWalker(implicit p: Parameters) extends XSModule with MPTCacheParam
+   // max 3 level or gate on top of mem.resp，NON ZERO error of mtpe
+   val rsvZeroError1 = RegEnable(mem.resp.bits(62, 58).orR, false.B, memRespAccepted)
+   val rsvZeroError2 = false.B
+-  when(io.req.fire) {
++  when(io.req.fire) { //updated before s_addr_proc
+     mpteData.apply(io.req.bits.hitAddr)
+   }.elsewhen(memRespAccepted) {
+     mpteData := mpteResp.data
+   }
+ 
++  val rootAddr = Cat(io.csr.mmpt.ppn(ppnLen - 1, 0),0.U(12.W))
++  val checkRootPMP = Wire(Bool())
++  val rootLevel = Mux(
++    io.csr.mmpt.mode === 2.U,
++    "b1000".U, // Smmpt52
++    "b0100".U  // Smmpt43
++  )
++
+   val pn = Wire(UInt(9.W))
+-  pn := Mux1H(Seq(
++  pn := Mux1H(Seq( //level updated at s_addr_proc
+     level(3) -> Cat(0.U(4.W), pa(47 - mptOff, 43 - mptOff)),
+     level(2) -> pa(42 - mptOff, 34 - mptOff),
+     level(1) -> pa(33 - mptOff, 25 - mptOff),
+@@ -1147,13 +1157,14 @@ class MPTTableWalker(implicit p: Parameters) extends XSModule with MPTCacheParam
+ 
+   // 3 layers of gate logic select the coresponding PN[i] based on cur level, just a onehot mux
+   val memAddr = mpteData.getAddr(pn) // gen addr 0 delay
+-  io.mem.req.bits.addr := memAddr
++  // used at s_addr_proc
+   io.pmp.req.valid := DontCare
+-  io.pmp.req.bits.addr := Mux(memRespAccepted, mpteResp.getAddr(pn), memAddr)
+-  // should be safer than just := memAddr
++  io.pmp.req.bits.addr := Mux(checkRootPMP, rootAddr, mpteData.getAddr(0.U(9.W)))
++  // Mux(memRespAccepted, mpteResp.getAddr(pn), memAddr))
+ 
++  io.mem.req.bits.addr := memAddr // used at s_mem_req
+   // accessFault logic
+-  val pmpFail = (!isLeafMpte) && (io.pmp.resp.ld || io.pmp.resp.mmio)
++  val pmpFail = (!isLeafMpte || checkRootPMP) && (io.pmp.resp.ld || io.pmp.resp.mmio)
+   // PMP delay unknown
+   val entryError = mpteInvalid || rsvZeroError0 || rsvZeroError1 || rsvZeroError2 || ((!isLeafMpte) && level === 1.U)
+   // level == 0 non leaf, zero = / = 0,pmp fail,invalid casue accessFault
+@@ -1180,16 +1191,27 @@ class MPTTableWalker(implicit p: Parameters) extends XSModule with MPTCacheParam
+   nextLevel         := level >> 1.U // onehotcounter-1 no aflevel
+   nextPmpCheckLevel := pmpCheckLevel >> 1.U
+   io.refill.valid   := false.B
++  checkRootPMP      := false.B
+   // default val
+   switch(curState) {
+     is(s_idle) {
++      checkRootPMP := true.B
+       io.req.ready := true.B
+       when(io.req.fire) {
+-        setPmpCheckLevel  := true.B
+-        nextLevel         := io.req.bits.hitLevel
+-        nextPmpCheckLevel := io.req.bits.hitLevel
+-        nextState         := s_mem_req // to mem req if fire
+-        setLevel          := true.B
++        when(pmpFail){
++          io.refill.valid           := true.B
++          io.refill.bits.isAf       := true.B
++          io.refill.bits.isLeafMpte := false.B
++          io.refill.bits.pa         := io.req.bits.reqPA
++          io.refill.bits.level      := rootLevel
++          nextState                 := s_idle
++        }.otherwise{
++          setPmpCheckLevel  := true.B
++          nextLevel         := io.req.bits.hitLevel
++          nextPmpCheckLevel := io.req.bits.hitLevel
++          nextState         := s_mem_req // to mem req if fire
++          setLevel          := true.B
++        }
+       }
+     }
+     is(s_mem_req) {
+diff --git a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+index f8b4088864b..bcce0dc20e1 100644
+--- a/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
++++ b/src/main/scala/xiangshan/cache/mmu/PageTableCache.scala
+@@ -218,7 +218,8 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst with
+   val refill = io.refill.bits
+   val refill_prefetch_dup = io.refill.bits.req_info_dup.map(a => from_pre(a.source))
+   val refill_h = io.refill.bits.req_info_dup.map(a => Mux(a.s2xlate === allStage, onlyStage1, a.s2xlate))
+-  val flush_dup = sfence_dup.zip(io.csr_dup).map(f => f._1.valid || f._2.satp.changed || f._2.vsatp.changed || f._2.hgatp.changed || f._2.priv.virt_changed)
++  val flush_dup = sfence_dup.zip(io.csr_dup).map(f => f._1.valid || f._2.satp.changed || f._2.vsatp.changed ||
++    f._2.hgatp.changed || f._2.priv.virt_changed || (if (HasMptCheck) f._2.mmpt.changed else false.B))
+   val flush = flush_dup(0)
+ 
+   // when refill, refuce to accept new req
+diff --git a/src/main/scala/xiangshan/cache/mmu/Repeater.scala b/src/main/scala/xiangshan/cache/mmu/Repeater.scala
+index abd3cec3dd4..d61f8100569 100644
+--- a/src/main/scala/xiangshan/cache/mmu/Repeater.scala
++++ b/src/main/scala/xiangshan/cache/mmu/Repeater.scala
+@@ -55,7 +55,9 @@ class PTWRepeater(Width: Int = 1, FenceDelay: Int)(implicit p: Parameters) exten
+     arb.io.in <> io.tlb.req
+     arb.io.out
+   }
+-  val (tlb, ptw, flush) = (io.tlb, io.ptw, DelayN(io.sfence.valid || io.csr.satp.changed || io.csr.vsatp.changed || io.csr.hgatp.changed || io.csr.priv.virt_changed, FenceDelay))
++  val (tlb, ptw, flush) = (io.tlb, io.ptw, DelayN(io.sfence.valid || io.csr.satp.changed ||
++    io.csr.vsatp.changed || io.csr.hgatp.changed || io.csr.priv.virt_changed ||
++    (if (HasMptCheck) io.csr.mmpt.changed else false.B), FenceDelay))
+   val req = RegEnable(req_in.bits, req_in.fire)
+   val resp = RegEnable(ptw.resp.bits, ptw.resp.fire)
+   val haveOne = BoolStopWatch(req_in.fire, tlb.resp.fire || flush)
+@@ -97,7 +99,9 @@ class PTWRepeaterNB(Width: Int = 1, passReady: Boolean = false, FenceDelay: Int)
+     arb.io.in <> io.tlb.req
+     arb.io.out
+   }
+-  val (tlb, ptw, flush) = (io.tlb, io.ptw, DelayN(io.sfence.valid || io.csr.satp.changed || io.csr.vsatp.changed || io.csr.hgatp.changed || io.csr.priv.virt_changed, FenceDelay))
++  val (tlb, ptw, flush) = (io.tlb, io.ptw, DelayN(io.sfence.valid || io.csr.satp.changed ||
++    io.csr.vsatp.changed || io.csr.hgatp.changed || io.csr.priv.virt_changed ||
++    (if (HasMptCheck) io.csr.mmpt.changed else false.B), FenceDelay))
+   /* sent: tlb -> repeater -> ptw
+    * recv: ptw -> repeater -> tlb
+    * different from PTWRepeater
+@@ -379,7 +383,8 @@ class PTWNewFilter(Width: Int, Size: Int, FenceDelay: Int)(implicit p: Parameter
+   store_filter.map(_.tlb.req := io.tlb.req.drop(LdExuCnt + PfNumInDtlbLD).take(StaCnt))
+   prefetch_filter.map(_.tlb.req := io.tlb.req.drop(LdExuCnt + PfNumInDtlbLD + StaCnt))
+ 
+-  val flush = DelayN(io.sfence.valid || io.csr.satp.changed || io.csr.vsatp.changed || io.csr.hgatp.changed || io.csr.priv.virt_changed, FenceDelay)
++  val flush = DelayN(io.sfence.valid || io.csr.satp.changed || io.csr.vsatp.changed || io.csr.hgatp.changed ||
++    io.csr.priv.virt_changed || (if (HasMptCheck) io.csr.mmpt.changed else false.B), FenceDelay)
+   val ptwResp = RegEnable(io.ptw.resp.bits, io.ptw.resp.fire)
+   val ptwResp_valid = Cat(filter.map(_.refill)).orR
+   filter.map(_.tlb.resp.ready := true.B)
+@@ -480,7 +485,8 @@ class PTWFilter(Width: Int, Size: Int, FenceDelay: Int)(implicit p: Parameters)
+   val mayFullDeq = RegInit(false.B)
+   val mayFullIss = RegInit(false.B)
+   val counter = RegInit(0.U(log2Up(Size+1).W))
+-  val flush = DelayN(io.sfence.valid || io.csr.satp.changed || io.csr.vsatp.changed || io.csr.hgatp.changed || io.csr.priv.virt_changed, FenceDelay)
++  val flush = DelayN(io.sfence.valid || io.csr.satp.changed || io.csr.vsatp.changed || io.csr.hgatp.changed ||
++    io.csr.priv.virt_changed || (if (HasMptCheck) io.csr.mmpt.changed else false.B), FenceDelay)
+   val tlb_req = WireInit(io.tlb.req) // NOTE: tlb_req is not io.tlb.req, see below codes, just use cloneType
+   tlb_req.suggestName("tlb_req")
+ 
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLB.scala b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+index beb3e8670c5..bf72a1a1168 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLB.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLB.scala
+@@ -248,7 +248,10 @@ class TLB(Width: Int, nRespDups: Int = 1, Block: Seq[Boolean], q: TLBParameters)
+     }
+   }
+ 
+-  val refill = ptw.resp.fire && !(ptw.resp.bits.getGpa) && !need_gpa && !maybe_need_gpa_not_allow_refill && !flush_mmu || (if (HasMptCheck) (ptw.resp.fire && BareMode.get) else false.B)
++  val refill = ptw.resp.fire &&
++    (!(ptw.resp.bits.getGpa) && !need_gpa && !maybe_need_gpa_not_allow_refill ||
++      (if (HasMptCheck) BareMode.get else false.B)) &&
++    !flush_mmu
+   // mpt only mode also returns and save to l1tlb
+   // prevent ptw refill when: 1) it's a getGpa request; 2) l1tlb is in need_gpa state; 3) mmu is being flushed.
+ 
+diff --git a/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala b/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala
+index c4161ab4587..e810158b7c2 100644
+--- a/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala
++++ b/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala
+@@ -205,9 +205,13 @@ class TLBFA(
+   val sfence_vpn = sfence.bits.addr(VAddrBits - 1, offLen)
+   val sfenceHit = entries.map(_.hit(sfence_vpn, sfence.bits.id, vmid = io.csr.hgatp.vmid, hasS2xlate = io.csr.priv.virt))
+   val sfenceHit_noasid = entries.map(_.hit(sfence_vpn, sfence.bits.id, ignoreAsid = true, vmid = io.csr.hgatp.vmid, hasS2xlate = io.csr.priv.virt))
++  // MPT may reduce the cached entry's effective range below the translation leaf page size.
++  // Over-fence by address so SFENCE cannot miss another subrange of the same leaf mapping.
++  val mptSfenceOverFence = if (HasMptCheck) io.csr.mmpt.mode =/= 0.U else false.B
+   // Sfence will flush all sectors of an entry when hit
+   when (sfence_valid) {
+-    when (sfence.bits.rs1 || io.csr.priv.virt || (if (HasBitmapCheck) (io.csr.mbmc.BME === 1.U && io.csr.mbmc.CMODE === 0.U) else false.B)) { // virtual address *.rs1 <- (rs1===0.U)
++    when (sfence.bits.rs1 || io.csr.priv.virt || mptSfenceOverFence ||
++      (if (HasBitmapCheck) (io.csr.mbmc.BME === 1.U && io.csr.mbmc.CMODE === 0.U) else false.B)) { // virtual address *.rs1 <- (rs1===0.U)
+       // Note: when virt=1, always flush all addr. See hfence.vvma comment.
+       when (sfence.bits.rs2) { // asid, but i do not want to support asid, *.rs2 <- (rs2===0.U)
+         // all addr and all asid
+diff --git a/src/main/scala/xiangshan/mem/MemBlock.scala b/src/main/scala/xiangshan/mem/MemBlock.scala
+index fd6ee141267..343dd4dd201 100644
+--- a/src/main/scala/xiangshan/mem/MemBlock.scala
++++ b/src/main/scala/xiangshan/mem/MemBlock.scala
+@@ -701,7 +701,9 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
+   }
+ 
+   val ptw_resp_next = RegEnable(ptwio.resp.bits, ptwio.resp.valid)
+-  val ptw_resp_v = RegNext(ptwio.resp.valid && !(sfence.valid || tlbcsr.satp.changed || tlbcsr.vsatp.changed || tlbcsr.hgatp.changed || tlbcsr.priv.virt_changed), init = false.B)
++  val ptw_resp_v = RegNext(ptwio.resp.valid && !(sfence.valid || tlbcsr.satp.changed || tlbcsr.vsatp.changed ||
++    tlbcsr.hgatp.changed || tlbcsr.priv.virt_changed || (if (HasMptCheck) tlbcsr.mmpt.changed else false.B)),
++    init = false.B)
+   ptwio.resp.ready := true.B
+ 
+   val tlbreplay = WireInit(VecInit(Seq.fill(LdExuCnt)(false.B)))

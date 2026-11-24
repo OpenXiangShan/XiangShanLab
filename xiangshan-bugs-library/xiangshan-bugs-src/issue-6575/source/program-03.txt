@@ -1,0 +1,4 @@
+mstatus different: right = 0x8000040a00567fa0, wrong = 0x8000000a005667a8
+   mepc different: right = 0x0000000080001028, wrong = 0x000000008000008e
+  mtval different: right = 0x0000000080001028, wrong = 0x0000000000000000
+ mcause different: right = 0x0000000000000001, wrong = 0x0000000000000000

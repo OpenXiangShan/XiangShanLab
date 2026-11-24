@@ -1,0 +1,2 @@
+  vtype different at pc = 0xffff08c10accd869,
+        right = 0x00000000000000c0, wrong = 0x80000000000000c0

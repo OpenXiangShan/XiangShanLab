@@ -1,0 +1,15 @@
+// https://github.com/riscv/riscv-smmtt/blob/58e864868ca4d6edf735f31b5bfc5ca622140bdf/chapter4.adoc#L159-L172
+[[Smmpt-xwr-encoding]]
+.Encoding of `MPTE` X/W/R permission tuple
+[%autowidth,float="center",align="center",cols="^,^,^,<",options="header"]
+|===
+| X | W | R | Meaning
+| 0 | 0 | 0 | No access.
+| 0 | 0 | 1 | Read-only page.
+| 0 | 1 | 0 | _Reserved for future use._
+| 0 | 1 | 1 | Read-write page.
+| 1 | 0 | 0 | Execute-only page.
+| 1 | 0 | 1 | Read-execute page.
+| 1 | 1 | 0 | _Reserved for future use._
+| 1 | 1 | 1 | Read-write-execute page.
+|===

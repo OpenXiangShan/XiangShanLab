@@ -1,0 +1,19 @@
+cat > link.ld <<'LD'
+OUTPUT_ARCH("riscv")
+ENTRY(_start)
+SECTIONS {
+  . = 0x80000000;
+  .text.init : { KEEP(*(.text.init)) }
+  . = ALIGN(0x1000); .text : { *(.text .text.*) }
+  . = ALIGN(0x1000); .data : { *(.data .data.* .sdata .sdata.* .rodata .rodata.*) }
+  . = ALIGN(0x1000);
+  .bss (NOLOAD) : { *(.bss .bss.* COMMON) }
+  . = ALIGN(0x1000);
+  .pagetables : { KEEP(*(.pagetables)) }
+  /DISCARD/ : { *(.comment) *(.note*) *(.riscv.attributes) }
+}
+LD
+riscv64-unknown-elf-gcc -nostdlib -nostartfiles -static -fno-pic \
+  -march=rv64gcv -mabi=lp64d -Wl,-T,link.ld -Wl,-e,_start -o poc.elf poc.S
+./build/emu -i poc.elf --diff ready-to-run/riscv64-nemu-interpreter-so \
+  --dump-commit-trace -C 100000
