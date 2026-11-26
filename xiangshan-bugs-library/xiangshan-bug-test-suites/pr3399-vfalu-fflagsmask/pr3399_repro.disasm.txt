@@ -1,0 +1,195 @@
+
+PR_BUG/pr3399-vfalu-fflagsmask/pr3399_repro.elf:     file format elf64-littleriscv
+
+
+Disassembly of section .text:
+
+0000000080000000 <_start>:
+    80000000:	00000297          	auipc	t0,0x0
+    80000004:	1f228293          	addi	t0,t0,498 # 800001f2 <m_trap_default>
+    80000008:	30529073          	csrw	mtvec,t0
+    8000000c:	6299                	lui	t0,0x6
+    8000000e:	6002829b          	addiw	t0,t0,1536 # 6600 <UART-0x405f9a04>
+    80000012:	3002a073          	csrs	mstatus,t0
+    80000016:	00000917          	auipc	s2,0x0
+    8000001a:	2ba90913          	addi	s2,s2,698 # 800002d0 <nan4>
+    8000001e:	4511                	li	a0,4
+    80000020:	0d0572d7          	vsetvli	t0,a0,e32,m1,ta,ma
+    80000024:	02096407          	vle32.v	v8,(s2)
+    80000028:	00000997          	auipc	s3,0x0
+    8000002c:	29898993          	addi	s3,s3,664 # 800002c0 <z4>
+    80000030:	0209ec07          	vle32.v	v24,(s3)
+    80000034:	0209e507          	vle32.v	v10,(s3)
+    80000038:	0209e007          	vle32.v	v0,(s3)
+    8000003c:	00000a17          	auipc	s4,0x0
+    80000040:	2a4a0a13          	addi	s4,s4,676 # 800002e0 <snan4>
+    80000044:	020a6587          	vle32.v	v11,(s4)
+    80000048:	4505                	li	a0,1
+    8000004a:	0d0572d7          	vsetvli	t0,a0,e32,m1,ta,ma
+    8000004e:	00101073          	fsflags	zero
+    80000052:	1e8c1857          	vfredmax.vs	v16,v8,v24
+    80000056:	00b51657          	vfadd.vv	v12,v11,v10,v0.t
+    8000005a:	00102b73          	frflags	s6
+    8000005e:	01fb7b93          	andi	s7,s6,31
+    80000062:	000b9c63          	bnez	s7,8000007a <_start+0x7a>
+    80000066:	00000517          	auipc	a0,0x0
+    8000006a:	20050513          	addi	a0,a0,512 # 80000266 <msg_pass>
+    8000006e:	090000ef          	jal	800000fe <puts>
+    80000072:	4505                	li	a0,1
+    80000074:	0e6000ef          	jal	8000015a <putdec>
+    80000078:	a01d                	j	8000009e <_start+0x9e>
+    8000007a:	00000517          	auipc	a0,0x0
+    8000007e:	1f650513          	addi	a0,a0,502 # 80000270 <msg_bug>
+    80000082:	07c000ef          	jal	800000fe <puts>
+    80000086:	4505                	li	a0,1
+    80000088:	0d2000ef          	jal	8000015a <putdec>
+    8000008c:	00000517          	auipc	a0,0x0
+    80000090:	1ed50513          	addi	a0,a0,493 # 80000279 <msg_f>
+    80000094:	06a000ef          	jal	800000fe <puts>
+    80000098:	855a                	mv	a0,s6
+    8000009a:	07c000ef          	jal	80000116 <puthex>
+    8000009e:	00101073          	fsflags	zero
+    800000a2:	168c1857          	vfredmin.vs	v16,v8,v24
+    800000a6:	00b51657          	vfadd.vv	v12,v11,v10,v0.t
+    800000aa:	00102b73          	frflags	s6
+    800000ae:	01fb7b93          	andi	s7,s6,31
+    800000b2:	000b9c63          	bnez	s7,800000ca <_start+0xca>
+    800000b6:	00000517          	auipc	a0,0x0
+    800000ba:	1b050513          	addi	a0,a0,432 # 80000266 <msg_pass>
+    800000be:	040000ef          	jal	800000fe <puts>
+    800000c2:	4509                	li	a0,2
+    800000c4:	096000ef          	jal	8000015a <putdec>
+    800000c8:	a01d                	j	800000ee <_start+0xee>
+    800000ca:	00000517          	auipc	a0,0x0
+    800000ce:	1a650513          	addi	a0,a0,422 # 80000270 <msg_bug>
+    800000d2:	02c000ef          	jal	800000fe <puts>
+    800000d6:	4509                	li	a0,2
+    800000d8:	082000ef          	jal	8000015a <putdec>
+    800000dc:	00000517          	auipc	a0,0x0
+    800000e0:	19d50513          	addi	a0,a0,413 # 80000279 <msg_f>
+    800000e4:	01a000ef          	jal	800000fe <puts>
+    800000e8:	855a                	mv	a0,s6
+    800000ea:	02c000ef          	jal	80000116 <puthex>
+    800000ee:	00000517          	auipc	a0,0x0
+    800000f2:	18f50513          	addi	a0,a0,399 # 8000027d <msg_done>
+    800000f6:	008000ef          	jal	800000fe <puts>
+    800000fa:	1440006f          	j	8000023e <halt>
+
+00000000800000fe <puts>:
+    800000fe:	406002b7          	lui	t0,0x40600
+    80000102:	2291                	addiw	t0,t0,4 # 40600004 <UART>
+    80000104:	00054303          	lbu	t1,0(a0)
+    80000108:	00030663          	beqz	t1,80000114 <puts+0x16>
+    8000010c:	00628023          	sb	t1,0(t0)
+    80000110:	0505                	addi	a0,a0,1
+    80000112:	bfcd                	j	80000104 <puts+0x6>
+    80000114:	8082                	ret
+
+0000000080000116 <puthex>:
+    80000116:	8f2a                	mv	t5,a0
+    80000118:	406002b7          	lui	t0,0x40600
+    8000011c:	2291                	addiw	t0,t0,4 # 40600004 <UART>
+    8000011e:	03000313          	li	t1,48
+    80000122:	00628023          	sb	t1,0(t0)
+    80000126:	07800313          	li	t1,120
+    8000012a:	00628023          	sb	t1,0(t0)
+    8000012e:	03c00393          	li	t2,60
+    80000132:	007f5e33          	srl	t3,t5,t2
+    80000136:	00fe7e13          	andi	t3,t3,15
+    8000013a:	4ea9                	li	t4,10
+    8000013c:	01de4463          	blt	t3,t4,80000144 <puthex+0x2e>
+    80000140:	027e0e13          	addi	t3,t3,39
+    80000144:	030e0e13          	addi	t3,t3,48
+    80000148:	01c28023          	sb	t3,0(t0)
+    8000014c:	13f1                	addi	t2,t2,-4
+    8000014e:	fe03d2e3          	bgez	t2,80000132 <puthex+0x1c>
+    80000152:	4e29                	li	t3,10
+    80000154:	01c28023          	sb	t3,0(t0)
+    80000158:	8082                	ret
+
+000000008000015a <putdec>:
+    8000015a:	1101                	addi	sp,sp,-32
+    8000015c:	406002b7          	lui	t0,0x40600
+    80000160:	2291                	addiw	t0,t0,4 # 40600004 <UART>
+    80000162:	4329                	li	t1,10
+    80000164:	4381                	li	t2,0
+    80000166:	c91d                	beqz	a0,8000019c <putdec+0x42>
+    80000168:	02657e33          	remu	t3,a0,t1
+    8000016c:	030e0e13          	addi	t3,t3,48
+    80000170:	00710f33          	add	t5,sp,t2
+    80000174:	01cf0023          	sb	t3,0(t5)
+    80000178:	0385                	addi	t2,t2,1
+    8000017a:	02655533          	divu	a0,a0,t1
+    8000017e:	f56d                	bnez	a0,80000168 <putdec+0xe>
+    80000180:	13fd                	addi	t2,t2,-1
+    80000182:	00710f33          	add	t5,sp,t2
+    80000186:	000f4e03          	lbu	t3,0(t5)
+    8000018a:	01c28023          	sb	t3,0(t0)
+    8000018e:	fe0399e3          	bnez	t2,80000180 <putdec+0x26>
+    80000192:	4e29                	li	t3,10
+    80000194:	01c28023          	sb	t3,0(t0)
+    80000198:	6105                	addi	sp,sp,32
+    8000019a:	8082                	ret
+    8000019c:	03000e13          	li	t3,48
+    800001a0:	01c28023          	sb	t3,0(t0)
+    800001a4:	4e29                	li	t3,10
+    800001a6:	01c28023          	sb	t3,0(t0)
+    800001aa:	6105                	addi	sp,sp,32
+    800001ac:	8082                	ret
+
+00000000800001ae <wave_begin>:
+    800001ae:	1141                	addi	sp,sp,-16
+    800001b0:	e406                	sd	ra,8(sp)
+    800001b2:	c0002573          	rdcycle	a0
+    800001b6:	8faa                	mv	t6,a0
+    800001b8:	00000517          	auipc	a0,0x0
+    800001bc:	08e50513          	addi	a0,a0,142 # 80000246 <str_wb>
+    800001c0:	f3fff0ef          	jal	800000fe <puts>
+    800001c4:	857e                	mv	a0,t6
+    800001c6:	f51ff0ef          	jal	80000116 <puthex>
+    800001ca:	60a2                	ld	ra,8(sp)
+    800001cc:	0141                	addi	sp,sp,16
+    800001ce:	8082                	ret
+
+00000000800001d0 <wave_end>:
+    800001d0:	1141                	addi	sp,sp,-16
+    800001d2:	e406                	sd	ra,8(sp)
+    800001d4:	c0002573          	rdcycle	a0
+    800001d8:	8faa                	mv	t6,a0
+    800001da:	00000517          	auipc	a0,0x0
+    800001de:	07050513          	addi	a0,a0,112 # 8000024a <str_we>
+    800001e2:	f1dff0ef          	jal	800000fe <puts>
+    800001e6:	857e                	mv	a0,t6
+    800001e8:	f2fff0ef          	jal	80000116 <puthex>
+    800001ec:	60a2                	ld	ra,8(sp)
+    800001ee:	0141                	addi	sp,sp,16
+    800001f0:	8082                	ret
+
+00000000800001f2 <m_trap_default>:
+    800001f2:	00000517          	auipc	a0,0x0
+    800001f6:	05c50513          	addi	a0,a0,92 # 8000024e <str_mtrap>
+    800001fa:	f05ff0ef          	jal	800000fe <puts>
+    800001fe:	34202573          	csrr	a0,mcause
+    80000202:	f15ff0ef          	jal	80000116 <puthex>
+    80000206:	34102573          	csrr	a0,mepc
+    8000020a:	f0dff0ef          	jal	80000116 <puthex>
+    8000020e:	34302573          	csrr	a0,mtval
+    80000212:	f05ff0ef          	jal	80000116 <puthex>
+    80000216:	a025                	j	8000023e <halt>
+
+0000000080000218 <s_trap_default>:
+    80000218:	00000517          	auipc	a0,0x0
+    8000021c:	04250513          	addi	a0,a0,66 # 8000025a <str_strap>
+    80000220:	edfff0ef          	jal	800000fe <puts>
+    80000224:	14202573          	csrr	a0,scause
+    80000228:	eefff0ef          	jal	80000116 <puthex>
+    8000022c:	14102573          	csrr	a0,sepc
+    80000230:	ee7ff0ef          	jal	80000116 <puthex>
+    80000234:	14302573          	csrr	a0,stval
+    80000238:	edfff0ef          	jal	80000116 <puthex>
+    8000023c:	a009                	j	8000023e <halt>
+
+000000008000023e <halt>:
+    8000023e:	4501                	li	a0,0
+    80000240:	0000006b          	.word	0x0000006b
+    80000244:	bfed                	j	8000023e <halt>
