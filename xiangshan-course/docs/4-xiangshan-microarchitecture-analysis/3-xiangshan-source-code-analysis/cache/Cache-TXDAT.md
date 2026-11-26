@@ -41,7 +41,7 @@
 
 ## 2. 理论概念到源码对象
 
-本节只保留理解本模块所需的缓存概念。作为课程背景，可参照 [LoadStore-DCache.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/LoadStore-DCache.md:1) 中对缓存流水线和数据通路的说明；下面每个行为均回到 L2 源码。
+本节只保留理解本模块所需的缓存概念。作为课程背景，可参照 [LoadStore-DCache.md](../memory/LoadStore-DCache.md#L1) 中对缓存流水线和数据通路的说明；下面每个行为均回到 L2 源码。
 
 | 概念 | 在 TXDAT 中的具体实现 | 不能由这里推出的内容 |
 | --- | --- | --- |

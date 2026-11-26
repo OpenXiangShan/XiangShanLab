@@ -14,7 +14,7 @@ Core-0 instrCnt = 5,347, cycleCnt = 24,028, IPC = 0.222532
 
 本分析使用 wavekit 开源仓库中的 `FstReader` 解析 FST，并用 clock-sampled `Waveform` 数组按 cycle 查询信号。核心 scope 为 `TOP.SimTop.cpu.l_soc.core_with_l2.core`，时钟为 `TOP.clock`，采样边沿为上升沿。Wavekit 对完整 FST 的扫描确认了预期的硬件动作：
 
-| 预期行为（见 [analysis.md](/nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/conflict/cache-conflict/analysis.md:1)） | FST 证据 | 判定 |
+| 预期行为（见 [analysis.md](analysis.md#L1)） | FST 证据 | 判定 |
 |---|---|---|
 | 三个请求命中同一 bank、属于不同 set，产生读读冲突 | cycle 13068，`c01=c02=c12=1`；三个 `bankMask=0x01`，地址分别为 `0x80002080/40/00` | 成立 |
 | 按 LQ age 选择最老请求 | `winner_port=2`，其 `lq=7`；port 1/0 的 LQ 分别为 8/9 且 `oldest=1` | 成立 |
@@ -656,4 +656,4 @@ Waveform hierarchy 中没有能可靠映射到本目标 transaction 的 `state/s
 5. LRQ 重放 c8 后无冲突完成，三条 load 各自按程序顺序提交。
 6. 冲突路径没有 memory violation 或 LoadUnit rollback；波形中的 redirect 来自循环分支预测恢复。
 
-这与 [analysis.md](/nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/conflict/cache-conflict/analysis.md:1) 中的源码推导和预期行为逐项吻合。
+这与 [analysis.md](analysis.md#L1) 中的源码推导和预期行为逐项吻合。

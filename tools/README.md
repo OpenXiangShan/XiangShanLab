@@ -9,7 +9,6 @@
 | `xiangshan-code-analyzer/` | 香山 Kunminghu 源码深度分析 skill，覆盖前端、后端、访存、Cache、AIA/IOPMP/AXI、Difftest、异常/调试/特权态等主题。 |
 | `analyze-xiangshan-wavekit/` | 基于 wavekit 的香山波形单指令追踪与流水线行为分析 skill，强调从波形证据还原 PC、ROB/LQ/SQ/FTQ、valid/ready/fire、redirect、bubble 和 difftest 状态。 |
 | `wavekit-xslab/` | XiangShanLab 的 WaveKit 工具与波形分析仓库；作为 Git 子模块接入，固定到对应提交。 |
-| `xiangshan-scenario-wave-test/` | 从微架构场景描述生成测试程序、构建镜像、运行 emu dump wave，并用 wavekit 验证场景是否真实复现的闭环 skill。 |
 | `scenarios-extractor/` | 将机制名、模块名或优化点转换为可执行的验证场景描述，包括 stimulus、期望观察、失败特征、checker、coverage 和所需证据。 |
 | `verification-driver/` | 验证驱动规则库，提供架构验证、微架构场景验证、系统验证、边界条件、冲突、FSM、性能瓶颈、debug、虚拟化和保护等场景模板。 |
 | `xiangshan-bugs-analyzer/` | 拉取、索引和总结 OpenXiangShan/XiangShan issue/PR 的工具与数据，用于 bug 归因、修复背景分析和模块风险梳理。 |
@@ -32,7 +31,6 @@
 
 - `xiangshan-code-analyzer/skills/analyze-xiangshan-kunminghu/SKILL.md`
 - `analyze-xiangshan-wavekit/SKILL.md`
-- `xiangshan-scenario-wave-test/SKILL.md`
 - `scenarios-extractor/skills/SKILL.md`
 - `xiangshan-bugs-analyzer/fetch-xiangshan-bugs/SKILL.md`
 - `specification-analyzer/riscv-security-hc-spec/SKILL.md`

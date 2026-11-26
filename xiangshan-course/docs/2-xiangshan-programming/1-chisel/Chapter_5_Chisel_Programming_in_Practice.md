@@ -106,22 +106,22 @@ TODO
 
 | 模块 | 文件 | 职责 | 比喻 |
 | --- | --- | --- | --- |
-| Bram | [Bram.scala](src/main/scala/Bram.scala) | 双端口 BRAM 原语封装 | 基础砖块 |
-| CacheTag | [CacheTag.scala](src/main/scala/CacheTag.scala) | 4路并行标签比较，Tree-PLRU 替换算法 | 仓库目录索引 |
-| CacheData | [CacheData.scala](src/main/scala/CacheData.scala) | Bank 存储阵列，并行数据读写 | 仓库货架 |
-| CacheCtrl | [CacheCtrl.scala](src/main/scala/CacheCtrl.scala) | 命中/缺失状态机，调度 MSHR，管理突发传输 | 生产线主管 |
-| MSHR | [MSHR.scala](src/main/scala/MSHR.scala) | 追踪未完成缺失，请求合并，乱序响应 | 订单跟踪系统 |
-| NonBlockingCache | [NonBlockingCache.scala](src/main/scala/NonBlockingCache.scala) | 集成所有子模块，定义 CPU 与内存接口 | 工厂总调度室 |
+| Bram | [Bram.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/main/scala/Bram.scala) | 双端口 BRAM 原语封装 | 基础砖块 |
+| CacheTag | [CacheTag.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/main/scala/CacheTag.scala) | 4路并行标签比较，Tree-PLRU 替换算法 | 仓库目录索引 |
+| CacheData | [CacheData.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/main/scala/CacheData.scala) | Bank 存储阵列，并行数据读写 | 仓库货架 |
+| CacheCtrl | [CacheCtrl.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/main/scala/CacheCtrl.scala) | 命中/缺失状态机，调度 MSHR，管理突发传输 | 生产线主管 |
+| MSHR | [MSHR.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/main/scala/MSHR.scala) | 追踪未完成缺失，请求合并，乱序响应 | 订单跟踪系统 |
+| NonBlockingCache | [NonBlockingCache.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/main/scala/NonBlockingCache.scala) | 集成所有子模块，定义 CPU 与内存接口 | 工厂总调度室 |
 
 ### 验证模块
 
 | 组件 | 文件 | 职责 | 比喻 |
 | --- | --- | --- | --- |
-| CacheSpec | [CacheSpec.scala](src/test/scala/CacheSpec.scala) | 集成测试环境，控制仿真流程 | 质检主管 |
-| FakeCPU | [FakeCPU.scala](src/test/scala/FakeCPU.scala) | 生成带局部性的请求，实时验证返回数据 | 模拟客户 |
-| FakeRAM | [FakeNonBlockingRAM.scala](src/test/scala/FakeNonBlockingRAM.scala) | 随机延迟响应，支持突发传输和乱序返回 | 模拟供应商 |
-| GlobalVars | [GlobalVars.scala](src/test/scala/GlobalVars.scala) | 测试数量、随机种子等参数 | 实验参数表 |
-| Tool | [Tool.scala](src/test/scala/Tool.scala) | 数据格式化、RAM 数据生成 | 辅助工具箱 |
+| CacheSpec | [CacheSpec.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/CacheSpec.scala) | 集成测试环境，控制仿真流程 | 质检主管 |
+| FakeCPU | [FakeCPU.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/FakeCPU.scala) | 生成带局部性的请求，实时验证返回数据 | 模拟客户 |
+| FakeRAM | [FakeNonBlockingRAM.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/FakeNonBlockingRAM.scala) | 随机延迟响应，支持突发传输和乱序返回 | 模拟供应商 |
+| GlobalVars | [GlobalVars.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/GlobalVars.scala) | 测试数量、随机种子等参数 | 实验参数表 |
+| Tool | [Tool.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/Tool.scala) | 数据格式化、RAM 数据生成 | 辅助工具箱 |
 
 ## 1.5 一次请求的生命周期
 
@@ -245,7 +245,7 @@ NonBlockingCache/
 
 ### 第一步：调整测试参数（可选）
 
-编辑 [GlobalVars.scala](src/test/scala/GlobalVars.scala) 自定义测试规模：
+编辑 [GlobalVars.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/GlobalVars.scala) 自定义测试规模：
 
 ```scala
 object GlobalVars {
@@ -1009,7 +1009,7 @@ object NonBlockingCache extends App {
 
 运行 `sbt run` 即可在 `generated/` 目录下生成 Verilog 文件。
 
-完整代码见 [NonBlockingCache.scala](src/main/scala/NonBlockingCache.scala#L1-L135)。
+完整代码见 [NonBlockingCache.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/main/scala/NonBlockingCache.scala#L1-L135)。
 
 ***
 
@@ -1051,9 +1051,9 @@ test(new NonBlockingCache(6, 36, 6))       // 实例化被测模块
 
 | 角色 | 文件 | 职责 | 比喻 |
 | --- | --- | --- | --- |
-| FakeCPU | [FakeCPU.scala](src/test/scala/FakeCPU.scala) | 发请求、验数据 | 模拟客户下单+验货 |
-| FakeRAM | [FakeNonBlockingRAM.scala](src/test/scala/FakeNonBlockingRAM.scala) | 随机延迟返回数据 | 模拟快递（可能晚到、可能乱序） |
-| CacheSpec | [CacheSpec.scala](src/test/scala/CacheSpec.scala) | 编排测试流程 | 质检主管 |
+| FakeCPU | [FakeCPU.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/FakeCPU.scala) | 发请求、验数据 | 模拟客户下单+验货 |
+| FakeRAM | [FakeNonBlockingRAM.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/FakeNonBlockingRAM.scala) | 随机延迟返回数据 | 模拟快递（可能晚到、可能乱序） |
+| CacheSpec | [CacheSpec.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/CacheSpec.scala) | 编排测试流程 | 质检主管 |
 
 FakeCPU 的请求不是纯随机的——它刻意制造了三种典型场景：
 
@@ -1127,9 +1127,9 @@ FakeCPU 的请求不是纯随机的——它刻意制造了三种典型场景：
 
 **三个地方需要同步修改**：
 
-1. [NonBlockingCache.scala](src/main/scala/NonBlockingCache.scala#L41-L44) 的类参数
-2. [NonBlockingCache.scala](src/main/scala/NonBlockingCache.scala#L131-L134) 的 `emitVerilog` 调用
-3. [CacheSpec.scala](src/test/scala/CacheSpec.scala#L12) 的 `test` 调用
+1. [NonBlockingCache.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/main/scala/NonBlockingCache.scala#L41-L44) 的类参数
+2. [NonBlockingCache.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/main/scala/NonBlockingCache.scala#L131-L134) 的 `emitVerilog` 调用
+3. [CacheSpec.scala](../../../../xiangshan-programming-practice/NonBlockingCache/src/test/scala/CacheSpec.scala#L12) 的 `test` 调用
 
 > 如果以上方法都无法解决，可以在 GitHub 仓库的 [Issues](https://github.com/HisionWang/NonBlockingCache/issues) 页面提问。
 

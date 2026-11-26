@@ -119,7 +119,7 @@ flowchart LR
 
 ### 2.1 Theory-to-Code Mapping
 
-课程中“结构冲突”和“流水寄存器”的概念有助于理解该模块为何反压、为何把任务分 S1/S2 保存；但这里仲裁的是 L2 一致性事务 `TaskBundle`，不是带 ROB、redirect 或异常提交语义的 CPU 指令。[结构冒险课程](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md) [Common.scala:57](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Common.scala:57)
+课程中“结构冲突”和“流水寄存器”的概念有助于理解该模块为何反压、为何把任务分 S1/S2 保存；但这里仲裁的是 L2 一致性事务 `TaskBundle`，不是带 ROB、redirect 或异常提交语义的 CPU 指令。[结构冒险课程](../../../../docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md) [Common.scala:57](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Common.scala:57)
 
 | 课程概念 | 在 RequestArb 周边的有效实体 | 源码中的具体含义 | 不能外推的结论 |
 | --- | --- | --- | --- |
@@ -169,7 +169,7 @@ flowchart LR
 
 ### 2.1 Theory-to-Code Mapping
 
-The course concepts of structural hazards and pipeline registers help explain why this module applies backpressure and retains tasks across S1/S2. However, it arbitrates L2 coherence-transaction `TaskBundle`s, not CPU instructions with ROB, redirect, or exception-commit semantics. [Structural-hazard course](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md) [Common.scala:57](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Common.scala:57)
+The course concepts of structural hazards and pipeline registers help explain why this module applies backpressure and retains tasks across S1/S2. However, it arbitrates L2 coherence-transaction `TaskBundle`s, not CPU instructions with ROB, redirect, or exception-commit semantics. [Structural-hazard course](../../../../docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md) [Common.scala:57](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Common.scala:57)
 
 | Course Concept | Effective Entity around RequestArb | Concrete Meaning in Source | Conclusion That Must Not Be Extrapolated |
 | --- | --- | --- | --- |

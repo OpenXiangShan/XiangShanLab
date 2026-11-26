@@ -12,7 +12,7 @@
 | 提交时间 | `2026-08-14T09:36:34+08:00` |
 | 直接分析对象 | [LoadQueueRAR.scala](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAR.scala:29) |
 | 设计文档基线 | D0：`/home/yanyusong/XiangShanLab/XiangShan-Design-Doc` 在本次分析环境中不存在，本文没有将未获得的设计文档结论写成实现事实。 |
-| 课程材料 | [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:1) 与 [scalar-load.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/instructions-lifecycle/scalar-load/scalar-load.md:1) 仅用于术语背景；其中引用的源码版本不等于本节提交。 |
+| 课程材料 | [14_LoadStore.md](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L1) 与 [scalar-load.md](../../../5-xiangshan-scenarios-analysis/instructions-lifecycle/scalar-load/scalar-load.md#L1) 仅用于术语背景；其中引用的源码版本不等于本节提交。 |
 
 分析开始前已按 `xiangshan-code-analyzer` 的每周同步流程检查；同步状态显示距离上次同步不足七天，因此未重复拉取。源码工作树存在与本文无关的 `difftest` 修改和 `src/main/resources/aia/` 未跟踪内容，本文只读分析，没有修改该工作树。
 

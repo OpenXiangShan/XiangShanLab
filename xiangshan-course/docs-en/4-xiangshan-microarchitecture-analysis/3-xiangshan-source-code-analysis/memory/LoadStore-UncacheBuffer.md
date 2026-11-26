@@ -17,7 +17,7 @@
 | 源码基线 | 分支 kunminghu-v2，提交 e12436c7cba86b195deec24981976d78bc263661 |
 | 有效配置 | KunminghuV2Config 继承 DefaultConfig；未发现它覆写 UncacheBufferSize 或 LoadUncacheBufferSize |
 | 设计文档基线 | 未查阅。本地 /home/yanyusong/XiangShan-Design-Doc 不存在，因此不把设计文档描述作为实现证据 |
-| 理论材料 | 课程 [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:311) 用于说明 LSQ 子模块定位；行为结论均回到本次源码基线 |
+| 理论材料 | 课程 [14_LoadStore.md](../../../xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L311) 用于说明 LSQ 子模块定位；行为结论均回到本次源码基线 |
 | 工作树注意 | 源码树已有 difftest 修改及 src/main/resources/aia/ 未跟踪内容；本文未改动源码树 |
 | 周同步检查 | 按 skill 运行 weekly_sync.py；状态文件显示距上次同步不足 7 天，因此脚本跳过同步，没有执行 fetch、pull 或任何破坏性操作 |
 | 波形边界 | 本次没有可用于核对的 FST；所有周期数只描述寄存器边界和可变握手，不宣称固定总线往返延迟 |
@@ -953,7 +953,7 @@ UncacheImp 在 env.EnableDifftest 时只为 A.fire 的 store 且 memBackTypeMM �
 | Source baseline | Branch <code>kunminghu-v2</code>, commit <code>e12436c7cba86b195deec24981976d78bc263661</code> |
 | Active configuration | KunminghuV2Config inherits DefaultConfig; no override of UncacheBufferSize or LoadUncacheBufferSize was found. |
 | Design-document baseline | Not consulted. <code>/home/yanyusong/XiangShan-Design-Doc</code> does not exist locally, so design-document descriptions are not implementation evidence. |
-| Theory material | Course [14_LoadStore.md](</home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:311>) explains LSQ submodule placement; behavioral conclusions return to this source baseline. |
+| Theory material | Course [14_LoadStore.md](../../../xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L311) explains LSQ submodule placement; behavioral conclusions return to this source baseline. |
 | Worktree note | The source tree already had changes under <code>difftest</code> and untracked <code>src/main/resources/aia/</code> content. This analysis did not alter it. |
 | Weekly synchronization check | The skill's weekly synchronization found less than seven days since the previous run, skipped synchronization, and performed no fetch, pull, or destructive action. |
 | Waveform boundary | No FST was available for comparison. Cycle counts describe register boundaries and variable handshakes only, never fixed bus round-trip latency. |

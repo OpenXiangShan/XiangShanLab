@@ -16,7 +16,7 @@
 
 :::
 
-## ![1771038423705-5af4c1c3-eb5d-4346-8795-22067b4006ed.png](../1.CHN/img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
+## ![1771038423705-5af4c1c3-eb5d-4346-8795-22067b4006ed.png](../../docs/1-xiangshan-development-environment/img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
 
 ## 4.1 The Role of Emulators
 
@@ -586,7 +586,7 @@ Method 2: Use the `menuconfig` tool to modify the configuration, then recompile.
 
 Use the `menuconfig` command to configure the object you want to view, then select it and enter `debug`.
 
-![1768895022679-4182fabd-385d-43c9-b14e-ec8abfe9606a.png](../1.CHN/img/chapter-4-instruction-emulator-cpu-simulation-and-reference-models-nemu-spike/figure-002-debug-menuconfig-inspect-nemu.png)
+![1768895022679-4182fabd-385d-43c9-b14e-ec8abfe9606a.png](../../docs/1-xiangshan-development-environment/img/chapter-4-instruction-emulator-cpu-simulation-and-reference-models-nemu-spike/figure-002-debug-menuconfig-inspect-nemu.png)
 
 Figure 1: NEMU `menuconfig` configuration interface
 

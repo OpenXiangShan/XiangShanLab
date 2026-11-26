@@ -45,10 +45,10 @@ Weekly-sync result:
 
 | 概念 | 课程背景 | Kunminghu V2 的落点 | 边界 |
 | --- | --- | --- | --- |
-| 结构冒险 | [Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md) 中的端口/队列资源竞争。 | `freeList.io.empty`、RAR/RAW full、LoadUnit source priority、DCache `ready`。 | 课程解释“为什么重放”；实际准入和时序以源码为准。 |
-| 内存相关与推测 | [Dependency_Between_Instructions.md](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/4_Dependency_Between_Instructions.md) 中 load/store 地址和数据相关。 | `C_MA` 等待 Store 地址，`C_FF` 等待 Store 数据，RAW/RAR 满则延后重试。 | `LoadQueueReplay` 只保存“需重试”的 load，不完成 RAW/RAR 的 CAM 检测。 |
-| 动态调度/年龄 | [Tomosulo_vs_ScoreBoard.md](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/7_Tomosulo_vs_ScoreBoard.md) 中的 ready/select 问题。 | `blocking` 是 readiness，`scheduled` 防止同一 entry 重复发，`AgeDetector` 与 `ldWbPtr` 倾向旧 load。 | 它不是通用 reservation station；重放原因的优先级会覆盖纯年龄选择。 |
-| 精确状态 | [13_ROB.md](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/2-xiangshan-design-document/13_ROB.md) 的 commit/redirect 背景。 | 每个 replay entry 留 `uop.robIdx`，redirect 用 `needFlush` 清 entry；ROB 仍拥有架构提交与 Difftest。 | Replay 表的 `allocated` 不是 ROB valid，也不是 ISA commit。 |
+| 结构冒险 | [Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md](../../1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md) 中的端口/队列资源竞争。 | `freeList.io.empty`、RAR/RAW full、LoadUnit source priority、DCache `ready`。 | 课程解释“为什么重放”；实际准入和时序以源码为准。 |
+| 内存相关与推测 | [Dependency_Between_Instructions.md](../../1-superscalar-basic-knowledge/4_Dependency_Between_Instructions.md) 中 load/store 地址和数据相关。 | `C_MA` 等待 Store 地址，`C_FF` 等待 Store 数据，RAW/RAR 满则延后重试。 | `LoadQueueReplay` 只保存“需重试”的 load，不完成 RAW/RAR 的 CAM 检测。 |
+| 动态调度/年龄 | [Tomosulo_vs_ScoreBoard.md](../../1-superscalar-basic-knowledge/7_Tomosulo_vs_ScoreBoard.md) 中的 ready/select 问题。 | `blocking` 是 readiness，`scheduled` 防止同一 entry 重复发，`AgeDetector` 与 `ldWbPtr` 倾向旧 load。 | 它不是通用 reservation station；重放原因的优先级会覆盖纯年龄选择。 |
+| 精确状态 | [13_ROB.md](../../2-xiangshan-design-document/13_ROB.md) 的 commit/redirect 背景。 | 每个 replay entry 留 `uop.robIdx`，redirect 用 `needFlush` 清 entry；ROB 仍拥有架构提交与 Difftest。 | Replay 表的 `allocated` 不是 ROB valid，也不是 ISA commit。 |
 
 ## 2. 模块角色、边界与连接
 

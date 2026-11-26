@@ -100,7 +100,7 @@ flowchart LR
 | 多周期流水与旁路 | HuanCun 的 `SinkD` 可把外侧 D data 写入 buffer，`SourceD` 不必等待数据先写入 BankedStore | 旁路缩短的是外侧 Grant 到内侧 GrantData 的数据路径，不等同于降低整个 miss 延迟 |
 | valid/ready 的背压传播 | `SourceD` 读不到某个 beat 会停住；HuanCun buffer 满会经 `SinkD.io.d.ready` 向外侧 D 反压 | 延迟是握手和仲裁相关的变量，不是一个固定 cycle 常数 |
 
-相关的课程基础可见：[结构冒险、数据冒险与控制冒险](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md:1)、[单周期、多周期与流水线](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md:1) 和 [LoadStore-DCache](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/LoadStore-DCache.md:1)。这些文档解释概念；本页的信号行为仅由下列源码链接支撑。
+相关的课程基础可见：[结构冒险、数据冒险与控制冒险](../../../../docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md#L1)、[单周期、多周期与流水线](../../../../docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md#L1) 和 [LoadStore-DCache](../../../../docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/LoadStore-DCache.md#L1)。这些文档解释概念；本页的信号行为仅由下列源码链接支撑。
 
 ### 2.2 Design Doc 可追溯矩阵
 

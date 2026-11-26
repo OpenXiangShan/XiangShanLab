@@ -28,7 +28,7 @@
 
 | 层次 | 本文如何使用 | 例子 |
 |---|---|---|
-| 课程概念 | 说明“非阻塞”“MSHR”“按 cache block 发送”的分析坐标 | 课程中把非阻塞描述为能在 miss 等待期间重叠独立请求，但同时受 MSHR、端口、冲突和缓冲限制；见 [15_XSCache.md:80-96](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md#L80-L96)。 |
+| 课程概念 | 说明“非阻塞”“MSHR”“按 cache block 发送”的分析坐标 | 课程中把非阻塞描述为能在 miss 等待期间重叠独立请求，但同时受 MSHR、端口、冲突和缓冲限制；见 [15_XSCache.md:80-96](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md#L80-L96)。 |
 | 设计文档意图 | 确认模块名称、协议分层和要检查的路径 | 文档称 TXREQ 为下行 CHI 请求控制点，但不把图中的信号名视为本版本 RTL 信号。 |
 | 当前有效代码 | 决定“已确认”的端口、优先级、状态更新和反压结论 | 例如 `pipeReq` 优先于 `mshrReq` 是 [TXREQ.scala:71-75](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/tl2chi/TXREQ.scala#L71-L75) 的直接赋值。 |
 

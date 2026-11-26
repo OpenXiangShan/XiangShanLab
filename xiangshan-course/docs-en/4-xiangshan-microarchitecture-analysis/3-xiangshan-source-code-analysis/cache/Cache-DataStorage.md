@@ -46,7 +46,7 @@
 
 ## 2. 理论映射与总体数据路径
 
-课程中的[流水线](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md>)与[结构冲突](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md>)在这里不是“指令级 RAW/WAR/WAW”问题，而是多个一致性事务争用有限数据阵列端口和固定时序窗口的问题。
+课程中的[流水线](../../../../docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md)与[结构冲突](../../../../docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md)在这里不是“指令级 RAW/WAR/WAW”问题，而是多个一致性事务争用有限数据阵列端口和固定时序窗口的问题。
 
 | 理论概念 | CoupledL2 中的实际实体 | 与抽象教材模型的差异 |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ The Design Doc used as the intent source is at [`DataStorage.md:1-3`](</home/yan
 
 ## 2. Theory Mapping and Overall Data Path
 
-The course concepts of [pipelining](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md>) and [structural hazards](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md>) do not describe instruction-level RAW/WAR/WAW hazards here. They describe multiple coherence transactions contending for finite data-array ports and fixed timing windows.
+The course concepts of [pipelining](../../../../docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md) and [structural hazards](../../../../docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/3_Structural_Hazards_vs_Data_Hazards_vs_Control_Hazards.md) do not describe instruction-level RAW/WAR/WAW hazards here. They describe multiple coherence transactions contending for finite data-array ports and fixed timing windows.
 
 | Theoretical Concept | Concrete CoupledL2 Entity | Difference from the Abstract Textbook Model |
 | --- | --- | --- |

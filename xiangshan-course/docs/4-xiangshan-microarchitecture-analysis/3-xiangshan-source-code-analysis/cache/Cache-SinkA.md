@@ -13,7 +13,7 @@
 | HuanCun 子仓 | `65ef077373ecf398b4cecdea06b65ef9b8d79044` | 非 CHI 备选 L3 的同名 SinkA |
 | 参考设计文档 | `XiangShan-Design-Doc/docs/zh/cache/l2cache/upstream/SinkA.md` 与 `CoupledL2.md` | 只用于提出待核对的问题，不作为实现证据 |
 
-主仓工作树已有与本题无关的 `difftest` 修改和 `src/main/resources/aia/` 未跟踪项；本次未改动这些内容。`coupledL2` 与 `huancun` 子仓在核查时干净。课程中已有的 [15_XSCache.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md:1) 标明其依据的是 V3 源码，因此本文不会把其中的 V3 行号或结论当作 V2 证据。
+主仓工作树已有与本题无关的 `difftest` 修改和 `src/main/resources/aia/` 未跟踪项；本次未改动这些内容。`coupledL2` 与 `huancun` 子仓在核查时干净。课程中已有的 [15_XSCache.md](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md#L1) 标明其依据的是 V3 源码，因此本文不会把其中的 V3 行号或结论当作 V2 证据。
 
 ### 1.2. 有效模块选择
 

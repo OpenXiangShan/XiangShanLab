@@ -6,7 +6,7 @@
 
 ### 1.1. 文档目标
 
-本文不是追踪单条指令的完整生命周期，而是围绕 `redirect / flush` 这一类恢复机制做定向场景分析。主线严格跟随 [redirect场景描述.md](/nfs/home/wanghao/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/redirect/learn-redirect/redirect场景描述.md)：
+本文不是追踪单条指令的完整生命周期，而是围绕 `redirect / flush` 这一类恢复机制做定向场景分析。主线严格跟随 [redirect场景描述.md](redirect场景描述.md)：
 
 1. redirect 为什么存在。
 2. 它经过哪些模块。
@@ -18,9 +18,9 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 场景说明 | [redirect场景描述.md](/nfs/home/wanghao/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/redirect/learn-redirect/redirect场景描述.md) |
-| 测试程序 | [learn.c](/nfs/home/wanghao/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/redirect/learn-redirect/demo/learn.c) |
-| Makefile | [Makefile](/nfs/home/wanghao/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/redirect/learn-redirect/demo/Makefile) |
+| 场景说明 | [redirect场景描述.md](redirect场景描述.md) |
+| 测试程序 | [learn.c](demo/learn.c) |
+| Makefile | [Makefile](demo/Makefile) |
 | 反汇编 | [learn-riscv64-xs.txt](/nfs/home/wanghao/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/redirect/learn-redirect/demo/build/learn-riscv64-xs.txt) |
 | ELF | [learn-riscv64-xs.elf](/nfs/home/wanghao/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/redirect/learn-redirect/demo/build/learn-riscv64-xs.elf) |
 | 波形 | [learnRedirect.vcd](/nfs/home/wanghao/XiangShanLab/xiangshan-course/docs/5-xiangshan-scenarios-analysis/scenarios-analysis/redirect/learn-redirect/waveform/learnRedirect.vcd) |

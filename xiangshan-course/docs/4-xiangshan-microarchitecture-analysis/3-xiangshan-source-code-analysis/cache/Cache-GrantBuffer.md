@@ -48,7 +48,7 @@ flowchart LR
 
 ### 2.1 Theory-to-Code Mapping
 
-课程中的流水线概念强调以级间寄存器和握手隔离长路径；GrantBuffer 对应的不是处理器指令流水线，而是 L2 响应出口的弹性流水段。它通过 FIFO、<code>valid</code> 位和 <code>ready</code> 将 MainPipe 的响应生产与 L1 的 D/E 消费解耦。[课程：单周期、多周期与流水线](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md) [GrantBuffer.scala:112-120](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:112)
+课程中的流水线概念强调以级间寄存器和握手隔离长路径；GrantBuffer 对应的不是处理器指令流水线，而是 L2 响应出口的弹性流水段。它通过 FIFO、<code>valid</code> 位和 <code>ready</code> 将 MainPipe 的响应生产与 L1 的 D/E 消费解耦。[课程：单周期、多周期与流水线](../../1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md) [GrantBuffer.scala:112-120](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/GrantBuffer.scala:112)
 
 | 理论概念 | 课程含义 | 有效代码实体 | 实现方式与教材模型的差异 |
 | --- | --- | --- | --- |

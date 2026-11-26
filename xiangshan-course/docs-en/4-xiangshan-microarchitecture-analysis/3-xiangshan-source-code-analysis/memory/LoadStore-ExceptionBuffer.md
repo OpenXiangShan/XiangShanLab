@@ -21,7 +21,7 @@
 | commit | `e12436c7cba86b195deec24981976d78bc263661` |
 | commit 主题 | `fix(Store): prevent rdataptr from advancing out of order (#6353)` |
 | 检出状态 | `difftest` 有已修改内容，`src/main/resources/aia/` 未跟踪；本文没有改动该检出 |
-| 课程/理论参照 | [14_LoadStore.md:2814](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:2814)、[13_ROB.md:14](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/2-xiangshan-design-document/13_ROB.md:14) |
+| 课程/理论参照 | [14_LoadStore.md:2814](../../../xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L2814)、[13_ROB.md:14](../../../../docs/4-xiangshan-microarchitecture-analysis/2-xiangshan-design-document/13_ROB.md#L14) |
 | XiangShan-Design-Doc | 本机未发现独立 `XiangShan-Design-Doc` 检出，本文不以网络副本替代；所有实现结论以该 commit 的 RTL 为准 |
 
 文中 “源码证实” 是对上述 commit 的静态结论；“推导” 会显式标注，不把课程文字或一般微架构常识写成 RTL 行为。
@@ -43,7 +43,7 @@
 | 精确异常需要最老异常指令的地址 | 两实现均按 `robIdx`，同 ROB 再按 `uopIdx` 选最老 [LoadExceptionBuffer.scala:67](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:67)、[StoreQueue.scala:108](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:108) | 证明地址候选的年龄排序；不等同于这里决定 trap cause |
 | ROB 按序发现/提交异常 | ROB 在头部异常条件满足时产生 exception/flush [Rob.scala:555](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:555)、[Rob.scala:635](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:635) | ExceptionBuffer 不直接连接为 ROB exception valid 的来源 |
 | 访存异常地址用于 CSR 的 trap value | MemBlock 组装 LSQ 地址，送往后端；CSR 根据 memory exception 输入更新 trap-value [MemBlock.scala:1983](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1983)、[CSR.scala:1363](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:1363) | 地址与 cause 是两条相关但不同的路径 |
-| 课程中 LQ ExceptionBuffer 的介绍 | [14_LoadStore.md:2814](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:2814) | 仅作概念参照，不能代替本 commit 的端口和时序证据 |
+| 课程中 LQ ExceptionBuffer 的介绍 | [14_LoadStore.md:2814](../../../xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L2814) | 仅作概念参照，不能代替本 commit 的端口和时序证据 |
 -->
 
 # 1. LoadStore-ExceptionBuffer: Kunminghu-v2 Memory Exception-Address Buffer Source Analysis
@@ -68,7 +68,7 @@ This document analyzes only the two Kunminghu-v2 memory-unit implementations tha
 | Commit | `e12436c7cba86b195deec24981976d78bc263661` |
 | Commit subject | `fix(Store): prevent rdataptr from advancing out of order (#6353)` |
 | Checkout state | Existing `difftest` modifications and untracked `src/main/resources/aia/`; this document did not change the checkout |
-| Course/theory reference | [14_LoadStore.md:2814](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:2814), [13_ROB.md:14](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/2-xiangshan-design-document/13_ROB.md:14) |
+| Course/theory reference | [14_LoadStore.md:2814](../../../xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L2814), [13_ROB.md:14](../../../../docs/4-xiangshan-microarchitecture-analysis/2-xiangshan-design-document/13_ROB.md#L14) |
 | XiangShan-Design-Doc | No independent checkout was found locally. A network copy is not substituted; all implementation conclusions use the RTL at this commit. |
 
 "Source-confirmed" in this document means a static conclusion from the commit above. An inference is labelled explicitly; course text and general microarchitectural knowledge are not presented as RTL behavior.
@@ -90,7 +90,7 @@ Course material describes the LQ exception-address buffer as a mechanism for pre
 | Precise exceptions require the oldest exceptional instruction's address | Both implementations select oldest by `robIdx`, then `uopIdx` within the same ROB: [LoadExceptionBuffer.scala:67](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadExceptionBuffer.scala:67), [StoreQueue.scala:108](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/StoreQueue.scala:108) | Proves age ordering for address candidates, not that trap cause is decided here |
 | ROB discovers/commits exceptions in order | ROB produces exception/flush when head exception conditions hold: [Rob.scala:555](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:555), [Rob.scala:635](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/rob/Rob.scala:635) | ExceptionBuffer is not directly the source of ROB exception valid |
 | Memory exception address feeds CSR trap value | MemBlock assembles LSQ address for backend; CSR updates trap value from memory-exception input: [MemBlock.scala:1983](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:1983), [CSR.scala:1363](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/CSR.scala:1363) | Address and cause are related but distinct paths |
-| Course introduction to LQ ExceptionBuffer | [14_LoadStore.md:2814](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:2814) | Conceptual reference only; not a substitute for this commit's ports/timing evidence |
+| Course introduction to LQ ExceptionBuffer | [14_LoadStore.md:2814](../../../xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L2814) | Conceptual reference only; not a substitute for this commit's ports/timing evidence |
 
 <!--
 ## 4. 实现位置和实例关系

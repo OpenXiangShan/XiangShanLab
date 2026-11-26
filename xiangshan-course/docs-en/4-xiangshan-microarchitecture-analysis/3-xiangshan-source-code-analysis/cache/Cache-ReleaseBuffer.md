@@ -30,7 +30,7 @@
 
 ## 2. 从缓存理论到代码：本文要验证什么
 
-课程 [XSCache.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md) 把非阻塞缓存中的数据暂存、MSHR 和一致性消息区分开来。落到当前代码，不能把“buffer”理解成一个必然独立分配、独立释放的 FIFO：CoupledL2 的 ReleaseBuffer 是 MSHR 上下文的 data sidecar；HuanCun 的同名对象才是显式可见容量和 valid 状态的缓存池。
+课程 [XSCache.md](../../../xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md) 把非阻塞缓存中的数据暂存、MSHR 和一致性消息区分开来。落到当前代码，不能把“buffer”理解成一个必然独立分配、独立释放的 FIFO：CoupledL2 的 ReleaseBuffer 是 MSHR 上下文的 data sidecar；HuanCun 的同名对象才是显式可见容量和 valid 状态的缓存池。
 
 | 理论问题 | CoupledL2 中应看的代码 | 本文结论 |
 | --- | --- | --- |
