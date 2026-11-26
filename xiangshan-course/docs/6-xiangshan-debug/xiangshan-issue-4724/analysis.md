@@ -18,10 +18,10 @@
 
 | 对象 | 本文采用的对象或版本 |
 | --- | --- |
-| 测试程序 | [main.c](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/main.c:1) |
-| 反汇编 | [amo-analysis-riscv64-xs.txt](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/amo-analysis-riscv64-xs.txt:260) |
-| 正确参考输出 | [correct-xs-log.stdout](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/correct-xs-log.stdout:1) |
-| 旧版错误输出 | [wrong-xs-log.stdout](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/wrong-xs-log.stdout:1) |
+| 测试程序 | [main.c](bug-replay/main.c#L1) |
+| 反汇编 | [amo-analysis-riscv64-xs.txt](bug-replay/amo-analysis-riscv64-xs.txt#L260) |
+| 正确参考输出 | [correct-xs-log.stdout](bug-replay/correct-xs-log.stdout#L1) |
+| 旧版错误输出 | [wrong-xs-log.stdout](bug-replay/wrong-xs-log.stdout#L1) |
 | 旧版源码 | `/home/yanyusong/amo-analysis-env/XiangShan`，detached HEAD `e49444835601e0e24deb722ede18be04d9a56c5c` |
 | 错误版波形 | [2026-08-26@16:44:32.fst](/home/yanyusong/amo-analysis-env/XiangShan/build/2026-08-26@16:44:32.fst) |
 | 修复提交 | `10ff24df824cb67b3c9deef764041a2a26fb2a19`，旧版 HEAD 的直接子提交 |
@@ -44,7 +44,7 @@
 
 ### 3.1 PMA 区域刻意允许普通读写、禁止原子操作
 
-[main.c:12-25](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/main.c:12) 定义：
+[main.c:12-25](bug-replay/main.c#L12) 定义：
 
 ```c
 #define PMA_R          (1UL << 0)
@@ -66,11 +66,11 @@
 | `A` | NAPOT | 以 NAPOT 表示 4 KiB 区间 |
 | `atomic` | **0** | 区域不支持 AMO；这正是测试变量 |
 
-[configure_pma_region()](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/main.c:62) 将 PMA entry 0 配成 `[0x80003000, 0x80004000)`，随后回读并显式检查 atomic 位仍为 0。目标对象是 4 KiB 对齐数组的第一个 64 位元素，初值为 `0x1122334455667788`。
+[configure_pma_region()](bug-replay/main.c#L62) 将 PMA entry 0 配成 `[0x80003000, 0x80004000)`，随后回读并显式检查 atomic 位仍为 0。目标对象是 4 KiB 对齐数组的第一个 64 位元素，初值为 `0x1122334455667788`。
 
 ### 3.2 目标指令及其正常 AMO 语义
 
-反汇编在 [0x800003a0](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/amo-analysis-riscv64-xs.txt:316) 给出：
+反汇编在 [0x800003a0](bug-replay/amo-analysis-riscv64-xs.txt#L316) 给出：
 
 ```text
 80000392: ...                         # a2 <- 0xbad0bad0bad0bad0
@@ -78,7 +78,7 @@
 800003a0: 00f4362f      amoadd.d a2,a5,(s0)
 ```
 
-此前 [0x800002f8-0x800002fc](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/amo-analysis-riscv64-xs.txt:273) 已令 `s0=0x80003000`。指令编码解码为：
+此前 [0x800002f8-0x800002fc](bug-replay/amo-analysis-riscv64-xs.txt#L273) 已令 `s0=0x80003000`。指令编码解码为：
 
 - `rd=a2/x12`；
 - `rs1=s0/x8=0x80003000`；
@@ -97,7 +97,7 @@ M[0x80003000] <- old + 0x10 = 0x1122334455667798
 
 ### 3.3 测试如何观察“指令没有执行”
 
-[main.c:104-139](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/main.c:104) 在 AMO 前注册 cause 7 处理器。处理器递增 `access_fault_count`，打印 `scause/sepc/stval`，并把 `sepc` 加 4 跳过固定 32 位 AMO。`amo_old_value` 在执行前被初始化为哨兵 `0xbad0bad0bad0bad0`。
+[main.c:104-139](bug-replay/main.c#L104) 在 AMO 前注册 cause 7 处理器。处理器递增 `access_fault_count`，打印 `scause/sepc/stval`，并把 `sepc` 加 4 跳过固定 32 位 AMO。`amo_old_value` 在执行前被初始化为哨兵 `0xbad0bad0bad0bad0`。
 
 因此正确判据同时包括：
 
@@ -119,7 +119,7 @@ M[0x80003000] <- old + 0x10 = 0x1122334455667798
 | AMO 后内存 | 保持 `0x1122334455667788` | **变成 `0x1122334455667798`** |
 | 结论 | AMO 被精确阻止并跳过 | 禁止的 AMO 被完整执行 |
 
-correct 证据位于 [correct-xs-log.stdout:6-10](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/correct-xs-log.stdout:6)：
+correct 证据位于 [correct-xs-log.stdout:6-10](bug-replay/correct-xs-log.stdout#L6)：
 
 ```text
 Before amoadd.d: address=0x80003000 value=0x1122334455667788 addend=0x10
@@ -128,7 +128,7 @@ After amoadd.d: handler_count=1 old=0xbad0bad0bad0bad0 memory=0x1122334455667788
 AMO was skipped after entering the AccessFault handler
 ```
 
-错误行为位于 [wrong-xs-log.stdout:9-12](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/wrong-xs-log.stdout:9)：
+错误行为位于 [wrong-xs-log.stdout:9-12](bug-replay/wrong-xs-log.stdout#L9)：
 
 ```text
 Before amoadd.d: address=0x80003000 value=0x1122334455667788 addend=0x10
@@ -136,7 +136,7 @@ After amoadd.d: handler_count=0 old=0x1122334455667788 memory=0x1122334455667798
 AMO completed without entering the AccessFault handler
 ```
 
-wrong 日志最后仍显示 `HIT GOOD TRAP`，不能据此认为 PMA 行为正确；[main.c:133-139](/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-4724/bug-replay/main.c:133) 只打印观察结果，随后无条件 `return 0`。所以这是“语义错误但测试进程仍返回成功”，不是崩溃、超时或 bad trap。
+wrong 日志最后仍显示 `HIT GOOD TRAP`，不能据此认为 PMA 行为正确；[main.c:133-139](bug-replay/main.c#L133) 只打印观察结果，随后无条件 `return 0`。所以这是“语义错误但测试进程仍返回成功”，不是崩溃、超时或 bad trap。
 
 ## 5. WaveKit 如何锁定这条 AMO
 

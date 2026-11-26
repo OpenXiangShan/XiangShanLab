@@ -33,7 +33,7 @@ cd XiangShan
 2. [Decode](backend/Decode.md)
 3. [Rename](backend/Rename.md)
 4. [Dispatch](backend/Dispatch.md)
-5. [MDP / Memory Dependence Predictor](memory/mdp-ref.md)
+5. [MDP / Memory Dependence Predictor](../../../docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/mdp-ref.md)
 
 ## Frontend
 
@@ -83,7 +83,7 @@ Cache 文档后续可按 L1/L2/L3、MSHR、prefetch、uncache、TLB/一致性接
 | 文档 | 内容 |
 | --- | --- |
 | [Frontend-ICache.md](frontend/Frontend-ICache.md) | 前端 ICache、miss、MSHR、预取和取指回压 |
-| [mdp-ref.md](memory/mdp-ref.md) | 访存依赖预测与 Load/Store 队列交互，可作为理解数据侧访存行为的入口 |
+| [mdp-ref.md](../../../docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/mdp-ref.md) | 访存依赖预测与 Load/Store 队列交互，可作为理解数据侧访存行为的入口 |
 
 建议阅读源码时同时查看 `cache/` 与 `mem/`，因为 Cache 行为通常需要结合 Load/Store queue、MSHR、replay、TLB 和一致性请求一起理解。
 
@@ -95,7 +95,7 @@ Memory 目录关注 Load/Store 执行、访存顺序、replay、依赖预测、�
 
 | 文档 | 内容 |
 | --- | --- |
-| [mdp-ref.md](memory/mdp-ref.md) | Memory Dependence Predictor、SSIT、LFST、Load/Store queue 等待与训练路径 |
+| [mdp-ref.md](../../../docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/mdp-ref.md) | Memory Dependence Predictor、SSIT、LFST、Load/Store queue 等待与训练路径 |
 
 ## 文档使用方式
 

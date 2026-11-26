@@ -16,7 +16,7 @@ By the end of this chapter, you will be able to clearly answer the following que
 
 :::
 
-![1771068691800-b38a602b-a511-4c65-b520-c62f1204e9a9.png](../1.CHN/img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
+![1771068691800-b38a602b-a511-4c65-b520-c62f1204e9a9.png](../../docs/1-xiangshan-development-environment/img/chapter-5-dramsim3-memory-simulation/figure-001-dramsim3-memory-simulation.png)
 
 ## 6.1 Why It Is Essential to Simulate CPUs
 
@@ -166,7 +166,7 @@ Load the corresponding bin file, then simulate on `emu`.
 Final successful output: If the terminal displays `hello xiangshan`, the process was successful.\
 Reference example:：
 
-![1770621631510-97acd557-05e5-4eb1-aed2-c6ae8f1ac81e.png](../1.CHN/img/chapter-6-the-xiang-shan-simulation-process/figure-002-nemu-run.png)
+![1770621631510-97acd557-05e5-4eb1-aed2-c6ae8f1ac81e.png](../../docs/1-xiangshan-development-environment/img/chapter-6-the-xiang-shan-simulation-process/figure-002-nemu-run.png)
 
 Figure 1: XiangShan simulates the “Hello World” program
 
@@ -470,7 +470,7 @@ guiConfFile (write)= /nfs/home/yourhome/xs-env/XiangShan/novas.conf (working dir
 
 Waveform interface displayed successfully:
 
-![1768548114223-5f126a7d-97ff-4fd3-b8d9-46e36b1e418e.png](../1.CHN/img/chapter-6-the-xiang-shan-simulation-process/figure-003-bashrc-waveform-bash.png)
+![1768548114223-5f126a7d-97ff-4fd3-b8d9-46e36b1e418e.png](../../docs/1-xiangshan-development-environment/img/chapter-6-the-xiang-shan-simulation-process/figure-003-bashrc-waveform-bash.png)
 
 ### 6.6.4 Command for linking waveforms and code
 

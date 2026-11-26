@@ -479,7 +479,7 @@ RXSNP 没有异常/特权/CSR 状态机。其可见的错误路径是 Directory/
 | 一致性序列化 | 同块 request/replacement/CMO 用 MSHR schedule/wait 字段界定可嵌套窗口。 | 不能只按 opcode 或地址做静态判断。 |
 | 进展监测 | `stallCnt` 和 replace-nest 唯一性断言。 | 断言失败是 bug 信号，不是性能 SLA。 |
 
-课程中“有限队列必须描述 valid/full/ready、谁写入、谁读取、何时清空”的读法适用于这里；但所有具体队列和 MSHR 结论已在本章回链至源码。[`Frontend-BPU.md:242`](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/frontend/Frontend-BPU.md:242)
+课程中“有限队列必须描述 valid/full/ready、谁写入、谁读取、何时清空”的读法适用于这里；但所有具体队列和 MSHR 结论已在本章回链至源码。[`Frontend-BPU.md:242`](../../../../docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/frontend/Frontend-BPU.md#L242)
 
 ## 16. 关键信号关系图与时序示意
 

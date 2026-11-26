@@ -35,7 +35,7 @@ issue / replay / prefetch request
 | ID | 来源 | 本文中的用途 | 结论状态 |
 |---|---|---|---|
 | D0 | 官方 Design Doc | 本机缺失，未读取 | 不可用 |
-| C0 | 课程总览，如 [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:269) | 解释 LSU、TLB、PMP、PTW 的课堂语境 | 仅背景 |
+| C0 | 课程总览，如 [14_LoadStore.md](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L269) | 解释 LSU、TLB、PMP、PTW 的课堂语境 | 仅背景 |
 | S0 | 上述 pinned checkout 的 Chisel 源码 | 端口、状态、仲裁、异常与地址路径 | 本文唯一行为证据 |
 
 下文的“已验证”均可回链到 S0；“推导”会注明参数前提；“待波形验证”表示仅靠源码无法确认具体事务、周期或某个触发序列。不能把代码中的结构性一拍寄存器，扩大表述成软件可见的固定 load latency。
@@ -617,7 +617,7 @@ MMU 的职责是对**每个实际访问片段**产生物理地址、PBMT 和权�
 2. 可以确认：DCache 根据从 LoadUnit 回送的 paddr 进行 tag/data/bank/miss 控制；
 3. 不能由 MMU 代码确认：跨 cache line 的最终 merge、MSHR 占用、data-bank conflict 与 retirement cycle。
 
-后两项应在 [LoadStore-DCache.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/LoadStore-DCache.md:1) 以及对应波形中继续追踪，不能把地址切片推导成已证实的 cache 行为。
+后两项应在 [LoadStore-DCache.md](LoadStore-DCache.md#L1) 以及对应波形中继续追踪，不能把地址切片推导成已证实的 cache 行为。
 
 ### 15.3. 三层取消：request、translation 与 cache pipeline
 
@@ -759,7 +759,7 @@ stateDiagram-v2
 | ID | Design Doc / 课程来源 | 原子主张 | 有效源码映射 | 状态 |
 |---|---|---|---|---|
 | D0 | 本机 Design Doc checkout | 任何正式 MMU 设计意图 | 无 | **not consulted**：本机不存在约定 checkout，不能引用或推测。 |
-| C0 | 课程 [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:269) | LSU/DTLB/PMP/PTW 的教学性分层 | `MemBlock` 的有效接线见 [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686)、[MemBlock.scala:789](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:789) | 背景；不是 Design Doc 证明。 |
+| C0 | 课程 [14_LoadStore.md](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L269) | LSU/DTLB/PMP/PTW 的教学性分层 | `MemBlock` 的有效接线见 [MemBlock.scala:686](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:686)、[MemBlock.scala:789](/home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/MemBlock.scala:789) | 背景；不是 Design Doc 证明。 |
 | S0 | pinned Kunminghu V2 source | 端口、状态、算法、exception/replay、flush | 本文每项 source link | **有效行为证据**。 |
 
 Design Doc discrepancy 结论：没有可做 line-by-line 映射的本地正式 Design Doc，因此不存在“已验证的 Design Doc 行为”条目；所有实现结论均以 S0 为准。课程材料与代码不一致或未覆盖时，本文保留代码证据和未验证边界，不用课程措辞覆盖它。

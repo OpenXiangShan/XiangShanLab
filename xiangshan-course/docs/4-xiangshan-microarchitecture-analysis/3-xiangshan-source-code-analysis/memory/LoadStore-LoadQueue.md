@@ -72,7 +72,7 @@ val uncacheBuffer    = Module(new LoadQueueUncache)
 | 层次 | 本文采用的内容 | 不能越界的结论 |
 | --- | --- | --- |
 | 理论 | LSQ 允许 load 在未知旧 Store 地址时推测执行，再用地址比较、重放/redirect 保证 memory ordering；队列需在 redirect、异常、资源满时保持年龄关系。 | 这解释“为何有 RAW/RAR/Replay”，但不自动给出昆明湖的容量、端口或固定周期。 |
-| 课程意图 | [14_LoadStore.md:311–397](</home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:311>) 将 LQ 介绍为多个协作结构，并说明 LQ/SQ 的联合分配与恢复。 | 课程文字必须回到本 commit 的连接、寄存器和参数确认。 |
+| 课程意图 | [14_LoadStore.md:311–397](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L311) 将 LQ 介绍为多个协作结构，并说明 LQ/SQ 的联合分配与恢复。 | 课程文字必须回到本 commit 的连接、寄存器和参数确认。 |
 | 有效 V2 代码 | `LoadQueue` 的实例化/连线、VLQ 的 `allocated/committed`、RAW/RAR 的 CAM 表、Replay 的 FreeList、LoadUnit S0–S3 与 MemBlock oldest redirect。 | 只有这些已实例化并有有效连线的 V2 实体被称为“实际行为”。 |
 
 ### 3.1 课程意图到 V2 源码的可追溯矩阵

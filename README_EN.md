@@ -66,7 +66,7 @@ English coverage is currently smaller than the Chinese course. For the complete 
 | [`xiangshan-collaborators/`](./xiangshan-collaborators/) | XiangShan collaborators from universities and research institutions | [Collaborators](./xiangshan-collaborators/xiangshan-collaborators.md) |
 | [`external-contribution-project/`](./external-contribution-project/) | Registration materials for external projects contributed by the XiangShan community, collaborating organizations, and individuals | [Project guide](./external-contribution-project/README.md) |
 | [`2026-CIE-RISC-V-Contest-Application-Track/`](./2026-CIE-RISC-V-Contest-Application-Track/) | 2026 CIE RISC-V Contest application-track materials and submission files | [Contest description](./2026-CIE-RISC-V-Contest-Application-Track/README.md) |
-| [`RISC-V-International-Participation-Guide/`](./RISC-V-International-Participation-Guide/) | RISC-V International participation guide: membership registration, groups/mailing lists, and committee joining | [Participation guide](./RISC-V-International-Participation-Guide/README.md) |
+| [`RISC-V-International-Participation-Guide/`](./RISC-V-International-Participation-Guide/) | RISC-V International participation guide: membership registration, groups/mailing lists, and committee joining | [Participation guide](./RISC-V-International-Participation-Guide/RISC-V-International-Participation-Guide.md) |
 
 ## Programming Exercises
 

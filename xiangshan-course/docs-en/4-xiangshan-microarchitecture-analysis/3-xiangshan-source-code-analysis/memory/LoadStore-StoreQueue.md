@@ -11,7 +11,7 @@
 | 分支/提交 | kunminghu-v2 @ e12436c7cba86b195deec24981976d78bc263661 |
 | 主要源码 | StoreQueue.scala、StoreQueueData.scala、LSQWrapper.scala、StoreUnit.scala、MemBlock.scala、Sbuffer.scala |
 | Design Doc 基线 | 未咨询：本地 XiangShan-Design-Doc checkout 不存在。本文不将设计文档或通用教材说法表述为当前 RTL 行为。 |
-| 课程材料 | 只用本地 [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md) 解释术语；它记录的源码提交不同，不能作为本次实现证据。 |
+| 课程材料 | 只用本地 [14_LoadStore.md](../../../xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md) 解释术语；它记录的源码提交不同，不能作为本次实现证据。 |
 | weekly sync | 已按 skill 执行；结果为 skip: last sync 2.66 days ago < 7 days。 |
 | 源码工作树 | 已有 difftest 修改和 src/main/resources/aia/ 未跟踪内容；本次仅只读分析，未触碰它们。 |
 
@@ -526,7 +526,7 @@ io.enq.req 是 ValidIO 而不是 Decoupled；图中的 alloc.accept 是本文定
 | Branch / commit | `kunminghu-v2 @ e12436c7cba86b195deec24981976d78bc263661` |
 | Principal source | `StoreQueue.scala`, `StoreQueueData.scala`, `LSQWrapper.scala`, `StoreUnit.scala`, `MemBlock.scala`, and `Sbuffer.scala` |
 | Design Doc baseline | Not consulted: no local `XiangShan-Design-Doc` checkout exists, so design-doc or textbook claims are not stated as current RTL behavior. |
-| Course material | Local [14_LoadStore.md](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md) is terminology background only; it pins a different source commit. |
+| Course material | Local [14_LoadStore.md](../../../xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md) is terminology background only; it pins a different source commit. |
 | Weekly synchronization | The skill ran it and reported `skip: last sync 2.66 days ago < 7 days`. |
 | Source worktree | Pre-existing `difftest` modifications and untracked `src/main/resources/aia/` content were left untouched. |
 

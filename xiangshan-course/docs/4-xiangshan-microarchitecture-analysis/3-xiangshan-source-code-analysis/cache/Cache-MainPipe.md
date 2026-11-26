@@ -62,7 +62,7 @@ flowchart LR
 
 ### 2.1 Theory-to-Code Mapping
 
-课程中的流水化概念可以解释为什么在长组合逻辑之间插入级间寄存器和为什么资源饱和时要反压；它不等价于 MainPipe 是 CPU 指令的取指、发射或提交流水。这里的载荷是缓存事务 <code>TaskBundle</code>，它携带 <code>tag/set/off</code>、TileLink channel、MSHR 关联和 CHI 字段，而不是 ROB 指针或执行单元结果。[课程：Single Cycle vs Multi Cycle vs Pipeline](/home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md) [Common.scala:55-165](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Common.scala:55)
+课程中的流水化概念可以解释为什么在长组合逻辑之间插入级间寄存器和为什么资源饱和时要反压；它不等价于 MainPipe 是 CPU 指令的取指、发射或提交流水。这里的载荷是缓存事务 <code>TaskBundle</code>，它携带 <code>tag/set/off</code>、TileLink channel、MSHR 关联和 CHI 字段，而不是 ROB 指针或执行单元结果。[课程：Single Cycle vs Multi Cycle vs Pipeline](../../1-superscalar-basic-knowledge/1_Single_Cycle_vs_Multi_Cycle_vs_Pipeline.md) [Common.scala:55-165](/home/yanyusong/xs-memory-env/XiangShan/coupledL2/src/main/scala/coupledL2/Common.scala:55)
 
 | 课程概念 | 在 MainPipe 周边的有效实体 | 代码上的具体含义 | 不应外推的内容 |
 | --- | --- | --- | --- |

@@ -335,7 +335,7 @@ mill 工具在项目目录中的配置文件。在该文件中主要是添加一
 
 ### 2.2.3 build.sc 代码结构分析
 
-![1770194988083-8d3cbcf9-064d-4d58-b700-3d9b5c04dea5.png](../2.ENG/img/chapter-2-preparing-and-understanding-the-tools/figure-003-sc-structure-mill.png)
+![1770194988083-8d3cbcf9-064d-4d58-b700-3d9b5c04dea5.png](../../docs-en/1-xiangshan-development-environment/img/chapter-2-preparing-and-understanding-the-tools/figure-003-sc-structure-mill.png)
 
 图2：build.sc代码主要结构分析
 

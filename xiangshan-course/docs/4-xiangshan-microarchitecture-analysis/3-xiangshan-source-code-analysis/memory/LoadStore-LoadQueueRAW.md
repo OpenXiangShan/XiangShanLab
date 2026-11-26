@@ -27,7 +27,7 @@
 
 ### 1.3. 术语
 
-课程中的通用 RAW 是读操作依赖更早写操作的结果；这里的 RAW 是更具体的 memory ordering 问题：load 已继续执行，而更老 store 的地址尚未知道，之后发现二者地址和掩码冲突。它使用 `robIdx`、`sqIdx`、物理地址和 mask，不读取物理寄存器重命名表。通用理论背景见 [Dependency_Between_Instructions.md:24](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/4_Dependency_Between_Instructions.md:24>)；本文以下“RAW”均指 `LoadQueueRAW` 的 memory RAW。
+课程中的通用 RAW 是读操作依赖更早写操作的结果；这里的 RAW 是更具体的 memory ordering 问题：load 已继续执行，而更老 store 的地址尚未知道，之后发现二者地址和掩码冲突。它使用 `robIdx`、`sqIdx`、物理地址和 mask，不读取物理寄存器重命名表。通用理论背景见 [Dependency_Between_Instructions.md:24](../../1-superscalar-basic-knowledge/4_Dependency_Between_Instructions.md#L24)；本文以下“RAW”均指 `LoadQueueRAW` 的 memory RAW。
 
 ## 2. 关键源码证据
 
@@ -76,7 +76,7 @@
 
 | ID | 问题或意图 | 状态 | 代码映射 | 结论 |
 | --- | --- | --- | --- | --- |
-| T0 | 通用 RAW 防止读到过早值 | 课程理论 | [Dependency_Between_Instructions.md:24](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/1-superscalar-basic-knowledge/4_Dependency_Between_Instructions.md:24>) | 仅背景，不等同于实现规格 |
+| T0 | 通用 RAW 防止读到过早值 | 课程理论 | [Dependency_Between_Instructions.md:24](../../1-superscalar-basic-knowledge/4_Dependency_Between_Instructions.md#L24) | 仅背景，不等同于实现规格 |
 | D0 | RAW 的 Design Doc 原始意图 | 未查阅 | 本地目录不存在 | 不作推断 |
 | C0 | 只给未知老 store 前的 load 建表 | 源码已确认 | [LoadQueueRAW.scala:115](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:115>) | `needEnqueue` 精确编码该过滤 |
 | C1 | 命中时选最老违规 load | 源码已确认 | [LoadQueueRAW.scala:241](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/lsqueue/LoadQueueRAW.scala:241>) | 每个 store 端口独立选择 |

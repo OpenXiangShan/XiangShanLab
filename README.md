@@ -71,7 +71,7 @@ git submodule update --init --recursive
 | [`xiangshan-collaborators/`](./xiangshan-collaborators/) | 香山合作高校和科研机构资料 | [合作机构](./xiangshan-collaborators/xiangshan-collaborators.md) |
 | [`external-contribution-project/`](./external-contribution-project/) | 香山社区、合作机构和个人贡献的外部项目登记资料 | [项目说明](./external-contribution-project/README.md) |
 | [`2026-CIE-RISC-V-Contest-Application-Track/`](./2026-CIE-RISC-V-Contest-Application-Track/) | 2026 CIE RISC-V 大赛应用方向赛题与提交文件 | [赛题说明](./2026-CIE-RISC-V-Contest-Application-Track/README.md) |
-| [`RISC-V-International-Participation-Guide/`](./RISC-V-International-Participation-Guide/) | RISC-V International 参与指南：会员注册、群组/邮件列表与委员会加入 | [参与指南](./RISC-V-International-Participation-Guide/README.md) |
+| [`RISC-V-International-Participation-Guide/`](./RISC-V-International-Participation-Guide/) | RISC-V International 参与指南：会员注册、群组/邮件列表与委员会加入 | [参与指南](./RISC-V-International-Participation-Guide/RISC-V-International-Participation-Guide.md) |
 
 ## 编程实践
 

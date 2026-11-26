@@ -30,7 +30,7 @@
 | 主题 | 理论/课程层 | 当前有效代码层 | 结论 |
 |---|---|---|---|
 | 虚拟地址翻译 | 常见的 TLB hit/miss/page-walk 模型 | [TLB.scala](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:39>)、[TLBStorage.scala](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLBStorage.scala:86>) | DTLB 是 nonblocking L1 包装，PTW 返回还可旁路正在等待的查找。 |
-| LSU 流水 | 课程的 LoadQueue、LoadPipe、StorePipe 分工 | [LoadStore-LoadQueue.md](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/LoadStore-LoadQueue.md:1>)、[LoadStore-LoadPipe.md](</home/yanyusong/XiangShanLab/xiangshan-course/docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/LoadStore-LoadPipe.md:1>) | Load/Store 在 S0/S1 通过 TLB 接口耦合，LSQ 不替每条访存直接完成翻译。 |
+| LSU 流水 | 课程的 LoadQueue、LoadPipe、StorePipe 分工 | [LoadStore-LoadQueue.md](LoadStore-LoadQueue.md#L1)、[LoadStore-LoadPipe.md](LoadStore-LoadPipe.md#L1) | Load/Store 在 S0/S1 通过 TLB 接口耦合，LSQ 不替每条访存直接完成翻译。 |
 | 权限和属性 | 页表权限、PMP/PMA、PBMT | [TLB.scala](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/TLB.scala:429>)、[PMP.scala](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/backend/fu/PMP.scala:563>) | 译后物理地址仍经 PMP/PMA；PBMT 随 TLB response 返回。 |
 | 精确异常 | 异常与 ROB/replay 协作 | [MMUBundle.scala](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/cache/mmu/MMUBundle.scala:563>)、[LoadUnit.scala](</home/yanyusong/xs-memory-env/XiangShan/src/main/scala/xiangshan/mem/pipeline/LoadUnit.scala:899>) | TLB 给出执行期异常信息，最终精确提交仍属于后端/ROB。 |
 

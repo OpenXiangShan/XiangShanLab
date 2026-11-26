@@ -55,7 +55,7 @@ flowchart LR
 
 ## 3. 课程理论到当前 RTL 的映射
 
-课程中的 Cache line、set、way、目录、非阻塞缓存与 TileLink A/B/C/D/E 的定义可作为阅读框架，但下面的映射只依赖当前实现。[15_XSCache.md:27](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md:27) [15_XSCache.md:131](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md:131)
+课程中的 Cache line、set、way、目录、非阻塞缓存与 TileLink A/B/C/D/E 的定义可作为阅读框架，但下面的映射只依赖当前实现。[15_XSCache.md:27](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md#L27) [15_XSCache.md:131](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md#L131)
 
 | 理论概念 | 在 SinkC 周围的具体落点 | 不能由此推出的结论 |
 |---|---|---|
@@ -159,7 +159,7 @@ io.sinkC.ready := sink_ready_basic && !block_C
 chnl_task_s1.bits := ParallelPriorityMux(sinkValids, Seq(C_task, B_task, A_task))
 ~~~
 
-这是 Slice 内的局部入口优先级，不替代跨通道的 TileLink 协议优先级。当前课程材料也把这两层明确区分。[15_XSCache.md:170](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md:170)
+这是 Slice 内的局部入口优先级，不替代跨通道的 TileLink 协议优先级。当前课程材料也把这两层明确区分。[15_XSCache.md:170](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/15_XSCache.md#L170)
 
 ### 5.3 ProbeAck 与 ProbeAckData 的 MSHR 路径
 

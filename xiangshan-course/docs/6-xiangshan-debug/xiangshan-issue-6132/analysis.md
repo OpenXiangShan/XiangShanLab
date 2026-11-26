@@ -179,7 +179,7 @@ noSpec = true, blockBack = true, flushPipe = true
 
 ### 5.1 实验对象与采样口径
 
-本地对照程序为 [smc_fencei_direct_probe.S](/nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-6132/bug-replay/smc_fencei_direct_probe.S)，其旧函数、补丁和 `fence rw,rw; fence.i; jal` 序列与直接加载 PoC 一致。
+本地对照程序为 [smc_fencei_direct_probe.S](bug-replay/smc_fencei_direct_probe.S)，其旧函数、补丁和 `fence rw,rw; fence.i; jal` 序列与直接加载 PoC 一致。
 
 - 源码分支：`kunminghu-v2`
 - 源码提交：`0fa7bb8259a7922481289d8d5932797afce84030`
@@ -742,5 +742,5 @@ store 修改代码
 - [Issue 所用提交 ICacheImp.scala](https://github.com/OpenXiangShan/XiangShan/blob/3931c5112c528299a23c256bdd77fb90813afa6e/src/main/scala/xiangshan/frontend/icache/ICacheImp.scala)
 - [Issue 所用提交 ICacheMainPipe.scala](https://github.com/OpenXiangShan/XiangShan/blob/3931c5112c528299a23c256bdd77fb90813afa6e/src/main/scala/xiangshan/frontend/icache/ICacheMainPipe.scala)
 - [FENCE_I 译码定义](https://github.com/OpenXiangShan/XiangShan/blob/96c3f568f943a096ffd3d712dc6f462ac4b1ba33/src/main/scala/xiangshan/backend/decode/DecodeUnit.scala#L250)
-- [本地 V2 对照程序](/nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-6132/bug-replay/smc_fencei_direct_probe.S)
-- [本地 V2 对照波形归档](/nfs/home/yanyusong/XiangShanLab/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-6132/bug-replay/wave.zip)
+- [本地 V2 对照程序](bug-replay/smc_fencei_direct_probe.S)
+- [本地 V2 对照波形归档](bug-replay/wave.zip)

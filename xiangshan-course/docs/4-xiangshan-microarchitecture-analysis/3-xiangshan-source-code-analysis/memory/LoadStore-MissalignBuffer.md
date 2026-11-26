@@ -29,7 +29,7 @@
 
 ### 1.2 理论、课程意图和有效代码
 
-课程资料 [14_LoadStore.md:3](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:3) 声明它参考的是旧检出 3fdbebedf6d505dedfdd66f8d8154c82136963a6，而不是本次 e12436c7。其 [14_LoadStore.md:222](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:222) 和 [14_LoadStore.md:1235](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:1235) 仅用作术语和学习路径，不能作为本提交的行为证据。
+课程资料 [14_LoadStore.md:3](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L3) 声明它参考的是旧检出 3fdbebedf6d505dedfdd66f8d8154c82136963a6，而不是本次 e12436c7。其 [14_LoadStore.md:222](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L222) 和 [14_LoadStore.md:1235](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L1235) 仅用作术语和学习路径，不能作为本提交的行为证据。
 
 | 层次 | 结论 | 证据边界 |
 | --- | --- | --- |
@@ -37,7 +37,7 @@
 | 设计意图 | 用独立的小缓冲承接少见且控制复杂的请求，复用常规 LoadUnit/StoreUnit、TLB 和 DCache，避免扩张通常的高速路径。 | 课程结构和 MemBlock 实例化支持该意图；没有同提交独立 Design Doc。 |
 | 有效代码 | 每类 buffer 均只有一个请求槽和至多两个 fragment；Load 复用 LDU1，Store 复用 STA0；二者仲裁、状态、异常和完成规则不同。 | 下文 Scala/Chisel 链路是唯一行为依据。 |
 
-课程资料的一个覆盖缺口是：旧文档的 Store 说明错误地指向非对齐 Load 小节，[14_LoadStore.md:3473](/home/yanyusong/XiangShanLab/xiangshan-course/docs/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md:3473)。所以不能套用旧 Load 图解释 Store；后文单独追踪其 cross-4KB 和 s_block。
+课程资料的一个覆盖缺口是：旧文档的 Store 说明错误地指向非对齐 Load 小节，[14_LoadStore.md:3473](../../../../docs-en/xiangshan-microarchitecture/Beginner_Implementation_and_Principles_of_the_High_Performance_Xiangshan_Processor/14_LoadStore.md#L3473)。所以不能套用旧 Load 图解释 Store；后文单独追踪其 cross-4KB 和 s_block。
 
 ## 2. 模块契约：Who / Why / How / From / To
 

@@ -60,10 +60,10 @@ Backend -> FTQ/BPU: commit, update, redirect recovery
 
 ### 4.1. 原理到实现的边界
 前端总览不直接把论文算法等同为有效实现，而是把论文概念映射到分文档里的可见代码：
-- `TAGE`、`SC`、`ITTAGE`、`RAS` 的论文原理用于解释预测器为什么采用折叠历史、统计校正和栈恢复，但有效参数、流水和训练时序必须回到 [Frontend-BPU.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-BPU.md) 及对应预测器文档。
-- `FTQ` 的生命周期和状态机体现“预测与提交分离”的实现约束，细节见 [Frontend-FTQ.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-FTQ.md)。
-- `IFU`、`ICache`、`InstrUncache` 体现“取指正确性收敛”和“跨边界分解请求”的实现约束，细节见 [Frontend-IFU-and-Predecode-Deep-Dive.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-IFU-and-Predecode-Deep-Dive.md) 与 [Frontend-ICache.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-ICache.md)。
-- `IBuffer` 的 banked FIFO、旁路和 output register 说明“前端与后端节奏解耦”的实现方式，细节见 [Frontend-IBuffer.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-IBuffer.md)。
+- `TAGE`、`SC`、`ITTAGE`、`RAS` 的论文原理用于解释预测器为什么采用折叠历史、统计校正和栈恢复，但有效参数、流水和训练时序必须回到 [Frontend-BPU.md](Frontend-BPU.md) 及对应预测器文档。
+- `FTQ` 的生命周期和状态机体现“预测与提交分离”的实现约束，细节见 [Frontend-FTQ.md](Frontend-FTQ.md)。
+- `IFU`、`ICache`、`InstrUncache` 体现“取指正确性收敛”和“跨边界分解请求”的实现约束，细节见 [Frontend-IFU-and-Predecode-Deep-Dive.md](Frontend-IFU-and-Predecode-Deep-Dive.md) 与 [Frontend-ICache.md](Frontend-ICache.md)。
+- `IBuffer` 的 banked FIFO、旁路和 output register 说明“前端与后端节奏解耦”的实现方式，细节见 [Frontend-IBuffer.md](Frontend-IBuffer.md)。
 ## 5. Microarchitecture Parameters
 
 先从源码证据读取表深度、队列容量、位宽、端口数和配置开关，再判断它们对吞吐、冲突和恢复延迟的影响；不要用文档中的默认值替代当前 commit 的参数。
@@ -130,19 +130,19 @@ Backend -> FTQ/BPU: commit, update, redirect recovery
 
 ### 10.1. 前端总算法
 前端总算法不是单一模块的内部公式，而是一个跨模块流水：
-1. `BPU` 先产生早级 prediction block 和 history/meta，见 [Frontend-BPU.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-BPU.md)。
-2. `FTQ` 把 prediction block 保存成可追踪到提交的生命周期条目，见 [Frontend-FTQ.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-FTQ.md)。
-3. `ICache/ITLB/InstrUncache` 和 `IFU` 把预测块分解成真实指令片段、异常和跨边界请求，见 [Frontend-ICache.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-ICache.md) 与 [Frontend-IFU-and-Predecode-Deep-Dive.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-IFU-and-Predecode-Deep-Dive.md)。
-4. `IBuffer` 用 banked queue 和 output register 吸收 IFU 与 Decode 的宽度差，见 [Frontend-IBuffer.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-IBuffer.md)。
-5. 后端 redirect、commit 和训练反馈再返回 FTQ/BPU，闭合一个预测块的生命周期，见 [Frontend-BPU.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-BPU.md) 和 [Frontend-FTQ.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-FTQ.md)。
+1. `BPU` 先产生早级 prediction block 和 history/meta，见 [Frontend-BPU.md](Frontend-BPU.md)。
+2. `FTQ` 把 prediction block 保存成可追踪到提交的生命周期条目，见 [Frontend-FTQ.md](Frontend-FTQ.md)。
+3. `ICache/ITLB/InstrUncache` 和 `IFU` 把预测块分解成真实指令片段、异常和跨边界请求，见 [Frontend-ICache.md](Frontend-ICache.md) 与 [Frontend-IFU-and-Predecode-Deep-Dive.md](Frontend-IFU-and-Predecode-Deep-Dive.md)。
+4. `IBuffer` 用 banked queue 和 output register 吸收 IFU 与 Decode 的宽度差，见 [Frontend-IBuffer.md](Frontend-IBuffer.md)。
+5. 后端 redirect、commit 和训练反馈再返回 FTQ/BPU，闭合一个预测块的生命周期，见 [Frontend-BPU.md](Frontend-BPU.md) 和 [Frontend-FTQ.md](Frontend-FTQ.md)。
 
 ### 10.2. 关键分支与责任分配
 | 处理环节 | 主要职责 | 深入文档 |
 | --- | --- | --- |
-| 早级预测 | 给出下一块 PC、taken/target 和 meta | [Frontend-BPU.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-BPU.md) |
-| 块生命周期 | 保存 PC、历史、训练和恢复状态 | [Frontend-FTQ.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-FTQ.md) |
-| 真实取指与校验 | 处理 cacheable / MMIO 取指、预译码和异常 | [Frontend-IFU-and-Predecode-Deep-Dive.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-IFU-and-Predecode-Deep-Dive.md), [Frontend-ICache.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-ICache.md) |
-| 弹性输出 | 吸收前后端节奏差并按年龄顺序输出 | [Frontend-IBuffer.md](/nfs/home/yuanmiaomiao/XiangShanLab/xiangshan-course/docs/课程体系4：实现篇-香山高性能处理器微架构优化/中级-高性能香山处理器代码深入解析/Frontend-IBuffer.md) |
+| 早级预测 | 给出下一块 PC、taken/target 和 meta | [Frontend-BPU.md](Frontend-BPU.md) |
+| 块生命周期 | 保存 PC、历史、训练和恢复状态 | [Frontend-FTQ.md](Frontend-FTQ.md) |
+| 真实取指与校验 | 处理 cacheable / MMIO 取指、预译码和异常 | [Frontend-IFU-and-Predecode-Deep-Dive.md](Frontend-IFU-and-Predecode-Deep-Dive.md), [Frontend-ICache.md](Frontend-ICache.md) |
+| 弹性输出 | 吸收前后端节奏差并按年龄顺序输出 | [Frontend-IBuffer.md](Frontend-IBuffer.md) |
 ## 11. 状态和存储结构
 
 

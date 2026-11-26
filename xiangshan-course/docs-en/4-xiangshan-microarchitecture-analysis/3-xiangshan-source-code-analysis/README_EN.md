@@ -33,7 +33,7 @@ Suggested reading order:
 2. [Decode](backend/Decode.md)
 3. [Rename](backend/Rename.md)
 4. [Dispatch](backend/Dispatch.md)
-5. [MDP / Memory Dependence Predictor](memory/mdp-ref.md)
+5. [MDP / Memory Dependence Predictor](../../../docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/mdp-ref.md)
 
 ## Frontend
 
@@ -83,7 +83,7 @@ Cache-specific notes can be expanded later around L1/L2/L3, MSHR, prefetch, unca
 | Document | Topic |
 | --- | --- |
 | [Frontend-ICache.md](frontend/Frontend-ICache.md) | Frontend ICache, misses, MSHR, prefetch, and fetch backpressure |
-| [mdp-ref.md](memory/mdp-ref.md) | Memory dependence prediction and Load/Store queue interaction, useful as an entry point for data-side memory behavior |
+| [mdp-ref.md](../../../docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/mdp-ref.md) | Memory dependence prediction and Load/Store queue interaction, useful as an entry point for data-side memory behavior |
 
 When reading the source, inspect `cache/` together with `mem/`, because cache behavior usually depends on Load/Store queues, MSHRs, replay, TLBs, and coherence requests.
 
@@ -95,7 +95,7 @@ The memory subsystem covers load/store execution, memory ordering, replay, depen
 
 | Document | Topic |
 | --- | --- |
-| [mdp-ref.md](memory/mdp-ref.md) | Memory Dependence Predictor, SSIT, LFST, Load/Store queue wait and training paths |
+| [mdp-ref.md](../../../docs/4-xiangshan-microarchitecture-analysis/3-xiangshan-source-code-analysis/memory/mdp-ref.md) | Memory Dependence Predictor, SSIT, LFST, Load/Store queue wait and training paths |
 
 ## How To Use These Notes
 
