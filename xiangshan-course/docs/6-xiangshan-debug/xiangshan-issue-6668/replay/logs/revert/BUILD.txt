@@ -1,0 +1,5 @@
+commit: b9638259e98c92b4c0d9e64a09d3c504faa699e6 + replay/patch/0002-revert-prefix-behavior.patch
+config: CONFIG=DefaultConfig NUM_CORES=1 OPT_FAST="-O3 -fno-tree-slp-vectorize"
+command: make emu -j64
+result: ok, 2126 s
+difference from HEAD: PseudoDecodeChannel.scala:95 loses "&& instBitFields.RD =/= 0.U"

@@ -1,0 +1,22 @@
+# trimmed log: x0_readback.nemu.log (PERF dump dropped; rerun with run_cases.sh to regenerate)
+emu compiled at Nov 23 2026, 10:37:27
+[INFO] init for constantin: loaded from init.
+[PERF ][time=                8327] SimTop.cpu.l_soc.core_with_l2.core.frontend.inner.bpu.tage: fast_final_prediction_mismatch,                    0
+[PERF ][time=                8327] SimTop.cpu.l_soc.core_with_l2.core.frontend.inner.bpu.ras.RasStack: ras_top_mismatch,                    0
+[PERF ][time=                8327] SimTop.cpu.l_soc.core_with_l2.core.frontend.inner.bpu: abtb_attribute_mismatch_takenCtr0,                    0
+[PERF ][time=                8327] SimTop.cpu.l_soc.core_with_l2.core.frontend.inner.bpu: abtb_attribute_mismatch_takenCtr1,                    0
+[PERF ][time=                8327] SimTop.cpu.l_soc.core_with_l2.core.frontend.inner.bpu: abtb_attribute_mismatch_takenCtr2,                    0
+[PERF ][time=                8327] SimTop.cpu.l_soc.core_with_l2.core.frontend.inner.bpu: abtb_attribute_mismatch_takenCtr3,                    0
+[PERF ][time=                8327] SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner.prefetcher.streamStrideOpt.stride_meta_array: s1_stat_valid_mismatch,                    0
+[PERF ][time=                8327] SimTop.cpu.l_soc.core_with_l2.core.memBlock.inner.prefetcher.streamStrideOpt.stride_meta_array: s1_stat_valid_mismatch_replace,                    0
+Using simulated 1048576B flash
+Core  0's Commit SHA is: 09453ff8f4, dirty: 1
+Using simulated 8386560MB RAM
+The image is /nfs/home/sunyuhang/work/xs-6668/course-doc/xiangshan-course/docs/6-xiangshan-debug/xiangshan-issue-6668/replay/case/x0_readback.elf
+ELF file detected and loading image from extracted elf file
+The reference model is /nfs/home/sunyuhang/work/xs-6668/base09453-fix/ready-to-run/riscv64-nemu-interpreter-so
+The first instruction of core 0 has commited. Difftest enabled. 
+Core 0: [33mEXCEEDING CYCLE/INSTR LIMIT at pc = 0x1ab6f7809e8e6
+[0m[35mCore-0 instrCnt = 60, cycleCnt = 8,322, IPC = 0.007210
+[34mSeed=0 Guest cycle spent: 8,328 (this will be different from cycleCnt if emu loads a snapshot)
+[0m[34mHost time spent: 85,231ms

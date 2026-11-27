@@ -1,0 +1,33 @@
+From: syhhyl
+Subject: [PATCH] fix(decode): clear gpWen for rd == x0 in PseudoDecodeChannel
+
+`csrr x0, vl` / `csrr x0, vlenb` are legal pure reads: the value is read and
+discarded because x0 is hardwired to zero.  The vl/vlenb pseudo decode channel
+takes gpWen straight from the uop table, so rename sees rfWen = 1 with
+ldest = x0, allocates a physical register for x0, and writes the speculative
+RAT entry of x0.  With assertions enabled this trips
+"rfWen cannot be 1 when Int regfile ldest is 0" and "pdest for $0 should be 0".
+
+Gate gpWen with rd != 0, exactly like SimpleDecodeChannel, VsetDecoder and
+VectorDecodeChannel already do.
+
+Upstream equivalent: 429980ea228c ("fix(decode): add support of out-of-order
+CSRR instructions execution", PR #6779), which applies this line together with
+the CSRR OoO rework.
+
+---
+ src/main/scala/xiangshan/backend/vector/Decoder/DecodeChannel/PseudoDecodeChannel.scala | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/main/scala/xiangshan/backend/vector/Decoder/DecodeChannel/PseudoDecodeChannel.scala b/src/main/scala/xiangshan/backend/vector/Decoder/DecodeChannel/PseudoDecodeChannel.scala
+--- a/src/main/scala/xiangshan/backend/vector/Decoder/DecodeChannel/PseudoDecodeChannel.scala
++++ b/src/main/scala/xiangshan/backend/vector/Decoder/DecodeChannel/PseudoDecodeChannel.scala
+@@ -90,7 +90,7 @@ class PseudoDecodeChannel(
+   out.bits.lsrc1 := instBitFields.RS1
+   out.bits.lsrc2 := instBitFields.RS2
+   out.bits.ldest := instBitFields.RD
+-  out.bits.gpWen := bundle(gpWenField)
++  out.bits.gpWen := bundle(gpWenField) && instBitFields.RD =/= 0.U
+   out.bits.fpWen := bundle(fpWenField)
+   out.bits.noSpec := bundle(noSpecField)
+   out.bits.blockBack := bundle(blockBackField)

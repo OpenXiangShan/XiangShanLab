@@ -1,0 +1,21 @@
+From: syhhyl
+Subject: [PATCH] debug(revert): drop the rd != 0 gate from PseudoDecodeChannel
+
+Controlled experiment only: re-introduce the pre-fix behaviour on the latest
+kunminghu-v3 tree so the same emulator build flow can show the assertion.
+
+Upstream fix being reverted: 429980ea228c (PR #6779),
+  out.bits.gpWen := bundle(gpWenField) && instBitFields.RD =/= 0.U
+---
+diff --git a/src/main/scala/xiangshan/backend/vector/Decoder/DecodeChannel/PseudoDecodeChannel.scala b/src/main/scala/xiangshan/backend/vector/Decoder/DecodeChannel/PseudoDecodeChannel.scala
+--- a/src/main/scala/xiangshan/backend/vector/Decoder/DecodeChannel/PseudoDecodeChannel.scala
++++ b/src/main/scala/xiangshan/backend/vector/Decoder/DecodeChannel/PseudoDecodeChannel.scala
+@@ -92,7 +92,7 @@ class PseudoDecodeChannel(
+   out.bits.lsrc1 := instBitFields.RS1
+   out.bits.lsrc2 := instBitFields.RS2
+   out.bits.ldest := instBitFields.RD
+-  out.bits.gpWen := bundle(gpWenField) && instBitFields.RD =/= 0.U
++  out.bits.gpWen := bundle(gpWenField)
+   out.bits.fpWen := bundle(fpWenField)
+   out.bits.noSpec := bundle(noSpecField)
+   out.bits.blockBack := bundle(blockBackField)
